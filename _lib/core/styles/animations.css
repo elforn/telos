@@ -1,0 +1,295 @@
+/* ============================================================
+   ANIMATIONS — optional
+   Include this file only if the app uses motion.
+   All animations respect prefers-reduced-motion.
+   Values reference tokens.css — load tokens.css first.
+   ============================================================ */
+
+
+/* ----------------------------------------------------------
+   REDUCED MOTION — collapses all transitions globally
+   ---------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration:       0.01ms !important;
+    animation-iteration-count: 1     !important;
+    transition-duration:      0.01ms !important;
+  }
+}
+
+
+/* ----------------------------------------------------------
+   PAGE TRANSITIONS
+   Apply to page-level components via the router.
+   ---------------------------------------------------------- */
+
+/* Forward navigation — new page enters from right */
+.enter-slide-right {
+  animation: slideInRight var(--duration-normal) var(--ease-decelerate) both;
+}
+
+/* Forward navigation — old page exits to left */
+.exit-slide-left {
+  animation: slideOutLeft var(--duration-normal) var(--ease-decelerate) both;
+}
+
+/* Back navigation — new page enters from left */
+.enter-slide-left {
+  animation: slideInLeft var(--duration-normal) var(--ease-decelerate) both;
+}
+
+/* Back navigation — old page exits to right */
+.exit-slide-right {
+  animation: slideOutRight var(--duration-normal) var(--ease-decelerate) both;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes slideOutLeft {
+  from { transform: translateX(0);     opacity: 1; }
+  to   { transform: translateX(-30%);  opacity: 0; }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-30%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes slideOutRight {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(100%); opacity: 0; }
+}
+
+
+/* ----------------------------------------------------------
+   ELEMENT ENTRANCES
+   For content appearing within a page.
+   ---------------------------------------------------------- */
+
+/* General fade up — list items, cards loading in */
+.enter-fade-up {
+  animation: fadeUp var(--duration-normal) var(--ease-out) both;
+}
+
+/* Stagger children — apply to parent, children get --i index */
+/* Usage: <ul class="stagger-children"> <li style="--i:0"> ... */
+.stagger-children > * {
+  animation: fadeUp var(--duration-normal) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+@keyframes fadeUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* Scale in — for cards, modals appearing */
+.enter-scale {
+  animation: scaleIn var(--duration-normal) var(--ease-spring) both;
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.94); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+
+/* ----------------------------------------------------------
+   BOTTOM SHEET
+   ---------------------------------------------------------- */
+
+.sheet-enter {
+  animation: sheetUp var(--duration-slow) var(--ease-decelerate) both;
+}
+
+.sheet-exit {
+  animation: sheetDown var(--duration-normal) var(--ease-in-out) both;
+}
+
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0);    }
+}
+
+@keyframes sheetDown {
+  from { transform: translateY(0);    }
+  to   { transform: translateY(100%); }
+}
+
+/* Backdrop */
+.backdrop-enter {
+  animation: fadeIn var(--duration-normal) var(--ease-out) both;
+}
+
+.backdrop-exit {
+  animation: fadeOut var(--duration-normal) var(--ease-in-out) both;
+}
+
+@keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+
+/* ----------------------------------------------------------
+   TOAST / SNACKBAR
+   ---------------------------------------------------------- */
+
+.toast-enter {
+  animation: toastUp var(--duration-normal) var(--ease-spring) both;
+}
+
+.toast-exit {
+  animation: toastFade var(--duration-fast) var(--ease-in-out) both;
+}
+
+@keyframes toastUp {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes toastFade {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+
+/* ----------------------------------------------------------
+   TAP FEEDBACK
+   Apply to any interactive element.
+   CSS-only — no JS required.
+   ---------------------------------------------------------- */
+
+.tap-feedback {
+  transition: transform var(--duration-fast) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.tap-feedback:active {
+  transform: scale(0.97);
+}
+
+/* Stronger press for large buttons */
+.tap-feedback-lg:active {
+  transform: scale(0.975);
+}
+
+
+/* ----------------------------------------------------------
+   SUCCESS FLASH
+   Brief green highlight on an element after a successful action.
+   Add class programmatically, remove after animation ends.
+   ---------------------------------------------------------- */
+
+.success-flash {
+  animation: successFlash var(--duration-slow) var(--ease-out) both;
+}
+
+@keyframes successFlash {
+  0%   { background-color: inherit; }
+  30%  { background-color: var(--color-success-light); }
+  100% { background-color: inherit; }
+}
+
+
+/* ----------------------------------------------------------
+   DRAG-TO-COMPLETE BUTTON
+   The handle spring-back when released before completion.
+   JS controls the drag position via --drag-x custom property.
+   ---------------------------------------------------------- */
+
+.drag-handle {
+  transform: translateX(var(--drag-x, 0px));
+  transition: transform 0ms linear; /* disabled during active drag */
+}
+
+.drag-handle.snap-back {
+  transition: transform var(--duration-spring) var(--ease-spring);
+}
+
+.drag-handle.complete {
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+
+/* Progress fill behind the handle */
+.drag-fill {
+  width: var(--drag-progress, 0%);
+  transition: width 0ms linear;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.2);
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+}
+
+
+/* ----------------------------------------------------------
+   SWIPE ROW (swipe to delete)
+   JS sets --swipe-x via inline style.
+   ---------------------------------------------------------- */
+
+.swipe-row {
+  transform: translateX(var(--swipe-x, 0px));
+  transition: transform 0ms linear;
+  will-change: transform;
+}
+
+.swipe-row.snap-back {
+  transition: transform var(--duration-normal) var(--ease-spring);
+}
+
+.swipe-row.snap-open {
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.swipe-row.collapsing {
+  transition: transform var(--duration-normal) var(--ease-in-out),
+              max-height var(--duration-normal) var(--ease-in-out),
+              opacity var(--duration-fast) var(--ease-in-out);
+  max-height: 0;
+  opacity: 0;
+}
+
+
+/* ----------------------------------------------------------
+   CHART — initial draw
+   SVG paths and bars animate in on mount.
+   ---------------------------------------------------------- */
+
+/* Line chart path draw */
+.chart-line {
+  stroke-dashoffset: var(--path-length, 1000);
+  stroke-dasharray:  var(--path-length, 1000);
+  animation: drawLine var(--duration-slow) var(--ease-out) forwards;
+  animation-delay: 100ms;
+}
+
+@keyframes drawLine {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Bar chart bars grow up */
+.chart-bar {
+  transform-origin: bottom center;
+  animation: growBar var(--duration-slow) var(--ease-decelerate) both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+
+@keyframes growBar {
+  from { transform: scaleY(0); opacity: 0; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+
+
+/* ----------------------------------------------------------
+   UTILITY
+   ---------------------------------------------------------- */
+
+/* Instant hide/show without layout shift */
+.hidden { visibility: hidden; pointer-events: none; }
+
+/* Smooth opacity toggle */
+.fade-out { opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); }
+.fade-in  { opacity: 1; transition: opacity var(--duration-fast) var(--ease-out); }
