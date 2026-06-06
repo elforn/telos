@@ -1,0 +1,14 @@
+{
+  "version": "0.2.5",
+  "modules": [
+    "core",
+    "gestures",
+    "sync",
+    "images",
+    "app-header",
+    "modal-dialog",
+    "toast"
+  ],
+  "store": "simple",
+  "scaffolded": "2026-06-06"
+}
