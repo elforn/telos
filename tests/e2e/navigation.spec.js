@@ -1,10 +1,5 @@
 import { test, expect } from '@playwright/test';
-
-async function waitForHomePage(page) {
-  await page.waitForFunction(() =>
-    !!document.querySelector('app-router')?.shadowRoot?.querySelector('home-page')
-  );
-}
+import { waitForPage as waitForHomePage } from './helpers.js';
 
 test.describe('Router — forward navigation', () => {
   test('renders home-page at /', async ({ page }) => {

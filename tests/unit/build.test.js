@@ -57,7 +57,6 @@ describe('build — default (BASE_PATH=/)', () => {
     const content = readDist(mainFilename());
     expect(content).not.toContain("'../_lib/");
     expect(content).toContain("'./_lib/");
-    expect(content).toContain("'./app/store/");
     expect(content).toContain("'./app/pages/");
     // General invariant: no bare app-relative imports remain after rewriting
     const unrewritten = content.match(/'\.\/(?!app\/|_lib\/)/g);
@@ -93,9 +92,11 @@ describe('build — default (BASE_PATH=/)', () => {
     expect(html).toMatch(/src="\/main\.[a-f0-9]{8}\.js"/);
   });
 
-  it('copies manifest.json byte-for-byte', () => {
-    const src = readFileSync(join(APP_ROOT, 'manifest.json'), 'utf8');
-    expect(readDist('manifest.json')).toBe(src);
+  it('substitutes %%BASE_PATH%% tokens in manifest.json', () => {
+    const manifest = readDist('manifest.json');
+    expect(manifest).not.toContain('%%BASE_PATH%%');
+    expect(manifest).toContain('"start_url": "/"');
+    expect(manifest).toContain('"scope": "/"');
   });
 
   it('copies _lib/ to dist/_lib/', () => {

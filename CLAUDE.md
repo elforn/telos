@@ -2,8 +2,62 @@
 
 A yearly goal planner
 
-Scaffolded from Socle 0.2.5 on 2026-06-06.
+Scaffolded from Socle 0.2.5 on 2026-06-06. Updated to 0.9.0 on 2026-06-08.
 Installed modules: core, gestures, sync, images, app-header, modal-dialog, toast
+
+---
+
+## About this app
+
+### Purpose
+Telos is a personal yearly goal planner that helps individuals set and track a capstone goal, 3-month milestones, and 8-week wow moments per year. It also includes a trans-year lists system for capturing ideas, tasks, and other items that can be linked to goals.
+
+### Context of use
+Used for year-start planning sessions and periodic (weekly or monthly) check-ins. Primarily a phone app (95% of use); tablet and desktop are secondary. The app is local-only with no accounts or cloud sync.
+
+### Users
+- **Personal user** — the sole user of the app; plans their year, tracks progress, manages lists. No multi-user features. A `sharedWith` note field on list items is the only people-awareness in the app.
+
+### Key flows
+1. **Set a capstone goal** — enter the one headline goal for the year, visible at a glance from the home screen.
+2. **Add milestones and wow moments** — fill the three 3-month milestone and three 8-week wow moment slots for the year.
+3. **Update goal progress** — hold-drag the progress bar on any goal item, or use arrow keys. A goal can also be marked as failed.
+4. **Navigate between years** — swipe the year header or tap prev/next to review past or future years; each year is independent.
+5. **Upload a year photo** — a photo displays as the header background and acts as a visual anchor for the year.
+6. **Create and manage lists** — create trans-year lists (ideas, improvements, gift ideas, identity anchors, etc.), add items, sort and filter by status or tag.
+7. **Copy a list item to a goal** — copy a list item into any year + goal section; the item stays in the list with `inGoals` updated to record where it was added. Progress is **not** synced — the goal and the list item track independently.
+
+### Data model
+All state lives in a **simple store** (setState/getState — no event log, no reducer). Top-level keys:
+
+- **`goals`** — `{ [year]: { capstone: Goal[], milestones: Goal[], wow: Goal[], goals?: Goal[] } }`. A fourth `goals` section (for additional per-year goals) may be added later. Each `Goal` has a fixed schema:
+  ```
+  { id, title, description?, tracking: { type: 'percentage', value: number } | { type: 'daily', days: string[] } }
+  ```
+  - `tracking.type = 'percentage'`: value 0–100, `-1` means failed. This is the default for all new goals.
+  - `tracking.type = 'daily'`: days is an array of ISO date strings recording the days the goal was performed (e.g. "drink a glass of water daily"). Visual representation TBD — treat as a stretch feature for now.
+- **`images`** — `{ [year]: blobId }`. Blobs stored via `attachBlob`/`getBlob`.
+- **`lists`** — `List[]` where each `List` is `{ id, name, items: ListItem[] }`. Lists are **trans-year** — never scoped to a specific year.
+- **`ListItem`** — fixed schema (no progress tracking — only goals are tracked):
+  ```
+  { id, title, description, dueDate, status, tags: string[], inGoals: Array<{ year: string, section: string, goalId: string }>, sharedWith: string[] }
+  ```
+  - `status` values include at minimum: `active`, `in-goals`, `completed`.
+  - `inGoals` is an empty array when not linked; each entry records where the item was copied (a single item can appear in multiple years/sections).
+  - Progress is **not** synced between list items and goal copies — each goal tracks independently.
+
+### Constraints
+- **UX matches the Socle YourYear reference app exactly** — the only permitted difference is the store layer (simple store instead of event log + reducer). Component structure, animations, and interaction patterns are not up for debate.
+- Local only: no accounts, no cloud sync. Export/import via the sync module is the only data-transfer mechanism.
+- Keep it simple: no unnecessary settings, no complexity for its own sake.
+- Sharing is notes-only: `sharedWith` records names/notes, no actual data sync occurs.
+
+### Common mistakes
+- **Lists are trans-year.** Never scope a list or item to a year. Only entries in `inGoals` point into a year.
+- **No progress sync between lists and goals.** When a list item is copied to a goal, progress tracks independently on each side — do not attempt to keep them in sync.
+- **List items have no tracking.** Only goals track progress (percentage or daily). Do not add a tracking field to `ListItem`.
+- **Daily tracker data grows fast.** Persisting a full activity calendar (`days: string[]`) in the simple store can make state very large. Keep the initial implementation minimal and treat daily tracking as a stretch feature.
+- **List item schema is fixed.** All items share the same field set regardless of which list they belong to — do not make the schema per-list-configurable.
 
 ---
 

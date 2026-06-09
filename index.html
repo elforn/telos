@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#5BADE0" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="Telos" />
     <title>Telos</title>
     <link rel="manifest" href="manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -11,10 +13,16 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@100..900&display=swap" />
     <link rel="stylesheet" href="_lib/core/styles/tokens.css" />
     <style>
+      :root {
+        --color-accent:        #5BADE0;
+        --color-accent-light:  #E2F3FB;
+        --color-accent-dark:   #3A93CC;
+        --color-accent-subtle: rgba(91, 173, 224, 0.12);
+      }
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         background-color: var(--color-bg);
-        background-image: radial-gradient(ellipse 80% 40% at 50% 0%, rgba(232,130,74,0.06) 0%, transparent 70%);
+        background-image: radial-gradient(ellipse 80% 40% at 50% 0%, rgba(91,173,224,0.08) 0%, transparent 70%);
         color: var(--color-text-primary);
         font-family: var(--font-family);
         font-size: var(--font-size-body);
@@ -33,9 +41,8 @@
     </style>
   </head>
   <body>
-    <sw-manager base-path="/" app-version="__APP_VERSION__"></sw-manager>
+    <sw-manager base-path="/" app-version="__APP_VERSION__" build-version="__BUILD_VERSION__"></sw-manager>
     <update-banner hidden></update-banner>
-    <app-header label="Telos"></app-header>
     <app-router></app-router>
     <script type="module" src="%%MAIN_JS%%"></script>
   </body>
