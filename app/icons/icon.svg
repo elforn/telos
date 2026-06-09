@@ -1,20 +1,26 @@
 <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" fill="#F2F1EE"/>
+  <rect width="512" height="512" fill="#1E293B"/>
   <!--
-    Scaffold template icon: YourYear arc rotated 180°.
-    The gap moves from the bottom to the top — an open bowl/cup,
-    ready to receive the app the developer is building.
-
-    Arc: 300° clockwise from upper-right (300°) through the bottom to upper-left (240°).
-    Start (336, 117.4) at 300° · End (176, 117.4) at 240°.
+    Progress arc: 300° clockwise, gap at the bottom centre (60° gap).
+    Start point (176, 394.6) is at 120° from east on a radius-160 circle centred at (256,256).
+    End point  (336, 394.6) is at  60° from east.
     large-arc-flag=1 (300° > 180°), sweep-flag=1 (clockwise).
-    All geometry within the 80% maskable safe zone.
+    Outer stroke edge stays within the 80% maskable safe zone.
   -->
   <path
-    d="M 336 117.4 A 160 160 0 1 1 176 117.4"
+    d="M 176 394.6 A 160 160 0 1 1 336 394.6"
     fill="none"
-    stroke="#2C2C2C"
+    stroke="#5BADE0"
     stroke-width="44"
     stroke-linecap="round"
+  />
+  <!--
+    Bold geometric T centred inside the arc.
+    Horizontal bar: x 161–351, y 170–210  (190 × 40px)
+    Vertical stem:  x 237–275, y 210–375  (38 × 165px)
+  -->
+  <path
+    d="M 161 170 H 351 V 210 H 275 V 375 H 237 V 210 H 161 Z"
+    fill="#FFFFFF"
   />
 </svg>

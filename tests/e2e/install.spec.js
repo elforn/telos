@@ -34,11 +34,10 @@ test('service worker registers successfully', async ({ page, baseURL }) => {
   await page.goto(baseURL);
   const swState = await page.evaluate(async () => {
     if (!('serviceWorker' in navigator)) return 'unsupported';
-    const reg = await navigator.serviceWorker.getRegistration();
-    const sw = reg?.active ?? reg?.installing ?? reg?.waiting;
-    return sw?.state ?? 'none';
+    const reg = await navigator.serviceWorker.ready;
+    return reg.active?.state ?? 'none';
   });
-  expect(['activating', 'activated', 'installing', 'installed']).toContain(swState);
+  expect(['activating', 'activated']).toContain(swState);
 });
 
 // ── Manual checklist ──────────────────────────────────────────────────────────

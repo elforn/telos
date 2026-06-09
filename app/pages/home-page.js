@@ -1,447 +1,457 @@
-import { toast } from '../../_lib/modules/toast/toast.js';
-import { Gestures } from '../../_lib/modules/gestures/gestures.js';
-import { compressImage } from '../../_lib/modules/images/images.js';
 import { AppElement } from '../../_lib/core/app-element.js';
+import { navigate } from '../../_lib/core/router/router.js';
+import { setState, getState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
+import { t } from '../../_lib/core/strings.js';
+import { toast } from '../../_lib/modules/toast/toast.js';
+import '../components/year-header/year-header.js';
+import '../components/goal-item/goal-item.js';
+import '../components/goal-dialog/goal-dialog.js';
 
 class HomePage extends AppElement {
   template() {
     return `
       <style>
-        :host { display: block; }
+        :host {
+          display: block;
+          --page-padding: var(--space-5);
+        }
+
         main {
-          padding: var(--space-4);
-          padding-block-end: calc(var(--space-4) + var(--safe-area-bottom, 0px));
-          max-inline-size: 600px;
-          margin-inline: auto;
           display: flex;
           flex-direction: column;
           gap: var(--space-4);
+          padding: 0 var(--page-padding);
+          padding-block-start: calc(var(--update-banner-height, 0px) + var(--year-header-height, 81px) + var(--space-2));
+          padding-block-end: calc(var(--safe-area-bottom) + var(--space-4));
         }
-        .card {
-          background: var(--color-surface);
-          border-radius: var(--radius-lg);
-          padding-block-start: var(--space-1);
-          padding-block-end: var(--space-4);
-          padding-inline: var(--space-4);
-          display: flex;
-          flex-direction: column;
-          box-shadow: var(--shadow-card);
-        }
-        h2 {
-          font-size: var(--font-size-subheading);
-          font-weight: var(--font-weight-bold);
-          padding-block-end: var(--space-2);
-          border-block-end: 0.5px solid var(--color-border);
-          margin-block-start: 0.5em;
-          margin-block-end: 0.5em;
-        }
-        p { font-size: var(--font-size-body); color: var(--color-text-secondary); margin-block: 0; }
-        .card label,
-        .card fieldset,
-        .card div,
-        .card p { margin-block-end: 0.6em; }
-        .card fieldset { margin-block-start: 0.5em; }
-        .card fieldset label { margin-block-end: 0; }
-        label {
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-1);
-          font-size: var(--font-size-body);
-        }
-        input[type="text"], textarea {
-          padding: var(--space-2) var(--space-3);
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-md);
-          font-size: var(--font-size-body);
-          font-family: var(--font-family);
-          background: var(--color-bg);
-          color: var(--color-text-primary);
-          inline-size: 100%;
-        }
-        textarea { block-size: 80px; resize: vertical; }
-        input[type="text"]:hover, textarea:hover {
-          border-color: var(--color-accent);
-          transition: border-color 0.15s;
-        }
-        input[type="text"]:focus, textarea:focus {
-          border-color: var(--color-accent);
-          background: var(--color-accent-subtle);
-          outline: none;
-        }
-        fieldset {
-          border: none;
-          border-radius: var(--radius-full);
-          padding: var(--space-1);
-          background: var(--color-accent-subtle);
-          display: flex;
-          flex-direction: row;
-          gap: var(--space-1);
-        }
-        legend {
-          position: absolute;
-          inline-size: 1px;
-          block-size: 1px;
-          overflow: hidden;
-          clip: rect(0, 0, 0, 0);
-        }
-        .radio-label {
-          flex: 1;
-          block-size: var(--touch-target);
-          min-block-size: unset;
-          border-radius: var(--radius-full);
-          background: transparent;
+
+        .section-heading {
           font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-medium);
-          color: var(--color-text-secondary);
-          cursor: pointer;
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-accent);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+
+        .section-header {
           display: flex;
           align-items: center;
-          justify-content: center;
-          transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+          justify-content: space-between;
+          margin-block-end: var(--space-1);
         }
-        .radio-label input[type="radio"] {
-          position: absolute;
-          opacity: 0;
-          inline-size: 1px;
-          block-size: 1px;
-          pointer-events: none;
-        }
-        .radio-label:has(input:checked) {
-          background: var(--color-surface);
-          color: var(--color-text-primary);
-          font-weight: var(--font-weight-bold);
-          box-shadow: var(--shadow-card);
-        }
-        .toggle-label {
-          display: flex;
-          flex-direction: row;
-          align-items: center;
-          gap: var(--space-3);
-          min-block-size: var(--touch-target);
+
+        .edit-btn {
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-text-muted);
+          background: none;
+          border: none;
           cursor: pointer;
+          padding-block: var(--space-1);
+          padding-inline: var(--space-2);
+          border-radius: var(--radius-sm);
         }
-        .toggle-label input[type="checkbox"] {
-          position: absolute;
-          opacity: 0;
-          width: 1px;
-          height: 1px;
-          pointer-events: none;
-        }
-        .toggle-label input:focus-visible ~ .toggle-track {
+
+        .edit-btn:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
-        .toggle-track {
-          inline-size: 44px;
-          block-size: 26px;
-          background: var(--color-border);
-          border-radius: 13px;
-          position: relative;
-          transition: background 0.2s;
-          flex-shrink: 0;
-        }
-        .toggle-thumb {
-          position: absolute;
-          inset-block-start: 3px;
-          inset-inline-start: 3px;
-          inline-size: 20px;
-          block-size: 20px;
-          border-radius: 50%;
-          background: var(--color-text-inverse);
-          transition: inset-inline-start 0.2s;
-        }
-        .toggle-label input:checked ~ .toggle-track { background: var(--color-accent); }
-        .toggle-label input:checked ~ .toggle-track .toggle-thumb { inset-inline-start: 21px; }
-        .tabs {
+
+        .list-section {
           display: flex;
-          border-block-end: 2px solid var(--color-border);
-          gap: var(--space-1);
+          flex-direction: column;
         }
-        .tabs button {
-          background: none;
-          border: none;
-          padding: var(--space-2) var(--space-3);
-          font-size: var(--font-size-body);
-          font-family: var(--font-family);
-          color: var(--color-text-secondary);
-          cursor: pointer;
-          border-block-end: 2px solid transparent;
-          margin-block-end: -2px;
-          min-block-size: var(--touch-target);
-        }
-        .tabs button[aria-selected="true"] {
-          color: var(--color-text-primary);
-          border-block-end-color: var(--color-accent);
-          font-weight: var(--font-weight-bold);
-        }
-        [role="tabpanel"] {
-          padding-block: var(--space-2);
-          font-size: var(--font-size-body);
-          color: var(--color-text-secondary);
-        }
-        .actions {
+
+        .item-list {
           display: flex;
+          flex-direction: column;
           gap: var(--space-2);
-          flex-wrap: wrap;
         }
-        button.primary {
-          background: var(--color-accent);
-          color: var(--color-text-inverse);
-          border: none;
-          border-radius: var(--radius-md);
-          padding: var(--space-2) var(--space-4);
-          font-size: var(--font-size-body);
-          font-family: var(--font-family);
-          font-weight: var(--font-weight-bold);
+
+        #capstone-section {
+          padding-block-start: var(--space-1);
+        }
+
+        #capstone-list goal-item {
+          --goal-item-height: 60px;
+        }
+
+        .add-row {
+          margin-block-start: var(--space-2);
+          display: none;
+          inline-size: 100%;
           min-block-size: var(--touch-target);
-          cursor: pointer;
-          transition: background 0.15s;
-        }
-        button.primary:hover { background: var(--color-accent-dark); }
-        button.secondary {
-          background: var(--color-surface);
-          color: var(--color-text-primary);
-          border: 1px solid var(--color-border);
+          background: none;
+          border: 1px dashed var(--color-border);
           border-radius: var(--radius-md);
-          padding: var(--space-2) var(--space-4);
-          font-size: var(--font-size-body);
-          font-family: var(--font-family);
-          min-block-size: var(--touch-target);
-          cursor: pointer;
-          transition: background 0.15s, border-color 0.15s;
-        }
-        button.secondary:hover {
-          background: var(--color-accent-subtle);
-          border-color: var(--color-accent);
-        }
-        .bar-wrapper {
-          block-size: 52px;
-          background: var(--color-border);
-          border-radius: var(--radius-md);
-          position: relative;
-          overflow: hidden;
-          cursor: grab;
-          user-select: none;
-          touch-action: none;
-        }
-        .bar-wrapper.hold-active { cursor: grabbing; }
-        .fill {
-          block-size: 100%;
-          inline-size: var(--pct, 0%);
-          background: var(--color-accent);
-          transition: inline-size 0.1s;
-          border-radius: var(--radius-md);
-        }
-        .bar-wrapper.hold-active .fill { transition: none; }
-        .pct-label {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          padding-inline: var(--space-3);
-          font-weight: var(--font-weight-bold);
-          color: var(--color-text-primary);
-          pointer-events: none;
-        }
-        .img-preview {
-          border-radius: var(--radius-md);
-          overflow: hidden;
-          background: var(--color-surface-raised);
-          min-block-size: 120px;
-          display: flex;
           align-items: center;
           justify-content: center;
-          color: var(--color-text-secondary);
+          gap: var(--space-2);
+          cursor: pointer;
+          color: var(--color-text-muted);
           font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-medium);
+          font-family: var(--font-family);
+          padding-inline: var(--space-3);
         }
-        .img-preview img { max-inline-size: 100%; display: block; }
-        .img-meta { font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+
+        .list-section.edit .add-row { display: flex; }
+
+        .add-row:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
       </style>
+
+      <year-header id="header"></year-header>
+
       <main>
-        <section class="card">
-          <h2>Telos</h2>
-
-          <label>
-            Entry
-            <input type="text" id="entry-input" placeholder="Type something…" />
-          </label>
-
-          <label>
-            Notes
-            <textarea id="notes-input" placeholder="Additional notes…"></textarea>
-          </label>
-
-          <fieldset>
-            <legend>Priority</legend>
-            <label class="radio-label">
-              <input type="radio" name="priority" value="low" checked />
-              Low
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="priority" value="high" />
-              High
-            </label>
-          </fieldset>
-
-          <label class="toggle-label">
-            <input type="checkbox" id="notify-toggle" />
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-            Notify me
-          </label>
-
-          <div>
-            <div class="tabs" role="tablist" aria-label="View">
-              <button role="tab" aria-selected="true" aria-controls="tab-details" id="tab-btn-details">Details</button>
-              <button role="tab" aria-selected="false" aria-controls="tab-history" id="tab-btn-history">History</button>
-            </div>
-            <div id="tab-details" role="tabpanel" aria-labelledby="tab-btn-details">
-              Details will appear here.
-            </div>
-            <div id="tab-history" role="tabpanel" aria-labelledby="tab-btn-history" hidden>
-              History will appear here.
-            </div>
+        <section id="capstone-section" class="list-section empty" aria-label="${t('home-page.capstone-section')}">
+          <div class="section-header">
+            <h2 class="section-heading">${t('home-page.capstone-section')}</h2>
+            <button class="edit-btn" id="capstone-edit-btn">${t('home-page.edit')}</button>
           </div>
-
-          <div class="actions">
-            <button class="primary" id="submit-btn">Save entry</button>
-            <button class="secondary" id="modal-btn">Info modal</button>
-          </div>
+          <div id="capstone-list" class="item-list" role="list"></div>
+          <button class="add-row" id="add-capstone">+ ${t('goal-item.add-capstone')}</button>
         </section>
 
-        <section class="card">
-          <h2>Gesture demo</h2>
-          <p>Hold and drag the bar to adjust the value.</p>
-          <div class="bar-wrapper" id="gesture-bar">
-            <div class="fill" id="gesture-fill"></div>
-            <span class="pct-label" id="gesture-pct">0%</span>
+        <section id="milestone-section" class="list-section empty" aria-label="${t('home-page.milestone-section')}">
+          <div class="section-header">
+            <h2 class="section-heading">${t('home-page.milestone-section')}</h2>
+            <button class="edit-btn" id="milestone-edit-btn">${t('home-page.edit')}</button>
           </div>
+          <div id="milestone-list" class="item-list" role="list"></div>
+          <button class="add-row" id="add-milestone">+ ${t('goal-item.add-milestone')}</button>
         </section>
 
-        <section class="card">
-          <h2>Data sync</h2>
-          <p>Export your data for backup or to transfer to another device.</p>
-          <div class="actions">
-            <button class="secondary" id="export-btn">Export backup</button>
-            <button class="secondary" id="import-btn">Import</button>
+        <section id="wow-section" class="list-section empty" aria-label="${t('home-page.wow-section')}">
+          <div class="section-header">
+            <h2 class="section-heading">${t('home-page.wow-section')}</h2>
+            <button class="edit-btn" id="wow-edit-btn">${t('home-page.edit')}</button>
           </div>
-          <input type="file" accept=".tlos,.json" id="sync-file-input" hidden />
+          <div id="wow-list" class="item-list" role="list"></div>
+          <button class="add-row" id="add-wow">+ ${t('goal-item.add-wow')}</button>
         </section>
 
-        <section class="card">
-          <h2>Images</h2>
-          <p>Pick an image to compress and store it locally.</p>
-          <div class="img-preview" id="img-preview">No image yet</div>
-          <p class="img-meta" id="img-meta" hidden></p>
-          <div class="actions">
-            <button class="secondary" id="img-pick-btn">Pick image</button>
+        <section id="focus-section" class="list-section empty" aria-label="${t('home-page.focus-section')}">
+          <div class="section-header">
+            <h2 class="section-heading">${t('home-page.focus-section')}</h2>
+            <button class="edit-btn" id="focus-edit-btn">${t('home-page.edit')}</button>
           </div>
-          <input type="file" accept="image/*" id="img-file-input" hidden />
+          <div id="focus-list" class="item-list" role="list"></div>
+          <button class="add-row" id="add-focus">+ ${t('goal-item.add-focus')}</button>
         </section>
-
-        <modal-dialog id="demo-modal">
-          <p>Replace this modal with your app's content.</p>
-          <button slot="footer" class="primary" id="modal-close-btn">Close</button>
-        </modal-dialog>
       </main>
+
+      <goal-dialog id="dialog"></goal-dialog>
     `;
   }
 
   subscribe() {
-    const sr = this.shadowRoot;
+    this._year   = Number(this.params?.year);
+    this._header = this.shadowRoot.querySelector('#header');
+    this._dialog = this.shadowRoot.querySelector('#dialog');
+    this._editingSection = 'capstone';
+    this._editingGoal    = null;
 
-    this._onSubmit = () => {
-      toast('Entry saved', 'success');
+    const capstoneSection  = this.shadowRoot.querySelector('#capstone-section');
+    const milestoneSection = this.shadowRoot.querySelector('#milestone-section');
+    const wowSection       = this.shadowRoot.querySelector('#wow-section');
+    const focusSection     = this.shadowRoot.querySelector('#focus-section');
+    this._capstoneList  = this.shadowRoot.querySelector('#capstone-list');
+    this._milestoneList = this.shadowRoot.querySelector('#milestone-list');
+    this._wowList       = this.shadowRoot.querySelector('#wow-list');
+    this._focusList     = this.shadowRoot.querySelector('#focus-list');
+
+    // ── Header ───────────────────────────────────────────────────────────────
+
+    this._header.year = this._year;
+
+    this._onYearNavigate = e => navigate(`/${e.detail.year}`);
+    this._header.addEventListener('year-navigate', this._onYearNavigate);
+
+    // ── Per-section edit ─────────────────────────────────────────────────────
+
+    const capstoneEditBtn  = this.shadowRoot.querySelector('#capstone-edit-btn');
+    const milestoneEditBtn = this.shadowRoot.querySelector('#milestone-edit-btn');
+    const wowEditBtn       = this.shadowRoot.querySelector('#wow-edit-btn');
+    const focusEditBtn     = this.shadowRoot.querySelector('#focus-edit-btn');
+    this._capstoneEdit  = false;
+    this._milestoneEdit = false;
+    this._wowEdit       = false;
+    this._focusEdit     = false;
+
+    this._onCapstoneEdit = () => {
+      this._capstoneEdit = !this._capstoneEdit;
+      capstoneSection.classList.toggle('edit', this._capstoneEdit);
+      capstoneEditBtn.textContent = this._capstoneEdit ? t('home-page.done') : t('home-page.edit');
+      const items = [...this._capstoneList.querySelectorAll('goal-item')];
+      items.forEach(el => { el.editMode = this._capstoneEdit; });
+      if (this._capstoneEdit)  items.forEach((el, i) => el.peekHint(i * 80));
+      else                     items.forEach((el, i) => el.popConfirm(i * 50));
     };
-    sr.querySelector('#submit-btn').addEventListener('click', this._onSubmit);
+    capstoneEditBtn.addEventListener('click', this._onCapstoneEdit);
 
-    this._onModalOpen  = () => sr.querySelector('#demo-modal').show();
-    this._onModalClose = () => sr.querySelector('#demo-modal').close();
-    sr.querySelector('#modal-btn').addEventListener('click', this._onModalOpen);
-    sr.querySelector('#modal-close-btn').addEventListener('click', this._onModalClose);
-
-    const _bar  = sr.querySelector('#gesture-bar');
-    const _fill = sr.querySelector('#gesture-fill');
-    const _lbl  = sr.querySelector('#gesture-pct');
-    this._gestureCleanup = Gestures.attach(_bar, {
-      onHoldDragStart: () => _bar.classList.add('hold-active'),
-      onHoldDrag: e => {
-        const rect = _bar.getBoundingClientRect();
-        const pct  = Math.round(Math.max(0, Math.min(100, (e.endX - rect.left) / rect.width * 100)));
-        _fill.style.setProperty('--pct', pct + '%');
-        _lbl.textContent = pct + '%';
-      },
-      onHoldDragEnd: () => _bar.classList.remove('hold-active'),
-      onHoldDragKey: dir => {
-        const cur = parseFloat(_fill.style.getPropertyValue('--pct') || '0');
-        const pct = Math.round(Math.max(0, Math.min(100, cur + (dir === 'right' ? 5 : -5))));
-        _fill.style.setProperty('--pct', pct + '%');
-        _lbl.textContent = pct + '%';
-      },
-    });
-
-    this._onExport = async () => {
-      const { exportData, downloadExport } = await import('../../_lib/modules/sync/sync.js');
-      const data = await exportData();
-      downloadExport(data, 'Telos-backup.tlos');
-      toast('Backup ready', 'success');
+    this._onMilestoneEdit = () => {
+      this._milestoneEdit = !this._milestoneEdit;
+      milestoneSection.classList.toggle('edit', this._milestoneEdit);
+      milestoneEditBtn.textContent = this._milestoneEdit ? t('home-page.done') : t('home-page.edit');
+      const items = [...this._milestoneList.querySelectorAll('goal-item')];
+      items.forEach(el => { el.editMode = this._milestoneEdit; });
+      if (this._milestoneEdit) items.forEach((el, i) => el.peekHint(i * 80));
+      else                     items.forEach((el, i) => el.popConfirm(i * 50));
     };
-    this._onImportClick = () => sr.querySelector('#sync-file-input').click();
-    this._onFileChange = async e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const { readImportFile, importData } = await import('../../_lib/modules/sync/sync.js');
-      const payload = await readImportFile(file);
-      const result  = await importData(payload);
-      toast('Imported ' + result.eventsAdded + ' event' + (result.eventsAdded === 1 ? '' : 's'), 'success');
-      e.target.value = '';
-    };
-    sr.querySelector('#export-btn').addEventListener('click', this._onExport);
-    sr.querySelector('#import-btn').addEventListener('click', this._onImportClick);
-    sr.querySelector('#sync-file-input').addEventListener('change', this._onFileChange);
+    milestoneEditBtn.addEventListener('click', this._onMilestoneEdit);
 
-    this._onImgPick = () => sr.querySelector('#img-file-input').click();
-    this._onImgFile = async e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const blob = await compressImage(file, { maxWidth: 1200, quality: 0.8 });
-      const id   = crypto.randomUUID();
-      await Store.attachBlob(id, blob);
-      const url     = URL.createObjectURL(blob);
-      const preview = sr.querySelector('#img-preview');
-      const img = document.createElement('img');
-      img.src = url; img.alt = 'Compressed image';
-      preview.textContent = '';
-      preview.appendChild(img);
-      sr.querySelector('#img-meta').hidden = false;
-      sr.querySelector('#img-meta').textContent = Math.round(blob.size / 1024) + ' KB';
-      toast('Image saved', 'success');
-      e.target.value = '';
+    this._onWowEdit = () => {
+      this._wowEdit = !this._wowEdit;
+      wowSection.classList.toggle('edit', this._wowEdit);
+      wowEditBtn.textContent = this._wowEdit ? t('home-page.done') : t('home-page.edit');
+      const items = [...this._wowList.querySelectorAll('goal-item')];
+      items.forEach(el => { el.editMode = this._wowEdit; });
+      if (this._wowEdit) items.forEach((el, i) => el.peekHint(i * 80));
+      else               items.forEach((el, i) => el.popConfirm(i * 50));
     };
-    sr.querySelector('#img-pick-btn').addEventListener('click', this._onImgPick);
-    sr.querySelector('#img-file-input').addEventListener('change', this._onImgFile);
+    wowEditBtn.addEventListener('click', this._onWowEdit);
 
-    this._tabs   = [...sr.querySelectorAll('[role="tab"]')];
-    this._panels = [...sr.querySelectorAll('[role="tabpanel"]')];
-    this._onTab  = e => {
-      const idx = this._tabs.indexOf(e.currentTarget);
-      this._tabs.forEach((t, i)   => t.setAttribute('aria-selected', String(i === idx)));
-      this._panels.forEach((p, i) => { p.hidden = i !== idx; });
+    this._onFocusEdit = () => {
+      this._focusEdit = !this._focusEdit;
+      focusSection.classList.toggle('edit', this._focusEdit);
+      focusEditBtn.textContent = this._focusEdit ? t('home-page.done') : t('home-page.edit');
+      const items = [...this._focusList.querySelectorAll('goal-item')];
+      items.forEach(el => { el.editMode = this._focusEdit; });
+      if (this._focusEdit) items.forEach((el, i) => el.peekHint(i * 80));
+      else                 items.forEach((el, i) => el.popConfirm(i * 50));
     };
-    this._tabs.forEach(t => t.addEventListener('click', this._onTab));
+    focusEditBtn.addEventListener('click', this._onFocusEdit);
+
+    // ── Store subscription ────────────────────────────────────────────────────
+
+    this._onGoals = goals => {
+      const year = String(this._year);
+      const yg   = goals?.[year] ?? { capstone: [], milestones: [], wow: [], focus: [] };
+
+      this._renderList(this._capstoneList,  yg.capstone  ?? [], this._capstoneEdit);
+      capstoneSection.classList.toggle('empty',  (yg.capstone  ?? []).length === 0);
+
+      this._renderList(this._milestoneList, yg.milestones ?? [], this._milestoneEdit);
+      milestoneSection.classList.toggle('empty', (yg.milestones ?? []).length === 0);
+
+      this._renderList(this._wowList,       yg.wow       ?? [], this._wowEdit);
+      wowSection.classList.toggle('empty',       (yg.wow       ?? []).length === 0);
+
+      this._renderList(this._focusList,     yg.focus     ?? [], this._focusEdit);
+      focusSection.classList.toggle('empty',     (yg.focus     ?? []).length === 0);
+    };
+    subscribe('goals', this._onGoals);
+
+    // ── Capstone events ───────────────────────────────────────────────────────
+
+    this._onCapstoneGoalTap = e => {
+      this._editingSection = 'capstone';
+      this._editingGoal    = e.detail.goal;
+      this._dialog.open(e.detail.goal);
+    };
+    this._capstoneList.addEventListener('goal-tap', this._onCapstoneGoalTap);
+
+    this._onCapstoneProgress = e => {
+      this._setProgress('capstone', e.detail.goal.id, e.detail.percentage);
+    };
+    this._capstoneList.addEventListener('goal-progress', this._onCapstoneProgress);
+
+    this._onCapstoneDelete = e => {
+      this._deleteGoal('capstone', e.detail.goal.id);
+    };
+    this._capstoneList.addEventListener('goal-delete', this._onCapstoneDelete);
+
+    this._onAddCapstone = () => {
+      this._editingSection = 'capstone';
+      this._editingGoal    = null;
+      this._dialog.open(null);
+    };
+    this.shadowRoot.querySelector('#add-capstone').addEventListener('click', this._onAddCapstone);
+
+    // ── Milestone events ──────────────────────────────────────────────────────
+
+    this._onMilestoneGoalTap = e => {
+      this._editingSection = 'milestones';
+      this._editingGoal    = e.detail.goal;
+      this._dialog.open(e.detail.goal);
+    };
+    this._milestoneList.addEventListener('goal-tap', this._onMilestoneGoalTap);
+
+    this._onMilestoneProgress = e => {
+      this._setProgress('milestones', e.detail.goal.id, e.detail.percentage);
+    };
+    this._milestoneList.addEventListener('goal-progress', this._onMilestoneProgress);
+
+    this._onMilestoneDelete = e => {
+      this._deleteGoal('milestones', e.detail.goal.id);
+    };
+    this._milestoneList.addEventListener('goal-delete', this._onMilestoneDelete);
+
+    this._onAddMilestone = () => {
+      this._editingSection = 'milestones';
+      this._editingGoal    = null;
+      this._dialog.open(null);
+    };
+    this.shadowRoot.querySelector('#add-milestone').addEventListener('click', this._onAddMilestone);
+
+    // ── Wow events ────────────────────────────────────────────────────────────
+
+    this._onWowGoalTap = e => {
+      this._editingSection = 'wow';
+      this._editingGoal    = e.detail.goal;
+      this._dialog.open(e.detail.goal);
+    };
+    this._wowList.addEventListener('goal-tap', this._onWowGoalTap);
+
+    this._onWowProgress = e => {
+      this._setProgress('wow', e.detail.goal.id, e.detail.percentage);
+    };
+    this._wowList.addEventListener('goal-progress', this._onWowProgress);
+
+    this._onWowDelete = e => {
+      this._deleteGoal('wow', e.detail.goal.id);
+    };
+    this._wowList.addEventListener('goal-delete', this._onWowDelete);
+
+    this._onAddWow = () => {
+      this._editingSection = 'wow';
+      this._editingGoal    = null;
+      this._dialog.open(null);
+    };
+    this.shadowRoot.querySelector('#add-wow').addEventListener('click', this._onAddWow);
+
+    // ── Forward Focus events ──────────────────────────────────────────────────
+
+    this._onFocusGoalTap = e => {
+      this._editingSection = 'focus';
+      this._editingGoal    = e.detail.goal;
+      this._dialog.open(e.detail.goal);
+    };
+    this._focusList.addEventListener('goal-tap', this._onFocusGoalTap);
+
+    this._onFocusProgress = e => {
+      this._setProgress('focus', e.detail.goal.id, e.detail.percentage);
+    };
+    this._focusList.addEventListener('goal-progress', this._onFocusProgress);
+
+    this._onFocusDelete = e => {
+      this._deleteGoal('focus', e.detail.goal.id);
+    };
+    this._focusList.addEventListener('goal-delete', this._onFocusDelete);
+
+    this._onAddFocus = () => {
+      this._editingSection = 'focus';
+      this._editingGoal    = null;
+      this._dialog.open(null);
+    };
+    this.shadowRoot.querySelector('#add-focus').addEventListener('click', this._onAddFocus);
+
+    // ── Dialog save ───────────────────────────────────────────────────────────
+
+    this._onGoalSaved = e => {
+      const title = e.detail.title;
+      if (this._editingGoal) {
+        this._editGoal(this._editingSection, this._editingGoal.id, title);
+      } else {
+        this._addGoal(this._editingSection, title);
+      }
+      toast(t('home.toast-goal-saved'), 'success');
+    };
+    this.shadowRoot.addEventListener('goal-saved', this._onGoalSaved);
+
+    this._onDialogDelete = () => {
+      if (this._editingGoal) {
+        this._deleteGoal(this._editingSection, this._editingGoal.id);
+        toast(t('home.toast-goal-deleted'), 'info');
+      }
+    };
+    this._dialog.addEventListener('goal-delete', this._onDialogDelete);
   }
 
   unsubscribe() {
-    const sr = this.shadowRoot;
-    sr.querySelector('#submit-btn')?.removeEventListener('click', this._onSubmit);
-    sr.querySelector('#modal-btn')?.removeEventListener('click', this._onModalOpen);
-    sr.querySelector('#modal-close-btn')?.removeEventListener('click', this._onModalClose);
-    this._gestureCleanup?.();
-    sr.querySelector('#export-btn')?.removeEventListener('click', this._onExport);
-    sr.querySelector('#import-btn')?.removeEventListener('click', this._onImportClick);
-    sr.querySelector('#sync-file-input')?.removeEventListener('change', this._onFileChange);
-    sr.querySelector('#img-pick-btn')?.removeEventListener('click', this._onImgPick);
-    sr.querySelector('#img-file-input')?.removeEventListener('change', this._onImgFile);
-    this._tabs?.forEach(t => t.removeEventListener('click', this._onTab));
+    unsubscribe('goals', this._onGoals);
+
+    this._header?.removeEventListener('year-navigate', this._onYearNavigate);
+
+    this.shadowRoot.querySelector('#capstone-edit-btn')?.removeEventListener('click', this._onCapstoneEdit);
+    this.shadowRoot.querySelector('#milestone-edit-btn')?.removeEventListener('click', this._onMilestoneEdit);
+    this.shadowRoot.querySelector('#wow-edit-btn')?.removeEventListener('click', this._onWowEdit);
+
+    this._capstoneList?.removeEventListener('goal-tap',      this._onCapstoneGoalTap);
+    this._capstoneList?.removeEventListener('goal-progress', this._onCapstoneProgress);
+    this._capstoneList?.removeEventListener('goal-delete',   this._onCapstoneDelete);
+    this.shadowRoot.querySelector('#add-capstone')?.removeEventListener('click', this._onAddCapstone);
+
+    this._milestoneList?.removeEventListener('goal-tap',      this._onMilestoneGoalTap);
+    this._milestoneList?.removeEventListener('goal-progress', this._onMilestoneProgress);
+    this._milestoneList?.removeEventListener('goal-delete',   this._onMilestoneDelete);
+    this.shadowRoot.querySelector('#add-milestone')?.removeEventListener('click', this._onAddMilestone);
+
+    this._wowList?.removeEventListener('goal-tap',      this._onWowGoalTap);
+    this._wowList?.removeEventListener('goal-progress', this._onWowProgress);
+    this._wowList?.removeEventListener('goal-delete',   this._onWowDelete);
+    this.shadowRoot.querySelector('#add-wow')?.removeEventListener('click', this._onAddWow);
+
+    this._focusList?.removeEventListener('goal-tap',      this._onFocusGoalTap);
+    this._focusList?.removeEventListener('goal-progress', this._onFocusProgress);
+    this._focusList?.removeEventListener('goal-delete',   this._onFocusDelete);
+    this.shadowRoot.querySelector('#add-focus')?.removeEventListener('click', this._onAddFocus);
+    this.shadowRoot.querySelector('#focus-edit-btn')?.removeEventListener('click', this._onFocusEdit);
+
+    this.shadowRoot.removeEventListener('goal-saved', this._onGoalSaved);
+    this._dialog?.removeEventListener('goal-delete', this._onDialogDelete);
+  }
+
+  // ── Store mutations ───────────────────────────────────────────────────────
+
+  _yearGoals() {
+    return getState().goals?.[String(this._year)] ?? { capstone: [], milestones: [], wow: [], focus: [] };
+  }
+
+  _mutateSection(section, fn) {
+    const year = String(this._year);
+    const yg   = this._yearGoals();
+    setState('goals', { ...getState().goals, [year]: { ...yg, [section]: fn(yg[section] ?? []) } });
+  }
+
+  _addGoal(section, title) {
+    const goal = { id: crypto.randomUUID(), title, percentage: 0 };
+    this._mutateSection(section, list => [...list, goal]);
+  }
+
+  _editGoal(section, id, title) {
+    this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, title } : g));
+  }
+
+  _setProgress(section, id, percentage) {
+    this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, percentage } : g));
+  }
+
+  _deleteGoal(section, id) {
+    this._mutateSection(section, list => list.filter(g => g.id !== id));
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  _renderList(container, items, editMode = false) {
+    const byId = new Map();
+    container.querySelectorAll('goal-item').forEach(el => {
+      if (el._goal?.id) byId.set(el._goal.id, el);
+    });
+
+    const ordered = items.map(goal => {
+      const el = byId.get(goal.id) ?? document.createElement('goal-item');
+      byId.delete(goal.id);
+      el.editMode = editMode;
+      el.goal = goal;
+      return el;
+    });
+
+    byId.forEach(el => el.remove());
+    ordered.forEach(el => container.appendChild(el));
   }
 }
 

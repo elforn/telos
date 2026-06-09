@@ -80,11 +80,12 @@ writeFileSync(join(dist, 'sw.js'), swProcessed);
 const indexProcessed = readFileSync(join(root, 'index.html'), 'utf8')
   .replace('%%MAIN_JS%%', `${BASE_PATH}${mainFilename}`)
   .replace('__APP_VERSION__', version)
+  .replace('__BUILD_VERSION__', `${version}-${cacheHash}`)
   .replace('base-path="/"', `base-path="${BASE_PATH}"`);
 writeFileSync(join(dist, 'index.html'), indexProcessed);
 
-// 5. Copy manifest.json
-copyFileSync(join(root, 'manifest.json'), join(dist, 'manifest.json'));
+// 5. Process manifest.json — substitute BASE_PATH
+writeFileSync(join(dist, 'manifest.json'), manifestContent.replaceAll('%%BASE_PATH%%', BASE_PATH));
 
 // 6. Copy _lib/ to dist/_lib/ — dereference symlinks so dist/ is self-contained
 cpSync(join(root, '_lib'), join(dist, '_lib'), { recursive: true, dereference: true });

@@ -1,6 +1,6 @@
 {
   "name": "Telos",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "build": "node utils/build.js",
@@ -9,7 +9,8 @@
     "test": "vitest run && playwright test",
     "test:unit": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "dev:https": "node utils/build.js && npx serve dist --listen tcp:0.0.0.0:3002 --single --ssl-cert local.pem --ssl-key local-key.pem"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
