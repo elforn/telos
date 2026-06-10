@@ -1,5 +1,6 @@
 import { AppElement } from '../../_lib/core/app-element.js';
 import { navigate } from '../../_lib/core/router/router.js';
+import { BASE_PATH } from '../base-path.js';
 import { setState, getState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
@@ -167,7 +168,7 @@ class HomePage extends AppElement {
 
     this._header.year = this._year;
 
-    this._onYearNavigate = e => navigate(`/${e.detail.year}`);
+    this._onYearNavigate = e => navigate(`${BASE_PATH}/${e.detail.year}`);
     this._header.addEventListener('year-navigate', this._onYearNavigate);
 
     // ── Per-section edit ─────────────────────────────────────────────────────

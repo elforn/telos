@@ -1,8 +1,9 @@
 import { navigate } from '../../_lib/core/router/router.js';
+import { BASE_PATH } from '../base-path.js';
 
 class YearRedirect extends HTMLElement {
   connectedCallback() {
-    navigate(`/${new Date().getFullYear()}`);
+    navigate(`${BASE_PATH}/${new Date().getFullYear()}`);
   }
 }
 

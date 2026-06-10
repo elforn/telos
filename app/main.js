@@ -1,4 +1,5 @@
 import './strings.js';
+import { BASE_PATH } from './base-path.js';
 import './locales/fr.js';
 import './locales/ca.js';
 import { setLocale, getLocale } from '../_lib/core/strings.js';
@@ -18,7 +19,7 @@ console.log('Telos', __APP_VERSION__);
 
 const router = document.querySelector('app-router');
 router.routes = [
-  { path: '/',       component: 'year-redirect' },
-  { path: '/:year',  component: 'home-page' },
-  { path: '*',       component: 'not-found-page' },
+  { path: `${BASE_PATH}/`,       component: 'year-redirect' },
+  { path: `${BASE_PATH}/:year`,  component: 'home-page' },
+  { path: '*',                   component: 'not-found-page' },
 ];
