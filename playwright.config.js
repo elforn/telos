@@ -2,6 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  outputDir: 'tests/results',
+  reporter: [['html', { outputFolder: 'tests/playwright-report', open: 'never' }]],
   use: {
     baseURL: 'http://localhost:4321',
     serviceWorkers: 'allow',

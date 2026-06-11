@@ -9,14 +9,14 @@ A personal yearly goal planner for your phone.
 - Hold-drag a progress bar to update any goal; swipe in Edit mode to mark failed or delete
 - Navigate between years to review past plans
 - Attach a **year photo** as a visual anchor for the year
-- Export and import all data as a single `.tlos` file — no account required
-- (Coming soon) Maintain **trans-year lists** (ideas, gifts, identity anchors, etc.) and link items into goal sections
+- Export and import all data as a single `.telos` file — no account required
+- Maintain **trans-year lists** (ideas, gifts, identity anchors, etc.) and link items into goal sections
 
 Everything is stored locally on the device. No cloud sync, no sign-in.
 
 ## Using on mobile
 
-Visit **https://magp.github.io/telos** on your phone.
+Visit **https://elforn.github.io/telos** on your phone.
 
 **Supported browsers:** Android Chrome and Firefox. iOS Safari is not supported — on iOS, use [Firefox for iOS](https://apps.apple.com/app/firefox-private-safe-browser/id989804926) instead.
 
@@ -34,24 +34,30 @@ Visit **https://magp.github.io/telos** on your phone.
 Clone the repo and install dev tools (no runtime dependencies):
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/elforn/telos.git
 cd telos
 npm install
 ```
 
 ### Running locally
 
-```bash
-npm run dev          # build and serve at http://localhost:3002
-npm run dev:https    # build and serve at https://localhost:3002 (required for mobile)
-```
-
-For HTTPS on mobile you need a local cert (one-time setup):
+The app is phone-first, so always develop over HTTPS. One-time cert setup:
 
 ```bash
-brew install mkcert && mkcert -install
-mkcert localhost <your-LAN-IP>
+npx socle cert
 ```
+
+Then start the dev server:
+
+```bash
+npm run dev:https
+```
+
+This serves the app at `https://localhost:3002` and `https://<your-LAN-IP>:3002`.
+Open the LAN address on your phone for real-device testing.
+
+**Android CA trust (one-time per device):**
+Run `mkcert -CAROOT` → copy `rootCA.pem` to the device → Settings → Security → Install certificate → CA certificate.
 
 ### Slash commands
 

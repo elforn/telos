@@ -2,7 +2,7 @@
 
 A yearly goal planner
 
-Scaffolded from Socle 0.2.5 on 2026-06-06. Updated to 0.9.0 on 2026-06-08.
+Scaffolded from Socle 0.2.5 on 2026-06-06. Now on 0.9.2.
 Installed modules: core, gestures, sync, images, app-header, modal-dialog, toast
 
 ---
@@ -24,40 +24,52 @@ Used for year-start planning sessions and periodic (weekly or monthly) check-ins
 3. **Update goal progress** — hold-drag the progress bar on any goal item, or use arrow keys. A goal can also be marked as failed.
 4. **Navigate between years** — swipe the year header or tap prev/next to review past or future years; each year is independent.
 5. **Upload a year photo** — a photo displays as the header background and acts as a visual anchor for the year.
-6. **Create and manage lists** — create trans-year lists (ideas, improvements, gift ideas, identity anchors, etc.), add items, sort and filter by status or tag.
-7. **Copy a list item to a goal** — copy a list item into any year + goal section; the item stays in the list with `inGoals` updated to record where it was added. Progress is **not** synced — the goal and the list item track independently.
+6. **Create and manage lists** — create trans-year lists (ideas, improvements, gift ideas, identity anchors, etc.), add items, filter by status or tag.
+7. **Promote a list item to a goal** — link a list item into any year + section; the item stays in the list with `inGoals` updated. A single item can feed goals in multiple years. Progress is **not** synced — each side tracks independently.
 
 ### Data model
 All state lives in a **simple store** (setState/getState — no event log, no reducer). Top-level keys:
 
-- **`goals`** — `{ [year]: { capstone: Goal[], milestones: Goal[], wow: Goal[], goals?: Goal[] } }`. A fourth `goals` section (for additional per-year goals) may be added later. Each `Goal` has a fixed schema:
+- **`goals`** — `{ [year]: { capstone: Goal[], milestones: Goal[], wow: Goal[], focus: Goal[] } }`. Each `Goal` has a fixed schema:
   ```
-  { id, title, description?, tracking: { type: 'percentage', value: number } | { type: 'daily', days: string[] } }
+  { id, title, description?, tags: string[], tracking }
   ```
-  - `tracking.type = 'percentage'`: value 0–100, `-1` means failed. This is the default for all new goals.
-  - `tracking.type = 'daily'`: days is an array of ISO date strings recording the days the goal was performed (e.g. "drink a glass of water daily"). Visual representation TBD — treat as a stretch feature for now.
+  `tracking` is one of three types:
+  - `{ type: 'percentage', value: number }` — value 0–100; `-1` means failed. Default for all new goals.
+  - `{ type: 'weekly', target: number, entries: string[] }` — target = times/week (e.g. 3). "Every day" is a UI preset for target=7. `entries` = unique ISO date strings (YYYY-MM-DD), one per calendar day max; past dates allowed.
+  - `{ type: 'monthly', target: number, entries: string[] }` — target = times/month. Same `entries` shape as weekly, different aggregation window.
+
+  For `weekly` and `monthly`: success per period = `min(entries_in_period / target, 1)`. Both use a weighted running average across periods (more recent periods weighted higher).
+
 - **`images`** — `{ [year]: blobId }`. Blobs stored via `attachBlob`/`getBlob`.
 - **`lists`** — `List[]` where each `List` is `{ id, name, items: ListItem[] }`. Lists are **trans-year** — never scoped to a specific year.
 - **`ListItem`** — fixed schema (no progress tracking — only goals are tracked):
   ```
-  { id, title, description, dueDate, status, tags: string[], inGoals: Array<{ year: string, section: string, goalId: string }>, sharedWith: string[] }
+  { id, title, description?, dueDate, status: 'open' | 'paused' | 'done', tags: string[], inGoals: Array<{ year: string, section: string, goalId: string }>, sharedWith: string[] }
   ```
-  - `status` values include at minimum: `active`, `in-goals`, `completed`.
-  - `inGoals` is an empty array when not linked; each entry records where the item was copied (a single item can appear in multiple years/sections).
+  - `inGoals` is an empty array when not linked; each entry records where the item was promoted. A single item can be promoted into goals across multiple years/sections.
   - Progress is **not** synced between list items and goal copies — each goal tracks independently.
+- **`theme`** — `'light' | 'dark' | 'system'` (default `'system'`). Controls colour scheme; `'system'` follows `prefers-color-scheme`.
+- **`accentColors`** — `{ [year]: string }`. Hex colour per year. On year change, writes to `--color-accent` on `:root` (or resets to the default `#5BADE0`).
+- **`reflections`** — `{ [year]: { annual?, Q1?, Q2?, Q3?, Q4? } }`. Each entry: `{ note: string, stars: number }` (1–5 stars).
 
 ### Constraints
-- **UX matches the Socle YourYear reference app exactly** — the only permitted difference is the store layer (simple store instead of event log + reducer). Component structure, animations, and interaction patterns are not up for debate.
 - Local only: no accounts, no cloud sync. Export/import via the sync module is the only data-transfer mechanism.
 - Keep it simple: no unnecessary settings, no complexity for its own sake.
 - Sharing is notes-only: `sharedWith` records names/notes, no actual data sync occurs.
 
 ### Common mistakes
 - **Lists are trans-year.** Never scope a list or item to a year. Only entries in `inGoals` point into a year.
-- **No progress sync between lists and goals.** When a list item is copied to a goal, progress tracks independently on each side — do not attempt to keep them in sync.
-- **List items have no tracking.** Only goals track progress (percentage or daily). Do not add a tracking field to `ListItem`.
-- **Daily tracker data grows fast.** Persisting a full activity calendar (`days: string[]`) in the simple store can make state very large. Keep the initial implementation minimal and treat daily tracking as a stretch feature.
+- **No progress sync between lists and goals.** When a list item is promoted to a goal, progress tracks independently on each side — do not attempt to keep them in sync.
+- **List items have no tracking.** Only goals track progress. Do not add a `tracking` field to `ListItem`.
 - **List item schema is fixed.** All items share the same field set regardless of which list they belong to — do not make the schema per-list-configurable.
+- **`theme`, `accentColors`, `reflections` are top-level store keys.** Never nest them inside `goals[year]`.
+- **Item status values are `open | paused | done`.** The old names `active`, `in-goals`, and `completed` are invalid.
+- **`in-goals` is not a valid item status.** Use `inGoals.length > 0` to detect linked items in the UI.
+- **Frequency goals use `entries: string[]` of unique ISO dates.** One entry per calendar day maximum — do not allow duplicate dates. Past dates are allowed.
+- **"Every day" is not a goal type.** It is `weekly` with `target=7`, offered as a UI preset. Do not add a `daily` type to the schema.
+- **Frequency goal `entries` data grows over time.** Keep it as a flat array of date strings (YYYY-MM-DD). Do not store counts, times, or any per-entry metadata — just the date of each completion.
+- **Never edit `_lib/` directly** — it is replaced wholesale by `npx socle update`.
 
 ---
 
@@ -65,10 +77,9 @@ All state lives in a **simple store** (setState/getState — no event log, no re
 
 - Vanilla JS, CSS, HTML — no runtime dependencies
 - Web Components (`AppElement` base class from `_lib/`)
-- IndexedDB via `_lib/core/idb/` — append-only event log
-- History API router from `_lib/core/router/`
+- IndexedDB via `_lib/core/idb/`
 - Service worker with offline-first caching
-- Accent colour: `#E8824A` — change via `--color-accent` in `_lib/core/styles/tokens.css`
+- Accent colour: `#5BADE0` — override via the `:root` block in `index.html`.
 - Target browsers: Firefox and Android Chrome. iOS Safari is not supported — direct users to install Firefox.
 
 ---
@@ -99,10 +110,10 @@ dist/            ← generated by build, never commit
 
 ```bash
 npm run build        # build to dist/
-npm run dev          # build + serve at http://localhost:3000
 npm run dev:https    # build + serve at https://localhost:3000 (required for SW on mobile)
-npm test             # Vitest unit tests (single run)
+npm test             # All tests (single run)
 npm run test:watch   # Vitest in watch mode
+npm run test:unit    # Vitest unit tests
 npm run test:e2e     # Playwright E2E tests
 ```
 
@@ -110,13 +121,13 @@ npm run test:e2e     # Playwright E2E tests
 
 ## Rules
 
-- All style values come from `_lib/core/styles/tokens.css` — no hardcoded colours, spacing, or sizes
+- All style values come from `_lib/core/styles/tokens.css` — no hardcoded fonts, spacing, or sizes
 - State flows one way: action → store → IDB → component
 - No full re-renders after initial mount — targeted DOM updates only
 - CSS logical properties throughout (`margin-inline-start`, not `margin-left`)
 - Fixed-position elements use `calc(var(--space-N) + var(--safe-area-top/bottom))` on the inset edge
 - All custom events must use `{ bubbles: true, composed: true }` — without `composed: true`, events fired inside a shadow root are swallowed and never reach parent listeners
-- Every new feature passes `/test`, `/a11y`, `/review`, and `/docs` before `/commit`
+- Every new feature passes `/test`, `/i18n`, `/a11y`, `/review`, and `/docs` before `/commit`
 
 ---
 
@@ -201,8 +212,8 @@ await vi.waitFor(() => expect(el.shadowRoot.querySelector('.title').textContent)
 ## Dev server and mobile testing
 
 ```bash
-npm run dev          # desktop — http://localhost:3000
 npm run dev:https    # mobile — https://localhost:3000 + https://<LAN-IP>:3000
+npm run dev          # desktop — http://localhost:3000
 ```
 
 Service workers only register on HTTPS or `localhost`. Always use `dev:https` when testing offline mode or SW behaviour on a real device.
@@ -234,7 +245,7 @@ Cert files (`*.pem`, `*.key`, `*.crt`) are gitignored — never commit them.
 - `/component <name> <tier>` — scaffold a new Web Component
 - `/migration <version> <description>` — scaffold a schema migration
 
-**After completing a feature:** `/test` → `/a11y` → `/review` → `/docs feature` → `/commit`
+**After completing a feature:** `/test` → `/i18n` → `/a11y` → `/review` → `/docs feature` → `/commit`
 
 **Before shipping:** `/test-pwa` → `/status` → `/docs changelog` → `/commit`
 
@@ -250,3 +261,8 @@ npx socle update
 
 Replaces `_lib/` files only. Your `app/` code is never touched.
 If the update includes a new IDB schema version, run `/migration` to review and apply it.
+
+> **`_lib/` is read-only.** Every file in it is overwritten on the next `npx socle update`.
+> Any edit you make there will be silently lost. App-level overrides belong in `app/` or `index.html`:
+> - Colour tokens → override in the `:root` block in `index.html`
+> - Component behaviour → extend or wrap in `app/components/`, never patch `_lib/`

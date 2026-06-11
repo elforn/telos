@@ -3,3 +3,5 @@ dist/
 *.pem
 .vscode/settings.json
 brand/
+tests/results/
+tests/playwright-report/

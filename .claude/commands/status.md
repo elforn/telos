@@ -40,6 +40,24 @@ List every file in `app/components/` and `app/pages/`. For each:
 - Is `README.md` present and accurate?
 - Is `CHANGELOG.md` up to date?
 
+### Planned features
+For each roadmap item: ✅ done / ⬜ not started.
+
+- [ ] Dark theme: `[data-theme="dark"]` token overrides present in CSS
+- [ ] Dark theme: `theme` store key; year-header menu has light/dark/system toggle
+- [ ] Year accent colour: `accentColors` store key; year change writes to `--color-accent` on `:root`
+- [ ] Lists: `app/pages/lists-page.js` exists and is routed
+- [ ] Lists: `app/components/list-item/` component exists
+- [ ] Lists: item status uses `open | paused | done` (not `active | completed`)
+- [ ] Lists: items filterable by status and tag in the UI
+- [ ] Goals: tag field present in schema and editable in goal dialog
+- [ ] Goals: tags filterable in the year view
+- [ ] Frequency goals: `tracking.type = 'weekly'` and `'monthly'` handled in goal-item and home-page
+- [ ] Frequency goals: log-completion UI allows picking a past date
+- [ ] Frequency goals: max one entry per calendar day enforced
+- [ ] Year selector overlay: tap year title → bottom-sheet picker with content dots
+- [ ] Goal ordering: drag-reorder in edit mode in `home-page.js`
+
 ---
 
 ## Output format
