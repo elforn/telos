@@ -150,6 +150,110 @@ class GoalItem extends Gestures(AppElement) {
           animation: goal-ring 700ms ease-out forwards;
         }
 
+        /* ── Particle bursts ─────────────────────────────────────────────────── */
+
+        :host(.celebrating)::before,
+        :host(.celebrating)::after {
+          content: '';
+          position: absolute;
+          width: 0;
+          height: 0;
+          top: 50%;
+          left: 50%;
+          pointer-events: none;
+          z-index: 10;
+        }
+
+        :host(.celebrating)::before {
+          animation: burst-1 1500ms ease-out forwards;
+          transform: rotate(var(--b1-rot, 0deg)) scale(var(--b-scale, 1));
+          border-radius: var(--b1-radius, 50%);
+        }
+
+        :host(.celebrating)::after {
+          animation: burst-2 1500ms var(--b2-delay, 120ms) ease-out forwards;
+          transform: rotate(var(--b2-rot, 0deg)) scale(var(--b-scale, 1));
+          border-radius: var(--b2-radius, 50%);
+        }
+
+        @keyframes burst-1 {
+          0% {
+            opacity: 1;
+            box-shadow:
+              -155px  0px 0 5px #FFFFFF,
+               -90px  0px 0 5px var(--color-accent),
+               -40px  0px 0 5px #FFFFFF,
+                15px  0px 0 5px var(--color-accent-dark),
+                65px  0px 0 5px #FFFFFF,
+               115px  0px 0 5px var(--color-accent),
+               165px  0px 0 5px #FFFFFF,
+               -15px  0px 0 5px var(--color-accent-dark);
+          }
+          60% {
+            opacity: 0.85;
+            box-shadow:
+              -157px  -53px 0 4px #FFFFFF,
+               -93px  -68px 0 4px var(--color-accent),
+               -41px  -62px 0 4px #FFFFFF,
+                13px  -73px 0 4px var(--color-accent-dark),
+                66px  -65px 0 4px #FFFFFF,
+               116px  -59px 0 4px var(--color-accent),
+               167px  -52px 0 4px #FFFFFF,
+               -17px  -70px 0 4px var(--color-accent-dark);
+          }
+          100% {
+            opacity: 0;
+            box-shadow:
+              -160px   -82px 0 2px #FFFFFF,
+               -95px  -104px 0 2px var(--color-accent),
+               -42px   -96px 0 2px #FFFFFF,
+                12px  -112px 0 2px var(--color-accent-dark),
+                68px  -100px 0 2px #FFFFFF,
+               118px   -90px 0 2px var(--color-accent),
+               170px   -80px 0 2px #FFFFFF,
+               -18px  -108px 0 2px var(--color-accent-dark);
+          }
+        }
+
+        @keyframes burst-2 {
+          0% {
+            opacity: 1;
+            box-shadow:
+              -140px  0px 0 5px var(--color-accent),
+               -75px  0px 0 5px #FFFFFF,
+               -25px  0px 0 5px var(--color-accent-dark),
+                30px  0px 0 5px #FFFFFF,
+                85px  0px 0 5px var(--color-accent),
+               135px  0px 0 5px #FFFFFF,
+               -55px  0px 0 5px #FFFFFF,
+                55px  0px 0 5px var(--color-accent-dark);
+          }
+          60% {
+            opacity: 0.85;
+            box-shadow:
+              -142px  -51px 0 4px var(--color-accent),
+               -77px  -70px 0 4px #FFFFFF,
+               -26px  -65px 0 4px var(--color-accent-dark),
+                29px  -75px 0 4px #FFFFFF,
+                86px  -68px 0 4px var(--color-accent),
+               138px  -57px 0 4px #FFFFFF,
+               -56px  -62px 0 4px #FFFFFF,
+                57px  -56px 0 4px var(--color-accent-dark);
+          }
+          100% {
+            opacity: 0;
+            box-shadow:
+              -145px   -78px 0 2px var(--color-accent),
+               -80px  -108px 0 2px #FFFFFF,
+               -28px  -100px 0 2px var(--color-accent-dark),
+                28px  -116px 0 2px #FFFFFF,
+                88px  -104px 0 2px var(--color-accent),
+               140px   -88px 0 2px #FFFFFF,
+               -58px   -96px 0 2px #FFFFFF,
+                58px   -86px 0 2px var(--color-accent-dark);
+          }
+        }
+
         @keyframes peek-hint {
           0%   { transform: translateX(0); }
           20%  { transform: translateX(-14px); }
@@ -177,6 +281,8 @@ class GoalItem extends Gestures(AppElement) {
         @media (prefers-reduced-motion: reduce) {
           .fill.celebrate { animation: none; }
           :host(.celebrating) { animation: none; }
+          :host(.celebrating)::before { animation: none; }
+          :host(.celebrating)::after  { animation: none; }
           :host(.peek-hint) .bar { animation: none; }
           :host(.pop-confirm) { animation: none; }
         }
@@ -385,8 +491,19 @@ class GoalItem extends Gestures(AppElement) {
   _celebrate() {
     this._fill.classList.add('celebrate');
     this._fill.addEventListener('animationend', () => this._fill.classList.remove('celebrate'), { once: true });
+    const r = (a, b) => +(a + Math.random() * (b - a)).toFixed(1);
+    const shape = () => ['50%', '50%', '20%', '0%'][Math.floor(Math.random() * 4)];
+    this.style.setProperty('--b1-rot',    `${r(-20, 20)}deg`);
+    this.style.setProperty('--b2-rot',    `${r(-20, 20)}deg`);
+    this.style.setProperty('--b-scale',   `${r(0.82, 1.18)}`);
+    this.style.setProperty('--b2-delay',  `${Math.round(80 + Math.random() * 120)}ms`);
+    this.style.setProperty('--b1-radius', shape());
+    this.style.setProperty('--b2-radius', shape());
     this.classList.add('celebrating');
-    this.addEventListener('animationend', () => this.classList.remove('celebrating'), { once: true });
+    // Use setTimeout rather than animationend — multiple animations run on :host
+    // (goal-ring 700ms, burst-1 1500ms, burst-2 1500ms+120ms delay) and we
+    // must keep .celebrating alive until the last one finishes.
+    setTimeout(() => this.classList.remove('celebrating'), 1700);
   }
 
   _update() {
