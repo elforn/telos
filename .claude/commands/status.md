@@ -17,9 +17,7 @@ Do not start any work. Report only.
 - [ ] 404 / fallback route handled by a not-found page
 
 ### Data layer
-- [ ] At least one store action defined in `app/store/`
 - [ ] Schema version and migrations reviewed — run `/migration` if schema changed
-- [ ] Event types are clear from reading `app/store/reducer.js`
 
 ### Components
 List every file in `app/components/` and `app/pages/`. For each:
