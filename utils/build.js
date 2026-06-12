@@ -81,7 +81,8 @@ const indexProcessed = readFileSync(join(root, 'index.html'), 'utf8')
   .replace('%%MAIN_JS%%', `${BASE_PATH}${mainFilename}`)
   .replace('__APP_VERSION__', version)
   .replace('__BUILD_VERSION__', `${version}-${cacheHash}`)
-  .replace('base-path="/"', `base-path="${BASE_PATH}"`);
+  .replace('base-path="/"', `base-path="${BASE_PATH}"`)
+  .replaceAll('%%BASE_PATH%%', BASE_PATH);
 writeFileSync(join(dist, 'index.html'), indexProcessed);
 
 // 5. Process manifest.json — substitute BASE_PATH
