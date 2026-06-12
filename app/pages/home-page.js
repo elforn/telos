@@ -149,7 +149,11 @@ class HomePage extends AppElement {
   }
 
   subscribe() {
-    this._year   = Number(this.params?.year);
+    this._year = Number(this.params?.year);
+    if (!Number.isInteger(this._year) || this._year < 2000 || this._year > 2500) {
+      navigate(`${BASE_PATH}/not-found`);
+      return;
+    }
     this._header = this.shadowRoot.querySelector('#header');
     this._dialog = this.shadowRoot.querySelector('#dialog');
     this._editingSection = 'capstone';
@@ -227,6 +231,9 @@ class HomePage extends AppElement {
     focusEditBtn.addEventListener('click', this._onFocusEdit);
 
     // ── Store subscription ────────────────────────────────────────────────────
+
+    this._onAccentColors = colors => this._applyAccent(colors?.[String(this._year)]);
+    subscribe('accentColors', this._onAccentColors);
 
     this._onGoals = goals => {
       const year = String(this._year);
@@ -374,6 +381,7 @@ class HomePage extends AppElement {
 
   unsubscribe() {
     unsubscribe('goals', this._onGoals);
+    unsubscribe('accentColors', this._onAccentColors);
 
     this._header?.removeEventListener('year-navigate', this._onYearNavigate);
 
@@ -404,6 +412,27 @@ class HomePage extends AppElement {
 
     this.shadowRoot.removeEventListener('goal-saved', this._onGoalSaved);
     this._dialog?.removeEventListener('goal-delete', this._onDialogDelete);
+  }
+
+  // ── Accent colour ─────────────────────────────────────────────────────────
+
+  _applyAccent(hex) {
+    const s = document.documentElement.style;
+    if (!hex) {
+      s.setProperty('--color-accent',        '#5BADE0');
+      s.setProperty('--color-accent-light',  '#E2F3FB');
+      s.setProperty('--color-accent-dark',   '#3A93CC');
+      s.setProperty('--color-accent-subtle', 'rgba(91, 173, 224, 0.12)');
+      return;
+    }
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const w = (c, t) => Math.round(c * t + 255 * (1 - t));
+    s.setProperty('--color-accent',        hex);
+    s.setProperty('--color-accent-light',  `rgb(${w(r, .22)},${w(g, .22)},${w(b, .22)})`);
+    s.setProperty('--color-accent-dark',   `rgb(${Math.round(r * .72)},${Math.round(g * .72)},${Math.round(b * .72)})`);
+    s.setProperty('--color-accent-subtle', `rgba(${r},${g},${b},0.12)`);
   }
 
   // ── Store mutations ───────────────────────────────────────────────────────

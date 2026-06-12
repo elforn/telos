@@ -43,6 +43,8 @@ defineStrings({
   'year-header.photo-add':    'Add photo',
   'year-header.photo-change': 'Change photo',
   'year-header.photo-remove': 'Remove photo',
+  'year-header.color':        'Year color',
+  'year-header.color-reset':  'Reset to default',
 
   'sync.export-year': 'Export {year}',
   'sync.export-all':  'Export all years',

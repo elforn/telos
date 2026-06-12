@@ -5,6 +5,11 @@ import * as Store from '../../../_lib/core/store/store.js';
 import { compressImage } from '../../../_lib/modules/images/images.js';
 import { exportData, importData, downloadExport, readImportFile } from '../../../_lib/modules/sync/sync.js';
 
+const PALETTE = [
+  '#5BADE0', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899',
+  '#EF4444', '#F97316', '#EAB308', '#22C55E', '#14B8A6',
+];
+
 class YearHeader extends Gestures(AppElement) {
   set year(v) {
     this._year = Number(v);
@@ -319,6 +324,44 @@ class YearHeader extends Gestures(AppElement) {
           outline-offset: 2px;
         }
 
+        .color-dot {
+          display: inline-block;
+          inline-size: 10px;
+          block-size: 10px;
+          border-radius: 50%;
+          background: var(--color-accent);
+          vertical-align: middle;
+          margin-inline-end: var(--space-1);
+        }
+
+        .color-grid {
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          gap: var(--space-3);
+          padding: var(--space-4) var(--space-5);
+          border-block-start: 0.5px solid var(--color-border);
+        }
+
+        .swatch {
+          aspect-ratio: 1;
+          border-radius: 50%;
+          border: none;
+          cursor: pointer;
+          min-inline-size: var(--touch-target);
+          min-block-size: var(--touch-target);
+          box-shadow: 0 0 0 0 transparent;
+          transition: box-shadow 0.15s;
+        }
+
+        .swatch.active {
+          box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-text-primary);
+        }
+
+        .swatch:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
         .badge {
           font-size: var(--font-size-caption);
           font-weight: var(--font-weight-medium);
@@ -369,6 +412,10 @@ class YearHeader extends Gestures(AppElement) {
           <span>${t('year-header.photo')}</span>
           <span class="menu-item-value">›</span>
         </button>
+        <button class="menu-item" id="year-color-btn">
+          <span>${t('year-header.color')}</span>
+          <span class="menu-item-value"><span class="color-dot"></span> ›</span>
+        </button>
         <button class="menu-item" id="export-year-btn">
           <span id="export-year-label">${t('sync.export-year', { year })}</span>
           <span class="menu-item-value">↓</span>
@@ -402,6 +449,17 @@ class YearHeader extends Gestures(AppElement) {
             ${active ? `<span class="badge selected">✓</span>` : ''}
           </button>`;
         }).join('')}
+      </dialog>
+
+      <dialog id="color-sheet">
+        <div class="menu-handle"></div>
+        <p class="menu-section-label">${t('year-header.color')}</p>
+        <div class="color-grid">
+          ${PALETTE.map(hex => `<button class="swatch" data-color="${hex}" style="background:${hex}" aria-label="${hex}"></button>`).join('')}
+        </div>
+        <button class="menu-item" id="color-reset-btn">
+          <span>${t('year-header.color-reset')}</span>
+        </button>
       </dialog>
 
       <dialog id="photo-sheet">
@@ -533,6 +591,36 @@ class YearHeader extends Gestures(AppElement) {
     };
     photoInput.addEventListener('change', this._onPhotoInput);
 
+    // Color picker
+    this._colorSheet = this.shadowRoot.querySelector('#color-sheet');
+
+    this._onYearColorBtn = () => {
+      this._menuDialog.close();
+      this._updateSwatches(Store.getState().accentColors?.[String(this._year)]);
+      this._colorSheet.showModal();
+    };
+    this.shadowRoot.querySelector('#year-color-btn').addEventListener('click', this._onYearColorBtn);
+
+    this._onColorSheetClick = e => {
+      if (e.target === this._colorSheet) { this._colorSheet.close(); return; }
+      const swatch = e.target.closest('.swatch');
+      if (!swatch) return;
+      const hex = swatch.dataset.color;
+      Store.setState('accentColors', { ...Store.getState().accentColors, [String(this._year)]: hex });
+      this._updateSwatches(hex);
+      this._colorSheet.close();
+    };
+    this._colorSheet.addEventListener('click', this._onColorSheetClick);
+
+    this._onColorReset = () => {
+      const colors = { ...Store.getState().accentColors };
+      delete colors[String(this._year)];
+      Store.setState('accentColors', colors);
+      this._updateSwatches(null);
+      this._colorSheet.close();
+    };
+    this.shadowRoot.querySelector('#color-reset-btn').addEventListener('click', this._onColorReset);
+
     // Export / import
     this._importConfirm = this.shadowRoot.querySelector('#import-confirm');
     const importInput   = this.shadowRoot.querySelector('#import-input');
@@ -624,6 +712,9 @@ class YearHeader extends Gestures(AppElement) {
     this._menuDialog?.removeEventListener('close', this._onMenuClose);
     this._menuDialog?.removeEventListener('click', this._onBackdrop);
     this.shadowRoot.querySelector('#year-photo-btn')?.removeEventListener('click', this._onYearPhotoBtn);
+    this.shadowRoot.querySelector('#year-color-btn')?.removeEventListener('click', this._onYearColorBtn);
+    this._colorSheet?.removeEventListener('click', this._onColorSheetClick);
+    this.shadowRoot.querySelector('#color-reset-btn')?.removeEventListener('click', this._onColorReset);
     this._photoSheet?.removeEventListener('click', this._onPhotoSheetBackdrop);
     this.shadowRoot.querySelector('#photo-add')?.removeEventListener('click', this._onPhotoAdd);
     this.shadowRoot.querySelector('#photo-change')?.removeEventListener('click', this._onPhotoChange);
@@ -642,6 +733,12 @@ class YearHeader extends Gestures(AppElement) {
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--year-header-height');
     window.removeEventListener('scroll', this._onScroll);
+  }
+
+  _updateSwatches(currentHex) {
+    this._colorSheet?.querySelectorAll('.swatch').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.color === currentHex);
+    });
   }
 
   _updateYear() {
