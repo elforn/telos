@@ -3,7 +3,7 @@ import { BASE_PATH } from '../base-path.js';
 
 class YearRedirect extends HTMLElement {
   connectedCallback() {
-    navigate(`${BASE_PATH}/${new Date().getFullYear()}`);
+    navigate(`${BASE_PATH}${new Date().getFullYear()}`);
   }
 }
 

@@ -21,8 +21,8 @@ console.log('Telos', __APP_VERSION__);
 
 const router = document.querySelector('app-router');
 router.routes = [
-  { path: `${BASE_PATH}/`,            component: 'year-redirect' },
-  { path: `${BASE_PATH}/not-found`,   component: 'not-found-page' },
-  { path: `${BASE_PATH}/:year`,       component: 'home-page' },
+  { path: `${BASE_PATH}`,             component: 'year-redirect' },
+  { path: `${BASE_PATH}not-found`,    component: 'not-found-page' },
+  { path: `${BASE_PATH}:year`,        component: 'home-page' },
   { path: '*',                        component: 'not-found-page' },
 ];

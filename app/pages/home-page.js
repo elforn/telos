@@ -151,7 +151,7 @@ class HomePage extends AppElement {
   subscribe() {
     this._year = Number(this.params?.year);
     if (!Number.isInteger(this._year) || this._year < 2000 || this._year > 2500) {
-      navigate(`${BASE_PATH}/not-found`);
+      navigate(`${BASE_PATH}not-found`);
       return;
     }
     this._header = this.shadowRoot.querySelector('#header');
@@ -172,7 +172,7 @@ class HomePage extends AppElement {
 
     this._header.year = this._year;
 
-    this._onYearNavigate = e => navigate(`${BASE_PATH}/${e.detail.year}`);
+    this._onYearNavigate = e => navigate(`${BASE_PATH}${e.detail.year}`);
     this._header.addEventListener('year-navigate', this._onYearNavigate);
 
     // ── Per-section edit ─────────────────────────────────────────────────────
