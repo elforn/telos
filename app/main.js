@@ -19,6 +19,11 @@ await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColor
 
 console.log('Telos', __APP_VERSION__);
 
+const swm = document.createElement('sw-manager');
+swm.setAttribute('base-path', BASE_PATH);
+swm.setAttribute('app-version', __APP_VERSION__);
+document.body.prepend(swm);
+
 const router = document.querySelector('app-router');
 router.routes = [
   { path: `${BASE_PATH}`,             component: 'year-redirect' },

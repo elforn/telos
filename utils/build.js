@@ -70,9 +70,7 @@ writeFileSync(join(dist, 'sw.js'), swSrc
 // 4. index.html — inline tokens.css, inject hashed main.js, BASE_PATH
 writeFileSync(join(dist, 'index.html'), indexSrc
   .replace('<link rel="stylesheet" href="_lib/core/styles/tokens.css" />', `<style>\n${tokensContent}\n</style>`)
-  .replace('%%MAIN_JS%%',    `${BASE_PATH}${mainFilename}`)
-  .replace('__APP_VERSION__', version)
-  .replace('base-path="/"', `base-path="${BASE_PATH}"`));
+  .replace('%%MAIN_JS%%',    `${BASE_PATH}${mainFilename}`));
 
 // 5. manifest.json (BASE_PATH substitution for scaffolded apps)
 writeFileSync(join(dist, 'manifest.json'), manifestSrc.replaceAll('%%BASE_PATH%%', BASE_PATH));
