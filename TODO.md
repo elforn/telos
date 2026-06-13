@@ -47,6 +47,12 @@ last 8 weeks or 6 months in the goal list. Visual representation TBD.
 - Share Target API — register as a system share target; incoming shares go into
   a chosen list.
 
+## Infrastructure
+- **Export before SW update** — when a new SW version is detected waiting, offer
+  (or auto-trigger) a data export before the user taps "Update". Prevents data loss
+  if a broken release ships. Likely a library-level feature in sw-manager or
+  update-banner.
+
 ## Later — depth
 - **Year / quarterly reflection** — 1–5 star rating + short note, storable
   annually or per quarter (Q1–Q4). Modal UI, TBD.
