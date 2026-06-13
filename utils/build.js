@@ -24,7 +24,7 @@ const { outputFiles } = await esbuild.build({
   minify:      true,
   sourcemap:   true,
   format:      'esm',
-  define:      { __APP_VERSION__: `"${version}"` },
+  define:      { __APP_VERSION__: `"${version}"`, __BASE_PATH__: `"${BASE_PATH}"` },
   outdir:      dist,
   write:       false,
 });
