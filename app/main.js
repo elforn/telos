@@ -1,5 +1,5 @@
-import { initTheme } from '../_lib/core/theme/theme.js';
 import './strings.js';
+import { initTheme } from '../_lib/core/theme/theme.js';
 import { BASE_PATH } from './base-path.js';
 import './locales/fr.js';
 import './locales/ca.js';

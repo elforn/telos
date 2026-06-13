@@ -190,6 +190,11 @@
   --color-action-dark:      #F5F2EE;
   --color-action-dark-text: #1C1C1E;
 
+  /* on-dark tokens flip with the surface — dark text on the now-light action surface */
+  --color-on-dark:           rgba(0, 0, 0, 0.80);
+  --color-on-dark-muted:     rgba(0, 0, 0, 0.60);
+  --color-on-dark-dim:       rgba(0, 0, 0, 0.12);
+
   --color-overlay:         rgba(0, 0, 0, 0.60);
 
   --shadow-card:  0 1px 3px rgba(0, 0, 0, 0.24),
