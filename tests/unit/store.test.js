@@ -32,6 +32,40 @@ describe('Simple store — boot', () => {
   });
 });
 
+describe('Simple store — SW update race condition', () => {
+  it('setState before boot does not corrupt stored data', async () => {
+    const name = freshName();
+    await boot({ dbName: name, initialState: { goals: {} } });
+    setState('goals', { '2026': { capstone: [{ id: '1', title: 'Race goal' }], milestones: [], wow: [], focus: [] } });
+    reset();
+
+    // Simulate sw-manager calling setState before boot — _db is null so the IDB
+    // write must fail rather than overwrite the stored goals with {}.
+    // Absorb the async rejection from put(null, ...) so Vitest doesn't flag it.
+    const rejection = new Promise(r => process.once('unhandledRejection', r));
+    setState('updateAvailable', true);
+    await rejection;
+
+    await boot({ dbName: name, initialState: { goals: {} } });
+    expect(getState().goals?.['2026']?.capstone?.[0]?.title).toBe('Race goal');
+  });
+
+  it('setState after boot adds key without wiping stored data', async () => {
+    const name = freshName();
+    await boot({ dbName: name, initialState: { goals: {} } });
+    setState('goals', { '2026': { capstone: [{ id: '1', title: 'Race goal' }], milestones: [], wow: [], focus: [] } });
+    reset();
+
+    await boot({ dbName: name, initialState: { goals: {} } });
+    // sw-manager fires setState AFTER boot — goals must survive the write
+    setState('updateAvailable', true);
+    reset();
+
+    await boot({ dbName: name, initialState: { goals: {} } });
+    expect(getState().goals?.['2026']?.capstone?.[0]?.title).toBe('Race goal');
+  });
+});
+
 describe('Simple store — setState / getState', () => {
   it('updates state synchronously', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {} } });

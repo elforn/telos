@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { waitForPage, waitForIDBFlush } from './helpers.js';
 
 /*
  * Full E2E SW update testing (two deployed builds swapping) cannot be automated
@@ -34,6 +35,66 @@ async function waitForApp(page) {
     !!document.querySelector('app-router')?.shadowRoot?.querySelector('home-page')
   );
 }
+
+test.describe('Update flow — data persistence', () => {
+  test('goals survive a reload triggered by the update banner', async ({ page }) => {
+    const currentYear = new Date().getFullYear();
+
+    // Seed a known goal directly into IDB before the app boots
+    await page.goto('/');
+    await waitForPage(page);
+
+    await page.evaluate(async (year) => {
+      const store = window.__store ?? await new Promise(r => {
+        const req = indexedDB.open('telos', 1);
+        req.onsuccess = e => r(e.target.result);
+      });
+      await new Promise((resolve, reject) => {
+        const tx = store.transaction('state', 'readwrite');
+        const existing = tx.objectStore('state').get('root');
+        existing.onsuccess = () => {
+          const data = existing.result?.data ?? {};
+          const yearGoals = data.goals?.[year] ?? { capstone: [], milestones: [], wow: [], focus: [] };
+          yearGoals.capstone = [{ id: 'update-test-1', title: 'Survives update', percentage: 0, tags: [] }];
+          data.goals = { ...data.goals, [year]: yearGoals };
+          tx.objectStore('state').put({ id: 'root', data });
+          tx.oncomplete = resolve;
+          tx.onerror = () => reject(tx.error);
+        };
+      });
+    }, String(currentYear));
+
+    await waitForIDBFlush(page);
+
+    // Trigger update banner via version mismatch
+    await page.route('**/version.json', route =>
+      route.fulfill({ json: { version: '999.0.0', buildTime: new Date().toISOString() } })
+    );
+    await page.reload();
+    await waitForPage(page);
+    await expect(page.locator('update-banner')).not.toHaveAttribute('hidden');
+
+    // Reload via update banner (no waiting SW → falls back to location.reload())
+    await page.unrouteAll();
+    await page.locator('update-banner #reload').click();
+    await page.waitForLoadState('domcontentloaded');
+    await waitForPage(page);
+
+    // Verify goal survived in IDB
+    const title = await page.evaluate(async (year) => {
+      const db = await new Promise(r => {
+        const req = indexedDB.open('telos', 1);
+        req.onsuccess = e => r(e.target.result);
+      });
+      return await new Promise(r => {
+        const req = db.transaction('state', 'readonly').objectStore('state').get('root');
+        req.onsuccess = () => r(req.result?.data?.goals?.[year]?.capstone?.[0]?.title);
+      });
+    }, String(currentYear));
+
+    expect(title).toBe('Survives update');
+  });
+});
 
 test.describe('Update flow — banner behaviour', () => {
   test('update-banner is hidden on initial load', async ({ page }) => {
