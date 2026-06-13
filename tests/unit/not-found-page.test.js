@@ -27,7 +27,7 @@ describe('not-found-page', () => {
   });
 
   it('renders a visible 404 heading', () => {
-    expect(el.shadowRoot.querySelector('h1').textContent).toBe('Page not found');
+    expect(el.shadowRoot.querySelector('h1').textContent).toBe('not-found.heading');
   });
 
   it('navigates to the current year on button click', () => {

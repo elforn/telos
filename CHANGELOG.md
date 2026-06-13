@@ -7,14 +7,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [1.2.0] — 2026-06-13
+
 ### Added
-- `TODO.md` — full feature roadmap covering lists, frequency goals, dark theme, year accent colour, and longer-term ideas
-- Not-found page redesigned with proper styling, accessible heading, and a "Go to this year" button
+- Appearance menu item (Light / System / Dark) — switch colour scheme from the year-header menu; persists across sessions
+- Unit tests for `year-header` — menu open/close, year navigation events, accent colour picker, and theme badge updates
+- Socle updated to 0.9.5: esbuild bundle pipeline (single hashed JS file, tokens.css inlined, no loose module files in dist)
+- Anti-FOUC inline script in `index.html` applies the correct `data-theme` before first paint
 
 ### Changed
-- App accent colour set to `#5BADE0` (light blue) via `index.html` `:root` override — `_lib/` remains unchanged
-- CLAUDE.md data model updated: goal schema now documents `percentage | weekly | monthly` tracking types; `ListItem` status renamed to `open | paused | done`; new top-level store keys `theme`, `accentColors`, `reflections` documented
-- CLAUDE.md strengthens the `_lib/` read-only rule — all overrides belong in `app/` or `index.html`
+- `year-header` `subscribe()` split into focused setup methods for readability
+- Locale files (`ca.js`, `fr.js`) standardised to single quotes with escaped apostrophes
+- Colour swatch `aria-label` values are now descriptive names ("Sky blue", "Teal") instead of hex codes
+
+### Fixed
+- Import confirmation button text now uses `--color-text-inverse` for correct contrast on the accent background
+- Photo upload and photo delete errors are now caught and logged instead of failing silently
+
+---
+
+## [1.1.0] — 2026-06-13
+
+### Added
+- Per-year accent colour picker — 10-colour palette in the year-header menu; resets to the default blue
+- CSS particle burst animation plays when a goal is marked complete
+
+### Changed
+- 404 page redesigned to match the app's visual style with a faded "404" motif and accent-coloured CTA button
+
+### Fixed
+- Invalid `/:year` URL values (non-numeric, out-of-range) now redirect to the 404 page instead of a broken year view
+- `tokens.css` link uses a root-absolute path so deep-URL navigation no longer breaks the stylesheet
 
 ---
 
@@ -25,7 +50,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Progress bar with hold-drag interaction (0–100 %); fail state (−1); swipe-to-reveal delete and fail actions in edit mode
 - Year navigation — tap prev/next in the header to move between years
 - Year photo — full-bleed header background image per year
-- Export / import as `.tlos` file via the sync module
+- Export / import as `.telos` file via the sync module
 - Service worker with offline-first caching
 - PWA manifest (installable on Android Chrome and Firefox)
 - Deployed to `https://elforn.github.io/telos` via GitHub Actions

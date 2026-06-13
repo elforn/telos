@@ -45,6 +45,14 @@ defineStrings({
   'year-header.photo-remove': 'Remove photo',
   'year-header.color':        'Year color',
   'year-header.color-reset':  'Reset to default',
+  'year-header.theme':        'Appearance',
+  'year-header.theme-light':  'Light',
+  'year-header.theme-dark':   'Dark',
+  'year-header.theme-system': 'System',
+
+  'not-found.heading': 'Nothing here',
+  'not-found.body':    "This page doesn't exist — but your goals are waiting.",
+  'not-found.cta':     'Go to this year',
 
   'sync.export-year': 'Export {year}',
   'sync.export-all':  'Export all years',

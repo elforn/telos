@@ -1,8 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { exportData, importData, downloadExport, readImportFile } from './sync.js';
-import { boot, reset, dispatch, attachBlob, getBlob, getAllEvents } from '../../core/store/store.js';
+import { boot, reset, attachBlob, getBlob, getAllEvents } from '../../core/store/store.js';
 import * as Store from '../../core/store/store.js';
+
+// dispatch is only exported by the event-log store. In simple-store apps store.js
+// doesn't export it — a static import would throw a SyntaxError at module load time.
+const { dispatch } = Store;
 
 // happy-dom does not implement URL.createObjectURL
 URL.createObjectURL = vi.fn(() => 'blob:mock-url');
@@ -38,7 +42,7 @@ describe('exportData (binary)', () => {
     expect(result[5]).toBe(0x8b);
   });
 
-  it('binary round-trip: events survive export → import', async () => {
+  it.skipIf(!dispatch)('binary round-trip: events survive export → import', async () => {
     await dispatch('item:added', { title: 'hello' });
     const uint8 = await exportData();
 
@@ -68,14 +72,14 @@ describe('exportData (binary)', () => {
     expect(stored.type).toBe('image/jpeg');
   });
 
-  it('skips duplicate events on binary reimport', async () => {
+  it.skipIf(!dispatch)('skips duplicate events on binary reimport', async () => {
     await dispatch('item:added', { title: 'dup' });
     const uint8 = await exportData();
     const result = await importData(uint8);
     expect(result.eventsAdded).toBe(0);
   });
 
-  it('filters events when eventFilter provided', async () => {
+  it.skipIf(!dispatch)('filters events when eventFilter provided', async () => {
     await dispatch('item:added', { year: '2025', title: 'a' });
     await dispatch('item:added', { year: '2026', title: 'b' });
     const uint8 = await exportData({ eventFilter: e => e.payload.year === '2026' });
@@ -129,7 +133,7 @@ describe('importData (legacy JSON)', () => {
     expect(all).toHaveLength(1);
   });
 
-  it('skips duplicate events (idempotent on id)', async () => {
+  it.skipIf(!dispatch)('skips duplicate events (idempotent on id)', async () => {
     await dispatch('item:added', { title: 'original' });
     const existing = await getAllEvents();
     const result = await importData({ socleVersion: 1, events: existing, images: [] });

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { boot, setState, getState, subscribe, unsubscribe, attachBlob, getBlob, deleteBlob, reset,
-  getAllBlobs, getAllEvents, importEvents } from './store-simple.js';
+  getAllBlobs, getAllEvents, importEvents } from './store.js';
 
 let dbSeq = 0;
 function freshName() { return `test-store-simple-${dbSeq++}`; }

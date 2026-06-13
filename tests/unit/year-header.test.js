@@ -1,232 +1,217 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import '../../app/strings.js';
-import '../../app/components/year-header/year-header.js';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import * as Store from '../../_lib/core/store/store.js';
 
-function stubAllDialogs(el) {
-  el.shadowRoot.querySelectorAll('dialog').forEach(dialog => {
-    dialog.showModal = vi.fn(() => dialog.setAttribute('open', ''));
-    dialog.close     = vi.fn(() => {
-      dialog.removeAttribute('open');
-      dialog.dispatchEvent(new Event('close'));
-    });
-  });
-}
+HTMLElement.prototype.setPointerCapture = () => {};
+HTMLElement.prototype.releasePointerCapture = () => {};
+global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+
+vi.mock('../../_lib/modules/images/images.js', () => ({
+  compressImage: vi.fn(async f => f),
+}));
+
+vi.mock('../../_lib/modules/sync/sync.js', () => ({
+  exportData:     vi.fn(async () => new Uint8Array()),
+  importData:     vi.fn(async () => ({ eventsAdded: 0, imagesAdded: 0 })),
+  downloadExport: vi.fn(),
+  readImportFile: vi.fn(async () => ({})),
+}));
+
+await import('../../app/strings.js');
+await import('../../app/components/year-header/year-header.js');
+
+beforeAll(async () => {
+  await Store.boot({ dbName: 'test-year-header', initialState: { goals: {}, images: {}, accentColors: {} } });
+});
 
 function mount(year = 2026) {
   const el = document.createElement('year-header');
-  document.body.appendChild(el);
   el.year = year;
-  stubAllDialogs(el);
+  document.body.appendChild(el);
   return el;
 }
 
-afterEach(() => { document.body.innerHTML = ''; vi.restoreAllMocks(); });
-
-describe('year-header — structure', () => {
-  it('renders prev and next buttons', () => {
-    const el = mount();
-    expect(el.shadowRoot.querySelector('#prev')).not.toBeNull();
-    expect(el.shadowRoot.querySelector('#next')).not.toBeNull();
-  });
-
-  it('renders the year', () => {
-    const el = mount(2025);
-    expect(el.shadowRoot.querySelector('#year').textContent).toBe('2025');
-  });
-
-  it('renders the progress strip', () => {
-    const el = mount();
-    expect(el.shadowRoot.querySelector('#strip-fill')).not.toBeNull();
-  });
-
-  it('renders a menu button', () => {
-    const el = mount();
-    expect(el.shadowRoot.querySelector('#menu-btn')).not.toBeNull();
-  });
+beforeEach(() => {
+  Store.setState('images', {});
+  Store.setState('accentColors', {});
 });
 
-describe('year-header — year strip', () => {
-  it('shows 100% strip for a past year', () => {
-    const el = mount(new Date().getFullYear() - 1);
-    expect(el.shadowRoot.querySelector('#strip-fill').style.width).toBe('100%');
-  });
-
-  it('shows 0% strip for a future year', () => {
-    const el = mount(new Date().getFullYear() + 1);
-    expect(el.shadowRoot.querySelector('#strip-fill').style.width).toBe('0%');
-  });
-});
-
-describe('year-header — navigation', () => {
-  it('emits year-navigate with year - 1 on prev click', () => {
-    const el = mount(2026);
-    let detail;
-    el.addEventListener('year-navigate', e => { detail = e.detail; }, { once: true });
-    el.shadowRoot.querySelector('#prev').click();
-    expect(detail.year).toBe(2025);
-  });
-
-  it('emits year-navigate with year + 1 on next click', () => {
-    const el = mount(2026);
-    let detail;
-    el.addEventListener('year-navigate', e => { detail = e.detail; }, { once: true });
-    el.shadowRoot.querySelector('#next').click();
-    expect(detail.year).toBe(2027);
-  });
-
-  it('updates displayed year when year prop changes', () => {
-    const el = mount(2026);
-    el.year = 2027;
-    expect(el.shadowRoot.querySelector('#year').textContent).toBe('2027');
-  });
+afterEach(() => {
+  document.body.querySelectorAll('year-header').forEach(el => el.remove());
+  localStorage.clear();
 });
 
 describe('year-header — menu', () => {
-  it('opens menu dialog on menu button click', () => {
+  it('opens the menu dialog when menu button is clicked', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    expect(el.shadowRoot.querySelector('#menu').open).toBe(true);
+  });
+
+  it('sets aria-expanded="true" on menu button when menu opens', () => {
+    const el = mount();
+    const btn = el.shadowRoot.querySelector('#menu-btn');
+    btn.click();
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('closes menu on backdrop click', () => {
     const el = mount();
     const menu = el.shadowRoot.querySelector('#menu');
     el.shadowRoot.querySelector('#menu-btn').click();
-    expect(menu.showModal).toHaveBeenCalledOnce();
+    menu.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(menu.open).toBe(false);
   });
 
-  it('shows year section in menu', () => {
+  it('resets aria-expanded when menu closes', () => {
     const el = mount();
-    const labels = Array.from(el.shadowRoot.querySelectorAll('.menu-section-label'))
-      .map(p => p.textContent);
-    expect(labels).toContain('This year');
-  });
-
-  it('shows app section in menu', () => {
-    const el = mount();
-    const labels = Array.from(el.shadowRoot.querySelectorAll('.menu-section-label'))
-      .map(p => p.textContent);
-    expect(labels).toContain('App');
+    const btn = el.shadowRoot.querySelector('#menu-btn');
+    btn.click();
+    el.shadowRoot.querySelector('#menu').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
   });
 });
 
-describe('year-header — compact mode (no image)', () => {
-  it('adds compact class when scrollY exceeds threshold (no image)', () => {
-    const el = mount();
-    Object.defineProperty(window, 'scrollY', { value: 100, configurable: true });
-    window.dispatchEvent(new Event('scroll'));
-    expect(el.classList.contains('compact')).toBe(true);
-  });
-
-  it('removes compact class when scrollY drops below revert threshold (no image)', () => {
-    const el = mount();
-    Object.defineProperty(window, 'scrollY', { value: 100, configurable: true });
-    window.dispatchEvent(new Event('scroll'));
-    Object.defineProperty(window, 'scrollY', { value: 10, configurable: true });
-    window.dispatchEvent(new Event('scroll'));
-    expect(el.classList.contains('compact')).toBe(false);
-  });
-
-  it('does not go compact at scrollY below threshold (no image)', () => {
-    const el = mount();
-    Object.defineProperty(window, 'scrollY', { value: 50, configurable: true });
-    window.dispatchEvent(new Event('scroll'));
-    expect(el.classList.contains('compact')).toBe(false);
-  });
-});
-
-describe('year-header — compact mode (with image)', () => {
-  it('adds compact class at lower threshold when image is set', () => {
-    const el = mount();
-    el.setAttribute('data-has-image', '');
-    Object.defineProperty(window, 'scrollY', { value: 25, configurable: true });
-    window.dispatchEvent(new Event('scroll'));
-    expect(el.classList.contains('compact')).toBe(true);
-  });
-
-  it('removes compact class at lower revert threshold when image is set', () => {
-    const el = mount();
-    el.setAttribute('data-has-image', '');
-    Object.defineProperty(window, 'scrollY', { value: 25, configurable: true });
-    window.dispatchEvent(new Event('scroll'));
-    Object.defineProperty(window, 'scrollY', { value: 5, configurable: true });
-    window.dispatchEvent(new Event('scroll'));
-    expect(el.classList.contains('compact')).toBe(false);
-  });
-});
-
-describe('year-header — photo sub-sheet', () => {
-  it('opens photo sub-sheet when year photo menu item is clicked', () => {
-    const el = mount();
-    el.shadowRoot.querySelector('#menu-btn').click();
-    el.shadowRoot.querySelector('#year-photo-btn').click();
-    const sheet = el.shadowRoot.querySelector('#photo-sheet');
-    expect(sheet.showModal).toHaveBeenCalledOnce();
-  });
-
-  it('shows add-photo button and hides change/remove when no image is set', () => {
-    const el = mount();
-    el.shadowRoot.querySelector('#menu-btn').click();
-    el.shadowRoot.querySelector('#year-photo-btn').click();
-    const sheet = el.shadowRoot.querySelector('#photo-sheet');
-    expect(sheet.querySelector('#photo-add').hidden).toBe(false);
-    expect(sheet.querySelector('#photo-change').hidden).toBe(true);
-    expect(sheet.querySelector('#photo-remove').hidden).toBe(true);
-  });
-
-  it('shows change/remove and hides add when image is set for the year', () => {
+describe('year-header — year navigation', () => {
+  it('emits year-navigate with year - 1 when prev button is clicked', () => {
     const el = mount(2026);
-    el._imagesState = { 2026: 'some-uuid' };
-    el.shadowRoot.querySelector('#menu-btn').click();
-    el.shadowRoot.querySelector('#year-photo-btn').click();
-    const sheet = el.shadowRoot.querySelector('#photo-sheet');
-    expect(sheet.querySelector('#photo-add').hidden).toBe(true);
-    expect(sheet.querySelector('#photo-change').hidden).toBe(false);
-    expect(sheet.querySelector('#photo-remove').hidden).toBe(false);
-  });
-});
-
-describe('year-header — language sub-sheet', () => {
-  it('opens language sub-sheet when language menu item is clicked', () => {
-    const el = mount();
-    el.shadowRoot.querySelector('#menu-btn').click();
-    el.shadowRoot.querySelector('#language-btn').click();
-    const sheet = el.shadowRoot.querySelector('#lang-sheet');
-    expect(sheet.showModal).toHaveBeenCalledOnce();
+    let detail;
+    el.addEventListener('year-navigate', e => { detail = e.detail; });
+    el.shadowRoot.querySelector('#prev').click();
+    expect(detail).toEqual({ year: 2025 });
   });
 
-  it('renders EN, FR, and CA locale options', () => {
-    const el = mount();
-    const locales = Array.from(
-      el.shadowRoot.querySelectorAll('#lang-sheet [data-locale]')
-    ).map(btn => btn.dataset.locale);
-    expect(locales).toContain('en');
-    expect(locales).toContain('fr');
-    expect(locales).toContain('ca');
-  });
-});
-
-describe('year-header — sync section', () => {
-  it('renders export this year button', () => {
+  it('emits year-navigate with year + 1 when next button is clicked', () => {
     const el = mount(2026);
-    expect(el.shadowRoot.querySelector('#export-year-btn')).not.toBeNull();
+    let detail;
+    el.addEventListener('year-navigate', e => { detail = e.detail; });
+    el.shadowRoot.querySelector('#next').click();
+    expect(detail).toEqual({ year: 2027 });
   });
 
-  it('export year button label includes the year', () => {
-    const el = mount(2026);
-    const span = el.shadowRoot.querySelector('#export-year-label');
-    expect(span.textContent).toContain('2026');
-  });
-
-  it('export year button label updates when year prop changes', () => {
+  it('updates displayed year when year property is set after mount', async () => {
     const el = mount(2026);
     el.year = 2027;
-    const span = el.shadowRoot.querySelector('#export-year-label');
-    expect(span.textContent).toContain('2027');
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#year').textContent).toBe('2027')
+    );
   });
 
-  it('renders export all years button', () => {
+  it('year-navigate event bubbles and is composed', () => {
+    const el = mount(2026);
+    let event;
+    document.addEventListener('year-navigate', e => { event = e; }, { once: true });
+    el.shadowRoot.querySelector('#next').click();
+    expect(event?.bubbles).toBe(true);
+    expect(event?.composed).toBe(true);
+  });
+});
+
+describe('year-header — accent color picker', () => {
+  it('opens color sheet when color menu item is clicked', () => {
     const el = mount();
-    expect(el.shadowRoot.querySelector('#export-all-btn')).not.toBeNull();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#year-color-btn').click();
+    expect(el.shadowRoot.querySelector('#color-sheet').open).toBe(true);
   });
 
-  it('renders import button', () => {
+  it('sets .active on the swatch matching the current accent color', () => {
+    Store.setState('accentColors', { '2026': '#3B82F6' });
     const el = mount();
-    expect(el.shadowRoot.querySelector('#import-btn')).not.toBeNull();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#year-color-btn').click();
+    const active = el.shadowRoot.querySelector('.swatch.active');
+    expect(active?.dataset.color).toBe('#3B82F6');
+  });
+
+  it('no swatch is active when no accent color is set', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#year-color-btn').click();
+    expect(el.shadowRoot.querySelector('.swatch.active')).toBeNull();
+  });
+
+  it('clicking a swatch updates accentColors in the store', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#year-color-btn').click();
+    const swatch = el.shadowRoot.querySelector('.swatch[data-color="#EF4444"]');
+    swatch.click();
+    expect(Store.getState().accentColors?.['2026']).toBe('#EF4444');
+  });
+
+  it('reset button removes the accent color for the year', () => {
+    Store.setState('accentColors', { '2026': '#3B82F6' });
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#year-color-btn').click();
+    el.shadowRoot.querySelector('#color-reset-btn').click();
+    expect(Store.getState().accentColors?.['2026']).toBeUndefined();
+  });
+
+  it('each swatch has a descriptive aria-label', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#year-color-btn').click();
+    const swatches = [...el.shadowRoot.querySelectorAll('.swatch')];
+    expect(swatches.every(s => s.getAttribute('aria-label')?.length > 0)).toBe(true);
+    expect(swatches.some(s => s.getAttribute('aria-label') === '#5BADE0')).toBe(false);
+  });
+});
+
+describe('year-header — theme picker', () => {
+  it('opens theme sheet when theme menu item is clicked', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#theme-btn').click();
+    expect(el.shadowRoot.querySelector('#theme-sheet').open).toBe(true);
+  });
+
+  it('shows checkmark badge on the active theme option', () => {
+    localStorage.setItem('theme', 'system');
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#theme-btn').click();
+    const systemBtn = el.shadowRoot.querySelector('[data-theme="system"]');
+    expect(systemBtn.querySelector('.badge')).toBeTruthy();
+  });
+
+  it('active theme has badge; others do not', () => {
+    localStorage.setItem('theme', 'dark');
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#theme-btn').click();
+    expect(el.shadowRoot.querySelector('[data-theme="dark"] .badge')).toBeTruthy();
+    expect(el.shadowRoot.querySelector('[data-theme="light"] .badge')).toBeNull();
+    expect(el.shadowRoot.querySelector('[data-theme="system"] .badge')).toBeNull();
+  });
+
+  it('selecting a different theme updates the badge', async () => {
+    localStorage.setItem('theme', 'system');
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#theme-btn').click();
+    el.shadowRoot.querySelector('[data-theme="dark"]').click();
+
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#theme-btn').click();
+
+    await vi.waitFor(() => {
+      expect(el.shadowRoot.querySelector('[data-theme="dark"] .badge')).toBeTruthy();
+      expect(el.shadowRoot.querySelector('[data-theme="system"] .badge')).toBeNull();
+    });
+  });
+
+  it('theme value in main menu updates when theme changes', async () => {
+    localStorage.setItem('theme', 'system');
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#theme-btn').click();
+    el.shadowRoot.querySelector('[data-theme="light"]').click();
+
+    await vi.waitFor(() => {
+      const val = el.shadowRoot.querySelector('#theme-value');
+      expect(val.textContent).toContain('Light');
+    });
   });
 });

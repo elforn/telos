@@ -1,3 +1,4 @@
+import { initTheme } from '../_lib/core/theme/theme.js';
 import './strings.js';
 import { BASE_PATH } from './base-path.js';
 import './locales/fr.js';
@@ -11,6 +12,7 @@ import './pages/year-redirect.js';
 import './pages/home-page.js';
 import './pages/not-found-page.js';
 
+initTheme();
 setLocale(getLocale());
 
 await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {} } });

@@ -4,10 +4,23 @@ import { t, setLocale, getLocale } from '../../../_lib/core/strings.js';
 import * as Store from '../../../_lib/core/store/store.js';
 import { compressImage } from '../../../_lib/modules/images/images.js';
 import { exportData, importData, downloadExport, readImportFile } from '../../../_lib/modules/sync/sync.js';
+import { getTheme, setTheme, onThemeChange } from '../../../_lib/core/theme/theme.js';
+
+function _themeName(theme) {
+  return { light: t('year-header.theme-light'), dark: t('year-header.theme-dark'), system: t('year-header.theme-system') }[theme] ?? theme;
+}
 
 const PALETTE = [
-  '#5BADE0', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899',
-  '#EF4444', '#F97316', '#EAB308', '#22C55E', '#14B8A6',
+  { hex: '#5BADE0', label: 'Sky blue' },
+  { hex: '#3B82F6', label: 'Blue' },
+  { hex: '#6366F1', label: 'Indigo' },
+  { hex: '#8B5CF6', label: 'Violet' },
+  { hex: '#EC4899', label: 'Pink' },
+  { hex: '#EF4444', label: 'Red' },
+  { hex: '#F97316', label: 'Orange' },
+  { hex: '#EAB308', label: 'Yellow' },
+  { hex: '#22C55E', label: 'Green' },
+  { hex: '#14B8A6', label: 'Teal' },
 ];
 
 class YearHeader extends Gestures(AppElement) {
@@ -19,7 +32,7 @@ class YearHeader extends Gestures(AppElement) {
   template() {
     const year         = this._year ?? new Date().getFullYear();
     const pct          = yearProgress(year);
-    const buildVersion = document.querySelector('sw-manager')?.getAttribute('build-version') ?? '';
+    const buildVersion = document.querySelector('sw-manager')?.getAttribute('app-version') ?? '';
     return `
       <style>
         @keyframes menu-in {
@@ -316,7 +329,7 @@ class YearHeader extends Gestures(AppElement) {
 
         .confirm-btn.accent {
           background: var(--color-accent);
-          color: var(--color-text-primary);
+          color: var(--color-text-inverse);
         }
 
         .confirm-btn:focus-visible {
@@ -429,6 +442,10 @@ class YearHeader extends Gestures(AppElement) {
           <span>${t('sync.import')}</span>
           <span class="menu-item-value">↑</span>
         </button>
+        <button class="menu-item" id="theme-btn">
+          <span>${t('year-header.theme')}</span>
+          <span class="menu-item-value" id="theme-value">${_themeName(getTheme())} ›</span>
+        </button>
         <button class="menu-item" id="language-btn">
           <span>${t('year-header.language')}</span>
           <span class="menu-item-value" id="lang-value">${_localeName(getLocale())} ›</span>
@@ -437,6 +454,16 @@ class YearHeader extends Gestures(AppElement) {
           <span>${t('year-header.version')}</span>
           <span class="menu-item-value">${buildVersion}</span>
         </div>
+      </dialog>
+
+      <dialog id="theme-sheet">
+        <div class="menu-handle"></div>
+        <p class="menu-section-label">${t('year-header.theme')}</p>
+        ${['light', 'system', 'dark'].map(val => `
+          <button class="menu-item" data-theme="${val}">
+            <span>${_themeName(val)}</span>
+            ${getTheme() === val ? `<span class="badge selected">✓</span>` : ''}
+          </button>`).join('')}
       </dialog>
 
       <dialog id="lang-sheet">
@@ -455,7 +482,7 @@ class YearHeader extends Gestures(AppElement) {
         <div class="menu-handle"></div>
         <p class="menu-section-label">${t('year-header.color')}</p>
         <div class="color-grid">
-          ${PALETTE.map(hex => `<button class="swatch" data-color="${hex}" style="background:${hex}" aria-label="${hex}"></button>`).join('')}
+          ${PALETTE.map(({ hex, label }) => `<button class="swatch" data-color="${hex}" style="background:${hex}" aria-label="${label}"></button>`).join('')}
         </div>
         <button class="menu-item" id="color-reset-btn">
           <span>${t('year-header.color-reset')}</span>
@@ -487,21 +514,11 @@ class YearHeader extends Gestures(AppElement) {
   }
 
   subscribe() {
-    this._yearEl    = this.shadowRoot.querySelector('#year');
-    this._stripFill = this.shadowRoot.querySelector('#strip-fill');
+    this._yearEl     = this.shadowRoot.querySelector('#year');
+    this._stripFill  = this.shadowRoot.querySelector('#strip-fill');
     this._menuDialog = this.shadowRoot.querySelector('#menu');
-    this._compact = false;
-    this._imageUrl = null;
-
-    this._onScroll = () => {
-      const y = window.scrollY;
-      const hasImage = this.hasAttribute('data-has-image');
-      const goThreshold  = hasImage ? 20 : 80;
-      const backThreshold = hasImage ? 10 : 60;
-      if (!this._compact && y > goThreshold)   { this._compact = true;  this.classList.add('compact'); }
-      else if (this._compact && y < backThreshold) { this._compact = false; this.classList.remove('compact'); }
-    };
-    window.addEventListener('scroll', this._onScroll, { passive: true });
+    this._compact    = false;
+    this._imageUrl   = null;
 
     this._onImages = images => {
       this._imagesState = images;
@@ -517,6 +534,66 @@ class YearHeader extends Gestures(AppElement) {
     });
     this._ro.observe(this);
 
+    this._setupScroll();
+    this._setupNav();
+    this._setupMenu();
+    this._setupPhoto();
+    this._setupColor();
+    this._setupSync();
+    this._setupTheme();
+    this._setupLanguage();
+  }
+
+  unsubscribe() {
+    Store.unsubscribe('images', this._onImages);
+    if (this._imageUrl) URL.revokeObjectURL(this._imageUrl);
+
+    this.shadowRoot.querySelector('#prev')?.removeEventListener('click', this._onPrev);
+    this.shadowRoot.querySelector('#next')?.removeEventListener('click', this._onNext);
+    this.shadowRoot.querySelector('#menu-btn')?.removeEventListener('click', this._onMenuBtn);
+    this._menuDialog?.removeEventListener('close', this._onMenuClose);
+    this._menuDialog?.removeEventListener('click', this._onBackdrop);
+    this.shadowRoot.querySelector('#year-photo-btn')?.removeEventListener('click', this._onYearPhotoBtn);
+    this.shadowRoot.querySelector('#year-color-btn')?.removeEventListener('click', this._onYearColorBtn);
+    this._colorSheet?.removeEventListener('click', this._onColorSheetClick);
+    this.shadowRoot.querySelector('#color-reset-btn')?.removeEventListener('click', this._onColorReset);
+    this._photoSheet?.removeEventListener('click', this._onPhotoSheetBackdrop);
+    this.shadowRoot.querySelector('#photo-add')?.removeEventListener('click', this._onPhotoAdd);
+    this.shadowRoot.querySelector('#photo-change')?.removeEventListener('click', this._onPhotoChange);
+    this.shadowRoot.querySelector('#photo-remove')?.removeEventListener('click', this._onPhotoRemove);
+    this.shadowRoot.querySelector('#photo-input')?.removeEventListener('change', this._onPhotoInput);
+    this.shadowRoot.querySelector('#export-year-btn')?.removeEventListener('click', this._onExportYear);
+    this.shadowRoot.querySelector('#export-all-btn')?.removeEventListener('click', this._onExportAll);
+    this.shadowRoot.querySelector('#import-btn')?.removeEventListener('click', this._onImportBtn);
+    this.shadowRoot.querySelector('#import-input')?.removeEventListener('change', this._onImportInput);
+    this.shadowRoot.querySelector('#import-cancel')?.removeEventListener('click', this._onImportCancel);
+    this.shadowRoot.querySelector('#import-reload')?.removeEventListener('click', this._onImportReload);
+    this.shadowRoot.querySelector('#import-close')?.removeEventListener('click', this._onImportClose);
+    this.shadowRoot.querySelector('#theme-btn')?.removeEventListener('click', this._onThemeBtn);
+    this._themeSheet?.removeEventListener('click', this._onThemeSheetBackdrop);
+    this._themeSheet?.removeEventListener('click', this._onThemeSelect);
+    this._unsubTheme?.();
+    this.shadowRoot.querySelector('#language-btn')?.removeEventListener('click', this._onLanguageBtn);
+    this._langDialog?.removeEventListener('click', this._onLangBackdrop);
+    this._langDialog?.removeEventListener('click', this._onLangSelect);
+    this._ro?.disconnect();
+    document.documentElement.style.removeProperty('--year-header-height');
+    window.removeEventListener('scroll', this._onScroll);
+  }
+
+  _setupScroll() {
+    this._onScroll = () => {
+      const y = window.scrollY;
+      const hasImage = this.hasAttribute('data-has-image');
+      const goThreshold   = hasImage ? 20 : 80;
+      const backThreshold = hasImage ? 10 : 60;
+      if (!this._compact && y > goThreshold)    { this._compact = true;  this.classList.add('compact'); }
+      else if (this._compact && y < backThreshold) { this._compact = false; this.classList.remove('compact'); }
+    };
+    window.addEventListener('scroll', this._onScroll, { passive: true });
+  }
+
+  _setupNav() {
     this._onPrev = () => this.dispatchEvent(new CustomEvent('year-navigate', {
       bubbles: true, composed: true, detail: { year: this._year - 1 },
     }));
@@ -525,7 +602,9 @@ class YearHeader extends Gestures(AppElement) {
     }));
     this.shadowRoot.querySelector('#prev').addEventListener('click', this._onPrev);
     this.shadowRoot.querySelector('#next').addEventListener('click', this._onNext);
+  }
 
+  _setupMenu() {
     const menuBtn = this.shadowRoot.querySelector('#menu-btn');
     this._onMenuBtn = () => {
       this._menuDialog.showModal();
@@ -540,8 +619,9 @@ class YearHeader extends Gestures(AppElement) {
       if (e.target === this._menuDialog) this._menuDialog.close();
     };
     this._menuDialog.addEventListener('click', this._onBackdrop);
+  }
 
-    // Photo sub-sheet
+  _setupPhoto() {
     this._photoSheet = this.shadowRoot.querySelector('#photo-sheet');
     const photoInput = this.shadowRoot.querySelector('#photo-input');
 
@@ -573,30 +653,40 @@ class YearHeader extends Gestures(AppElement) {
       const images  = { ...Store.getState().images };
       delete images[year];
       Store.setState('images', images);
-      if (imageId) await Store.deleteBlob(imageId);
+      try {
+        if (imageId) await Store.deleteBlob(imageId);
+      } catch (err) {
+        console.error('Failed to delete photo blob:', err);
+      }
     };
     this.shadowRoot.querySelector('#photo-remove').addEventListener('click', this._onPhotoRemove);
 
     this._onPhotoInput = async e => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const year       = String(this._year);
-      const oldImageId = Store.getState().images?.[year];
-      const imageId    = crypto.randomUUID();
-      const blob       = await compressImage(file, { maxWidth: 1200, quality: 0.8 });
-      await Store.attachBlob(imageId, blob);
-      Store.setState('images', { ...Store.getState().images, [year]: imageId });
-      if (oldImageId) await Store.deleteBlob(oldImageId);
-      e.target.value = '';
+      try {
+        const year       = String(this._year);
+        const oldImageId = Store.getState().images?.[year];
+        const imageId    = crypto.randomUUID();
+        const blob       = await compressImage(file, { maxWidth: 1200, quality: 0.8 });
+        await Store.attachBlob(imageId, blob);
+        Store.setState('images', { ...Store.getState().images, [year]: imageId });
+        if (oldImageId) await Store.deleteBlob(oldImageId);
+      } catch (err) {
+        console.error('Failed to upload photo:', err);
+      } finally {
+        e.target.value = '';
+      }
     };
     photoInput.addEventListener('change', this._onPhotoInput);
+  }
 
-    // Color picker
+  _setupColor() {
     this._colorSheet = this.shadowRoot.querySelector('#color-sheet');
 
     this._onYearColorBtn = () => {
       this._menuDialog.close();
-      this._updateSwatches(Store.getState().accentColors?.[String(this._year)]);
+      this._updateSwatches(Store.getState().accentColors?.[String(this._year)] ?? null);
       this._colorSheet.showModal();
     };
     this.shadowRoot.querySelector('#year-color-btn').addEventListener('click', this._onYearColorBtn);
@@ -620,8 +710,9 @@ class YearHeader extends Gestures(AppElement) {
       this._colorSheet.close();
     };
     this.shadowRoot.querySelector('#color-reset-btn').addEventListener('click', this._onColorReset);
+  }
 
-    // Export / import
+  _setupSync() {
     this._importConfirm = this.shadowRoot.querySelector('#import-confirm');
     const importInput   = this.shadowRoot.querySelector('#import-input');
 
@@ -677,8 +768,39 @@ class YearHeader extends Gestures(AppElement) {
     this.shadowRoot.querySelector('#import-cancel').addEventListener('click', this._onImportCancel);
     this.shadowRoot.querySelector('#import-reload').addEventListener('click', this._onImportReload);
     this.shadowRoot.querySelector('#import-close').addEventListener('click', this._onImportClose);
+  }
 
-    // Language picker
+  _setupTheme() {
+    this._themeSheet = this.shadowRoot.querySelector('#theme-sheet');
+
+    this._onThemeBtn = () => {
+      this._menuDialog.close();
+      this._updateThemeSheet();
+      this._themeSheet.showModal();
+    };
+    this.shadowRoot.querySelector('#theme-btn').addEventListener('click', this._onThemeBtn);
+
+    this._onThemeSheetBackdrop = e => {
+      if (e.target === this._themeSheet) this._themeSheet.close();
+    };
+    this._themeSheet.addEventListener('click', this._onThemeSheetBackdrop);
+
+    this._onThemeSelect = e => {
+      const btn = e.target.closest('[data-theme]');
+      if (!btn || btn.dataset.theme === getTheme()) return;
+      setTheme(btn.dataset.theme);
+      this._updateThemeSheet();
+      this._themeSheet.close();
+    };
+    this._themeSheet.addEventListener('click', this._onThemeSelect);
+
+    this._unsubTheme = onThemeChange(theme => {
+      const el = this.shadowRoot.querySelector('#theme-value');
+      if (el) el.textContent = `${_themeName(theme)} ›`;
+    });
+  }
+
+  _setupLanguage() {
     this._langDialog = this.shadowRoot.querySelector('#lang-sheet');
 
     this._onLanguageBtn = () => {
@@ -702,42 +824,27 @@ class YearHeader extends Gestures(AppElement) {
     this._langDialog.addEventListener('click', this._onLangSelect);
   }
 
-  unsubscribe() {
-    Store.unsubscribe('images', this._onImages);
-    if (this._imageUrl) URL.revokeObjectURL(this._imageUrl);
-
-    this.shadowRoot.querySelector('#prev')?.removeEventListener('click', this._onPrev);
-    this.shadowRoot.querySelector('#next')?.removeEventListener('click', this._onNext);
-    this.shadowRoot.querySelector('#menu-btn')?.removeEventListener('click', this._onMenuBtn);
-    this._menuDialog?.removeEventListener('close', this._onMenuClose);
-    this._menuDialog?.removeEventListener('click', this._onBackdrop);
-    this.shadowRoot.querySelector('#year-photo-btn')?.removeEventListener('click', this._onYearPhotoBtn);
-    this.shadowRoot.querySelector('#year-color-btn')?.removeEventListener('click', this._onYearColorBtn);
-    this._colorSheet?.removeEventListener('click', this._onColorSheetClick);
-    this.shadowRoot.querySelector('#color-reset-btn')?.removeEventListener('click', this._onColorReset);
-    this._photoSheet?.removeEventListener('click', this._onPhotoSheetBackdrop);
-    this.shadowRoot.querySelector('#photo-add')?.removeEventListener('click', this._onPhotoAdd);
-    this.shadowRoot.querySelector('#photo-change')?.removeEventListener('click', this._onPhotoChange);
-    this.shadowRoot.querySelector('#photo-remove')?.removeEventListener('click', this._onPhotoRemove);
-    this.shadowRoot.querySelector('#photo-input')?.removeEventListener('change', this._onPhotoInput);
-    this.shadowRoot.querySelector('#export-year-btn')?.removeEventListener('click', this._onExportYear);
-    this.shadowRoot.querySelector('#export-all-btn')?.removeEventListener('click', this._onExportAll);
-    this.shadowRoot.querySelector('#import-btn')?.removeEventListener('click', this._onImportBtn);
-    this.shadowRoot.querySelector('#import-input')?.removeEventListener('change', this._onImportInput);
-    this.shadowRoot.querySelector('#import-cancel')?.removeEventListener('click', this._onImportCancel);
-    this.shadowRoot.querySelector('#import-reload')?.removeEventListener('click', this._onImportReload);
-    this.shadowRoot.querySelector('#import-close')?.removeEventListener('click', this._onImportClose);
-    this.shadowRoot.querySelector('#language-btn')?.removeEventListener('click', this._onLanguageBtn);
-    this._langDialog?.removeEventListener('click', this._onLangBackdrop);
-    this._langDialog?.removeEventListener('click', this._onLangSelect);
-    this._ro?.disconnect();
-    document.documentElement.style.removeProperty('--year-header-height');
-    window.removeEventListener('scroll', this._onScroll);
+  _updateThemeSheet() {
+    const current = getTheme();
+    this._themeSheet?.querySelectorAll('[data-theme]').forEach(btn => {
+      const isActive = btn.dataset.theme === current;
+      let badge = btn.querySelector('.badge');
+      if (isActive && !badge) {
+        badge = document.createElement('span');
+        badge.className = 'badge selected';
+        badge.textContent = '✓';
+        btn.appendChild(badge);
+      } else if (!isActive && badge) {
+        badge.remove();
+      }
+    });
   }
 
   _updateSwatches(currentHex) {
     this._colorSheet?.querySelectorAll('.swatch').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.color === currentHex);
+      const active = btn.dataset.color === currentHex;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
     });
   }
 
@@ -759,6 +866,7 @@ class YearHeader extends Gestures(AppElement) {
     }
     this.setAttribute('data-has-image', '');
     const blob = await Store.getBlob(imageId);
+    // Guard: year may have changed while the blob fetch was in-flight
     if (this._year !== year) return;
     if (!blob) {
       this._clearImage();

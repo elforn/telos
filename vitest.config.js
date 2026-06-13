@@ -5,7 +5,7 @@ export default defineConfig({
     fs: { allow: ['..'] },
   },
   test: {
-    include: ['tests/unit/**/*.test.js'],
+    include: ['tests/unit/**/*.test.js', '_lib/**/*.test.js'],
     environment: 'node',
     setupFiles: ['./_lib/core/test-setup.js'],
   },

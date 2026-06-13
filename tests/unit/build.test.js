@@ -50,17 +50,14 @@ describe('build — default (BASE_PATH=/)', () => {
   it('replaces __APP_VERSION__ token in main.js output', () => {
     const content = readDist(mainFilename());
     expect(content).not.toContain('__APP_VERSION__');
-    expect(content).toContain(`'${version}'`);
+    expect(content).toContain(version);
   });
 
-  it('rewrites import paths in main.js for dist/ layout', () => {
+  it('bundle is self-contained: no unbundled ES import statements', () => {
     const content = readDist(mainFilename());
-    expect(content).not.toContain("'../_lib/");
-    expect(content).toContain("'./_lib/");
-    expect(content).toContain("'./app/pages/");
-    // General invariant: no bare app-relative imports remain after rewriting
-    const unrewritten = content.match(/'\.\/(?!app\/|_lib\/)/g);
-    expect(unrewritten, 'unrewritten app-relative imports found').toBeNull();
+    expect(content).not.toContain("from '../_lib/");
+    expect(content).not.toContain("from './_lib/");
+    expect(content).not.toContain("from './app/");
   });
 
   it('injects CACHE_VERSION into sw.js', () => {
@@ -92,21 +89,20 @@ describe('build — default (BASE_PATH=/)', () => {
     expect(html).toMatch(/src="\/main\.[a-f0-9]{8}\.js"/);
   });
 
-  it('substitutes %%BASE_PATH%% tokens in manifest.json', () => {
+it('substitutes %%BASE_PATH%% tokens in manifest.json', () => {
     const manifest = readDist('manifest.json');
     expect(manifest).not.toContain('%%BASE_PATH%%');
     expect(manifest).toContain('"start_url": "/"');
     expect(manifest).toContain('"scope": "/"');
   });
 
-  it('copies _lib/ to dist/_lib/', () => {
-    expect(existsSync(join(DIST, '_lib', 'core', 'app-element.js'))).toBe(true);
-    expect(existsSync(join(DIST, '_lib', 'core', 'router', 'router.js'))).toBe(true);
+  it('does not copy _lib/ or app/ source modules to dist/ (all bundled)', () => {
+    expect(existsSync(join(DIST, '_lib'))).toBe(false);
+    expect(existsSync(join(DIST, 'app', 'pages'))).toBe(false);
   });
 
-  it('copies app/ to dist/app/', () => {
-    expect(existsSync(join(DIST, 'app', 'pages', 'home-page.js'))).toBe(true);
-    expect(existsSync(join(DIST, 'app', 'pages', 'not-found-page.js'))).toBe(true);
+  it('copies app/icons/ to dist/app/icons/', () => {
+    expect(existsSync(join(DIST, 'app', 'icons'))).toBe(true);
   });
 
   it('produces a deterministic hash — same content yields same filename', () => {

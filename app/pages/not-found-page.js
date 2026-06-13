@@ -1,6 +1,7 @@
 import { AppElement } from '../../_lib/core/app-element.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { BASE_PATH } from '../base-path.js';
+import { t } from '../../_lib/core/strings.js';
 
 class NotFoundPage extends AppElement {
   template() {
@@ -110,9 +111,9 @@ class NotFoundPage extends AppElement {
           <span class="code">404</span>
           <div class="strip"><div class="strip-fill"></div></div>
         </div>
-        <h1>Nothing here</h1>
-        <p>This page doesn't exist — but your goals are waiting.</p>
-        <button id="home-btn">Go to this year</button>
+        <h1>${t('not-found.heading')}</h1>
+        <p>${t('not-found.body')}</p>
+        <button id="home-btn">${t('not-found.cta')}</button>
       </main>
     `;
   }

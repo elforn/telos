@@ -7,6 +7,8 @@
 
 :root {
 
+  color-scheme: light dark;
+
   /* ----------------------------------------------------------
      COLOUR — Base
      Warm neutrals from the grey reference app.
@@ -148,4 +150,53 @@
   --ease-in-out:      cubic-bezier(0.4, 0.0, 0.2, 1);
   --ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-decelerate:  cubic-bezier(0.05, 0.7, 0.1, 1.0);
+}
+
+/* ============================================================
+   DARK THEME
+   Applied via data-theme="dark" on <html> by core/theme/theme.js.
+   Only colour and shadow tokens change — spacing, typography,
+   and animation tokens are theme-neutral.
+   ============================================================ */
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg:              #1C1C1E;
+  --color-surface:         #2C2C2E;
+  --color-surface-raised:  #3A3A3C;
+  --color-border:          #48484A;
+
+  --color-text-primary:    #F5F2EE;
+  --color-text-secondary:  #8D8D93;
+  --color-text-muted:      #636366;
+  --color-text-inverse:    #1C1C1E;
+
+  /* accent stays the same — orange reads well on dark */
+  --color-accent-light:    #2D1F14;
+  --color-accent-dark:     #F0945C;
+  --color-accent-subtle:   rgba(232, 130, 74, 0.15);
+
+  --color-success:         #34C77A;
+  --color-success-light:   #0D2018;
+  --color-warning:         #FFB040;
+  --color-warning-light:   #2A1D00;
+  --color-danger:          #FF453A;
+  --color-danger-light:    #2A0A0A;
+  --color-info:            #64A8FF;
+  --color-info-light:      #0A1A35;
+
+  /* dark action surface inverts — it becomes a light button on a dark page */
+  --color-action-dark:      #F5F2EE;
+  --color-action-dark-text: #1C1C1E;
+
+  --color-overlay:         rgba(0, 0, 0, 0.60);
+
+  --shadow-card:  0 1px 3px rgba(0, 0, 0, 0.24),
+                  0 1px 2px rgba(0, 0, 0, 0.18);
+  --shadow-sheet: 0 -2px 16px rgba(0, 0, 0, 0.32);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
 }

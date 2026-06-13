@@ -1,6 +1,6 @@
 {
   "name": "Telos",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
     "build": "node utils/build.js",
@@ -16,6 +16,7 @@
     "@playwright/test": "^1.52.0",
     "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.9.0",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.0",
+    "esbuild": "^0.28.1"
   }
 }
