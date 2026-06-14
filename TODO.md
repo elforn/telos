@@ -11,12 +11,12 @@
 ## Up next — foundation
 Land these first; they underpin everything else.
 
-### 1. Dark theme
+### ✅ 1. Dark theme
 Auto-follows system preference on first launch. Manual override in the year-header
 menu: light / dark / system. Saved in store. All colour tokens are CSS custom
 properties — add a `[data-theme="dark"]` block.
 
-### 2. Year accent colour
+### ✅ 2. Year accent colour
 One colour per year. While that year is active, `--color-accent` on `:root` updates
 to the stored colour. Colour picker in year-header menu. Stored as
 `accentColors: { [year]: '#rrggbb' }`.
