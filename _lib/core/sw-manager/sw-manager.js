@@ -19,13 +19,21 @@ class SwManager extends AppElement {
           setState('updateAvailable', true);
           return;
         }
-        registration.addEventListener('updatefound', () => {
-          const sw = registration.installing;
+
+        const trackInstalling = sw => {
+          if (!sw) return;
           sw.addEventListener('statechange', () => {
             if (sw.state === 'installed' && navigator.serviceWorker.controller) {
               setState('updateAvailable', true);
             }
           });
+        };
+
+        // updatefound may have fired during boot() — check installing directly
+        // before also listening for future updatefound events
+        trackInstalling(registration.installing);
+        registration.addEventListener('updatefound', () => {
+          trackInstalling(registration.installing);
         });
       })
       .catch(() => {}); // silent in dev (no sw.js at source path)
@@ -37,9 +45,10 @@ class SwManager extends AppElement {
     this._onControllerChange = () => { if (prevController) location.reload(); };
     navigator.serviceWorker.addEventListener('controllerchange', this._onControllerChange);
 
-    // Layer 2: version.json — show banner immediately if newer version exists
+    // Layer 2: version.json — show banner immediately if newer version exists.
+    // cache: 'no-store' bypasses the browser cache; ?_= busts CDN caches (e.g. GitHub Pages/Fastly).
     if (appVersion) {
-      fetch(`${basePath}version.json`, { cache: 'no-store' })
+      fetch(`${basePath}version.json?_=${Date.now()}`, { cache: 'no-store' })
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           if (data?.version && data.version !== appVersion) {

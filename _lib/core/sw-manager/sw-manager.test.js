@@ -91,6 +91,20 @@ describe('Layer 1 — SW waiting detection', () => {
     expect(getState().updateAvailable).toBe(true);
   });
 
+  it('sets updateAvailable when SW is already installing at registration (updatefound missed during boot)', async () => {
+    const installingSW = makeFakeSW('installing');
+    const registration = makeFakeRegistration();
+    registration.installing = installingSW; // updatefound already fired before register().then() ran
+    stubServiceWorker({ register: vi.fn().mockResolvedValue(registration) });
+
+    mountElement({ 'base-path': '/' });
+    await Promise.resolve(); // flush register promise
+
+    installingSW._setState('installed');
+
+    expect(getState().updateAvailable).toBe(true);
+  });
+
   it('does not set updateAvailable when installing SW state is not installed', async () => {
     const registration = makeFakeRegistration();
     stubServiceWorker({ register: vi.fn().mockResolvedValue(registration) });
@@ -182,6 +196,20 @@ describe('Layer 2 — version.json check', () => {
     await new Promise(r => setTimeout(r, 0));
 
     expect(getState().updateAvailable).toBeUndefined();
+  });
+
+  it('version.json fetch URL includes a cache-busting query parameter', async () => {
+    stubServiceWorker();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ version: '1.0.0' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    mountElement({ 'base-path': '/', 'app-version': '1.0.0' });
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/version\.json\?_=\d+$/);
   });
 
   it('skips version check when app-version attribute is absent', async () => {
