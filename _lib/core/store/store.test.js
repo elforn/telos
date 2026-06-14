@@ -197,6 +197,35 @@ describe('sync-compatible API', () => {
   });
 });
 
+describe('Simple store — SW update race condition', () => {
+  it('setState before boot does not write to IDB and stored data is preserved', async () => {
+    const name = freshName();
+    await boot({ dbName: name, initialState: { goals: {} } });
+    setState('goals', { '2026': { capstone: [{ id: '1', title: 'Race goal' }] } });
+    reset();
+
+    // Simulates sw-manager calling setState before boot() — _db is null, write is skipped
+    setState('updateAvailable', true);
+
+    await boot({ dbName: name, initialState: { goals: {} } });
+    expect(getState().goals?.['2026']?.capstone?.[0]?.title).toBe('Race goal');
+  });
+
+  it('setState after boot adds a key without wiping stored data', async () => {
+    const name = freshName();
+    await boot({ dbName: name, initialState: { goals: {} } });
+    setState('goals', { '2026': { capstone: [{ id: '1', title: 'Race goal' }] } });
+    reset();
+
+    await boot({ dbName: name, initialState: { goals: {} } });
+    setState('updateAvailable', true); // safe — boot has completed, _db is set
+    reset();
+
+    await boot({ dbName: name, initialState: { goals: {} } });
+    expect(getState().goals?.['2026']?.capstone?.[0]?.title).toBe('Race goal');
+  });
+});
+
 describe('reset', () => {
   it('clears in-memory state immediately', async () => {
     await boot({ dbName: freshName() });

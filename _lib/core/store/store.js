@@ -5,18 +5,20 @@ let _state = {};
 const _subs = new Map(); // key → Set<callback>
 
 export async function boot({ dbName, initialState = {} } = {}) {
-  _db = await openDB(dbName, 1, db => {
+  const db = await openDB(dbName, 1, db => {
     db.createObjectStore('state', { keyPath: 'id' });
     db.createObjectStore('images', { keyPath: 'id' });
   });
-  const stored = await get(_db, 'state', 'root');
+  const stored = await get(db, 'state', 'root');
   _state = { ...initialState, ...(stored?.data ?? {}) };
+  _db = db; // set last: no setState can write partial state to IDB during boot
 }
 
 export function setState(key, value) {
   const oldState = _state;
   _state = { ..._state, [key]: value };
   _notify(oldState, _state);
+  if (!_db) return;
   put(_db, 'state', { id: 'root', data: _state });
 }
 

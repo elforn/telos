@@ -39,12 +39,9 @@ describe('Simple store — SW update race condition', () => {
     setState('goals', { '2026': { capstone: [{ id: '1', title: 'Race goal' }], milestones: [], wow: [], focus: [] } });
     reset();
 
-    // Simulate sw-manager calling setState before boot — _db is null so the IDB
-    // write must fail rather than overwrite the stored goals with {}.
-    // Absorb the async rejection from put(null, ...) so Vitest doesn't flag it.
-    const rejection = new Promise(r => process.once('unhandledRejection', r));
+    // Simulate sw-manager calling setState before boot — _db is null so the
+    // write is silently skipped and stored goals are preserved.
     setState('updateAvailable', true);
-    await rejection;
 
     await boot({ dbName: name, initialState: { goals: {} } });
     expect(getState().goals?.['2026']?.capstone?.[0]?.title).toBe('Race goal');
