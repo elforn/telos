@@ -119,6 +119,29 @@ describe('Layer 1 — SW waiting detection', () => {
     expect(getState().updateAvailable).toBeUndefined();
   });
 
+  it('re-notifies subscribers when updateAvailable is already true in state (stale IDB scenario)', async () => {
+    // Simulate stale IDB-restored true value already in state at boot time
+    const { setState, subscribe, unsubscribe } = await import('../store/store.js');
+    setState('updateAvailable', true);
+
+    const waitingSW = makeFakeSW('installed');
+    const registration = makeFakeRegistration({ waiting: waitingSW });
+    stubServiceWorker({ register: vi.fn().mockResolvedValue(registration) });
+
+    const calls = [];
+    const cb = v => calls.push(v);
+    subscribe('updateAvailable', cb);
+    expect(calls).toEqual([true]); // immediate subscribe fires once
+
+    mountElement({ 'base-path': '/' });
+    await Promise.resolve(); // flush register promise
+
+    // setRuntimeState must re-notify even though value was already true
+    expect(calls.at(-1)).toBe(true);
+    expect(calls.length).toBeGreaterThan(1);
+    unsubscribe('updateAvailable', cb);
+  });
+
   it('reloads on controllerchange when a previous controller existed', () => {
     const swStub = stubServiceWorker({ controller: { scriptURL: 'sw.js' } });
     const reloadSpy = vi.spyOn(location, 'reload').mockImplementation(() => {});

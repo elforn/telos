@@ -22,6 +22,14 @@ export function setState(key, value) {
   put(_db, 'state', { id: 'root', data: _state });
 }
 
+export function setRuntimeState(key, value) {
+  _state = { ..._state, [key]: value };
+  const callbacks = _subs.get(key);
+  if (callbacks) for (const cb of callbacks) cb(value);
+  // intentionally no IDB write — runtime-only, must not survive a page reload
+  // notifies unconditionally so re-delivery works when old === new (stale IDB scenario)
+}
+
 export function getState() {
   return _state;
 }

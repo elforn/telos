@@ -25,7 +25,7 @@ import { waitForPage, waitForIDBFlush } from './helpers.js';
 // first load, so Playwright can intercept it directly. After goto the SW is active
 // and handles fetches itself, bypassing page.route().
 async function routeFutureVersion(page) {
-  await page.route('/version.json', route =>
+  await page.route(/\/version\.json/, route =>
     route.fulfill({ json: { version: '999.0.0', buildTime: new Date().toISOString() } })
   );
 }
@@ -40,10 +40,17 @@ test.describe('Update flow — data persistence', () => {
   test('goals survive a reload triggered by the update banner', async ({ page }) => {
     const currentYear = new Date().getFullYear();
 
-    // Seed a known goal directly into IDB before the app boots
+    // Route must be set BEFORE goto: once the SW is active it handles version.json
+    // sub-fetches internally and Playwright cannot intercept them via page.route().
+    await routeFutureVersion(page);
+
     await page.goto('/');
     await waitForPage(page);
 
+    // Banner appears on this first load (version mismatch detected before SW activated).
+    await expect(page.locator('update-banner')).not.toHaveAttribute('hidden');
+
+    // Seed a known goal directly into IDB while the banner is up.
     await page.evaluate(async (year) => {
       const store = window.__store ?? await new Promise(r => {
         const req = indexedDB.open('telos', 1);
@@ -66,16 +73,10 @@ test.describe('Update flow — data persistence', () => {
 
     await waitForIDBFlush(page);
 
-    // Trigger update banner via version mismatch
-    await page.route('**/version.json', route =>
-      route.fulfill({ json: { version: '999.0.0', buildTime: new Date().toISOString() } })
-    );
-    await page.reload();
-    await waitForPage(page);
-    await expect(page.locator('update-banner')).not.toHaveAttribute('hidden');
+    // Unroute so the real version.json is served after reload (banner must not reappear).
+    await page.unrouteAll();
 
     // Reload via update banner (no waiting SW → falls back to location.reload())
-    await page.unrouteAll();
     await page.locator('update-banner #reload').click();
     await page.waitForLoadState('domcontentloaded');
     await waitForPage(page);

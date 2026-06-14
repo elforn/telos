@@ -24,7 +24,7 @@ self.addEventListener('message', event => {
 
 self.addEventListener('fetch', event => {
   // version.json — always network, never cache (update detection depends on freshness)
-  if (event.request.url.endsWith('/version.json')) {
+  if (new URL(event.request.url).pathname.endsWith('/version.json')) {
     event.respondWith(fetch(event.request).catch(() => new Response('', { status: 503 })));
     return;
   }

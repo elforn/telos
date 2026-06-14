@@ -1,5 +1,5 @@
 import { AppElement } from '../app-element.js';
-import { setState } from '../store/store.js';
+import { setRuntimeState } from '../store/store.js';
 
 class SwManager extends AppElement {
   template() {
@@ -16,7 +16,7 @@ class SwManager extends AppElement {
     navigator.serviceWorker.register(`${basePath}sw.js`)
       .then(registration => {
         if (registration.waiting && navigator.serviceWorker.controller) {
-          setState('updateAvailable', true);
+          setRuntimeState('updateAvailable', true);
           return;
         }
 
@@ -24,7 +24,7 @@ class SwManager extends AppElement {
           if (!sw) return;
           sw.addEventListener('statechange', () => {
             if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-              setState('updateAvailable', true);
+              setRuntimeState('updateAvailable', true);
             }
           });
         };
@@ -52,7 +52,7 @@ class SwManager extends AppElement {
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           if (data?.version && data.version !== appVersion) {
-            setState('updateAvailable', true);
+            setRuntimeState('updateAvailable', true);
           }
         })
         .catch(() => {}); // silent in dev (no version.json at source path)
