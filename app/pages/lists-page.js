@@ -41,6 +41,7 @@ class ListsPage extends AppElement {
           font-weight: var(--font-weight-bold);
           color: var(--color-text-primary);
           line-height: 1;
+          margin-inline-start: var(--touch-target);
         }
 
         /* ── Main content ────────────────────────────────────────────────── */

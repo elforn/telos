@@ -122,10 +122,6 @@ class GoalItem extends Gestures(AppElement) {
           margin-inline-start: var(--space-2);
         }
 
-        :host(.edit-mode) .bar {
-          border: 1px dashed var(--color-accent);
-        }
-
         :host(.edit-mode) .title {
           font-style: italic;
         }

@@ -153,6 +153,10 @@ class YearHeader extends Gestures(AppElement) {
           justify-content: center;
         }
 
+        /* Pull the ‹ icon flush with the screen edge so it aligns
+           with the left edge of goal items (page-padding inset). */
+        #prev { margin-inline-start: calc(-1 * var(--page-padding)); }
+
         .nav-btn:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
@@ -179,6 +183,7 @@ class YearHeader extends Gestures(AppElement) {
           display: flex;
           align-items: center;
           justify-content: center;
+          margin-inline-end: calc(-1 * var(--page-padding));
         }
 
         .menu-btn:focus-visible {

@@ -71,6 +71,7 @@ class ListItem extends Gestures(AppElement) {
           cursor: pointer;
           user-select: none;
           touch-action: pan-y;
+          padding-inline-start: var(--page-padding);
           transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
           will-change: transform;
         }
@@ -99,8 +100,8 @@ class ListItem extends Gestures(AppElement) {
         }
 
         .badge[data-status="open"] {
-          background: var(--color-accent-light);
-          color: var(--color-accent);
+          background: var(--color-app-accent-light);
+          color: var(--color-app-accent);
         }
 
         .badge[data-status="paused"] {
