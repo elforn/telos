@@ -313,8 +313,8 @@ describe('Gestures — swipe', () => {
     expect(typeof e.dx).toBe('number');
   });
 
-  it('sets touch-action: pan-y', () => {
-    expect(el.style.touchAction).toBe('pan-y');
+  it('sets touch-action: manipulation', () => {
+    expect(el.style.touchAction).toBe('manipulation');
   });
 });
 
@@ -445,8 +445,8 @@ describe('Gestures — holdDrag', () => {
     expect(holdDragStartSpy).not.toHaveBeenCalled();
   });
 
-  it('sets touch-action: pan-y', () => {
-    expect(el.style.touchAction).toBe('pan-y');
+  it('sets touch-action: manipulation', () => {
+    expect(el.style.touchAction).toBe('manipulation');
   });
 
   it('sets user-select: none', () => {

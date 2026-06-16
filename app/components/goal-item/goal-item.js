@@ -43,7 +43,6 @@ class GoalItem extends Gestures(AppElement) {
           display: flex;
           align-items: center;
           justify-content: center;
-          touch-action: manipulation;
         }
 
         /* delete — right side, revealed by swiping bar left */

@@ -36,7 +36,6 @@ class ListItem extends Gestures(AppElement) {
           display: flex;
           align-items: center;
           justify-content: center;
-          touch-action: manipulation;
         }
 
         /* done — left side, revealed by swiping row right */

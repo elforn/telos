@@ -14,7 +14,12 @@ export const Gestures = (Base) => class extends Base {
 
     if (!this._pointerDown) {
       if (hasHoldDrag || hasSwipe) {
-        this.style.touchAction = 'pan-y';
+        // manipulation = pan-y + pan-x + pinch-zoom but no double-tap-to-zoom.
+        // Suppresses click-delay disambiguation on shadow DOM descendants (e.g. revealed
+        // action buttons) that would otherwise inherit pan-y from the host and trigger
+        // the browser's 300ms double-tap wait. Horizontal swipe detection is unaffected
+        // because browsers only pan-x when a container is actually scrollable horizontally.
+        this.style.touchAction = 'manipulation';
       } else {
         this.style.touchAction = 'manipulation';
       }
