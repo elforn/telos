@@ -2,7 +2,9 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 
-const REVEAL_WIDTH = 80;
+const REVEAL_WIDTH    = 80;
+const COMMIT_RATIO    = 1.2;  // fraction of reveal width needed to commit
+const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
 
 class GoalItem extends Gestures(AppElement) {
   set goal(value) {
@@ -41,6 +43,7 @@ class GoalItem extends Gestures(AppElement) {
           display: flex;
           align-items: center;
           justify-content: center;
+          touch-action: manipulation;
         }
 
         /* delete — right side, revealed by swiping bar left */
@@ -69,6 +72,7 @@ class GoalItem extends Gestures(AppElement) {
           padding-inline: var(--space-3);
           cursor: pointer;
           user-select: none;
+          touch-action: pan-y;
           transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
           will-change: transform;
         }
@@ -117,6 +121,14 @@ class GoalItem extends Gestures(AppElement) {
           color: var(--color-accent);
           flex-shrink: 0;
           margin-inline-start: var(--space-2);
+        }
+
+        :host(.edit-mode) .bar {
+          border: 1px dashed var(--color-accent);
+        }
+
+        :host(.edit-mode) .title {
+          font-style: italic;
         }
 
         :host(.hold-active) .bar {
@@ -330,14 +342,17 @@ class GoalItem extends Gestures(AppElement) {
     this._stopPointerDown = e => e.stopPropagation();
 
     const deleteEl = this.shadowRoot.querySelector('#delete-btn');
+
     this._onDeleteBtn = () => {
       this.dispatchEvent(new CustomEvent('goal-delete', {
         bubbles: true, composed: true, detail: { goal: this._goal },
       }));
       this._closeReveal();
     };
+    this._onDeleteBtnKey = e => { if (e.detail === 0) this._onDeleteBtn(); };
     deleteEl.addEventListener('pointerdown', this._stopPointerDown);
-    deleteEl.addEventListener('click', this._onDeleteBtn);
+    deleteEl.addEventListener('pointerup', this._onDeleteBtn);
+    deleteEl.addEventListener('click', this._onDeleteBtnKey);
 
     const failEl = this.shadowRoot.querySelector('#fail-btn');
     this._onFailBtn = () => {
@@ -353,8 +368,10 @@ class GoalItem extends Gestures(AppElement) {
       }
       this._closeReveal();
     };
+    this._onFailBtnKey = e => { if (e.detail === 0) this._onFailBtn(); };
     failEl.addEventListener('pointerdown', this._stopPointerDown);
-    failEl.addEventListener('click', this._onFailBtn);
+    failEl.addEventListener('pointerup', this._onFailBtn);
+    failEl.addEventListener('click', this._onFailBtnKey);
 
     this._onKeyDown = e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._tap(); }
@@ -367,22 +384,28 @@ class GoalItem extends Gestures(AppElement) {
   unsubscribe() {
     const deleteEl = this.shadowRoot.querySelector('#delete-btn');
     deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
-    deleteEl?.removeEventListener('click', this._onDeleteBtn);
+    deleteEl?.removeEventListener('pointerup', this._onDeleteBtn);
+    deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
     const failEl = this.shadowRoot.querySelector('#fail-btn');
     failEl?.removeEventListener('pointerdown', this._stopPointerDown);
-    failEl?.removeEventListener('click', this._onFailBtn);
+    failEl?.removeEventListener('pointerup', this._onFailBtn);
+    failEl?.removeEventListener('click', this._onFailBtnKey);
     this._bar?.removeEventListener('keydown', this._onKeyDown);
   }
 
   // ── Gestures ──────────────────────────────────────────────────────────────
 
   onTap() {
-    if (this._revealedDir === 'left')  { this._onDeleteBtn(); return; }
-    if (this._revealedDir === 'right') { this._onFailBtn();   return; }
+    if (this._revealedDir) {
+      this._closeReveal();
+      return;
+    }
+    if (this._failed) return;
     this._tap();
   }
 
   onHoldDragStart() {
+    if (this._failed) return;
     this._closeReveal();
     this.classList.add('hold-active');
     this._bar.style.transition = 'none';
@@ -390,12 +413,14 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   onHoldDragKey(dir) {
+    if (this._failed) return;
     this._setPct(dir === 'right' ? Math.min(100, this._pct + 5) : Math.max(0, this._pct - 5));
     if (this._pct === 100) this._celebrate();
     this._emitProgress();
   }
 
   onHoldDrag(e) {
+    if (this._failed) return;
     const rect = this._bar.getBoundingClientRect();
     if (!rect.width) return;
     const pct = Math.round(Math.max(0, Math.min(100, (e.endX - rect.left) / rect.width * 100)));
@@ -403,6 +428,7 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   onHoldDragEnd() {
+    if (this._failed) return;
     this.classList.remove('hold-active');
     this._bar.style.transition = '';
     this._setDragMode(false);
@@ -413,30 +439,45 @@ class GoalItem extends Gestures(AppElement) {
   onSwipeMove(e) {
     if (!this._editMode) return;
     this._bar.style.transition = 'none';
-    const base = this._revealedDir === 'left'  ? -REVEAL_WIDTH
-               : this._revealedDir === 'right' ?  REVEAL_WIDTH
-               : 0;
-    const offset = Math.max(-REVEAL_WIDTH, Math.min(REVEAL_WIDTH, base + e.dx));
+    let offset;
+    if (this._revealedDir === 'left') {
+      offset = Math.min(0, -REVEAL_WIDTH + e.dx);
+    } else if (this._revealedDir === 'right') {
+      offset = Math.max(0, REVEAL_WIDTH + e.dx);
+    } else {
+      offset = Math.max(-REVEAL_WIDTH, Math.min(REVEAL_WIDTH, e.dx));
+    }
     this._bar.style.transform = `translateX(${offset}px)`;
   }
 
   onSwipe(e) {
-    this._bar.style.transition = '';
-    if (!this._editMode) return;
-    if (e.direction === 'left') {
+    if (!this._editMode) {
+      this._bar.style.transition = '';
+      return;
+    }
+
+    if (this._revealedDir) {
+      this._closeReveal();
+      return;
+    }
+
+    const commit = e.distance >= REVEAL_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
+
+    if (commit && e.direction === 'left') {
       this._bar.style.transform = `translateX(-${REVEAL_WIDTH}px)`;
       this._revealedDir = 'left';
-    } else if (e.direction === 'right') {
+    } else if (commit && e.direction === 'right') {
       this._bar.style.transform = `translateX(${REVEAL_WIDTH}px)`;
       this._revealedDir = 'right';
     } else {
-      this._closeReveal();
+      this._closeReveal(); // _closeReveal sets its own spring transition
     }
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
 
   _tap() {
+    if (!this._editMode) return;
     this.dispatchEvent(new CustomEvent('goal-tap', {
       bubbles: true, composed: true, detail: { goal: this._goal },
     }));

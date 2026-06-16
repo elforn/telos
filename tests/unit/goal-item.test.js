@@ -87,14 +87,13 @@ describe('goal-item — failed state', () => {
 });
 
 describe('goal-item — tap', () => {
-  it('dispatches goal-tap on tap in view mode', () => {
+  it('does not dispatch goal-tap on tap in view mode', () => {
     const el = mount();
     const events = [];
     el.addEventListener('goal-tap', e => events.push(e));
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
     el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
-    expect(events).toHaveLength(1);
-    expect(events[0].detail.goal.title).toBe('Test goal');
+    expect(events).toHaveLength(0);
   });
 
   it('dispatches goal-tap on tap in edit mode', () => {
@@ -104,6 +103,28 @@ describe('goal-item — tap', () => {
     el.addEventListener('goal-tap', e => events.push(e));
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
     el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.goal.title).toBe('Test goal');
+  });
+
+  it('does not dispatch goal-tap on Enter key in view mode', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('goal-tap', e => events.push(e));
+    el.shadowRoot.querySelector('.bar').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
+    expect(events).toHaveLength(0);
+  });
+
+  it('dispatches goal-tap on Enter key in edit mode', () => {
+    const el = mount();
+    el.editMode = true;
+    const events = [];
+    el.addEventListener('goal-tap', e => events.push(e));
+    el.shadowRoot.querySelector('.bar').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
     expect(events).toHaveLength(1);
   });
 });
@@ -182,5 +203,57 @@ describe('goal-item — hold drag', () => {
 
     expect(events).toHaveLength(1);
     expect(events[0].detail.percentage).toBe(50);
+  });
+});
+
+describe('goal-item — failed goal is non-interactive', () => {
+  it('does not dispatch goal-tap when tapped while failed', () => {
+    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
+    const events = [];
+    el.addEventListener('goal-tap', e => events.push(e));
+    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
+    el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
+    expect(events).toHaveLength(0);
+  });
+
+  it('does not dispatch goal-progress on ArrowRight when failed', () => {
+    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
+    const events = [];
+    el.addEventListener('goal-progress', e => events.push(e));
+    el.shadowRoot.querySelector('.bar').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+    );
+    expect(events).toHaveLength(0);
+  });
+
+  it('does not dispatch goal-progress on ArrowLeft when failed', () => {
+    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
+    const events = [];
+    el.addEventListener('goal-progress', e => events.push(e));
+    el.shadowRoot.querySelector('.bar').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })
+    );
+    expect(events).toHaveLength(0);
+  });
+
+  it('does not add hold-active class when onHoldDragStart called while failed', () => {
+    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
+    el.onHoldDragStart();
+    expect(el.classList.contains('hold-active')).toBe(false);
+  });
+
+  it('does not change fill on onHoldDrag when failed', () => {
+    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
+    el.shadowRoot.querySelector('.bar').getBoundingClientRect = () => ({ left: 0, width: 200, top: 0, height: 40 });
+    el.onHoldDrag({ endX: 100 });
+    expect(el.shadowRoot.querySelector('.fill').style.width).toBe('0%');
+  });
+
+  it('does not dispatch goal-progress on onHoldDragEnd when failed', () => {
+    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
+    const events = [];
+    el.addEventListener('goal-progress', e => events.push(e));
+    el.onHoldDragEnd();
+    expect(events).toHaveLength(0);
   });
 });
