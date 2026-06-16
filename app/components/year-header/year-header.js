@@ -1,14 +1,8 @@
 import { AppElement } from '../../../_lib/core/app-element.js';
 import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
-import { t, setLocale, getLocale } from '../../../_lib/core/strings.js';
+import { t } from '../../../_lib/core/strings.js';
 import * as Store from '../../../_lib/core/store/store.js';
 import { compressImage } from '../../../_lib/modules/images/images.js';
-import { exportData, importData, downloadExport, readImportFile } from '../../../_lib/modules/sync/sync.js';
-import { getTheme, setTheme, onThemeChange } from '../../../_lib/core/theme/theme.js';
-
-function _themeName(theme) {
-  return { light: t('year-header.theme-light'), dark: t('year-header.theme-dark'), system: t('year-header.theme-system') }[theme] ?? theme;
-}
 
 const PALETTE = [
   { hex: '#5BADE0', label: 'Sky blue' },
@@ -32,22 +26,12 @@ class YearHeader extends Gestures(AppElement) {
   template() {
     const year         = this._year ?? new Date().getFullYear();
     const pct          = yearProgress(year);
-    const buildVersion = document.querySelector('sw-manager')?.getAttribute('app-version') ?? '';
     return `
       <style>
-        @keyframes menu-in {
-          from { transform: translateY(100%); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
-
         @media (prefers-reduced-motion: reduce) {
           .menu-sheet { animation: none; }
           .header-img { animation: none; }
+          dialog[open], dialog::backdrop { animation: none; }
         }
 
         :host {
@@ -276,11 +260,6 @@ class YearHeader extends Gestures(AppElement) {
           color: var(--color-danger, #d32f2f);
         }
 
-        .menu-item.info {
-          cursor: default;
-          pointer-events: none;
-        }
-
         .menu-section-label {
           font-size: var(--font-size-caption);
           font-weight: var(--font-weight-semibold);
@@ -295,46 +274,6 @@ class YearHeader extends Gestures(AppElement) {
         .menu-item-value {
           font-size: var(--font-size-body);
           color: var(--color-text-muted);
-        }
-
-        .confirm-message {
-          margin: 0;
-          padding-inline: var(--space-5);
-          padding-block: var(--space-4);
-          font-size: var(--font-size-body);
-          line-height: 1.5;
-          color: var(--color-text-primary);
-        }
-
-        .confirm-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: var(--space-2);
-          padding-inline: var(--space-4);
-          padding-block-end: var(--space-3);
-        }
-
-        .confirm-btn {
-          min-block-size: var(--touch-target);
-          padding-inline: var(--space-4);
-          background: var(--color-surface-raised);
-          border: none;
-          border-radius: var(--radius-md);
-          cursor: pointer;
-          font-family: var(--font-family);
-          font-size: var(--font-size-body);
-          font-weight: var(--font-weight-medium);
-          color: var(--color-text-primary);
-        }
-
-        .confirm-btn.accent {
-          background: var(--color-accent);
-          color: var(--color-text-inverse);
-        }
-
-        .confirm-btn:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
         }
 
         .color-dot {
@@ -374,15 +313,6 @@ class YearHeader extends Gestures(AppElement) {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
-
-        .badge {
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-medium);
-          color: var(--color-accent);
-          background: color-mix(in srgb, var(--color-accent) 12%, transparent);
-          border-radius: var(--radius-full);
-          padding: 2px var(--space-2);
-        }
       </style>
 
       <div class="header-bg" aria-hidden="true">
@@ -404,19 +334,6 @@ class YearHeader extends Gestures(AppElement) {
       </div>
 
       <input type="file" id="photo-input" accept="image/*" hidden>
-      <input type="file" id="import-input" accept=".telos,.json" hidden>
-
-      <dialog id="import-confirm" aria-modal="true">
-        <div class="menu-handle"></div>
-        <p id="import-message" class="confirm-message" role="alert"></p>
-        <div id="import-success-actions" class="confirm-actions" hidden>
-          <button id="import-reload" class="confirm-btn accent">${t('sync.import-reload')}</button>
-          <button id="import-cancel" class="confirm-btn">${t('sync.import-cancel')}</button>
-        </div>
-        <div id="import-error-actions" class="confirm-actions" hidden>
-          <button id="import-close" class="confirm-btn">${t('sync.import-close')}</button>
-        </div>
-      </dialog>
 
       <dialog id="menu">
         <div class="menu-handle"></div>
@@ -429,53 +346,6 @@ class YearHeader extends Gestures(AppElement) {
           <span>${t('year-header.color')}</span>
           <span class="menu-item-value"><span class="color-dot"></span> ›</span>
         </button>
-        <button class="menu-item" id="export-year-btn">
-          <span id="export-year-label">${t('sync.export-year', { year })}</span>
-          <span class="menu-item-value">↓</span>
-        </button>
-        <p class="menu-section-label">${t('year-header.app-section')}</p>
-        <button class="menu-item" id="export-all-btn">
-          <span>${t('sync.export-all')}</span>
-          <span class="menu-item-value">↓</span>
-        </button>
-        <button class="menu-item" id="import-btn">
-          <span>${t('sync.import')}</span>
-          <span class="menu-item-value">↑</span>
-        </button>
-        <button class="menu-item" id="theme-btn">
-          <span>${t('year-header.theme')}</span>
-          <span class="menu-item-value" id="theme-value">${_themeName(getTheme())} ›</span>
-        </button>
-        <button class="menu-item" id="language-btn">
-          <span>${t('year-header.language')}</span>
-          <span class="menu-item-value" id="lang-value">${_localeName(getLocale())} ›</span>
-        </button>
-        <div class="menu-item info">
-          <span>${t('year-header.version')}</span>
-          <span class="menu-item-value">${buildVersion}</span>
-        </div>
-      </dialog>
-
-      <dialog id="theme-sheet">
-        <div class="menu-handle"></div>
-        <p class="menu-section-label">${t('year-header.theme')}</p>
-        ${['light', 'system', 'dark'].map(val => `
-          <button class="menu-item" data-theme="${val}">
-            <span>${_themeName(val)}</span>
-            ${getTheme() === val ? `<span class="badge selected">✓</span>` : ''}
-          </button>`).join('')}
-      </dialog>
-
-      <dialog id="lang-sheet">
-        <div class="menu-handle"></div>
-        <p class="menu-section-label">${t('year-header.language')}</p>
-        ${['en', 'fr', 'ca'].map(locale => {
-          const active = getLocale() === locale;
-          return `<button class="menu-item" data-locale="${locale}">
-            <span>${_localeName(locale)}</span>
-            ${active ? `<span class="badge selected">✓</span>` : ''}
-          </button>`;
-        }).join('')}
       </dialog>
 
       <dialog id="color-sheet">
@@ -539,9 +409,6 @@ class YearHeader extends Gestures(AppElement) {
     this._setupMenu();
     this._setupPhoto();
     this._setupColor();
-    this._setupSync();
-    this._setupTheme();
-    this._setupLanguage();
   }
 
   unsubscribe() {
@@ -562,20 +429,6 @@ class YearHeader extends Gestures(AppElement) {
     this.shadowRoot.querySelector('#photo-change')?.removeEventListener('click', this._onPhotoChange);
     this.shadowRoot.querySelector('#photo-remove')?.removeEventListener('click', this._onPhotoRemove);
     this.shadowRoot.querySelector('#photo-input')?.removeEventListener('change', this._onPhotoInput);
-    this.shadowRoot.querySelector('#export-year-btn')?.removeEventListener('click', this._onExportYear);
-    this.shadowRoot.querySelector('#export-all-btn')?.removeEventListener('click', this._onExportAll);
-    this.shadowRoot.querySelector('#import-btn')?.removeEventListener('click', this._onImportBtn);
-    this.shadowRoot.querySelector('#import-input')?.removeEventListener('change', this._onImportInput);
-    this.shadowRoot.querySelector('#import-cancel')?.removeEventListener('click', this._onImportCancel);
-    this.shadowRoot.querySelector('#import-reload')?.removeEventListener('click', this._onImportReload);
-    this.shadowRoot.querySelector('#import-close')?.removeEventListener('click', this._onImportClose);
-    this.shadowRoot.querySelector('#theme-btn')?.removeEventListener('click', this._onThemeBtn);
-    this._themeSheet?.removeEventListener('click', this._onThemeSheetBackdrop);
-    this._themeSheet?.removeEventListener('click', this._onThemeSelect);
-    this._unsubTheme?.();
-    this.shadowRoot.querySelector('#language-btn')?.removeEventListener('click', this._onLanguageBtn);
-    this._langDialog?.removeEventListener('click', this._onLangBackdrop);
-    this._langDialog?.removeEventListener('click', this._onLangSelect);
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--year-header-height');
     window.removeEventListener('scroll', this._onScroll);
@@ -712,134 +565,6 @@ class YearHeader extends Gestures(AppElement) {
     this.shadowRoot.querySelector('#color-reset-btn').addEventListener('click', this._onColorReset);
   }
 
-  _setupSync() {
-    this._importConfirm = this.shadowRoot.querySelector('#import-confirm');
-    const importInput   = this.shadowRoot.querySelector('#import-input');
-
-    this._onExportYear = async () => {
-      this._menuDialog.close();
-      const year = this._year;
-      const data = await exportData({ eventFilter: e => String(e.payload?.year) === String(year) });
-      const ts   = new Date().toISOString().replace(/\D/g, '').slice(0, 12);
-      downloadExport(data, `${ts}_telos-${year}.telos`);
-    };
-    this.shadowRoot.querySelector('#export-year-btn').addEventListener('click', this._onExportYear);
-
-    this._onExportAll = async () => {
-      this._menuDialog.close();
-      const data = await exportData();
-      const ts   = new Date().toISOString().replace(/\D/g, '').slice(0, 12);
-      downloadExport(data, `${ts}_telos-all.telos`);
-    };
-    this.shadowRoot.querySelector('#export-all-btn').addEventListener('click', this._onExportAll);
-
-    this._onImportBtn = () => {
-      this._menuDialog.close();
-      importInput.click();
-    };
-    this.shadowRoot.querySelector('#import-btn').addEventListener('click', this._onImportBtn);
-
-    this._onImportInput = async e => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      e.target.value = '';
-      const msgEl     = this.shadowRoot.querySelector('#import-message');
-      const successEl = this.shadowRoot.querySelector('#import-success-actions');
-      const errorEl   = this.shadowRoot.querySelector('#import-error-actions');
-      try {
-        const raw    = await readImportFile(file);
-        const result = await importData(raw);
-        msgEl.textContent = t('sync.import-confirm', { events: result.eventsAdded, images: result.imagesAdded });
-        successEl.hidden = false;
-        errorEl.hidden   = true;
-      } catch (err) {
-        console.error('Import failed:', err);
-        msgEl.textContent = t('sync.import-error');
-        successEl.hidden  = true;
-        errorEl.hidden    = false;
-      }
-      this._importConfirm.showModal();
-    };
-    importInput.addEventListener('change', this._onImportInput);
-
-    this._onImportCancel = () => this._importConfirm.close();
-    this._onImportReload = () => location.reload();
-    this._onImportClose  = () => this._importConfirm.close();
-    this.shadowRoot.querySelector('#import-cancel').addEventListener('click', this._onImportCancel);
-    this.shadowRoot.querySelector('#import-reload').addEventListener('click', this._onImportReload);
-    this.shadowRoot.querySelector('#import-close').addEventListener('click', this._onImportClose);
-  }
-
-  _setupTheme() {
-    this._themeSheet = this.shadowRoot.querySelector('#theme-sheet');
-
-    this._onThemeBtn = () => {
-      this._menuDialog.close();
-      this._updateThemeSheet();
-      this._themeSheet.showModal();
-    };
-    this.shadowRoot.querySelector('#theme-btn').addEventListener('click', this._onThemeBtn);
-
-    this._onThemeSheetBackdrop = e => {
-      if (e.target === this._themeSheet) this._themeSheet.close();
-    };
-    this._themeSheet.addEventListener('click', this._onThemeSheetBackdrop);
-
-    this._onThemeSelect = e => {
-      const btn = e.target.closest('[data-theme]');
-      if (!btn || btn.dataset.theme === getTheme()) return;
-      setTheme(btn.dataset.theme);
-      this._updateThemeSheet();
-      this._themeSheet.close();
-    };
-    this._themeSheet.addEventListener('click', this._onThemeSelect);
-
-    this._unsubTheme = onThemeChange(theme => {
-      const el = this.shadowRoot.querySelector('#theme-value');
-      if (el) el.textContent = `${_themeName(theme)} ›`;
-    });
-  }
-
-  _setupLanguage() {
-    this._langDialog = this.shadowRoot.querySelector('#lang-sheet');
-
-    this._onLanguageBtn = () => {
-      this._menuDialog.close();
-      this._langDialog.showModal();
-    };
-    this.shadowRoot.querySelector('#language-btn').addEventListener('click', this._onLanguageBtn);
-
-    this._onLangBackdrop = e => {
-      if (e.target === this._langDialog) this._langDialog.close();
-    };
-    this._langDialog.addEventListener('click', this._onLangBackdrop);
-
-    this._onLangSelect = e => {
-      const btn = e.target.closest('[data-locale]');
-      if (btn && btn.dataset.locale !== getLocale()) {
-        setLocale(btn.dataset.locale);
-        location.reload();
-      }
-    };
-    this._langDialog.addEventListener('click', this._onLangSelect);
-  }
-
-  _updateThemeSheet() {
-    const current = getTheme();
-    this._themeSheet?.querySelectorAll('[data-theme]').forEach(btn => {
-      const isActive = btn.dataset.theme === current;
-      let badge = btn.querySelector('.badge');
-      if (isActive && !badge) {
-        badge = document.createElement('span');
-        badge.className = 'badge selected';
-        badge.textContent = '✓';
-        btn.appendChild(badge);
-      } else if (!isActive && badge) {
-        badge.remove();
-      }
-    });
-  }
-
   _updateSwatches(currentHex) {
     this._colorSheet?.querySelectorAll('.swatch').forEach(btn => {
       const active = btn.dataset.color === currentHex;
@@ -853,8 +578,6 @@ class YearHeader extends Gestures(AppElement) {
     if (this._yearEl) this._yearEl.textContent = String(year);
     const pct = yearProgress(year);
     if (this._stripFill) this._stripFill.style.width = `${pct}%`;
-    const exportLabel = this.shadowRoot?.querySelector('#export-year-label');
-    if (exportLabel) exportLabel.textContent = t('sync.export-year', { year });
     this._updateImageFor(year);
   }
 
@@ -898,9 +621,6 @@ class YearHeader extends Gestures(AppElement) {
     if (removeBtn) removeBtn.hidden = !hasImage;
   }
 }
-
-const LOCALE_LABELS = { en: 'English', fr: 'Français', ca: 'Català' };
-function _localeName(locale) { return LOCALE_LABELS[locale] ?? locale; }
 
 function yearProgress(year) {
   const now     = new Date();
