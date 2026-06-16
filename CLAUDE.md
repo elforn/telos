@@ -16,7 +16,7 @@ Telos is a personal yearly goal planner that helps individuals set and track a c
 Used for year-start planning sessions and periodic (weekly or monthly) check-ins. Primarily a phone app (95% of use); tablet and desktop are secondary. The app is local-only with no accounts or cloud sync.
 
 ### Users
-- **Personal user** — the sole user of the app; plans their year, tracks progress, manages lists. No multi-user features. A `sharedWith` note field on list items is the only people-awareness in the app.
+- **Personal user** — the sole user of the app; plans their year, tracks progress, manages lists. No multi-user features.
 
 ### Key flows
 1. **Set a capstone goal** — enter the one headline goal for the year, visible at a glance from the home screen.
@@ -42,10 +42,10 @@ All state lives in a **simple store** (setState/getState — no event log, no re
   For `weekly` and `monthly`: success per period = `min(entries_in_period / target, 1)`. Both use a weighted running average across periods (more recent periods weighted higher).
 
 - **`images`** — `{ [year]: blobId }`. Blobs stored via `attachBlob`/`getBlob`.
-- **`lists`** — `List[]` where each `List` is `{ id, name, items: ListItem[] }`. Lists are **trans-year** — never scoped to a specific year.
+- **`lists`** — `List[]` where each `List` is `{ id, name, color?: string, items: ListItem[] }`. Lists are **trans-year** — never scoped to a specific year. `color` is an optional hex string for visual differentiation.
 - **`ListItem`** — fixed schema (no progress tracking — only goals are tracked):
   ```
-  { id, title, description?, dueDate, status: 'open' | 'paused' | 'done', tags: string[], inGoals: Array<{ year: string, section: string, goalId: string }>, sharedWith: string[] }
+  { id, title, note?, url?, dueDate?, status: 'open' | 'paused' | 'done', tags: string[], inGoals: Array<{ year: string, section: string, goalId: string }> }
   ```
   - `inGoals` is an empty array when not linked; each entry records where the item was promoted. A single item can be promoted into goals across multiple years/sections.
   - Progress is **not** synced between list items and goal copies — each goal tracks independently.
@@ -56,7 +56,6 @@ All state lives in a **simple store** (setState/getState — no event log, no re
 ### Constraints
 - Local only: no accounts, no cloud sync. Export/import via the sync module is the only data-transfer mechanism.
 - Keep it simple: no unnecessary settings, no complexity for its own sake.
-- Sharing is notes-only: `sharedWith` records names/notes, no actual data sync occurs.
 
 ### Common mistakes
 - **Lists are trans-year.** Never scope a list or item to a year. Only entries in `inGoals` point into a year.

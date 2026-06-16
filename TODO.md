@@ -56,15 +56,16 @@ last 8 weeks or 6 months in the goal list. Visual representation TBD.
 ## Later — depth
 - **Year / quarterly reflection** — 1–5 star rating + short note, storable
   annually or per quarter (Q1–Q4). Modal UI, TBD.
-- **Success card** — when a percentage goal hits 100%, offer "Share this win":
-  generates a card and triggers the Web Share API. No server needed.
 - **Year summary card** — shareable image of the full year plan (Web Share API).
 - **Check-in badge reminder** — app icon badge (Badging API) showing count of
   frequency goals behind target. Updated on app open and via Periodic Background
   Sync (Chrome Android, no server needed).
-- **Walkthrough / onboarding** — first-launch guide, skippable.
+- **Success card** — when a percentage goal hits 100%, offer "Share this win":
+  generates a card and triggers the Web Share API. No server needed.
+- Fast import of list of items
 
 ## Stretch
+- **Walkthrough / onboarding** — first-launch guide, skippable.
 - Frequency goal dot-calendar — richer visual for weekly/monthly goal types.
 - Analytics — goal stats, tag stats, progress over time. Tags on both goals and
   items are stored from day one specifically to enable this. Very late stage.
