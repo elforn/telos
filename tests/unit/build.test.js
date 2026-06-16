@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'child_process';
 import { readFileSync, existsSync, readdirSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
@@ -117,6 +117,12 @@ describe('build — custom BASE_PATH', () => {
   beforeAll(() => {
     rmSync(DIST, { recursive: true, force: true });
     runBuild({ BASE_PATH: '/my-app/' });
+  });
+
+  afterAll(() => {
+    // Restore dist to the default BASE_PATH=/ so dev server works after running tests
+    rmSync(DIST, { recursive: true, force: true });
+    runBuild();
   });
 
   it('prefixes all asset paths in sw.js ASSETS with BASE_PATH', () => {

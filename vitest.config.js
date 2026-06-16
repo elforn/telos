@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  define: { __BASE_PATH__: '"/"' },
+  define: { __BASE_PATH__: '"/"', __APP_VERSION__: '"0.0.0-test"' },
   server: {
     fs: { allow: ['..'] },
   },
