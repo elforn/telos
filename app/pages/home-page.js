@@ -7,6 +7,7 @@ import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/year-header/year-header.js';
 import '../components/goal-item/goal-item.js';
 import '../components/goal-dialog/goal-dialog.js';
+import '../components/add-row/add-row.js';
 
 class HomePage extends AppElement {
   template() {
@@ -23,7 +24,7 @@ class HomePage extends AppElement {
           gap: var(--space-4);
           padding: 0 var(--page-padding);
           padding-block-start: calc(var(--update-banner-height, 0px) + var(--year-header-height, 81px) + var(--space-2));
-          padding-block-end: calc(var(--safe-area-bottom) + var(--space-4));
+          padding-block-end: calc(var(--bottom-nav-height) + var(--space-2));
         }
 
         .section-heading {
@@ -77,31 +78,15 @@ class HomePage extends AppElement {
           --goal-item-height: 60px;
         }
 
-        .add-row {
-          margin-block-start: var(--space-2);
+        add-row {
           display: none;
-          inline-size: 100%;
-          min-block-size: var(--touch-target);
-          background: none;
-          border: 1px dashed var(--color-border);
-          border-radius: var(--radius-md);
-          align-items: center;
-          justify-content: center;
-          gap: var(--space-2);
-          cursor: pointer;
-          color: var(--color-text-muted);
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-medium);
-          font-family: var(--font-family);
-          padding-inline: var(--space-3);
+          --add-row-border: none;
+          font-style: italic;
         }
 
-        .list-section.edit .add-row { display: flex; }
+        .list-section.edit add-row { display: block; }
 
-        .add-row:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
+        .list-section.edit .section-heading { color: var(--color-text-secondary); }
       </style>
 
       <year-header id="header"></year-header>
@@ -113,7 +98,7 @@ class HomePage extends AppElement {
             <button class="edit-btn" id="capstone-edit-btn">${t('home-page.edit')}</button>
           </div>
           <div id="capstone-list" class="item-list" role="list"></div>
-          <button class="add-row" id="add-capstone">+ ${t('goal-item.add-capstone')}</button>
+          <add-row id="add-capstone">+ ${t('goal-item.add-capstone')}</add-row>
         </section>
 
         <section id="milestone-section" class="list-section empty" aria-label="${t('home-page.milestone-section')}">
@@ -122,7 +107,7 @@ class HomePage extends AppElement {
             <button class="edit-btn" id="milestone-edit-btn">${t('home-page.edit')}</button>
           </div>
           <div id="milestone-list" class="item-list" role="list"></div>
-          <button class="add-row" id="add-milestone">+ ${t('goal-item.add-milestone')}</button>
+          <add-row id="add-milestone">+ ${t('goal-item.add-milestone')}</add-row>
         </section>
 
         <section id="wow-section" class="list-section empty" aria-label="${t('home-page.wow-section')}">
@@ -131,7 +116,7 @@ class HomePage extends AppElement {
             <button class="edit-btn" id="wow-edit-btn">${t('home-page.edit')}</button>
           </div>
           <div id="wow-list" class="item-list" role="list"></div>
-          <button class="add-row" id="add-wow">+ ${t('goal-item.add-wow')}</button>
+          <add-row id="add-wow">+ ${t('goal-item.add-wow')}</add-row>
         </section>
 
         <section id="focus-section" class="list-section empty" aria-label="${t('home-page.focus-section')}">
@@ -140,7 +125,7 @@ class HomePage extends AppElement {
             <button class="edit-btn" id="focus-edit-btn">${t('home-page.edit')}</button>
           </div>
           <div id="focus-list" class="item-list" role="list"></div>
-          <button class="add-row" id="add-focus">+ ${t('goal-item.add-focus')}</button>
+          <add-row id="add-focus">+ ${t('goal-item.add-focus')}</add-row>
         </section>
       </main>
 
