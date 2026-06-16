@@ -55,11 +55,56 @@ defineStrings({
   'not-found.cta':     'Go to this year',
 
   'sync.export-year': 'Export {year}',
-  'sync.export-all':  'Export all years',
+  'sync.export-all':  'Export data',
   'sync.import':      'Import',
   'sync.import-confirm': 'Imported {events} events and {images} images. The app will reload to apply them. Continue?',
   'sync.import-cancel':  'Cancel',
   'sync.import-reload':  'Reload',
   'sync.import-close':   'Close',
   'sync.import-error':   'Invalid or incompatible export file.',
+
+  'lists-page.heading': 'Lists',
+  'lists-page.empty':   'No lists yet',
+  'lists-page.add':     'New list',
+  'lists-page.edit':    'Edit',
+
+  'list-detail.back':        'Lists',
+  'list-detail.empty':       'No items yet',
+  'list-detail.add':         'New item',
+  'list-detail.menu':        'Options',
+  'list-detail.show-status': 'Show status',
+  'list-detail.hide-status': 'Hide status',
+
+  'list-dialog.heading-create':   'New list',
+  'list-dialog.heading-edit':     'Edit list',
+  'list-dialog.name-placeholder': 'List name',
+  'list-dialog.save':             'Save',
+  'list-dialog.cancel':           'Cancel',
+  'list-dialog.delete':           'Delete list',
+
+  'item-dialog.heading-create':   'New item',
+  'item-dialog.heading-edit':     'Edit item',
+  'item-dialog.title-placeholder':'Title',
+  'item-dialog.status-label':     'Status',
+  'item-dialog.status-open':      'Open',
+  'item-dialog.status-paused':    'Paused',
+  'item-dialog.status-done':      'Done',
+  'item-dialog.save':             'Save',
+  'item-dialog.cancel':           'Cancel',
+  'item-dialog.delete':           'Delete item',
+
+  'list-item.delete':    'Delete',
+  'list-item.mark-done': 'Mark done',
+  'list-item.restore':   'Restore',
+
+  'lists.toast-list-saved':   'List saved',
+  'lists.toast-list-deleted': 'List deleted',
+  'lists.toast-item-saved':   'Item saved',
+  'lists.toast-item-deleted': 'Item deleted',
+
+  'year-header.lists': 'Lists',
+
+  'bottom-nav.years':    'Years',
+  'bottom-nav.lists':    'Lists',
+  'bottom-nav.settings': 'Settings',
 });

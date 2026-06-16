@@ -56,11 +56,56 @@ defineStrings({
   'not-found.cta':               'Aller à cette année',
 
   'sync.export-year':            'Exporter {year}',
-  'sync.export-all':             'Exporter toutes les années',
+  'sync.export-all':             'Exporter les données',
   'sync.import':                 'Importer',
   'sync.import-confirm':         'Importé {events} événements et {images} images. L\'application va recharger pour les appliquer. Continuer ?',
   'sync.import-cancel':          'Annuler',
   'sync.import-reload':          'Recharger',
   'sync.import-close':           'Fermer',
   'sync.import-error':           'Fichier d\'export invalide ou incompatible.',
+
+  'lists-page.heading': 'Listes',
+  'lists-page.empty':   'Aucune liste',
+  'lists-page.add':     'Nouvelle liste',
+  'lists-page.edit':    'Modifier',
+
+  'list-detail.back':        'Listes',
+  'list-detail.empty':       'Aucun élément',
+  'list-detail.add':         'Nouvel élément',
+  'list-detail.menu':        'Options',
+  'list-detail.show-status': 'Afficher le statut',
+  'list-detail.hide-status': 'Masquer le statut',
+
+  'list-dialog.heading-create':   'Nouvelle liste',
+  'list-dialog.heading-edit':     'Modifier la liste',
+  'list-dialog.name-placeholder': 'Nom de la liste',
+  'list-dialog.save':             'Enregistrer',
+  'list-dialog.cancel':           'Annuler',
+  'list-dialog.delete':           'Supprimer la liste',
+
+  'item-dialog.heading-create':   'Nouvel élément',
+  'item-dialog.heading-edit':     'Modifier l\'élément',
+  'item-dialog.title-placeholder':'Titre',
+  'item-dialog.status-label':     'Statut',
+  'item-dialog.status-open':      'Ouvert',
+  'item-dialog.status-paused':    'En pause',
+  'item-dialog.status-done':      'Terminé',
+  'item-dialog.save':             'Enregistrer',
+  'item-dialog.cancel':           'Annuler',
+  'item-dialog.delete':           'Supprimer l\'élément',
+
+  'list-item.delete':    'Supprimer',
+  'list-item.mark-done': 'Marquer comme terminé',
+  'list-item.restore':   'Restaurer',
+
+  'lists.toast-list-saved':   'Liste enregistrée',
+  'lists.toast-list-deleted': 'Liste supprimée',
+  'lists.toast-item-saved':   'Élément enregistré',
+  'lists.toast-item-deleted': 'Élément supprimé',
+
+  'year-header.lists': 'Listes',
+
+  'bottom-nav.years':    'Années',
+  'bottom-nav.lists':    'Listes',
+  'bottom-nav.settings': 'Réglages',
 }, 'fr');

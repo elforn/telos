@@ -56,11 +56,56 @@ defineStrings({
   'not-found.cta':               'Anar a aquest any',
 
   'sync.export-year':            'Exporta {year}',
-  'sync.export-all':             'Exporta tots els anys',
+  'sync.export-all':             'Exporta les dades',
   'sync.import':                 'Importa',
   'sync.import-confirm':         'Importats {events} esdeveniments i {images} imatges. L\'aplicació es recarregarà per aplicar-los. Continuar?',
   'sync.import-cancel':          'Cancel·la',
   'sync.import-reload':          'Recarrega',
   'sync.import-close':           'Tanca',
   'sync.import-error':           'Fitxer d\'exportació invàlid o incompatible.',
+
+  'lists-page.heading': 'Llistes',
+  'lists-page.empty':   'Cap llista',
+  'lists-page.add':     'Nova llista',
+  'lists-page.edit':    'Edita',
+
+  'list-detail.back':        'Llistes',
+  'list-detail.empty':       'Cap element',
+  'list-detail.add':         'Nou element',
+  'list-detail.menu':        'Opcions',
+  'list-detail.show-status': 'Mostra l\'estat',
+  'list-detail.hide-status': 'Amaga l\'estat',
+
+  'list-dialog.heading-create':   'Nova llista',
+  'list-dialog.heading-edit':     'Edita la llista',
+  'list-dialog.name-placeholder': 'Nom de la llista',
+  'list-dialog.save':             'Desa',
+  'list-dialog.cancel':           'Cancel·la',
+  'list-dialog.delete':           'Elimina la llista',
+
+  'item-dialog.heading-create':   'Nou element',
+  'item-dialog.heading-edit':     'Edita l\'element',
+  'item-dialog.title-placeholder':'Títol',
+  'item-dialog.status-label':     'Estat',
+  'item-dialog.status-open':      'Obert',
+  'item-dialog.status-paused':    'En pausa',
+  'item-dialog.status-done':      'Fet',
+  'item-dialog.save':             'Desa',
+  'item-dialog.cancel':           'Cancel·la',
+  'item-dialog.delete':           'Elimina l\'element',
+
+  'list-item.delete':    'Elimina',
+  'list-item.mark-done': 'Marca com a fet',
+  'list-item.restore':   'Restaura',
+
+  'lists.toast-list-saved':   'Llista desada',
+  'lists.toast-list-deleted': 'Llista eliminada',
+  'lists.toast-item-saved':   'Element desat',
+  'lists.toast-item-deleted': 'Element eliminat',
+
+  'year-header.lists': 'Llistes',
+
+  'bottom-nav.years':    'Anys',
+  'bottom-nav.lists':    'Llistes',
+  'bottom-nav.settings': 'Ajustos',
 }, 'ca');
