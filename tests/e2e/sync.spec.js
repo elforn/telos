@@ -2,22 +2,68 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
-import { waitForPage } from './helpers.js';
+import { waitForPage, waitForListsPage, openSettings, clickInBottomNav } from './helpers.js';
 
 const currentYear = new Date().getFullYear();
 
-async function clickInYearHeader(page, selector) {
-  await page.evaluate((sel) => {
+// ── Year-header helpers ────────────────────────────────────────────────────────
+
+async function openYearMenu(page) {
+  await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
       .querySelector('year-header').shadowRoot
-      .querySelector(sel).click();
-  }, selector);
+      .querySelector('#menu-btn').click();
+  });
 }
 
-async function openMenu(page) {
-  await clickInYearHeader(page, '#menu-btn');
+// ── Bottom-nav import helpers ─────────────────────────────────────────────────
+
+async function injectImportFile(page, content) {
+  if (Buffer.isBuffer(content)) {
+    await page.evaluate((bytes) => {
+      const file  = new File([new Uint8Array(bytes)], 'data.telos', { type: 'application/octet-stream' });
+      const dt    = new DataTransfer();
+      dt.items.add(file);
+      const input = document.querySelector('bottom-nav').shadowRoot.querySelector('#import-input');
+      Object.defineProperty(input, 'files', { value: dt.files, configurable: true });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, Array.from(content));
+  } else {
+    const json = typeof content === 'string' ? content : JSON.stringify(content);
+    await page.evaluate((j) => {
+      const file  = new File([j], 'export.json', { type: 'application/json' });
+      const dt    = new DataTransfer();
+      dt.items.add(file);
+      const input = document.querySelector('bottom-nav').shadowRoot.querySelector('#import-input');
+      Object.defineProperty(input, 'files', { value: dt.files, configurable: true });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, json);
+  }
 }
+
+async function waitForImportModal(page) {
+  await page.waitForFunction(() =>
+    document.querySelector('bottom-nav')?.shadowRoot
+      ?.querySelector('#import-modal')?.shadowRoot?.querySelector('dialog')?.open
+  );
+}
+
+async function importModalState(page) {
+  return page.evaluate(() => {
+    const bn     = document.querySelector('bottom-nav').shadowRoot;
+    const dialog = bn.querySelector('#import-modal').shadowRoot.querySelector('dialog');
+    return {
+      open:          dialog.open,
+      message:       bn.querySelector('#import-message').textContent,
+      cancelHidden:  bn.querySelector('#import-cancel').hidden,
+      reloadHidden:  bn.querySelector('#import-reload').hidden,
+      closeHidden:   bn.querySelector('#import-close').hidden,
+    };
+  });
+}
+
+// ── Goal helpers ──────────────────────────────────────────────────────────────
 
 async function createGoal(page, title) {
   await page.evaluate(() => {
@@ -51,66 +97,73 @@ async function createGoal(page, title) {
       .querySelector('goal-dialog').shadowRoot
       .querySelector('#save').click();
   });
-  await page.waitForFunction(() => {
-    const list = document.querySelector('app-router')?.shadowRoot
+  await page.waitForFunction(() =>
+    (document.querySelector('app-router')?.shadowRoot
       ?.querySelector('home-page')?.shadowRoot
-      ?.querySelector('#capstone-list');
-    return list?.querySelectorAll('goal-item').length > 0;
-  });
+      ?.querySelector('#capstone-list')?.querySelectorAll('goal-item').length ?? 0) > 0
+  );
 }
 
 async function goalCount(page) {
-  return page.evaluate(() => {
-    const list = document.querySelector('app-router')?.shadowRoot
+  return page.evaluate(() =>
+    document.querySelector('app-router')?.shadowRoot
       ?.querySelector('home-page')?.shadowRoot
-      ?.querySelector('#capstone-list');
-    return list?.querySelectorAll('goal-item').length ?? 0;
-  });
+      ?.querySelector('#capstone-list')?.querySelectorAll('goal-item').length ?? 0
+  );
 }
 
-async function injectImportFile(page, content) {
-  if (Buffer.isBuffer(content)) {
-    await page.evaluate((bytes) => {
-      const file = new File([new Uint8Array(bytes)], 'data.telos', { type: 'application/octet-stream' });
-      const dt   = new DataTransfer();
-      dt.items.add(file);
-      const yh    = document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('year-header');
-      const input = yh.shadowRoot.querySelector('#import-input');
-      Object.defineProperty(input, 'files', { value: dt.files, configurable: true });
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    }, Array.from(content));
-  } else {
-    const json = typeof content === 'string' ? content : JSON.stringify(content);
-    await page.evaluate((json) => {
-      const file = new File([json], 'export.json', { type: 'application/json' });
-      const dt   = new DataTransfer();
-      dt.items.add(file);
-      const yh    = document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('year-header');
-      const input = yh.shadowRoot.querySelector('#import-input');
-      Object.defineProperty(input, 'files', { value: dt.files, configurable: true });
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    }, json);
-  }
+// ── List helpers ──────────────────────────────────────────────────────────────
+
+async function navToLists(page) {
+  await page.evaluate(() =>
+    document.querySelector('bottom-nav').shadowRoot.querySelector('#pill-lists').click()
+  );
+  await waitForListsPage(page);
 }
 
-async function confirmDialogState(page) {
-  return page.evaluate(() => {
-    const yh = document.querySelector('app-router').shadowRoot
-      .querySelector('home-page').shadowRoot
-      .querySelector('year-header');
-    const dialog = yh.shadowRoot.querySelector('#import-confirm');
-    return {
-      open:           dialog.open,
-      message:        yh.shadowRoot.querySelector('#import-message').textContent,
-      successHidden:  yh.shadowRoot.querySelector('#import-success-actions').hidden,
-      errorHidden:    yh.shadowRoot.querySelector('#import-error-actions').hidden,
-    };
+async function createList(page, name) {
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('lists-page').shadowRoot
+      .querySelector('#add-row').click();
   });
+  await page.waitForFunction(() => {
+    const d = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('lists-page')?.shadowRoot
+      ?.querySelector('list-dialog')?.shadowRoot
+      ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+    return d?.open;
+  });
+  await page.evaluate((n) => {
+    const inp = document.querySelector('app-router').shadowRoot
+      .querySelector('lists-page').shadowRoot
+      .querySelector('list-dialog').shadowRoot
+      .querySelector('#input');
+    inp.value = n;
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  }, name);
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('lists-page').shadowRoot
+      .querySelector('list-dialog').shadowRoot
+      .querySelector('#save').click();
+  });
+  await page.waitForFunction(() =>
+    (document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('lists-page')?.shadowRoot
+      ?.querySelector('#list-container')?.querySelectorAll('.list-row').length ?? 0) > 0
+  );
 }
+
+async function listCount(page) {
+  return page.evaluate(() =>
+    document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('lists-page')?.shadowRoot
+      ?.querySelector('#list-container')?.querySelectorAll('.list-row').length ?? 0
+  );
+}
+
+// ── IDB helpers ───────────────────────────────────────────────────────────────
 
 async function clearIDB(page) {
   await page.evaluate(() => new Promise((resolve, reject) => {
@@ -127,40 +180,26 @@ async function clearIDB(page) {
   }));
 }
 
-test.describe('Sync — menu items', () => {
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('Sync — settings items', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(`/${currentYear}`);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
-    await openMenu(page);
+    await openSettings(page);
   });
 
-  test('Export this year menu item is present', async ({ page }) => {
-    const text = await page.evaluate(() =>
-      document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('year-header').shadowRoot
-        .querySelector('#export-year-btn').textContent.trim()
-    );
-    expect(text).toContain(String(currentYear));
-  });
-
-  test('Export all years menu item is present', async ({ page }) => {
+  test('Export all years button is present in settings', async ({ page }) => {
     const present = await page.evaluate(() =>
-      !!document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('year-header').shadowRoot
-        .querySelector('#export-all-btn')
+      !!document.querySelector('bottom-nav').shadowRoot.querySelector('#export-all-btn')
     );
     expect(present).toBe(true);
   });
 
-  test('Import menu item is present', async ({ page }) => {
+  test('Import button is present in settings', async ({ page }) => {
     const present = await page.evaluate(() =>
-      !!document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('year-header').shadowRoot
-        .querySelector('#import-btn')
+      !!document.querySelector('bottom-nav').shadowRoot.querySelector('#import-btn')
     );
     expect(present).toBe(true);
   });
@@ -173,23 +212,12 @@ test.describe('Sync — export', () => {
     await waitForPage(page);
   });
 
-  test('Export this year triggers a file download', async ({ page }) => {
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      (async () => {
-        await openMenu(page);
-        await clickInYearHeader(page, '#export-year-btn');
-      })(),
-    ]);
-    expect(download.suggestedFilename()).toMatch(/^\d{12}_telos-\d{4}\.telos$/);
-  });
-
   test('Export all years triggers a file download', async ({ page }) => {
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       (async () => {
-        await openMenu(page);
-        await clickInYearHeader(page, '#export-all-btn');
+        await openSettings(page);
+        await clickInBottomNav(page, '#export-all-btn');
       })(),
     ]);
     expect(download.suggestedFilename()).toMatch(/^\d{12}_telos-all\.telos$/);
@@ -199,8 +227,8 @@ test.describe('Sync — export', () => {
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       (async () => {
-        await openMenu(page);
-        await clickInYearHeader(page, '#export-all-btn');
+        await openSettings(page);
+        await clickInBottomNav(page, '#export-all-btn');
       })(),
     ]);
     const tmpPath = path.join(os.tmpdir(), download.suggestedFilename());
@@ -224,55 +252,40 @@ test.describe('Sync — import', () => {
   });
 
   test('importing a corrupted binary file shows error dialog', async ({ page }) => {
-    await openMenu(page);
-    await clickInYearHeader(page, '#import-btn');
-    // SCLE magic so readImportFile passes it as Uint8Array, but gzip payload is garbage.
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
     await injectImportFile(page, Buffer.from([0x53, 0x43, 0x4c, 0x45, 0x00, 0x00, 0x00, 0x00]));
-    await page.waitForFunction(() => {
-      const yh = document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('year-header');
-      return yh.shadowRoot.querySelector('#import-confirm').open;
-    });
-    const state = await confirmDialogState(page);
+    await waitForImportModal(page);
+    const state = await importModalState(page);
     expect(state.open).toBe(true);
-    expect(state.errorHidden).toBe(false);
-    expect(state.successHidden).toBe(true);
+    expect(state.closeHidden).toBe(false);
+    expect(state.reloadHidden).toBe(true);
   });
 
   test('importing invalid JSON shows error dialog', async ({ page }) => {
-    await openMenu(page);
-    await clickInYearHeader(page, '#import-btn');
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
     await injectImportFile(page, 'this is not json {{');
-    await page.waitForFunction(() => {
-      const yh = document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('year-header');
-      return yh.shadowRoot.querySelector('#import-confirm').open;
-    });
-    const state = await confirmDialogState(page);
+    await waitForImportModal(page);
+    const state = await importModalState(page);
     expect(state.open).toBe(true);
-    expect(state.errorHidden).toBe(false);
-    expect(state.successHidden).toBe(true);
+    expect(state.closeHidden).toBe(false);
+    expect(state.reloadHidden).toBe(true);
   });
 
   test('importing wrong socleVersion shows error dialog', async ({ page }) => {
-    await openMenu(page);
-    await clickInYearHeader(page, '#import-btn');
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
     await injectImportFile(page, { socleVersion: 99, events: [], images: [] });
-    await page.waitForFunction(() => {
-      const yh = document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('year-header');
-      return yh.shadowRoot.querySelector('#import-confirm').open;
-    });
-    const state = await confirmDialogState(page);
-    expect(state.errorHidden).toBe(false);
+    await waitForImportModal(page);
+    const state = await importModalState(page);
+    expect(state.closeHidden).toBe(false);
+    expect(state.reloadHidden).toBe(true);
   });
 
   test('importing valid legacy JSON shows success dialog', async ({ page }) => {
-    await openMenu(page);
-    await clickInYearHeader(page, '#import-btn');
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
     const payload = {
       socleVersion: 1,
       events: [
@@ -282,16 +295,11 @@ test.describe('Sync — import', () => {
       images: [],
     };
     await injectImportFile(page, payload);
-    await page.waitForFunction(() => {
-      const yh = document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('year-header');
-      return yh.shadowRoot.querySelector('#import-confirm').open;
-    });
-    const state = await confirmDialogState(page);
+    await waitForImportModal(page);
+    const state = await importModalState(page);
     expect(state.open).toBe(true);
-    expect(state.successHidden).toBe(false);
-    expect(state.errorHidden).toBe(true);
+    expect(state.reloadHidden).toBe(false);
+    expect(state.closeHidden).toBe(true);
   });
 });
 
@@ -307,8 +315,8 @@ test.describe('Sync — round-trip', () => {
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       (async () => {
-        await openMenu(page);
-        await clickInYearHeader(page, '#export-all-btn');
+        await openSettings(page);
+        await clickInBottomNav(page, '#export-all-btn');
       })(),
     ]);
     const tmpPath = path.join(os.tmpdir(), download.suggestedFilename());
@@ -322,33 +330,73 @@ test.describe('Sync — round-trip', () => {
     await waitForPage(page);
     expect(await goalCount(page)).toBe(0);
 
-    await openMenu(page);
-    await clickInYearHeader(page, '#import-btn');
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
     await injectImportFile(page, exportedBytes);
-    await page.waitForFunction(() => {
-      const yh = document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('year-header');
-      return yh.shadowRoot.querySelector('#import-confirm').open;
-    });
+    await waitForImportModal(page);
 
     const navigationPromise = page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {});
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('year-header').shadowRoot
-        .querySelector('#import-reload').click();
-    });
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-reload').click()
+    );
     await navigationPromise;
     await waitForPage(page);
 
     expect(await goalCount(page)).toBe(1);
-    const title = await page.evaluate(() => {
-      const item = document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('#capstone-list goal-item');
-      return item?.shadowRoot?.querySelector('.title')?.textContent?.trim();
-    });
+    const title = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        ?.querySelector('home-page').shadowRoot
+        ?.querySelector('#capstone-list goal-item')?.shadowRoot
+        ?.querySelector('.title')?.textContent?.trim()
+    );
     expect(title).toBe('Round-trip goal');
+  });
+
+  test('export then import restores lists after IDB clear', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    await navToLists(page);
+    await createList(page, 'Gift ideas');
+    expect(await listCount(page)).toBe(1);
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      (async () => {
+        await openSettings(page);
+        await clickInBottomNav(page, '#export-all-btn');
+      })(),
+    ]);
+    const tmpPath = path.join(os.tmpdir(), download.suggestedFilename());
+    await download.saveAs(tmpPath);
+    const exportedBytes = fs.readFileSync(tmpPath);
+    fs.unlinkSync(tmpPath);
+
+    await clearIDB(page);
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForListsPage(page);
+    expect(await listCount(page)).toBe(0);
+
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
+    await injectImportFile(page, exportedBytes);
+    await waitForImportModal(page);
+
+    const navigationPromise = page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {});
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-reload').click()
+    );
+    await navigationPromise;
+    await waitForListsPage(page);
+    expect(await listCount(page)).toBe(1);
+
+    const listName = await page.evaluate(() =>
+      document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('.list-name')?.textContent
+    );
+    expect(listName).toBe('Gift ideas');
   });
 });

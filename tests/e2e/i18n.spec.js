@@ -1,29 +1,13 @@
 import { test, expect } from '@playwright/test';
-import { waitForPage } from './helpers.js';
+import { waitForPage, openSettings } from './helpers.js';
 
 const currentYear = new Date().getFullYear();
 
-async function clickInYearHeader(page, selector) {
-  await page.evaluate((sel) => {
-    document.querySelector('app-router').shadowRoot
-      .querySelector('home-page').shadowRoot
-      .querySelector('year-header').shadowRoot
-      .querySelector(sel).click();
-  }, selector);
-}
-
-async function openLanguageSheet(page) {
-  await clickInYearHeader(page, '#menu-btn');
-  await clickInYearHeader(page, '#language-btn');
-}
-
 async function switchLocale(page, locale) {
-  await openLanguageSheet(page);
+  await openSettings(page);
   await page.evaluate((loc) => {
-    document.querySelector('app-router').shadowRoot
-      .querySelector('home-page').shadowRoot
-      .querySelector('year-header').shadowRoot
-      .querySelector(`#lang-sheet [data-locale="${loc}"]`).click();
+    document.querySelector('bottom-nav').shadowRoot
+      .querySelector(`[data-locale="${loc}"]`).click();
   }, locale);
   await page.waitForLoadState('domcontentloaded');
   await waitForPage(page);
@@ -48,14 +32,11 @@ test.describe('Language picker', () => {
     await page.evaluate(() => localStorage.removeItem('locale'));
   });
 
-  test('language sub-sheet lists EN, FR and CA options', async ({ page }) => {
-    await openLanguageSheet(page);
+  test('settings modal lists EN, FR and CA options', async ({ page }) => {
+    await openSettings(page);
     const locales = await page.evaluate(() =>
       Array.from(
-        document.querySelector('app-router').shadowRoot
-          .querySelector('home-page').shadowRoot
-          .querySelector('year-header').shadowRoot
-          .querySelectorAll('#lang-sheet [data-locale]')
+        document.querySelector('bottom-nav').shadowRoot.querySelectorAll('[data-locale]')
       ).map(b => b.dataset.locale)
     );
     expect(locales).toEqual(expect.arrayContaining(['en', 'fr', 'ca']));

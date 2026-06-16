@@ -4,6 +4,18 @@ export async function waitForPage(page) {
   );
 }
 
+export async function waitForListsPage(page) {
+  await page.waitForFunction(() =>
+    !!document.querySelector('app-router')?.shadowRoot?.querySelector('lists-page')
+  );
+}
+
+export async function waitForListDetailPage(page) {
+  await page.waitForFunction(() =>
+    !!document.querySelector('app-router')?.shadowRoot?.querySelector('list-detail-page')
+  );
+}
+
 export async function waitForIDBFlush(page) {
   await page.evaluate(() => new Promise((res, rej) => {
     const r = indexedDB.open('telos', 1);
@@ -16,4 +28,20 @@ export async function waitForIDBFlush(page) {
     };
     r.onerror = () => rej(r.error);
   }));
+}
+
+export async function openSettings(page) {
+  await page.evaluate(() =>
+    document.querySelector('bottom-nav').shadowRoot.querySelector('#gear-btn').click()
+  );
+  await page.waitForFunction(() =>
+    document.querySelector('bottom-nav')?.shadowRoot
+      ?.querySelector('#settings-modal')?.shadowRoot?.querySelector('dialog')?.open
+  );
+}
+
+export async function clickInBottomNav(page, selector) {
+  await page.evaluate((sel) =>
+    document.querySelector('bottom-nav').shadowRoot.querySelector(sel).click()
+  , selector);
 }

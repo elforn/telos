@@ -294,6 +294,70 @@ test.describe('Goal progress via hold-drag', () => {
   });
 });
 
+// ── Goal tap — edit mode gate ─────────────────────────────────────────────────
+
+test.describe('Goal tap — edit mode gate', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    await enableEditMode(page, '#capstone-edit-btn');
+    await openDialog(page, '#add-capstone');
+    await fillAndSaveDialog(page, 'Tap gate test');
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+    await enableEditMode(page, '#capstone-edit-btn'); // exit edit mode
+  });
+
+  test('tapping a goal in view mode does not open the dialog', async ({ page }) => {
+    const barBounds = await page.evaluate(() => {
+      const bar = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item').shadowRoot
+        .querySelector('.bar');
+      return bar.getBoundingClientRect().toJSON();
+    });
+
+    await page.mouse.click(barBounds.x + barBounds.width / 2, barBounds.y + barBounds.height / 2);
+    await page.waitForTimeout(200);
+
+    const dialogOpen = await page.evaluate(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open ?? false;
+    });
+    expect(dialogOpen).toBe(false);
+  });
+
+  test('tapping a goal in edit mode opens the dialog', async ({ page }) => {
+    await enableEditMode(page, '#capstone-edit-btn'); // enter edit mode
+
+    const barBounds = await page.evaluate(() => {
+      const bar = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item').shadowRoot
+        .querySelector('.bar');
+      return bar.getBoundingClientRect().toJSON();
+    });
+
+    await page.mouse.click(barBounds.x + barBounds.width / 2, barBounds.y + barBounds.height / 2);
+
+    await page.waitForFunction(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open;
+    });
+  });
+});
+
 // ── Goal fail / restore ───────────────────────────────────────────────────────
 
 test.describe('Goal fail / restore', () => {
@@ -372,6 +436,91 @@ test.describe('Goal fail / restore', () => {
       return item._goal?.percentage;
     });
     expect(pct).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ── Failed goal — non-interactive ────────────────────────────────────────────
+
+test.describe('Failed goal — non-interactive', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    await enableEditMode(page, '#capstone-edit-btn');
+    await openDialog(page, '#add-capstone');
+    await fillAndSaveDialog(page, 'Fail test goal');
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+    await enableEditMode(page, '#capstone-edit-btn'); // exit edit mode
+
+    // Fail the goal
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item').shadowRoot
+        .querySelector('#fail-btn').click();
+    });
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return (item?._goal?.percentage ?? 0) < 0;
+    });
+  });
+
+  test('tapping a failed goal does not open the edit dialog', async ({ page }) => {
+    const barBounds = await page.evaluate(() => {
+      const bar = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item').shadowRoot
+        .querySelector('.bar');
+      return bar.getBoundingClientRect().toJSON();
+    });
+
+    await page.mouse.click(barBounds.x + barBounds.width / 2, barBounds.y + barBounds.height / 2);
+    await page.waitForTimeout(200);
+
+    const dialogOpen = await page.evaluate(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open ?? false;
+    });
+    expect(dialogOpen).toBe(false);
+  });
+
+  test('hold-drag on a failed goal does not change its percentage', async ({ page }) => {
+    const barBox = await page.evaluate(() => {
+      const bar = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item').shadowRoot
+        .querySelector('.bar');
+      return bar.getBoundingClientRect().toJSON();
+    });
+
+    const startX  = barBox.x + 10;
+    const midY    = barBox.y + barBox.height / 2;
+    const targetX = barBox.x + barBox.width * 0.7;
+
+    await page.mouse.move(startX, midY);
+    await page.mouse.down();
+    await page.waitForTimeout(600); // wait for hold-drag to activate
+    await page.mouse.move(targetX, midY, { steps: 20 });
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+
+    const pct = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item._goal?.percentage;
+    });
+    expect(pct).toBeLessThan(0); // still failed, unchanged
   });
 });
 
