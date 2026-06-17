@@ -166,6 +166,10 @@ export const Gestures = (Base) => class extends Base {
     }
 
     if (g.phase === 'swipe') {
+      // Suppress the browser's synthetic click after a swipe — on Android Chrome,
+      // double-tap disambiguation can delay or misfire click on unrelated page elements
+      // even with manipulation set on all ancestors.
+      e.preventDefault();
       if (typeof this.onSwipe === 'function') {
         const dx = e.clientX - g.startX;
         const duration = Date.now() - g.startTime;
@@ -342,6 +346,7 @@ Gestures.attach = (element, handlers) => {
       return;
     }
     if (g?.phase === 'swipe') {
+      e.preventDefault(); // suppress synthetic click after swipe (see mixin comment)
       const dx = e.clientX - g.startX;
       const duration = Date.now() - g.startTime;
       handlers.onSwipe?.({
@@ -368,7 +373,7 @@ Gestures.attach = (element, handlers) => {
     }
   };
 
-  element.style.touchAction = (hasSwipe || !!handlers.onHoldDragStart) ? 'pan-y' : 'none';
+  element.style.touchAction = (hasSwipe || !!handlers.onHoldDragStart) ? 'manipulation' : 'none';
   element.style.userSelect = 'none';
   element.addEventListener('pointerdown', onDown);
 

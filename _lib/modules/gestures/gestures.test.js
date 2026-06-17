@@ -316,6 +316,22 @@ describe('Gestures — swipe', () => {
   it('sets touch-action: manipulation', () => {
     expect(el.style.touchAction).toBe('manipulation');
   });
+
+  it('calls preventDefault on pointerup after a completed swipe to suppress synthetic click', () => {
+    pdown(el, 0, 0); pmove(el, 50, 0);
+    const upEvent = new PointerEvent('pointerup', { clientX: 50, clientY: 0, bubbles: true, cancelable: true });
+    const preventSpy = vi.spyOn(upEvent, 'preventDefault');
+    el.dispatchEvent(upEvent);
+    expect(preventSpy).toHaveBeenCalledOnce();
+  });
+
+  it('does not call preventDefault on pointerup for a tap (no swipe)', () => {
+    pdown(el, 0, 0);
+    const upEvent = new PointerEvent('pointerup', { clientX: 0, clientY: 0, bubbles: true, cancelable: true });
+    const preventSpy = vi.spyOn(upEvent, 'preventDefault');
+    el.dispatchEvent(upEvent);
+    expect(preventSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe('Gestures — swipe + tap coexistence', () => {
@@ -546,9 +562,20 @@ describe('Gestures.attach', () => {
     expect(holdDragStartSpy).not.toHaveBeenCalled();
   });
 
-  it('sets touch-action: pan-y on element', () => {
+  it('sets touch-action: manipulation on element', () => {
     Gestures.attach(child, { onHoldDragStart: holdDragStartSpy });
-    expect(child.style.touchAction).toBe('pan-y');
+    expect(child.style.touchAction).toBe('manipulation');
+  });
+
+  it('calls preventDefault on pointerup after a completed swipe to suppress synthetic click', () => {
+    const swipeSpy = vi.fn();
+    Gestures.attach(child, { onSwipe: swipeSpy });
+    child.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, clientY: 0, button: 0, bubbles: true }));
+    child.dispatchEvent(new PointerEvent('pointermove', { clientX: 50, clientY: 0, bubbles: true }));
+    const upEvent = new PointerEvent('pointerup', { clientX: 50, clientY: 0, bubbles: true, cancelable: true });
+    const preventSpy = vi.spyOn(upEvent, 'preventDefault');
+    child.dispatchEvent(upEvent);
+    expect(preventSpy).toHaveBeenCalledOnce();
   });
 
   it('calls navigator.vibrate(40) when hold fires', () => {
