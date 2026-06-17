@@ -72,8 +72,11 @@ defineStrings({
   'list-detail.empty':       'No items yet',
   'list-detail.add':         'New item',
   'list-detail.menu':        'Options',
-  'list-detail.show-status': 'Show status',
-  'list-detail.hide-status': 'Hide status',
+  'list-detail.show-status':  'Show status',
+  'list-detail.hide-status':  'Hide status',
+  'list-detail.status-label': 'Status',
+  'list-detail.status-show':  'Show',
+  'list-detail.status-hide':  'Hide',
 
   'list-dialog.heading-create':   'New list',
   'list-dialog.heading-edit':     'Edit list',

@@ -6,8 +6,8 @@ defineStrings({
   'update-banner.dismiss':       'Ignora',
 
   'home-page.capstone-section':  'Objectiu principal',
-  'home-page.milestone-section': 'Fites de 3 mesos',
-  'home-page.wow-section':       'Wow de 8 setmanes',
+  'home-page.milestone-section': 'Fites a 3 mesos',
+  'home-page.wow-section':       'Guau cada 8 setmanes',
   'home-page.focus-section':     'Prioritats actuals',
   'home-page.prev-year':         'Any anterior',
   'home-page.next-year':         'Any següent',
@@ -27,7 +27,7 @@ defineStrings({
   'goal-item.restore':           'Restaura',
   'goal-item.add-capstone':      'Afegeix objectiu principal',
   'goal-item.add-milestone':     'Afegeix una fita',
-  'goal-item.add-wow':           'Afegeix un moment wow',
+  'goal-item.add-wow':           'Afegeix un moment guau',
   'goal-item.add-focus':         'Afegeix una prioritat',
   'goal-item.status-failed':     'Objectiu marcat com a abandonat',
   'goal-item.status-restored':   'Objectiu restaurat',
@@ -70,8 +70,8 @@ defineStrings({
   'lists-page.edit':    'Edita',
 
   'list-detail.back':        'Llistes',
-  'list-detail.empty':       'Cap element',
-  'list-detail.add':         'Nou element',
+  'list-detail.empty':       'Cap item',
+  'list-detail.add':         'Nou item',
   'list-detail.menu':        'Opcions',
   'list-detail.show-status': 'Mostra l\'estat',
   'list-detail.hide-status': 'Amaga l\'estat',
@@ -83,8 +83,8 @@ defineStrings({
   'list-dialog.cancel':           'Cancel·la',
   'list-dialog.delete':           'Elimina la llista',
 
-  'item-dialog.heading-create':   'Nou element',
-  'item-dialog.heading-edit':     'Edita l\'element',
+  'item-dialog.heading-create':   'Nou item',
+  'item-dialog.heading-edit':     'Edita l\'item',
   'item-dialog.title-placeholder':'Títol',
   'item-dialog.status-label':     'Estat',
   'item-dialog.status-open':      'Obert',
@@ -92,7 +92,7 @@ defineStrings({
   'item-dialog.status-done':      'Fet',
   'item-dialog.save':             'Desa',
   'item-dialog.cancel':           'Cancel·la',
-  'item-dialog.delete':           'Elimina l\'element',
+  'item-dialog.delete':           'Elimina l\'item',
 
   'list-item.delete':    'Elimina',
   'list-item.mark-done': 'Marca com a fet',
@@ -100,8 +100,8 @@ defineStrings({
 
   'lists.toast-list-saved':   'Llista desada',
   'lists.toast-list-deleted': 'Llista eliminada',
-  'lists.toast-item-saved':   'Element desat',
-  'lists.toast-item-deleted': 'Element eliminat',
+  'lists.toast-item-saved':   'Item desat',
+  'lists.toast-item-deleted': 'Item eliminat',
 
   'year-header.lists': 'Llistes',
 

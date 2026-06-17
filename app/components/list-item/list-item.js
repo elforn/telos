@@ -61,7 +61,7 @@ class ListItem extends Gestures(AppElement) {
         .row {
           position: relative;
           z-index: 1;
-          min-block-size: var(--touch-target-lg, 48px);
+          min-block-size: var(--goal-item-height, 44px);
           background: var(--color-surface);
           border: 0.5px solid var(--color-border);
           display: flex;

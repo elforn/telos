@@ -32,7 +32,7 @@ class ListsPage extends AppElement {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding-block: var(--space-3);
+          min-block-size: 64px;
         }
 
         h1 {
@@ -62,7 +62,7 @@ class ListsPage extends AppElement {
         .list-row {
           display: flex;
           align-items: center;
-          min-block-size: var(--touch-target-lg, 56px);
+          min-block-size: var(--goal-item-height, 44px);
           background: var(--color-surface);
           border: 0.5px solid var(--color-border);
           border-radius: var(--radius-md);

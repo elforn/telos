@@ -62,7 +62,7 @@ class GoalItem extends Gestures(AppElement) {
         .bar {
           position: relative;
           z-index: 1;
-          block-size: var(--goal-item-height, 40px);
+          block-size: var(--goal-item-height, 44px);
           background: var(--color-surface);
           border: 0.5px solid var(--color-border);
           overflow: hidden;

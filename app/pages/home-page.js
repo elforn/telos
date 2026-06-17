@@ -9,6 +9,8 @@ import '../components/goal-item/goal-item.js';
 import '../components/goal-dialog/goal-dialog.js';
 import '../components/add-row/add-row.js';
 
+const _sectionEdit = { capstone: false, milestones: false, wow: false, focus: false };
+
 class HomePage extends AppElement {
   template() {
     return `
@@ -167,13 +169,19 @@ class HomePage extends AppElement {
     const milestoneEditBtn = this.shadowRoot.querySelector('#milestone-edit-btn');
     const wowEditBtn       = this.shadowRoot.querySelector('#wow-edit-btn');
     const focusEditBtn     = this.shadowRoot.querySelector('#focus-edit-btn');
-    this._capstoneEdit  = false;
-    this._milestoneEdit = false;
-    this._wowEdit       = false;
-    this._focusEdit     = false;
+    this._capstoneEdit  = _sectionEdit.capstone;
+    this._milestoneEdit = _sectionEdit.milestones;
+    this._wowEdit       = _sectionEdit.wow;
+    this._focusEdit     = _sectionEdit.focus;
+
+    if (this._capstoneEdit)  { capstoneSection.classList.add('edit');  capstoneEditBtn.textContent  = t('home-page.done'); }
+    if (this._milestoneEdit) { milestoneSection.classList.add('edit'); milestoneEditBtn.textContent = t('home-page.done'); }
+    if (this._wowEdit)       { wowSection.classList.add('edit');       wowEditBtn.textContent       = t('home-page.done'); }
+    if (this._focusEdit)     { focusSection.classList.add('edit');     focusEditBtn.textContent     = t('home-page.done'); }
 
     this._onCapstoneEdit = () => {
       this._capstoneEdit = !this._capstoneEdit;
+      _sectionEdit.capstone = this._capstoneEdit;
       capstoneSection.classList.toggle('edit', this._capstoneEdit);
       capstoneEditBtn.textContent = this._capstoneEdit ? t('home-page.done') : t('home-page.edit');
       const items = [...this._capstoneList.querySelectorAll('goal-item')];
@@ -185,6 +193,7 @@ class HomePage extends AppElement {
 
     this._onMilestoneEdit = () => {
       this._milestoneEdit = !this._milestoneEdit;
+      _sectionEdit.milestones = this._milestoneEdit;
       milestoneSection.classList.toggle('edit', this._milestoneEdit);
       milestoneEditBtn.textContent = this._milestoneEdit ? t('home-page.done') : t('home-page.edit');
       const items = [...this._milestoneList.querySelectorAll('goal-item')];
@@ -196,6 +205,7 @@ class HomePage extends AppElement {
 
     this._onWowEdit = () => {
       this._wowEdit = !this._wowEdit;
+      _sectionEdit.wow = this._wowEdit;
       wowSection.classList.toggle('edit', this._wowEdit);
       wowEditBtn.textContent = this._wowEdit ? t('home-page.done') : t('home-page.edit');
       const items = [...this._wowList.querySelectorAll('goal-item')];
@@ -207,6 +217,7 @@ class HomePage extends AppElement {
 
     this._onFocusEdit = () => {
       this._focusEdit = !this._focusEdit;
+      _sectionEdit.focus = this._focusEdit;
       focusSection.classList.toggle('edit', this._focusEdit);
       focusEditBtn.textContent = this._focusEdit ? t('home-page.done') : t('home-page.edit');
       const items = [...this._focusList.querySelectorAll('goal-item')];

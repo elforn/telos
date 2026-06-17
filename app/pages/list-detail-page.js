@@ -39,7 +39,7 @@ class ListDetailPage extends AppElement {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding-block: var(--space-3);
+          min-block-size: 64px;
         }
 
         .back-btn,
@@ -138,27 +138,49 @@ class ListDetailPage extends AppElement {
           margin: var(--space-3) auto var(--space-1);
         }
 
-        .menu-item {
+        .menu-section {
+          padding: var(--space-4) var(--space-5);
+        }
+
+        .menu-section-label {
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          margin: 0;
+          margin-block-end: var(--space-2);
+        }
+
+        .status-pill-group {
           display: flex;
-          align-items: center;
-          justify-content: space-between;
-          inline-size: 100%;
-          min-block-size: var(--touch-target-lg);
-          padding-inline: var(--space-5);
-          background: none;
+          gap: var(--space-1);
+          background: var(--color-surface-raised);
+          border-radius: var(--radius-full);
+          padding: var(--pill-inset);
+        }
+
+        .status-pill {
+          flex: 1;
+          min-block-size: var(--touch-target);
           border: none;
-          border-block-start: 0.5px solid var(--color-border);
+          border-radius: var(--radius-full);
+          background: none;
           cursor: pointer;
           font-family: var(--font-family);
           font-size: var(--font-size-body);
           font-weight: var(--font-weight-medium);
-          color: var(--color-text-primary);
-          text-align: start;
+          color: var(--color-text-secondary);
+          text-align: center;
         }
 
-        .menu-item:first-of-type { border-block-start: none; }
+        .status-pill.active {
+          background: var(--color-surface);
+          color: var(--color-text-primary);
+          box-shadow: var(--shadow-card);
+        }
 
-        .menu-item:focus-visible {
+        .status-pill:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
@@ -179,7 +201,13 @@ class ListDetailPage extends AppElement {
 
       <dialog id="menu">
         <div class="menu-handle"></div>
-        <button class="menu-item" id="toggle-status-btn"></button>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('list-detail.status-label')}</p>
+          <div class="status-pill-group" role="group" aria-label="${t('list-detail.status-label')}">
+            <button class="status-pill" id="status-show-btn">${t('list-detail.status-show')}</button>
+            <button class="status-pill" id="status-hide-btn">${t('list-detail.status-hide')}</button>
+          </div>
+        </div>
       </dialog>
 
       <item-dialog id="dialog"></item-dialog>
@@ -216,13 +244,20 @@ class ListDetailPage extends AppElement {
     this._onBackdrop = e => { if (e.target === this._menuDialog) this._menuDialog.close(); };
     this._menuDialog.addEventListener('click', this._onBackdrop);
 
-    this._onToggleStatus = () => {
-      this._showStatus = !this._showStatus;
-      localStorage.setItem(lsKey(this._listId), String(this._showStatus));
+    this._onStatusShow = () => {
+      if (this._showStatus) return;
+      this._showStatus = true;
+      localStorage.setItem(lsKey(this._listId), 'true');
       this._applyStatusPref();
-      this._menuDialog.close();
     };
-    this.shadowRoot.querySelector('#toggle-status-btn').addEventListener('click', this._onToggleStatus);
+    this._onStatusHide = () => {
+      if (!this._showStatus) return;
+      this._showStatus = false;
+      localStorage.setItem(lsKey(this._listId), 'false');
+      this._applyStatusPref();
+    };
+    this.shadowRoot.querySelector('#status-show-btn').addEventListener('click', this._onStatusShow);
+    this.shadowRoot.querySelector('#status-hide-btn').addEventListener('click', this._onStatusHide);
 
     this._onAddRow = () => {
       this._editingItem = null;
@@ -282,7 +317,8 @@ class ListDetailPage extends AppElement {
     this.shadowRoot?.querySelector('#menu-btn')?.removeEventListener('click', this._onMenuBtn);
     this._menuDialog?.removeEventListener('close', this._onMenuClose);
     this._menuDialog?.removeEventListener('click', this._onBackdrop);
-    this.shadowRoot?.querySelector('#toggle-status-btn')?.removeEventListener('click', this._onToggleStatus);
+    this.shadowRoot?.querySelector('#status-show-btn')?.removeEventListener('click', this._onStatusShow);
+    this.shadowRoot?.querySelector('#status-hide-btn')?.removeEventListener('click', this._onStatusHide);
     this.shadowRoot?.querySelector('#add-row')?.removeEventListener('click', this._onAddRow);
     this._itemList?.removeEventListener('item-tap', this._onItemTap);
     this._itemList?.removeEventListener('item-delete', this._onItemDelete);
@@ -327,11 +363,10 @@ class ListDetailPage extends AppElement {
         this._itemList.style.setProperty('--list-badge-display', 'none');
       }
     }
-    const btn = this.shadowRoot?.querySelector('#toggle-status-btn');
-    if (btn) {
-      btn.textContent = this._showStatus ? t('list-detail.hide-status') : t('list-detail.show-status');
-      btn.setAttribute('aria-pressed', String(this._showStatus));
-    }
+    const showBtn = this.shadowRoot?.querySelector('#status-show-btn');
+    const hideBtn = this.shadowRoot?.querySelector('#status-hide-btn');
+    if (showBtn) showBtn.classList.toggle('active', this._showStatus);
+    if (hideBtn) hideBtn.classList.toggle('active', !this._showStatus);
   }
 
   // ── Rendering ─────────────────────────────────────────────────────────────

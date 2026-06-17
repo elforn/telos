@@ -303,14 +303,23 @@ class BottomNav extends AppElement {
 
   _subscribeNav() {
     this._onPillYears = () => {
-      if (!window.location.pathname.startsWith(`${BASE_PATH}lists`)) return;
-      navigate(`${BASE_PATH}${this._currentYear}`);
+      const onLists = window.location.pathname.startsWith(`${BASE_PATH}lists`);
+      if (onLists) {
+        navigate(`${BASE_PATH}${this._currentYear}`);
+      } else {
+        const todayYear = new Date().getFullYear();
+        if (window.location.pathname !== `${BASE_PATH}${todayYear}`) navigate(`${BASE_PATH}${todayYear}`);
+      }
     };
     this._pillYears.addEventListener('click', this._onPillYears);
 
     this._onPillLists = () => {
-      if (window.location.pathname === `${BASE_PATH}lists`) return;
-      navigate(`${BASE_PATH}lists`);
+      const onLists = window.location.pathname.startsWith(`${BASE_PATH}lists`);
+      if (onLists) {
+        if (window.location.pathname !== `${BASE_PATH}lists`) navigate(`${BASE_PATH}lists`);
+      } else {
+        navigate(this._lastListsPath);
+      }
     };
     this._pillLists.addEventListener('click', this._onPillLists);
 
