@@ -41,7 +41,7 @@ class YearHeader extends Gestures(AppElement) {
           inset-inline: 0;
           z-index: 100;
           background: var(--color-surface);
-          padding-block-start: calc(var(--space-2) + var(--safe-area-top));
+          padding-block-start: var(--safe-area-top);
           padding-block-end: 0;
           padding-inline: var(--page-padding);
           --image-overlay-edge: rgba(0,0,0,0.65);
@@ -126,11 +126,11 @@ class YearHeader extends Gestures(AppElement) {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding-block-end: var(--space-1);
+          padding-block: var(--space-3);
         }
 
         :host(.compact) .top-row {
-          padding-block-end: 0;
+          padding-block: var(--space-3);
         }
 
         .year-nav {
@@ -167,6 +167,7 @@ class YearHeader extends Gestures(AppElement) {
           font-weight: var(--font-weight-bold);
           color: var(--color-text-primary);
           line-height: 1;
+          margin: 0;
           min-inline-size: 4ch;
           text-align: center;
         }
@@ -183,7 +184,6 @@ class YearHeader extends Gestures(AppElement) {
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-inline-end: calc(-1 * var(--page-padding));
         }
 
         .menu-btn:focus-visible {
@@ -378,6 +378,14 @@ class YearHeader extends Gestures(AppElement) {
         </button>
       </dialog>
     `;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    // The Gestures mixin sets touch-action: manipulation on the host after subscribe()
+    // runs. Override it so the browser does not consume horizontal pointer events —
+    // horizontal swipe must reach our onSwipe handler to navigate years.
+    this.style.touchAction = 'pan-y';
   }
 
   onSwipe(e) {

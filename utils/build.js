@@ -42,6 +42,12 @@ const jsContent    = jsFile.text.replace(
 writeFileSync(join(dist, mainFilename), jsContent);
 if (mapFile) writeFileSync(join(dist, `${mainFilename}.map`), mapFile.text);
 
+// 2. version.json
+writeFileSync(
+  join(dist, 'version.json'),
+  JSON.stringify({ version, buildTime: new Date().toISOString() }, null, 2)
+);
+
 // 3. SW — compute CACHE_VERSION from all significant content
 const swSrc         = readFileSync(join(root, '_lib', 'core', 'sw.js'), 'utf8');
 const tokensContent = readFileSync(join(root, '_lib', 'core', 'styles', 'tokens.css'), 'utf8');
@@ -56,18 +62,12 @@ if (existsSync(iconDir)) {
   for (const f of readdirSync(iconDir)) assets.push(`${BASE_PATH}app/icons/${f}`);
 }
 
-// 2. version.json — written after cacheHash so the hash can be included
-writeFileSync(
-  join(dist, 'version.json'),
-  JSON.stringify({ version, buildHash: cacheHash, buildTime: new Date().toISOString() }, null, 2)
-);
-
 writeFileSync(join(dist, 'sw.js'), swSrc
   .replace('%%CACHE_VERSION%%', `${version}-${cacheHash}`)
   .replace('%%ASSETS%%',        JSON.stringify(assets))
   .replace('%%BASE_PATH%%',     BASE_PATH));
 
-// 4. index.html — inline tokens.css, inject hashed main.js, substitute BASE_PATH
+// 4. index.html — inline tokens.css, inject hashed main.js, substitute BASE_PATH tokens
 writeFileSync(join(dist, 'index.html'), indexSrc
   .replace('<link rel="stylesheet" href="_lib/core/styles/tokens.css" />', `<style>\n${tokensContent}\n</style>`)
   .replace('%%MAIN_JS%%', `${BASE_PATH}${mainFilename}`)

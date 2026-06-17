@@ -80,13 +80,14 @@ class HomePage extends AppElement {
 
         add-row {
           display: none;
-          --add-row-border: none;
           font-style: italic;
         }
 
         .list-section.edit add-row { display: block; }
 
         .list-section.edit .section-heading { color: var(--color-text-secondary); }
+
+        .list-section.edit .edit-btn { color: var(--color-accent); }
       </style>
 
       <year-header id="header"></year-header>

@@ -309,8 +309,8 @@ class BottomNav extends AppElement {
     this._pillYears.addEventListener('click', this._onPillYears);
 
     this._onPillLists = () => {
-      if (window.location.pathname.startsWith(`${BASE_PATH}lists`)) return;
-      navigate(this._lastListsPath);
+      if (window.location.pathname === `${BASE_PATH}lists`) return;
+      navigate(`${BASE_PATH}lists`);
     };
     this._pillLists.addEventListener('click', this._onPillLists);
 

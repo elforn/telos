@@ -31,7 +31,7 @@ class ListDetailPage extends AppElement {
           z-index: 100;
           background: var(--color-surface);
           border-block-end: 1px solid var(--color-border);
-          padding-block-start: calc(var(--space-2) + var(--safe-area-top));
+          padding-block-start: var(--safe-area-top);
           padding-inline: var(--page-padding);
         }
 
@@ -39,8 +39,7 @@ class ListDetailPage extends AppElement {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          min-block-size: var(--touch-target);
-          padding-block-end: var(--space-1);
+          padding-block: var(--space-3);
         }
 
         .back-btn,
@@ -60,6 +59,10 @@ class ListDetailPage extends AppElement {
           justify-content: center;
         }
 
+        .back-btn {
+          margin-inline-start: calc(-1 * var(--page-padding));
+        }
+
         .back-btn:focus-visible,
         .menu-btn:focus-visible {
           outline: 2px solid var(--color-accent);
@@ -76,7 +79,7 @@ class ListDetailPage extends AppElement {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          text-align: center;
+          text-align: start;
           margin: 0;
         }
 
