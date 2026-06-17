@@ -73,8 +73,11 @@ defineStrings({
   'list-detail.empty':       'Aucun élément',
   'list-detail.add':         'Nouvel élément',
   'list-detail.menu':        'Options',
-  'list-detail.show-status': 'Afficher le statut',
-  'list-detail.hide-status': 'Masquer le statut',
+  'list-detail.show-status':  'Afficher le statut',
+  'list-detail.hide-status':  'Masquer le statut',
+  'list-detail.status-label': 'Statut',
+  'list-detail.status-show':  'Afficher',
+  'list-detail.status-hide':  'Masquer',
 
   'list-dialog.heading-create':   'Nouvelle liste',
   'list-dialog.heading-edit':     'Modifier la liste',

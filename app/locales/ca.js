@@ -73,8 +73,11 @@ defineStrings({
   'list-detail.empty':       'Cap item',
   'list-detail.add':         'Nou item',
   'list-detail.menu':        'Opcions',
-  'list-detail.show-status': 'Mostra l\'estat',
-  'list-detail.hide-status': 'Amaga l\'estat',
+  'list-detail.show-status':  'Mostra l\'estat',
+  'list-detail.hide-status':  'Amaga l\'estat',
+  'list-detail.status-label': 'Estat',
+  'list-detail.status-show':  'Mostra',
+  'list-detail.status-hide':  'Amaga',
 
   'list-dialog.heading-create':   'Nova llista',
   'list-dialog.heading-edit':     'Edita la llista',

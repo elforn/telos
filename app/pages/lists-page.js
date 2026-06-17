@@ -109,6 +109,7 @@ class ListsPage extends AppElement {
           display: flex;
           align-items: center;
           justify-content: center;
+          touch-action: manipulation;
         }
 
         .edit-btn:focus-visible {

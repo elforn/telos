@@ -71,7 +71,6 @@ class ListItem extends Gestures(AppElement) {
           cursor: pointer;
           user-select: none;
           touch-action: pan-y;
-          padding-inline-start: var(--page-padding);
           transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
           will-change: transform;
         }

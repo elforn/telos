@@ -14,17 +14,18 @@ class AddRow extends AppElement {
           inline-size: 100%;
           min-block-size: var(--touch-target);
           background: none;
-          border: var(--add-row-border, 1px dashed var(--color-border));
+          border: var(--add-row-border, 1px dashed currentColor);
           border-radius: var(--radius-md);
           align-items: center;
           justify-content: center;
           gap: var(--space-2);
           cursor: pointer;
-          color: var(--color-text-muted);
+          color: var(--color-text-secondary);
           font-size: var(--font-size-caption);
           font-weight: var(--font-weight-medium);
           font-family: var(--font-family);
           padding-inline: var(--space-3);
+          touch-action: manipulation;
         }
 
         button:focus-visible {

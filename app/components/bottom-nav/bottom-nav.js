@@ -22,6 +22,7 @@ class BottomNav extends AppElement {
           inset-block-end: 0;
           inset-inline: 0;
           z-index: 200;
+          touch-action: manipulation;
           background: var(--color-surface);
           border-block-start: 0.5px solid var(--color-border);
           padding-block-start: var(--space-2);
@@ -55,6 +56,7 @@ class BottomNav extends AppElement {
           font-size: var(--font-size-body);
           font-weight: var(--font-weight-medium);
           color: var(--color-text-secondary);
+          touch-action: manipulation;
         }
 
         .pill.active {
@@ -82,6 +84,7 @@ class BottomNav extends AppElement {
           display: flex;
           align-items: center;
           justify-content: center;
+          touch-action: manipulation;
         }
 
         .gear-btn:focus-visible {
@@ -132,6 +135,7 @@ class BottomNav extends AppElement {
           color: var(--color-text-secondary);
           white-space: nowrap;
           text-align: center;
+          touch-action: manipulation;
         }
 
         .option-pill.active {
@@ -164,6 +168,7 @@ class BottomNav extends AppElement {
           font-size: var(--font-size-body);
           color: var(--color-text-primary);
           padding-inline: 0;
+          touch-action: manipulation;
         }
 
         .action-row:first-child {
@@ -311,7 +316,9 @@ class BottomNav extends AppElement {
         if (window.location.pathname !== `${BASE_PATH}${todayYear}`) navigate(`${BASE_PATH}${todayYear}`);
       }
     };
-    this._pillYears.addEventListener('click', this._onPillYears);
+    this._onPillYearsKey = e => { if (e.detail === 0) this._onPillYears(); };
+    this._pillYears.addEventListener('pointerup', this._onPillYears);
+    this._pillYears.addEventListener('click', this._onPillYearsKey);
 
     this._onPillLists = () => {
       const onLists = window.location.pathname.startsWith(`${BASE_PATH}lists`);
@@ -321,7 +328,9 @@ class BottomNav extends AppElement {
         navigate(this._lastListsPath);
       }
     };
-    this._pillLists.addEventListener('click', this._onPillLists);
+    this._onPillListsKey = e => { if (e.detail === 0) this._onPillLists(); };
+    this._pillLists.addEventListener('pointerup', this._onPillLists);
+    this._pillLists.addEventListener('click', this._onPillListsKey);
 
     this._onNavEvent = e => {
       const path = e?.detail?.path ?? window.location.pathname;
@@ -340,7 +349,9 @@ class BottomNav extends AppElement {
       this._updateSettingsPills();
       this._settingsModal.show();
     };
-    this.shadowRoot.querySelector('#gear-btn').addEventListener('click', this._onGear);
+    this._onGearKey = e => { if (e.detail === 0) this._onGear(); };
+    this.shadowRoot.querySelector('#gear-btn').addEventListener('pointerup', this._onGear);
+    this.shadowRoot.querySelector('#gear-btn').addEventListener('click', this._onGearKey);
 
     this._onThemeGroup = e => {
       const btn = e.target.closest('[data-theme]');
@@ -427,11 +438,14 @@ class BottomNav extends AppElement {
   }
 
   unsubscribe() {
-    this._pillYears?.removeEventListener('click', this._onPillYears);
-    this._pillLists?.removeEventListener('click', this._onPillLists);
+    this._pillYears?.removeEventListener('pointerup', this._onPillYears);
+    this._pillYears?.removeEventListener('click', this._onPillYearsKey);
+    this._pillLists?.removeEventListener('pointerup', this._onPillLists);
+    this._pillLists?.removeEventListener('click', this._onPillListsKey);
     window.removeEventListener('navigate', this._onNavEvent);
     window.removeEventListener('popstate', this._onNavEvent);
-    this.shadowRoot?.querySelector('#gear-btn')?.removeEventListener('click', this._onGear);
+    this.shadowRoot?.querySelector('#gear-btn')?.removeEventListener('pointerup', this._onGear);
+    this.shadowRoot?.querySelector('#gear-btn')?.removeEventListener('click', this._onGearKey);
     this.shadowRoot?.querySelector('#theme-group')?.removeEventListener('click', this._onThemeGroup);
     this._unsubTheme?.();
     this.shadowRoot?.querySelector('#lang-group')?.removeEventListener('click', this._onLangGroup);

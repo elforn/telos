@@ -57,6 +57,7 @@ class ListDetailPage extends AppElement {
           display: flex;
           align-items: center;
           justify-content: center;
+          touch-action: manipulation;
         }
 
         .back-btn {
