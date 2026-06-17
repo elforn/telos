@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { boot, setState, reset } from '../../_lib/core/store/store.js';
 import '../../app/strings.js';
 import '../../app/pages/home-page.js';
+import { _resetSectionEditForTest } from '../../app/pages/home-page.js';
 import '../../app/components/goal-item/goal-item.js';
 import '../../app/components/year-header/year-header.js';
 import '../../app/components/goal-dialog/goal-dialog.js';
@@ -27,7 +28,7 @@ function mount(year = 2026) {
   return el;
 }
 
-afterEach(() => { document.body.innerHTML = ''; reset(); });
+afterEach(() => { document.body.innerHTML = ''; reset(); _resetSectionEditForTest(); });
 
 describe('home-page — structure', () => {
   it('renders a <main> landmark', () => {

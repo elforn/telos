@@ -119,62 +119,64 @@ describe('list-detail-page — item rendering', () => {
 // ── Status toggle preference ──────────────────────────────────────────────────
 
 describe('list-detail-page — status toggle', () => {
-  it('toggle button shows "Hide status" by default (status visible)', async () => {
+  it('show pill is active by default (status visible)', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#toggle-status-btn').textContent).toBe('Hide status')
+      expect(el.shadowRoot.querySelector('#status-show-btn').classList.contains('active')).toBe(true)
     );
   });
 
-  it('toggle button shows "Show status" when preference is off', async () => {
+  it('hide pill is active when preference is off', async () => {
     localStorage.setItem('lists.showStatus.l1', 'false');
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#toggle-status-btn').textContent).toBe('Show status')
+      expect(el.shadowRoot.querySelector('#status-hide-btn').classList.contains('active')).toBe(true)
     );
   });
 
-  it('toggle has aria-pressed="true" when status is visible', async () => {
+  it('show pill is active and hide pill is inactive when status is visible', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#toggle-status-btn').getAttribute('aria-pressed')).toBe('true')
-    );
+    await vi.waitFor(() => {
+      expect(el.shadowRoot.querySelector('#status-show-btn').classList.contains('active')).toBe(true);
+      expect(el.shadowRoot.querySelector('#status-hide-btn').classList.contains('active')).toBe(false);
+    });
   });
 
-  it('toggle has aria-pressed="false" when status is hidden', async () => {
+  it('hide pill is active and show pill is inactive when status is hidden', async () => {
     localStorage.setItem('lists.showStatus.l1', 'false');
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#toggle-status-btn').getAttribute('aria-pressed')).toBe('false')
-    );
+    await vi.waitFor(() => {
+      expect(el.shadowRoot.querySelector('#status-hide-btn').classList.contains('active')).toBe(true);
+      expect(el.shadowRoot.querySelector('#status-show-btn').classList.contains('active')).toBe(false);
+    });
   });
 
-  it('clicking toggle hides badge via CSS custom property', async () => {
+  it('clicking hide pill hides badge via CSS custom property', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
     const el = mount();
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#toggle-status-btn')).not.toBeNull());
-    el.shadowRoot.querySelector('#toggle-status-btn').click();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#status-hide-btn')).not.toBeNull());
+    el.shadowRoot.querySelector('#status-hide-btn').click();
     expect(el.shadowRoot.querySelector('#item-list').style.getPropertyValue('--list-badge-display')).toBe('none');
   });
 
-  it('clicking toggle twice restores badge', async () => {
+  it('clicking hide then show pill restores badge', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
     const el = mount();
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#toggle-status-btn')).not.toBeNull());
-    el.shadowRoot.querySelector('#toggle-status-btn').click();
-    el.shadowRoot.querySelector('#toggle-status-btn').click();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#status-hide-btn')).not.toBeNull());
+    el.shadowRoot.querySelector('#status-hide-btn').click();
+    el.shadowRoot.querySelector('#status-show-btn').click();
     expect(el.shadowRoot.querySelector('#item-list').style.getPropertyValue('--list-badge-display')).toBe('');
   });
 
-  it('clicking toggle persists preference to localStorage', async () => {
+  it('clicking hide pill persists false to localStorage', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#toggle-status-btn')).not.toBeNull());
-    el.shadowRoot.querySelector('#toggle-status-btn').click();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#status-hide-btn')).not.toBeNull());
+    el.shadowRoot.querySelector('#status-hide-btn').click();
     expect(localStorage.getItem('lists.showStatus.l1')).toBe('false');
   });
 
@@ -192,8 +194,8 @@ describe('list-detail-page — status toggle', () => {
     document.body.appendChild(el2);
 
     await vi.waitFor(() => {
-      expect(el1.shadowRoot.querySelector('#toggle-status-btn').textContent).toBe('Show status');
-      expect(el2.shadowRoot.querySelector('#toggle-status-btn').textContent).toBe('Hide status');
+      expect(el1.shadowRoot.querySelector('#status-hide-btn').classList.contains('active')).toBe(true);
+      expect(el2.shadowRoot.querySelector('#status-show-btn').classList.contains('active')).toBe(true);
     });
   });
 });

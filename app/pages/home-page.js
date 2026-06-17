@@ -10,6 +10,9 @@ import '../components/goal-dialog/goal-dialog.js';
 import '../components/add-row/add-row.js';
 
 const _sectionEdit = { capstone: false, milestones: false, wow: false, focus: false };
+export function _resetSectionEditForTest() {
+  Object.assign(_sectionEdit, { capstone: false, milestones: false, wow: false, focus: false });
+}
 
 class HomePage extends AppElement {
   template() {

@@ -231,16 +231,25 @@ test.describe('Lists — tab navigation memory', () => {
     expect(returnedPath).toBe(listDetailPath);
   });
 
-  test('Lists pill is a no-op when already on a list detail', async ({ page }) => {
-    const pathBefore = await page.evaluate(() => window.location.pathname);
-
+  test('Lists pill navigates back to /lists when on a list detail', async ({ page }) => {
     await page.evaluate(() =>
       document.querySelector('bottom-nav').shadowRoot.querySelector('#pill-lists').click()
     );
-    await page.waitForTimeout(100);
-
+    await waitForListsPage(page);
     const pathAfter = await page.evaluate(() => window.location.pathname);
-    expect(pathAfter).toBe(pathBefore);
+    expect(pathAfter).toMatch(/\/lists$/);
+  });
+
+  test('Years pill navigates to current year when on a different year', async ({ page }) => {
+    await navToYears(page);
+    await page.goto(`/${currentYear - 1}`);
+    await waitForPage(page);
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#pill-years').click()
+    );
+    await waitForPage(page);
+    const pathAfter = await page.evaluate(() => window.location.pathname);
+    expect(pathAfter).toMatch(new RegExp(`/${currentYear}$`));
   });
 });
 
@@ -530,39 +539,39 @@ test.describe('Lists — status toggle', () => {
     expect(open).toBe(true);
   });
 
-  test('toggle defaults to "Hide status" (status visible by default)', async ({ page }) => {
-    const text = await page.evaluate(() =>
+  test('show pill is active by default (status visible)', async ({ page }) => {
+    const active = await page.evaluate(() =>
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('#toggle-status-btn')?.textContent
+        ?.querySelector('#status-show-btn')?.classList.contains('active')
     );
-    expect(text).toBe('Hide status');
+    expect(active).toBe(true);
   });
 
-  test('clicking toggle changes button text to "Show status" and hides badges', async ({ page }) => {
+  test('clicking hide pill hides badges and makes hide pill active', async ({ page }) => {
     await openListDetailMenu(page);
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
-        .querySelector('#toggle-status-btn').click();
+        .querySelector('#status-hide-btn').click();
     });
-    const [btnText, cssVar] = await page.evaluate(() => {
-      const page = document.querySelector('app-router')?.shadowRoot?.querySelector('list-detail-page')?.shadowRoot;
+    const [hideActive, cssVar] = await page.evaluate(() => {
+      const sr = document.querySelector('app-router')?.shadowRoot?.querySelector('list-detail-page')?.shadowRoot;
       return [
-        page?.querySelector('#toggle-status-btn')?.textContent,
-        page?.querySelector('#item-list')?.style.getPropertyValue('--list-badge-display'),
+        sr?.querySelector('#status-hide-btn')?.classList.contains('active'),
+        sr?.querySelector('#item-list')?.style.getPropertyValue('--list-badge-display'),
       ];
     });
-    expect(btnText).toBe('Show status');
+    expect(hideActive).toBe(true);
     expect(cssVar).toBe('none');
   });
 
-  test('status toggle preference persists after page reload', async ({ page }) => {
+  test('status hidden preference persists after page reload', async ({ page }) => {
     await openListDetailMenu(page);
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
-        .querySelector('#toggle-status-btn').click();
+        .querySelector('#status-hide-btn').click();
     });
     await waitForIDBFlush(page);
     await page.reload();
@@ -571,8 +580,8 @@ test.describe('Lists — status toggle', () => {
     await page.waitForFunction(() => {
       const btn = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('#toggle-status-btn');
-      return btn?.textContent === 'Show status';
+        ?.querySelector('#status-hide-btn');
+      return btn?.classList.contains('active') === true;
     });
   });
 });
