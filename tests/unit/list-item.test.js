@@ -77,6 +77,32 @@ describe('list-item — structure', () => {
     expect(el.shadowRoot.querySelector('.badge').dataset.status).toBe('done');
     expect(el.shadowRoot.querySelector('.badge').textContent).toBe('Done');
   });
+
+  it('note icon is hidden when item has no note', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('.row').dataset.hasNote).toBe('false');
+  });
+
+  it('note icon is visible when item has a note', () => {
+    const el = mount({ ...ITEM, note: 'A reminder' });
+    expect(el.shadowRoot.querySelector('.row').dataset.hasNote).toBe('true');
+  });
+
+  it('note icon updates when note is added', () => {
+    const el = mount();
+    el.item = { ...ITEM, note: 'New note' };
+    expect(el.shadowRoot.querySelector('.row').dataset.hasNote).toBe('true');
+  });
+
+  it('url icon is hidden when item has no url', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('.row').dataset.hasUrl).toBe('false');
+  });
+
+  it('url icon is visible when item has a url', () => {
+    const el = mount({ ...ITEM, url: 'https://example.com' });
+    expect(el.shadowRoot.querySelector('.row').dataset.hasUrl).toBe('true');
+  });
 });
 
 describe('list-item — item-tap event', () => {

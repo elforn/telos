@@ -7,8 +7,14 @@ class GoalDialog extends AppElement {
     this._input.value = goal?.title ?? '';
     this._saveBtn.disabled = !this._input.value.trim();
     if (this._deleteBtn) this._deleteBtn.hidden = !goal;
+    this._blockBackdropClick = true;
     this._modal.show();
-    this._input.select();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      this._blockBackdropClick = false;
+      this._input.focus();
+      const len = this._input.value.length;
+      this._input.setSelectionRange(len, len);
+    }));
   }
 
   template() {
@@ -150,12 +156,21 @@ class GoalDialog extends AppElement {
 
     this._onKeyDown = e => { if (e.key === 'Enter') this._onSave(); };
 
+    this._blockBackdropClick = false;
+    this._onShadowCapture = e => {
+      if (this._blockBackdropClick && e.target === this._modal) {
+        this._blockBackdropClick = false;
+        e.stopPropagation();
+      }
+    };
+
     this._input.addEventListener('input',   this._onInput);
     this._input.addEventListener('keydown', this._onKeyDown);
     this._saveBtn.addEventListener('click', this._onSave);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
     this._modal.addEventListener('modal-close', this._onModalClose);
+    this.shadowRoot.addEventListener('click', this._onShadowCapture, { capture: true });
   }
 
   unsubscribe() {
@@ -165,6 +180,7 @@ class GoalDialog extends AppElement {
     this._deleteBtn?.removeEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
+    this.shadowRoot?.removeEventListener('click', this._onShadowCapture, { capture: true });
   }
 }
 

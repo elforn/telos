@@ -4,6 +4,7 @@ import '../../app/strings.js';
 import '../../app/components/list-dialog/list-dialog.js';
 
 const LIST = { id: 'l1', name: 'Gift ideas' };
+const LIST_WITH_COLOR = { id: 'l2', name: 'Gift ideas', color: '#4A94D4' };
 
 function stubModal(el) {
   const modal = el.shadowRoot.querySelector('#modal');
@@ -191,5 +192,91 @@ describe('list-dialog — cancel', () => {
     el.open(null);
     el.shadowRoot.querySelector('#cancel').click();
     expect(modal.close).toHaveBeenCalledOnce();
+  });
+});
+
+// ── color picker ──────────────────────────────────────────────────────────────
+
+describe('list-dialog — color picker', () => {
+  it('color swatches are hidden by default', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('.color-swatches').hidden).toBe(true);
+  });
+
+  it('clicking color-toggle reveals swatches', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#color-toggle').click();
+    expect(el.shadowRoot.querySelector('.color-swatches').hidden).toBe(false);
+  });
+
+  it('clicking a swatch collapses the swatches row', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#color-toggle').click();
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    expect(el.shadowRoot.querySelector('.color-swatches').hidden).toBe(true);
+  });
+
+  it('selected swatch gets aria-pressed true', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#color-toggle').click();
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    el.shadowRoot.querySelector('#color-toggle').click();
+    expect(el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('color is included in list-saved detail when a swatch is selected', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('list-saved', e => events.push(e));
+    el.shadowRoot.querySelector('#color-toggle').click();
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'Books';
+    inp.dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#save').click();
+    expect(events[0].detail.color).toBe('#4A94D4');
+  });
+
+  it('color is null in list-saved detail when no swatch is selected', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('list-saved', e => events.push(e));
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'Books';
+    inp.dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#save').click();
+    expect(events[0].detail.color).toBeNull();
+  });
+
+  it('pre-selects the list colour when opened with an existing list', () => {
+    const el = mount();
+    el.open(LIST_WITH_COLOR);
+    el.shadowRoot.querySelector('#color-toggle').click();
+    expect(el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('pre-selects no color when list has no color', () => {
+    const el = mount();
+    el.open(LIST);
+    el.shadowRoot.querySelector('#color-toggle').click();
+    expect(el.shadowRoot.querySelector('.swatch[data-color=""]').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('selecting none swatch clears a previously set color', () => {
+    const el = mount();
+    el.open(LIST_WITH_COLOR);
+    const events = [];
+    el.addEventListener('list-saved', e => events.push(e));
+    el.shadowRoot.querySelector('#color-toggle').click();
+    el.shadowRoot.querySelector('.swatch[data-color=""]').click();
+    el.shadowRoot.querySelector('#input').dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#save').click();
+    expect(events[0].detail.color).toBeNull();
   });
 });

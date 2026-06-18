@@ -218,6 +218,19 @@ describe('list-detail-page — add item', () => {
     expect(getState().lists[0].items[0].inGoals).toEqual([]);
   });
 
+  it('persists note and url when adding an item', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#add-row')).not.toBeNull());
+    el.shadowRoot.dispatchEvent(new CustomEvent('item-saved', {
+      bubbles: true, composed: true,
+      detail: { title: 'Item', status: 'open', note: 'My note', url: 'https://example.com' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].items).toHaveLength(1));
+    expect(getState().lists[0].items[0].note).toBe('My note');
+    expect(getState().lists[0].items[0].url).toBe('https://example.com');
+  });
+
   it('new item appears as list-item in the DOM', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
@@ -244,6 +257,22 @@ describe('list-detail-page — edit item', () => {
     }));
     await vi.waitFor(() => expect(getState().lists[0].items[0].title).toBe('Edited title'));
     expect(getState().lists[0].items[0].status).toBe('done');
+  });
+
+  it('persists note and url when editing an item', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.dispatchEvent(new CustomEvent('item-saved', {
+      bubbles: true, composed: true,
+      detail: { title: 'Item', status: 'open', note: 'Updated note', url: 'https://example.com' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].items[0].note).toBe('Updated note'));
+    expect(getState().lists[0].items[0].url).toBe('https://example.com');
   });
 });
 

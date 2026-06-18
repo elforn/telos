@@ -70,7 +70,7 @@ class ListItem extends Gestures(AppElement) {
           gap: var(--space-2);
           cursor: pointer;
           user-select: none;
-          touch-action: pan-y;
+          touch-action: manipulation;
           transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
           will-change: transform;
         }
@@ -88,6 +88,18 @@ class ListItem extends Gestures(AppElement) {
           color: var(--color-text-muted);
           font-weight: var(--font-weight-normal);
         }
+
+        .note-icon,
+        .url-icon {
+          flex-shrink: 0;
+          font-size: var(--font-size-caption);
+          color: var(--color-text-muted);
+          display: none;
+          line-height: 1;
+        }
+
+        .row[data-has-note="true"]  .note-icon { display: block; }
+        .row[data-has-url="true"]   .url-icon  { display: block; }
 
         .badge {
           display: var(--list-badge-display, inline-flex);
@@ -146,6 +158,8 @@ class ListItem extends Gestures(AppElement) {
       <button class="action-btn delete-btn" id="delete-btn">${t('list-item.delete')}</button>
       <div class="row" tabindex="0" role="button" aria-label="">
         <span class="title"></span>
+        <span class="note-icon" aria-hidden="true">✎</span>
+        <span class="url-icon"  aria-hidden="true">🔗</span>
         <span class="badge" data-status="open"></span>
       </div>
     `;
@@ -155,6 +169,8 @@ class ListItem extends Gestures(AppElement) {
     this.setAttribute('role', 'listitem');
     this._row      = this.shadowRoot.querySelector('.row');
     this._title    = this.shadowRoot.querySelector('.title');
+    this._noteIcon = this.shadowRoot.querySelector('.note-icon');
+    this._urlIcon  = this.shadowRoot.querySelector('.url-icon');
     this._badge    = this.shadowRoot.querySelector('.badge');
     this._deleteEl = this.shadowRoot.querySelector('#delete-btn');
     this._doneEl   = this.shadowRoot.querySelector('#done-btn');
@@ -275,6 +291,8 @@ class ListItem extends Gestures(AppElement) {
     this._title.textContent    = title;
     this._row.setAttribute('aria-label', title);
     this._row.dataset.status   = status;
+    this._row.dataset.hasNote  = String(!!this._item?.note);
+    this._row.dataset.hasUrl   = String(!!this._item?.url);
     this._badge.textContent    = t(`item-dialog.status-${status}`);
     this._badge.dataset.status = status;
     this._doneEl.textContent   = isDone ? '↺' : '✓';

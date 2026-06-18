@@ -65,12 +65,14 @@ class ListsPage extends AppElement {
           min-block-size: var(--goal-item-height, 44px);
           background: var(--color-surface);
           border: 0.5px solid var(--color-border);
+          border-inline-start: 3px solid var(--list-color, transparent);
           border-radius: var(--radius-md);
           box-shadow: var(--shadow-card);
           padding-inline: var(--space-3);
           gap: var(--space-2);
           cursor: pointer;
           user-select: none;
+          touch-action: manipulation;
         }
 
         .list-row:focus-visible {
@@ -167,11 +169,11 @@ class ListsPage extends AppElement {
     this._container.addEventListener('keydown', this._onListKeyDown);
 
     this._onListSaved = e => {
-      const { name } = e.detail;
+      const { name, color } = e.detail;
       if (this._editingList) {
-        this._rename(this._editingList.id, name);
+        this._update(this._editingList.id, name, color);
       } else {
-        this._create(name);
+        this._create(name, color);
       }
       toast(t('lists.toast-list-saved'), 'success');
     };
@@ -200,13 +202,18 @@ class ListsPage extends AppElement {
 
   // ── Store mutations ───────────────────────────────────────────────────────
 
-  _create(name) {
+  _create(name, color) {
     const list = { id: crypto.randomUUID(), name, items: [] };
+    if (color) list.color = color;
     setState('lists', [...(getState().lists ?? []), list]);
   }
 
-  _rename(id, name) {
-    setState('lists', (getState().lists ?? []).map(l => l.id === id ? { ...l, name } : l));
+  _update(id, name, color) {
+    setState('lists', (getState().lists ?? []).map(l => {
+      if (l.id !== id) return l;
+      const { color: _, ...rest } = l;
+      return color ? { ...rest, name, color } : { ...rest, name };
+    }));
   }
 
   _delete(id) {
@@ -256,6 +263,7 @@ class ListsPage extends AppElement {
     row.querySelector('.item-count').textContent = list.items?.length ?? 0;
     row.querySelector('.edit-btn').setAttribute('aria-label', `${t('lists-page.edit')} ${list.name}`);
     row.setAttribute('aria-label', list.name);
+    row.style.setProperty('--list-color', list.color ?? 'transparent');
   }
 }
 

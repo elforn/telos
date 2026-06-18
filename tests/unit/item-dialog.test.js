@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/item-dialog/item-dialog.js';
 
-const ITEM = { id: 'i1', title: 'Buy flowers', status: 'paused' };
+const ITEM = { id: 'i1', title: 'Buy flowers', status: 'paused', note: 'From the corner shop', url: 'https://example.com' };
 
 function stubModal(el) {
   const modal = el.shadowRoot.querySelector('#modal');
@@ -44,6 +44,69 @@ describe('item-dialog — open', () => {
     el.open(ITEM);
     el.open(null);
     expect(el.shadowRoot.querySelector('#title-input').value).toBe('');
+  });
+
+  it('pre-fills note textarea with item note', () => {
+    const el = mount();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('#note-input').value).toBe('From the corner shop');
+  });
+
+  it('clears note textarea when opened with no item', () => {
+    const el = mount();
+    el.open(ITEM);
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#note-input').value).toBe('');
+  });
+
+  it('pre-fills url input with item url', () => {
+    const el = mount();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('#url-input').value).toBe('https://example.com');
+  });
+
+  it('clears url input when opened with no item', () => {
+    const el = mount();
+    el.open(ITEM);
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#url-input').value).toBe('');
+  });
+
+  it('url field is hidden by default on new item', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('.url-row').hidden).toBe(true);
+  });
+
+  it('url field is shown automatically when item has a url', () => {
+    const el = mount();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('.url-row').hidden).toBe(false);
+  });
+
+  it('url-toggle sets aria-expanded to true when url field is shown', () => {
+    const el = mount();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('#url-toggle').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('clicking url-toggle reveals the url field', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#url-toggle').click();
+    expect(el.shadowRoot.querySelector('.url-row').hidden).toBe(false);
+  });
+
+  it('url open button is hidden when url is empty', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#url-open').hidden).toBe(true);
+  });
+
+  it('url open button is visible when item has a url', () => {
+    const el = mount();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('#url-open').hidden).toBe(false);
   });
 
   it('pre-selects the item status radio', () => {
@@ -103,6 +166,52 @@ describe('item-dialog — save', () => {
     expect(events).toHaveLength(1);
     expect(events[0].detail.title).toBe('My item');
     expect(events[0].detail.status).toBe('open');
+  });
+
+  it('includes note in item-saved detail when note is filled', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-saved', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#note-input').value = 'A helpful note';
+    el.shadowRoot.querySelector('#save').click();
+    expect(events[0].detail.note).toBe('A helpful note');
+  });
+
+  it('note is undefined in item-saved detail when note is empty', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-saved', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#save').click();
+    expect(events[0].detail.note).toBeUndefined();
+  });
+
+  it('includes url in item-saved detail when url is filled', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-saved', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#url-input').value = 'https://example.com';
+    el.shadowRoot.querySelector('#save').click();
+    expect(events[0].detail.url).toBe('https://example.com');
+  });
+
+  it('url is undefined in item-saved detail when url is empty', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-saved', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#save').click();
+    expect(events[0].detail.url).toBeUndefined();
   });
 
   it('dispatches item-saved with the selected status', () => {

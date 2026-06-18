@@ -71,7 +71,7 @@ class GoalItem extends Gestures(AppElement) {
           padding-inline: var(--space-3);
           cursor: pointer;
           user-select: none;
-          touch-action: pan-y;
+          touch-action: manipulation;
           transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
           will-change: transform;
         }

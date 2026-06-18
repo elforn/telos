@@ -286,11 +286,11 @@ class ListDetailPage extends AppElement {
     this._itemList.addEventListener('item-done-toggle', this._onItemDoneToggle);
 
     this._onItemSaved = e => {
-      const { title, status } = e.detail;
+      const { title, status, note, url } = e.detail;
       if (this._editingItem) {
-        this._editItem(this._editingItem.id, { title, status });
+        this._editItem(this._editingItem.id, { title, status, note, url });
       } else {
-        this._addItem({ title, status });
+        this._addItem({ title, status, note, url });
       }
       toast(t('lists.toast-item-saved'), 'success');
     };
@@ -337,17 +337,17 @@ class ListDetailPage extends AppElement {
     ));
   }
 
-  _addItem({ title, status }) {
+  _addItem({ title, status, note, url }) {
     const item = {
       id: crypto.randomUUID(), title, status,
-      note: undefined, url: undefined, dueDate: undefined,
+      note, url, dueDate: undefined,
       tags: [], inGoals: [],
     };
     this._mutateItems(items => [...items, item]);
   }
 
-  _editItem(id, { title, status }) {
-    this._mutateItems(items => items.map(i => i.id === id ? { ...i, title, status } : i));
+  _editItem(id, { title, status, note, url }) {
+    this._mutateItems(items => items.map(i => i.id === id ? { ...i, title, status, note, url } : i));
   }
 
   _deleteItem(id) {
