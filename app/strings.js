@@ -19,9 +19,11 @@ defineStrings({
   'goal-dialog.placeholder': 'What will you achieve this year?',
   'goal-dialog.save':        'Save',
   'goal-dialog.cancel':      'Cancel',
-  'goal-dialog.delete':      'Delete',
+  'goal-dialog.delete':         'Delete',
+  'goal-dialog.delete-confirm': 'Sure?',
 
   'goal-item.delete':          'Delete',
+  'goal-item.delete-confirm':  'Sure?',
   'goal-item.fail':            'Fail',
   'goal-item.restore':         'Restore',
   'goal-item.add-capstone':    'Add capstone goal',
@@ -85,6 +87,7 @@ defineStrings({
   'list-dialog.save':             'Save',
   'list-dialog.cancel':           'Cancel',
   'list-dialog.delete':           'Delete list',
+  'list-dialog.delete-confirm':   'Sure?',
 
   'item-dialog.heading-create':   'New item',
   'item-dialog.heading-edit':     'Edit item',
@@ -100,8 +103,10 @@ defineStrings({
   'item-dialog.save':             'Save',
   'item-dialog.cancel':           'Cancel',
   'item-dialog.delete':           'Delete item',
+  'item-dialog.delete-confirm':   'Sure?',
 
-  'list-item.delete':    'Delete',
+  'list-item.delete':          'Delete',
+  'list-item.delete-confirm':  'Sure?',
   'list-item.mark-done': 'Mark done',
   'list-item.restore':   'Restore',
 

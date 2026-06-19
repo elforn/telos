@@ -18,11 +18,13 @@ defineStrings({
   'goal-dialog.save':            'Enregistrer',
   'goal-dialog.cancel':          'Annuler',
   'goal-dialog.delete':          'Supprimer',
+  'goal-dialog.delete-confirm':  'Sûr ?',
 
   'home-page.edit':              'Modifier',
   'home-page.done':              'Terminé',
 
   'goal-item.delete':            'Supprimer',
+  'goal-item.delete-confirm':    'Sûr ?',
   'goal-item.fail':              'Abandonner',
   'goal-item.restore':           'Restaurer',
   'goal-item.add-capstone':      'Ajouter un objectif phare',
@@ -86,6 +88,7 @@ defineStrings({
   'list-dialog.save':             'Enregistrer',
   'list-dialog.cancel':           'Annuler',
   'list-dialog.delete':           'Supprimer la liste',
+  'list-dialog.delete-confirm':   'Sûr ?',
 
   'item-dialog.heading-create':   'Nouvel élément',
   'item-dialog.heading-edit':     'Modifier l\'élément',
@@ -101,8 +104,10 @@ defineStrings({
   'item-dialog.save':             'Enregistrer',
   'item-dialog.cancel':           'Annuler',
   'item-dialog.delete':           'Supprimer l\'élément',
+  'item-dialog.delete-confirm':   'Sûr ?',
 
-  'list-item.delete':    'Supprimer',
+  'list-item.delete':          'Supprimer',
+  'list-item.delete-confirm':  'Sûr ?',
   'list-item.mark-done': 'Marquer comme terminé',
   'list-item.restore':   'Restaurer',
 

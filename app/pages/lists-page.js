@@ -6,6 +6,7 @@ import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/list-dialog/list-dialog.js';
 import '../components/add-row/add-row.js';
+import '../components/lists-page-item/lists-page-item.js';
 
 class ListsPage extends AppElement {
   template() {
@@ -58,66 +59,6 @@ class ListsPage extends AppElement {
           flex-direction: column;
           gap: var(--space-2);
         }
-
-        .list-row {
-          display: flex;
-          align-items: center;
-          min-block-size: var(--goal-item-height, 44px);
-          background: var(--color-surface);
-          border: 0.5px solid var(--color-border);
-          border-inline-start: 3px solid var(--list-color, transparent);
-          border-radius: var(--radius-md);
-          box-shadow: var(--shadow-card);
-          padding-inline: var(--space-3);
-          gap: var(--space-2);
-          cursor: pointer;
-          user-select: none;
-          touch-action: manipulation;
-        }
-
-        .list-row:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        .list-name {
-          flex: 1;
-          min-inline-size: 0;
-          font-size: var(--font-size-body);
-          font-weight: var(--font-weight-medium);
-          color: var(--color-text-primary);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .item-count {
-          flex-shrink: 0;
-          font-size: var(--font-size-caption);
-          color: var(--color-text-muted);
-          padding-inline-end: var(--space-1);
-        }
-
-        .edit-btn {
-          flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
-          background: none;
-          border: none;
-          cursor: pointer;
-          font-size: var(--font-size-caption);
-          color: var(--color-text-muted);
-          border-radius: var(--radius-sm);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          touch-action: manipulation;
-        }
-
-        .edit-btn:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
       </style>
 
       <div class="page-header">
@@ -144,29 +85,24 @@ class ListsPage extends AppElement {
     };
     this.shadowRoot.querySelector('#add-row').addEventListener('click', this._onAddRow);
 
-    this._onListClick = e => {
-      const editBtn = e.target.closest('.edit-btn');
-      if (editBtn) {
-        e.stopPropagation();
-        const id = editBtn.closest('.list-row').dataset.id;
-        this._editingList = (getState().lists ?? []).find(l => l.id === id) ?? null;
-        this._dialog.open(this._editingList);
-        return;
-      }
-      const row = e.target.closest('.list-row');
-      if (row) navigate(`${BASE_PATH}lists/${row.dataset.id}`);
+    this._onListTap = e => {
+      navigate(`${BASE_PATH}lists/${e.detail.list.id}`);
     };
-    this._container.addEventListener('click', this._onListClick);
+    this._container.addEventListener('list-tap', this._onListTap);
 
-    this._onListKeyDown = e => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      if (e.target.closest('.edit-btn')) return;
-      const row = e.target.closest('.list-row');
-      if (!row) return;
-      e.preventDefault();
-      navigate(`${BASE_PATH}lists/${row.dataset.id}`);
+    this._onListEdit = e => {
+      this._editingList = e.detail.list;
+      this._dialog.open(this._editingList);
     };
-    this._container.addEventListener('keydown', this._onListKeyDown);
+    this._container.addEventListener('list-edit', this._onListEdit);
+
+    this._onSwipeDelete = e => {
+      const list = e.detail?.list;
+      if (!list) return;
+      this._delete(list.id);
+      toast(t('lists.toast-list-deleted'), 'info');
+    };
+    this._container.addEventListener('list-delete', this._onSwipeDelete);
 
     this._onListSaved = e => {
       const { name, color } = e.detail;
@@ -193,8 +129,9 @@ class ListsPage extends AppElement {
 
   unsubscribe() {
     this.shadowRoot.querySelector('#add-row')?.removeEventListener('click', this._onAddRow);
-    this._container?.removeEventListener('click', this._onListClick);
-    this._container?.removeEventListener('keydown', this._onListKeyDown);
+    this._container?.removeEventListener('list-tap', this._onListTap);
+    this._container?.removeEventListener('list-edit', this._onListEdit);
+    this._container?.removeEventListener('list-delete', this._onSwipeDelete);
     this.shadowRoot?.removeEventListener('list-saved', this._onListSaved);
     this._dialog?.removeEventListener('list-delete', this._onListDelete);
     unsubscribe('lists', this._onLists);
@@ -224,46 +161,24 @@ class ListsPage extends AppElement {
 
   _renderLists(lists) {
     const byId = new Map();
-    this._container.querySelectorAll('.list-row').forEach(el => {
+    this._container.querySelectorAll('lists-page-item').forEach(el => {
       if (el.dataset.id) byId.set(el.dataset.id, el);
     });
 
     const ordered = lists.map(list => {
-      let row = byId.get(list.id);
-      if (!row) {
-        row = this._createRow(list);
+      let el = byId.get(list.id);
+      if (!el) {
+        el = document.createElement('lists-page-item');
+        el.dataset.id = list.id;
       } else {
         byId.delete(list.id);
-        this._updateRow(row, list);
       }
-      return row;
+      el.list = list;
+      return el;
     });
 
     byId.forEach(el => el.remove());
     ordered.forEach(el => this._container.appendChild(el));
-  }
-
-  _createRow(list) {
-    const row = document.createElement('div');
-    row.className = 'list-row';
-    row.dataset.id = list.id;
-    row.setAttribute('role', 'button');
-    row.setAttribute('tabindex', '0');
-    row.innerHTML = `
-      <span class="list-name"></span>
-      <span class="item-count"></span>
-      <button class="edit-btn" type="button" aria-label="">···</button>
-    `;
-    this._updateRow(row, list);
-    return row;
-  }
-
-  _updateRow(row, list) {
-    row.querySelector('.list-name').textContent = list.name;
-    row.querySelector('.item-count').textContent = list.items?.length ?? 0;
-    row.querySelector('.edit-btn').setAttribute('aria-label', `${t('lists-page.edit')} ${list.name}`);
-    row.setAttribute('aria-label', list.name);
-    row.style.setProperty('--list-color', list.color ?? 'transparent');
   }
 }
 

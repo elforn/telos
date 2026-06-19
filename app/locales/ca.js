@@ -18,11 +18,13 @@ defineStrings({
   'goal-dialog.save':            'Desa',
   'goal-dialog.cancel':          'Cancel·la',
   'goal-dialog.delete':          'Elimina',
+  'goal-dialog.delete-confirm':  'Segur?',
 
   'home-page.edit':              'Edita',
   'home-page.done':              'Fet',
 
   'goal-item.delete':            'Elimina',
+  'goal-item.delete-confirm':    'Segur?',
   'goal-item.fail':              'Abandona',
   'goal-item.restore':           'Restaura',
   'goal-item.add-capstone':      'Afegeix objectiu principal',
@@ -86,6 +88,7 @@ defineStrings({
   'list-dialog.save':             'Desa',
   'list-dialog.cancel':           'Cancel·la',
   'list-dialog.delete':           'Elimina la llista',
+  'list-dialog.delete-confirm':   'Segur?',
 
   'item-dialog.heading-create':   'Nou item',
   'item-dialog.heading-edit':     'Edita l\'item',
@@ -101,8 +104,10 @@ defineStrings({
   'item-dialog.save':             'Desa',
   'item-dialog.cancel':           'Cancel·la',
   'item-dialog.delete':           'Elimina l\'item',
+  'item-dialog.delete-confirm':   'Segur?',
 
-  'list-item.delete':    'Elimina',
+  'list-item.delete':          'Elimina',
+  'list-item.delete-confirm':  'Segur?',
   'list-item.mark-done': 'Marca com a fet',
   'list-item.restore':   'Restaura',
 

@@ -28,6 +28,15 @@ function mount() {
   return el;
 }
 
+// Access helpers for lists-page-item internals
+function getItems(el) {
+  return [...el.shadowRoot.querySelector('#list-container').querySelectorAll('lists-page-item')];
+}
+
+function getItemInner(item, selector) {
+  return item.shadowRoot.querySelector(selector);
+}
+
 beforeEach(() => reset());
 afterEach(() => { document.body.innerHTML = ''; });
 
@@ -58,46 +67,39 @@ describe('lists-page — rendering', () => {
       { id: 'l1', name: 'Gift ideas', items: [] },
       { id: 'l2', name: 'Books', items: [] },
     ]);
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#list-container').querySelectorAll('.list-row').length).toBe(2)
-    );
+    await vi.waitFor(() => expect(getItems(el).length).toBe(2));
   });
 
   it('renders list name in each row', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     setState('lists', [{ id: 'l1', name: 'Gift ideas', items: [] }]);
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('.list-name').textContent).toBe('Gift ideas')
-    );
+    await vi.waitFor(() => {
+      const item = getItems(el)[0];
+      return expect(getItemInner(item, '.list-name')?.textContent).toBe('Gift ideas');
+    });
   });
 
   it('reuses existing row element on update (reconciliation)', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     setState('lists', [{ id: 'l1', name: 'Original', items: [] }]);
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('.list-row')).not.toBeNull()
-    );
-    const firstRow = el.shadowRoot.querySelector('.list-row');
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
+    const firstItem = getItems(el)[0];
     setState('lists', [{ id: 'l1', name: 'Renamed', items: [] }]);
     await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('.list-name').textContent).toBe('Renamed')
+      expect(getItemInner(firstItem, '.list-name')?.textContent).toBe('Renamed')
     );
-    expect(el.shadowRoot.querySelector('.list-row')).toBe(firstRow);
+    expect(getItems(el)[0]).toBe(firstItem);
   });
 
   it('removes row when list is deleted from state', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     setState('lists', [{ id: 'l1', name: 'Gift ideas', items: [] }]);
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('.list-row')).not.toBeNull()
-    );
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
     setState('lists', []);
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('.list-row')).toBeNull()
-    );
+    await vi.waitFor(() => expect(getItems(el).length).toBe(0));
   });
 });
 
@@ -109,10 +111,9 @@ describe('lists-page — create list', () => {
     el.shadowRoot.dispatchEvent(new CustomEvent('list-saved', {
       bubbles: true, composed: true, detail: { name: 'Reading list' },
     }));
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#list-container').querySelectorAll('.list-row').length).toBe(1)
-    );
-    expect(el.shadowRoot.querySelector('.list-name').textContent).toBe('Reading list');
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
+    const item = getItems(el)[0];
+    expect(getItemInner(item, '.list-name')?.textContent).toBe('Reading list');
   });
 
   it('persists the new list to the store', async () => {
@@ -122,9 +123,7 @@ describe('lists-page — create list', () => {
     el.shadowRoot.dispatchEvent(new CustomEvent('list-saved', {
       bubbles: true, composed: true, detail: { name: 'Ideas' },
     }));
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('.list-row')).not.toBeNull()
-    );
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
     const { lists } = (await import('../../_lib/core/store/store.js')).getState();
     expect(lists).toHaveLength(1);
     expect(lists[0].name).toBe('Ideas');
@@ -137,14 +136,15 @@ describe('lists-page — rename list', () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     setState('lists', [{ id: 'l1', name: 'Old name', items: [] }]);
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('.edit-btn')).not.toBeNull());
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
 
-    el.shadowRoot.querySelector('.edit-btn').click();
+    // Click the edit button inside the lists-page-item shadow DOM
+    getItemInner(getItems(el)[0], '#edit-btn').click();
     el.shadowRoot.dispatchEvent(new CustomEvent('list-saved', {
       bubbles: true, composed: true, detail: { name: 'New name' },
     }));
     await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('.list-name').textContent).toBe('New name')
+      expect(getItemInner(getItems(el)[0], '.list-name')?.textContent).toBe('New name')
     );
   });
 });
@@ -154,15 +154,27 @@ describe('lists-page — delete list', () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     setState('lists', [{ id: 'l1', name: 'To delete', items: [] }]);
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('.edit-btn')).not.toBeNull());
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
 
-    el.shadowRoot.querySelector('.edit-btn').click();
+    getItemInner(getItems(el)[0], '#edit-btn').click();
     el.shadowRoot.querySelector('#dialog').dispatchEvent(
       new CustomEvent('list-delete', { bubbles: true, composed: true })
     );
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('.list-row')).toBeNull()
-    );
+    await vi.waitFor(() => expect(getItems(el).length).toBe(0));
+  });
+
+  it('removes a list when list-delete fires from swipe', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    const el = mount();
+    setState('lists', [{ id: 'l1', name: 'To delete', items: [] }]);
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
+
+    const item = getItems(el)[0];
+    // Simulate the swipe-delete event from the component
+    item.dispatchEvent(new CustomEvent('list-delete', {
+      bubbles: true, composed: true, detail: { list: { id: 'l1', name: 'To delete', items: [] } },
+    }));
+    await vi.waitFor(() => expect(getItems(el).length).toBe(0));
   });
 });
 
@@ -171,26 +183,27 @@ describe('lists-page — accessibility', () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     setState('lists', [{ id: 'l1', name: 'Gift ideas', items: [] }]);
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('.list-row')).not.toBeNull());
-    expect(el.shadowRoot.querySelector('.list-row').getAttribute('role')).toBe('button');
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
+    const row = getItemInner(getItems(el)[0], '.row');
+    expect(row.getAttribute('role')).toBe('button');
   });
 
   it('list row aria-label matches the list name', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     setState('lists', [{ id: 'l1', name: 'Gift ideas', items: [] }]);
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('.list-row')).not.toBeNull());
-    expect(el.shadowRoot.querySelector('.list-row').getAttribute('aria-label')).toBe('Gift ideas');
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
+    expect(getItemInner(getItems(el)[0], '.row').getAttribute('aria-label')).toBe('Gift ideas');
   });
 
   it('list row aria-label updates when list is renamed', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     setState('lists', [{ id: 'l1', name: 'Original', items: [] }]);
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('.list-row')).not.toBeNull());
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
     setState('lists', [{ id: 'l1', name: 'Renamed', items: [] }]);
     await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('.list-row').getAttribute('aria-label')).toBe('Renamed')
+      expect(getItemInner(getItems(el)[0], '.row').getAttribute('aria-label')).toBe('Renamed')
     );
   });
 
@@ -198,8 +211,8 @@ describe('lists-page — accessibility', () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     setState('lists', [{ id: 'l1', name: 'Gift ideas', items: [] }]);
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('.edit-btn')).not.toBeNull());
-    expect(el.shadowRoot.querySelector('.edit-btn').getAttribute('aria-label')).toContain('Gift ideas');
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
+    expect(getItemInner(getItems(el)[0], '#edit-btn').getAttribute('aria-label')).toContain('Gift ideas');
   });
 
   it('item count is displayed in each row', async () => {
@@ -209,7 +222,7 @@ describe('lists-page — accessibility', () => {
       { id: 'i1', title: 'a', status: 'open', tags: [], inGoals: [] },
       { id: 'i2', title: 'b', status: 'open', tags: [], inGoals: [] },
     ] }]);
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('.item-count')).not.toBeNull());
-    expect(el.shadowRoot.querySelector('.item-count').textContent).toBe('2');
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
+    expect(getItemInner(getItems(el)[0], '.item-count').textContent).toBe('2');
   });
 });
