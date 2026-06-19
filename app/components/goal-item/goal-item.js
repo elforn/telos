@@ -71,7 +71,7 @@ class GoalItem extends Gestures(AppElement) {
           padding-inline: var(--space-3);
           cursor: pointer;
           user-select: none;
-          touch-action: manipulation;
+          touch-action: pan-y;
           transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
           will-change: transform;
         }
@@ -328,28 +328,40 @@ class GoalItem extends Gestures(AppElement) {
     this._title    = this.shadowRoot.querySelector('.title');
     this._pctLabel = this.shadowRoot.querySelector('.pct-label');
     this._announce = this.shadowRoot.querySelector('#announce');
-    this._revealedDir = null;
-    this._failed      = false;
-    this._editMode    = this._editMode ?? false;
+    this._revealedDir   = null;
+    this._failed        = false;
+    this._editMode      = this._editMode ?? false;
+    this._deleteConfirm = false;
 
     this._update();
 
     this._stopPointerDown = e => e.stopPropagation();
 
-    const deleteEl = this.shadowRoot.querySelector('#delete-btn');
+    this._deleteEl = this.shadowRoot.querySelector('#delete-btn');
 
-    this._onDeleteBtn = () => {
-      this.dispatchEvent(new CustomEvent('goal-delete', {
-        bubbles: true, composed: true, detail: { goal: this._goal },
-      }));
-      this._closeReveal();
+    // useDelay: rAF lets the browser's synthesized click fire on the still-present button before DOM removal
+    this._onDeleteBtn = (useDelay = false) => {
+      if (!this._deleteConfirm) {
+        this._deleteConfirm = true;
+        this._deleteEl.textContent = t('goal-item.delete-confirm');
+        return;
+      }
+      const fire = () => {
+        this.dispatchEvent(new CustomEvent('goal-delete', {
+          bubbles: true, composed: true, detail: { goal: this._goal },
+        }));
+        this._closeReveal();
+      };
+      if (useDelay) requestAnimationFrame(fire);
+      else fire();
     };
-    this._onDeleteBtnKey = e => { if (e.detail === 0) this._onDeleteBtn(); };
-    deleteEl.addEventListener('pointerdown', this._stopPointerDown);
-    deleteEl.addEventListener('pointerup', this._onDeleteBtn);
-    deleteEl.addEventListener('click', this._onDeleteBtnKey);
+    this._onDeletePointerUp = e => { e.stopPropagation(); e.preventDefault(); this._onDeleteBtn(true); };
+    this._onDeleteBtnKey = e => { e.stopPropagation(); if (e.detail === 0) this._onDeleteBtn(); };
+    this._deleteEl.addEventListener('pointerdown', this._stopPointerDown);
+    this._deleteEl.addEventListener('pointerup', this._onDeletePointerUp);
+    this._deleteEl.addEventListener('click', this._onDeleteBtnKey);
 
-    const failEl = this.shadowRoot.querySelector('#fail-btn');
+    this._failEl = this.shadowRoot.querySelector('#fail-btn');
     this._onFailBtn = () => {
       const wasFailed = this._failed;
       this.dispatchEvent(new CustomEvent('goal-progress', {
@@ -363,10 +375,11 @@ class GoalItem extends Gestures(AppElement) {
       }
       this._closeReveal();
     };
-    this._onFailBtnKey = e => { if (e.detail === 0) this._onFailBtn(); };
-    failEl.addEventListener('pointerdown', this._stopPointerDown);
-    failEl.addEventListener('pointerup', this._onFailBtn);
-    failEl.addEventListener('click', this._onFailBtnKey);
+    this._onFailPointerUp = e => { e.stopPropagation(); e.preventDefault(); this._onFailBtn(); };
+    this._onFailBtnKey = e => { e.stopPropagation(); if (e.detail === 0) this._onFailBtn(); };
+    this._failEl.addEventListener('pointerdown', this._stopPointerDown);
+    this._failEl.addEventListener('pointerup', this._onFailPointerUp);
+    this._failEl.addEventListener('click', this._onFailBtnKey);
 
     this._onKeyDown = e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._tap(); }
@@ -377,14 +390,12 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   unsubscribe() {
-    const deleteEl = this.shadowRoot.querySelector('#delete-btn');
-    deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
-    deleteEl?.removeEventListener('pointerup', this._onDeleteBtn);
-    deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
-    const failEl = this.shadowRoot.querySelector('#fail-btn');
-    failEl?.removeEventListener('pointerdown', this._stopPointerDown);
-    failEl?.removeEventListener('pointerup', this._onFailBtn);
-    failEl?.removeEventListener('click', this._onFailBtnKey);
+    this._deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
+    this._deleteEl?.removeEventListener('pointerup', this._onDeletePointerUp);
+    this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
+    this._failEl?.removeEventListener('pointerdown', this._stopPointerDown);
+    this._failEl?.removeEventListener('pointerup', this._onFailPointerUp);
+    this._failEl?.removeEventListener('click', this._onFailBtnKey);
     this._bar?.removeEventListener('keydown', this._onKeyDown);
   }
 
@@ -429,6 +440,11 @@ class GoalItem extends Gestures(AppElement) {
     this._setDragMode(false);
     if (this._pct === 100) this._celebrate();
     this._emitProgress();
+  }
+
+  _gestureCancel(e) {
+    if (this._gesture?.phase === 'swipe') this._closeReveal();
+    super._gestureCancel(e);
   }
 
   onSwipeMove(e) {
@@ -499,6 +515,10 @@ class GoalItem extends Gestures(AppElement) {
     this._bar.style.transition = '';
     this._bar.style.transform  = '';
     this._revealedDir = null;
+    if (this._deleteConfirm) {
+      this._deleteConfirm = false;
+      this._deleteEl.textContent = t('goal-item.delete');
+    }
   }
 
   _setPct(pct) {
