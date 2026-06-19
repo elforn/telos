@@ -128,4 +128,7 @@ defineStrings({
   'bottom-nav.years':    'Years',
   'bottom-nav.lists':    'Lists',
   'bottom-nav.settings': 'Settings',
+
+  'settings.repair':       'Repair installation',
+  'sync.backup-downloaded': 'Your data has been backed up before the update.',
 });

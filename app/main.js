@@ -17,6 +17,14 @@ import './components/bottom-nav/bottom-nav.js';
 
 initTheme();
 
+// Record when a SW controller change triggers a reload so bottom-nav can detect loops.
+// Must be registered before sw-manager connects its own controllerchange listener.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    try { sessionStorage.setItem('telos:swReloadAt', String(Date.now())); } catch {}
+  });
+}
+
 await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, lists: [] } });
 
 console.log('Telos', __APP_VERSION__);

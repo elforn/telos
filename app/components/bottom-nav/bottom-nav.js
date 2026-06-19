@@ -4,7 +4,8 @@ import { BASE_PATH } from '../../base-path.js';
 import { t, setLocale, getLocale } from '../../../_lib/core/strings.js';
 import { getTheme, setTheme, onThemeChange } from '../../../_lib/core/theme/theme.js';
 import { exportData, downloadExport, readImportFile, previewImport, applyMerge, applyReplace } from '../../../_lib/modules/sync/sync.js';
-import { getState } from '../../../_lib/core/store/store.js';
+import { toast } from '../../../_lib/modules/toast/toast.js';
+import { getState, subscribe, unsubscribe } from '../../../_lib/core/store/store.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 
@@ -302,6 +303,10 @@ class BottomNav extends AppElement {
               <span>${t('sync.import')}</span>
               <span class="action-icon">↑</span>
             </button>
+            <button class="action-row" id="repair-btn">
+              <span>${t('settings.repair')}</span>
+              <span class="action-icon">↺</span>
+            </button>
           </div>
         </div>
 
@@ -344,6 +349,7 @@ class BottomNav extends AppElement {
     this._subscribeSettings();
     this._subscribeSync();
     this._subscribeHeight();
+    this._subscribeUpdateSafety();
   }
 
   _subscribeNav() {
@@ -535,6 +541,56 @@ class BottomNav extends AppElement {
     this._importModal.addEventListener('modal-close', this._onImportModalClose);
   }
 
+  _subscribeUpdateSafety() {
+    // Detect SW update loops and auto-repair. A loop = updateAvailable fired within
+    // 15s of a SW-triggered reload (controllerchange). Happens when the SW cached
+    // stale assets during a deploy race (poisoned cache).
+    this._onUpdateAvailable = (available) => {
+      if (!available) return;
+      const lastReload = parseInt(sessionStorage.getItem('telos:swReloadAt') || '0', 10);
+      if (lastReload && (Date.now() - lastReload) < 15_000) {
+        sessionStorage.removeItem('telos:swReloadAt');
+        this._repairInstallation(false);
+      }
+    };
+    subscribe('updateAvailable', this._onUpdateAvailable);
+
+    this._onRepairBtn = () => {
+      this._settingsModal.close();
+      this._repairInstallation();
+    };
+    this.shadowRoot.querySelector('#repair-btn').addEventListener('click', this._onRepairBtn);
+  }
+
+  async _repairInstallation(checkServer = true) {
+    // Verify the server is reachable before clearing caches.
+    // Without both a cache and a network, the app becomes completely inaccessible.
+    // Skip when called from loop detection — Layer 2 already confirmed connectivity.
+    if (checkServer) {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 5000);
+        const r = await fetch(`version.json?_=${Date.now()}`, { cache: 'no-store', signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!r.ok) return;
+      } catch {
+        return; // offline or server down — leave the cached app intact
+      }
+    }
+    try {
+      const data = await exportData();
+      const ts = new Date().toISOString().replace(/\D/g, '').slice(0, 12);
+      downloadExport(data, `telos-backup-before-update-${ts}.telos`);
+      toast(t('sync.backup-downloaded'), 'info');
+    } catch {}
+    caches.keys()
+      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+      .then(() => navigator.serviceWorker.getRegistrations())
+      .then(regs => Promise.all(regs.map(r => r.unregister())))
+      .then(() => location.reload())
+      .catch(() => location.reload());
+  }
+
   _subscribeHeight() {
     fetch('version.json').then(r => r.json()).then(data => {
       const el = this.shadowRoot?.querySelector('#version-text');
@@ -570,6 +626,8 @@ class BottomNav extends AppElement {
     this.shadowRoot?.querySelector('#import-replace')?.removeEventListener('click', this._onImportReplace);
     this.shadowRoot?.querySelector('#import-close')?.removeEventListener('click', this._onImportClose);
     this._importModal?.removeEventListener('modal-close', this._onImportModalClose);
+    unsubscribe('updateAvailable', this._onUpdateAvailable);
+    this.shadowRoot?.querySelector('#repair-btn')?.removeEventListener('click', this._onRepairBtn);
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--bottom-nav-height');
   }

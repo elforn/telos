@@ -129,4 +129,7 @@ defineStrings({
   'bottom-nav.years':    'Années',
   'bottom-nav.lists':    'Listes',
   'bottom-nav.settings': 'Réglages',
+
+  'settings.repair':       'Réparer l\'installation',
+  'sync.backup-downloaded': 'Vos données ont été sauvegardées avant la mise à jour.',
 }, 'fr');
