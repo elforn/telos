@@ -124,7 +124,7 @@ npm run test:e2e     # Playwright E2E tests
 - State flows one way: action → store → IDB → component
 - No full re-renders after initial mount — targeted DOM updates only
 - CSS logical properties throughout (`margin-inline-start`, not `margin-left`)
-- Fixed-position elements use `calc(var(--space-N) + var(--safe-area-top/bottom))` on the inset edge
+- Elements with `position: sticky` or `fixed` at the top use `padding-block-start: var(--safe-area-top)` to avoid the notch; bottom elements use `padding-block-end: calc(var(--space-N) + var(--safe-area-bottom, 0px))`
 - All custom events must use `{ bubbles: true, composed: true }` — without `composed: true`, events fired inside a shadow root are swallowed and never reach parent listeners
 - Every new feature passes `/test`, `/i18n`, `/a11y`, `/review`, and `/docs` before `/commit`
 

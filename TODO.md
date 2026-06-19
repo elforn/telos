@@ -40,6 +40,14 @@ across periods (recent periods weighted higher). Compact dot/bar visual for the
 last 8 weeks or 6 months in the goal list. Visual representation TBD.
 
 ## Navigation & UX
+
+### Dialog save pattern — revisit later
+Currently: explicit Save / Cancel buttons on all dialogs. Works fine for multi-field
+forms. Candidate improvements to evaluate together:
+- **Close = save** (backdrop tap commits) — removes Save button, simpler for single-action edits
+- **Direct discrete edits** — status and colour changes applied immediately without opening a modal (long-press quick-picker, inline swipe actions, etc.)
+- **Undo** — prerequisite for close=save to feel safe; not yet in scope
+Consider once goal dialog is multi-field and the full editing surface is stable.
 - **Year selector overlay** — tap year title in header → bottom-sheet picker;
   years with any content shown with a filled dot.
 - **Goal ordering in edit mode** — drag handles in edit mode to reorder goals
