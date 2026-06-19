@@ -1,4 +1,4 @@
-import { getAllEvents, getAllBlobs, importEvents, attachBlob } from '../../core/store/store.js';
+import { getAllEvents, getAllBlobs, importEvents, attachBlob, setState, getState } from '../../core/store/store.js';
 
 const SOCLE_VERSION = 1;
 const BINARY_VERSION = 1;
@@ -177,6 +177,87 @@ async function importLegacyJSON(data) {
 export async function importData(input) {
   if (input instanceof Uint8Array) return importBinary(input);
   return importLegacyJSON(input);
+}
+
+// ── Preview / merge-aware import ──────────────────────────────────────────────
+
+async function _readBinary(uint8) {
+  if (uint8.length < 5 || dec.decode(uint8.slice(0, 4)) !== MAGIC) {
+    throw new Error('Invalid file (bad magic bytes)');
+  }
+  const bytes = await decompress(uint8.slice(4));
+  let off = 0;
+  const version = bytes[off++];
+  if (version !== BINARY_VERSION) throw new Error(`Unsupported format version: ${version}`);
+  const eventsLen = readU32LE(bytes, off); off += 4;
+  const { events } = JSON.parse(dec.decode(bytes.slice(off, off + eventsLen)));
+  off += eventsLen;
+  const imageCount = readU16LE(bytes, off); off += 2;
+  const blobs = [];
+  for (let i = 0; i < imageCount; i++) {
+    const idLen = bytes[off++];
+    const id = dec.decode(bytes.slice(off, off + idLen)); off += idLen;
+    const mimeLen = bytes[off++];
+    const mime = dec.decode(bytes.slice(off, off + mimeLen)); off += mimeLen;
+    const imgLen = readU32LE(bytes, off); off += 4;
+    blobs.push({ id, blob: new Blob([bytes.slice(off, off + imgLen)], { type: mime }) });
+    off += imgLen;
+  }
+  const snapshot = (events ?? []).find(e => e.type === 'simple:state');
+  return snapshot
+    ? { type: 'simple', payload: snapshot.payload, blobs }
+    : { type: 'log', events: events ?? [], blobs };
+}
+
+function _readLegacyJSON(data) {
+  if (data?.socleVersion !== SOCLE_VERSION) {
+    throw new Error(`Invalid or incompatible export file (socleVersion: ${data?.socleVersion ?? 'missing'})`);
+  }
+  const events = data.events ?? [];
+  const blobs = (data.images ?? []).map(({ id, dataUrl }) => ({ id, blob: dataUrlToBlob(dataUrl) }));
+  const snapshot = events.find(e => e.type === 'simple:state');
+  return snapshot
+    ? { type: 'simple', payload: snapshot.payload, blobs }
+    : { type: 'log', events, blobs };
+}
+
+async function _writeNewBlobs(blobs) {
+  const existingIds = new Set((await getAllBlobs()).map(b => b.id));
+  for (const { id, blob } of blobs) {
+    if (!existingIds.has(id)) await attachBlob(id, blob);
+  }
+}
+
+// Parse without applying — returns { type: 'simple', payload, blobs } for simple-store
+// files or { type: 'log', events, blobs } for event-log files.
+export async function previewImport(raw) {
+  if (raw instanceof Uint8Array) return _readBinary(raw);
+  return _readLegacyJSON(raw);
+}
+
+// Overwrite — for simple store: setState each key (in-memory + IDB, no reload needed).
+// For event-log: importEvents (IDB only, reload still needed).
+export async function applyReplace(parsed) {
+  if (parsed.type === 'simple') {
+    for (const [key, value] of Object.entries(parsed.payload)) setState(key, value);
+  } else {
+    const existing = new Set((await getAllEvents()).map(e => e.id));
+    await importEvents(parsed.events.filter(e => !existing.has(e.id)));
+  }
+  await _writeNewBlobs(parsed.blobs);
+}
+
+// Merge — for simple store: mergeStrategy(currentState, payload) → setState each key.
+// For event-log: importEvents (dedup-by-ID is already merge semantics).
+export async function applyMerge(parsed, mergeStrategy) {
+  if (parsed.type === 'simple') {
+    const merged = mergeStrategy(getState(), parsed.payload);
+    for (const [key, value] of Object.entries(merged)) setState(key, value);
+  } else {
+    const existing = new Set((await getAllEvents()).map(e => e.id));
+    await importEvents(parsed.events.filter(e => !existing.has(e.id)));
+  }
+  await _writeNewBlobs(parsed.blobs);
 }
 
 // ── Download / file read ──────────────────────────────────────────────────────

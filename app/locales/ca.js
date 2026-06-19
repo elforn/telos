@@ -68,6 +68,7 @@ defineStrings({
   'sync.import-merge':           'Fusiona',
   'sync.import-replace':         'Substitueix tot',
   'sync.import-sure':            'Segur?',
+  'sync.import-sure-aria':       'Confirma: substitueix totes les dades',
   'sync.import-confirm':         'Afegits {goals} objectius i {items} elements de llista.',
   'sync.import-replace-confirm': 'Totes les dades han estat substituïdes.',
   'sync.import-close':           'Tanca',

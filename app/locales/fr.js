@@ -68,6 +68,7 @@ defineStrings({
   'sync.import-merge':           'Fusionner',
   'sync.import-replace':         'Tout remplacer',
   'sync.import-sure':            'Sûr ?',
+  'sync.import-sure-aria':       'Confirmer : remplacer toutes les données',
   'sync.import-confirm':         'Ajouté {goals} objectifs et {items} éléments de liste.',
   'sync.import-replace-confirm': 'Toutes les données ont été remplacées.',
   'sync.import-close':           'Fermer',

@@ -54,11 +54,12 @@ async function importModalState(page) {
     const bn     = document.querySelector('bottom-nav').shadowRoot;
     const dialog = bn.querySelector('#import-modal').shadowRoot.querySelector('dialog');
     return {
-      open:          dialog.open,
-      message:       bn.querySelector('#import-message').textContent,
-      cancelHidden:  bn.querySelector('#import-cancel').hidden,
-      reloadHidden:  bn.querySelector('#import-reload').hidden,
-      closeHidden:   bn.querySelector('#import-close').hidden,
+      open:           dialog.open,
+      message:        bn.querySelector('#import-message').textContent,
+      cancelHidden:   bn.querySelector('#import-cancel').hidden,
+      mergeHidden:    bn.querySelector('#import-merge').hidden,
+      replaceHidden:  bn.querySelector('#import-replace').hidden,
+      closeHidden:    bn.querySelector('#import-close').hidden,
     };
   });
 }
@@ -258,8 +259,10 @@ test.describe('Sync — import', () => {
     await waitForImportModal(page);
     const state = await importModalState(page);
     expect(state.open).toBe(true);
+    expect(state.cancelHidden).toBe(true);
+    expect(state.mergeHidden).toBe(true);
+    expect(state.replaceHidden).toBe(true);
     expect(state.closeHidden).toBe(false);
-    expect(state.reloadHidden).toBe(true);
   });
 
   test('importing invalid JSON shows error dialog', async ({ page }) => {
@@ -269,8 +272,10 @@ test.describe('Sync — import', () => {
     await waitForImportModal(page);
     const state = await importModalState(page);
     expect(state.open).toBe(true);
+    expect(state.cancelHidden).toBe(true);
+    expect(state.mergeHidden).toBe(true);
+    expect(state.replaceHidden).toBe(true);
     expect(state.closeHidden).toBe(false);
-    expect(state.reloadHidden).toBe(true);
   });
 
   test('importing wrong socleVersion shows error dialog', async ({ page }) => {
@@ -279,18 +284,20 @@ test.describe('Sync — import', () => {
     await injectImportFile(page, { socleVersion: 99, events: [], images: [] });
     await waitForImportModal(page);
     const state = await importModalState(page);
+    expect(state.cancelHidden).toBe(true);
+    expect(state.mergeHidden).toBe(true);
+    expect(state.replaceHidden).toBe(true);
     expect(state.closeHidden).toBe(false);
-    expect(state.reloadHidden).toBe(true);
   });
 
-  test('importing valid legacy JSON shows success dialog', async ({ page }) => {
+  test('importing valid legacy JSON shows preview dialog with merge and replace buttons', async ({ page }) => {
     await openSettings(page);
     await clickInBottomNav(page, '#import-btn');
     const payload = {
       socleVersion: 1,
       events: [
         { id: 'imported-1', deviceId: null, recordedAt: 1000, occurredAt: 1000,
-          type: 'simple:state', payload: { goals: {}, images: {} } },
+          type: 'simple:state', payload: { goals: {}, lists: [], images: {} } },
       ],
       images: [],
     };
@@ -298,8 +305,60 @@ test.describe('Sync — import', () => {
     await waitForImportModal(page);
     const state = await importModalState(page);
     expect(state.open).toBe(true);
-    expect(state.reloadHidden).toBe(false);
+    expect(state.cancelHidden).toBe(false);
+    expect(state.mergeHidden).toBe(false);
+    expect(state.replaceHidden).toBe(false);
     expect(state.closeHidden).toBe(true);
+  });
+
+  test('cancel button closes the modal without writing any data', async ({ page }) => {
+    await createGoal(page, 'Existing goal');
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
+    const payload = {
+      socleVersion: 1,
+      events: [
+        { id: 'cancel-1', deviceId: null, recordedAt: 1000, occurredAt: 1000,
+          type: 'simple:state', payload: { goals: {}, lists: [], images: {} } },
+      ],
+      images: [],
+    };
+    await injectImportFile(page, payload);
+    await waitForImportModal(page);
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-cancel').click()
+    );
+    await page.waitForFunction(() =>
+      !document.querySelector('bottom-nav')?.shadowRoot
+        ?.querySelector('#import-modal')?.shadowRoot?.querySelector('dialog')?.open
+    );
+    expect(await goalCount(page)).toBe(1);
+  });
+
+  test('replace all button shows a Sure? confirmation before executing', async ({ page }) => {
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
+    const payload = {
+      socleVersion: 1,
+      events: [
+        { id: 'sure-1', deviceId: null, recordedAt: 1000, occurredAt: 1000,
+          type: 'simple:state', payload: { goals: {}, lists: [], images: {} } },
+      ],
+      images: [],
+    };
+    await injectImportFile(page, payload);
+    await waitForImportModal(page);
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-replace').click()
+    );
+    const label = await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-replace').textContent.trim()
+    );
+    expect(label).toBe('Sure?');
+    const state = await importModalState(page);
+    expect(state.open).toBe(true);
+    expect(state.cancelHidden).toBe(false);
+    expect(state.mergeHidden).toBe(false);
   });
 });
 
@@ -335,11 +394,9 @@ test.describe('Sync — round-trip', () => {
     await injectImportFile(page, exportedBytes);
     await waitForImportModal(page);
 
-    const navigationPromise = page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {});
     await page.evaluate(() =>
-      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-reload').click()
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-merge').click()
     );
-    await navigationPromise;
     await waitForPage(page);
 
     expect(await goalCount(page)).toBe(1);
@@ -384,11 +441,9 @@ test.describe('Sync — round-trip', () => {
     await injectImportFile(page, exportedBytes);
     await waitForImportModal(page);
 
-    const navigationPromise = page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {});
     await page.evaluate(() =>
-      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-reload').click()
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-merge').click()
     );
-    await navigationPromise;
     await waitForListsPage(page);
     expect(await listCount(page)).toBe(1);
 
@@ -398,5 +453,98 @@ test.describe('Sync — round-trip', () => {
         ?.querySelector('.list-name')?.textContent
     );
     expect(listName).toBe('Gift ideas');
+  });
+
+  test('export then import via Replace all restores goals after IDB clear', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    await createGoal(page, 'Replace trip goal');
+    expect(await goalCount(page)).toBe(1);
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      (async () => {
+        await openSettings(page);
+        await clickInBottomNav(page, '#export-all-btn');
+      })(),
+    ]);
+    const tmpPath = path.join(os.tmpdir(), download.suggestedFilename());
+    await download.saveAs(tmpPath);
+    const exportedBytes = fs.readFileSync(tmpPath);
+    fs.unlinkSync(tmpPath);
+
+    await clearIDB(page);
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    expect(await goalCount(page)).toBe(0);
+
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
+    await injectImportFile(page, exportedBytes);
+    await waitForImportModal(page);
+
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-replace').click()
+    );
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-replace').click()
+    );
+    await waitForPage(page);
+
+    expect(await goalCount(page)).toBe(1);
+    const title = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        ?.querySelector('home-page').shadowRoot
+        ?.querySelector('#capstone-list goal-item')?.shadowRoot
+        ?.querySelector('.title')?.textContent?.trim()
+    );
+    expect(title).toBe('Replace trip goal');
+  });
+
+  test('dismissing import modal via Escape resets the replace button label', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    const payload = {
+      socleVersion: 1,
+      events: [
+        { id: 'escape-1', deviceId: null, recordedAt: 1000, occurredAt: 1000,
+          type: 'simple:state', payload: { goals: {}, lists: [], images: {} } },
+      ],
+      images: [],
+    };
+
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
+    await injectImportFile(page, payload);
+    await waitForImportModal(page);
+
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-replace').click()
+    );
+    const sureLabel = await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-replace').textContent.trim()
+    );
+    expect(sureLabel).toBe('Sure?');
+
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() =>
+      !document.querySelector('bottom-nav')?.shadowRoot
+        ?.querySelector('#import-modal')?.shadowRoot?.querySelector('dialog')?.open
+    );
+
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
+    await injectImportFile(page, payload);
+    await waitForImportModal(page);
+
+    const resetLabel = await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-replace').textContent.trim()
+    );
+    expect(resetLabel).toBe('Replace all');
   });
 });

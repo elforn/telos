@@ -3,8 +3,44 @@ import { navigate } from '../../../_lib/core/router/router.js';
 import { BASE_PATH } from '../../base-path.js';
 import { t, setLocale, getLocale } from '../../../_lib/core/strings.js';
 import { getTheme, setTheme, onThemeChange } from '../../../_lib/core/theme/theme.js';
-import { exportData, importData, downloadExport, readImportFile } from '../../../_lib/modules/sync/sync.js';
+import { exportData, downloadExport, readImportFile, previewImport, applyMerge, applyReplace } from '../../../_lib/modules/sync/sync.js';
+import { getState } from '../../../_lib/core/store/store.js';
+import { mergeStrategy } from '../../utils/merge-strategy.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
+
+function _countGoals(goalsObj) {
+  if (!goalsObj) return 0;
+  return Object.values(goalsObj)
+    .flatMap(yr => ['capstone', 'milestones', 'wow', 'focus'].flatMap(s => yr[s] ?? []))
+    .length;
+}
+
+function _countItems(lists) {
+  if (!lists) return 0;
+  return lists.reduce((n, l) => n + (l.items?.length ?? 0), 0);
+}
+
+function _buildPreviewMsg(parsed) {
+  if (parsed.type !== 'simple') {
+    return t('sync.import-preview-log', { count: parsed.events.length });
+  }
+  const { payload } = parsed;
+  const goalsObj   = payload.goals ?? {};
+  const years      = Object.keys(goalsObj).sort();
+  const totalGoals = _countGoals(goalsObj);
+  const lists      = payload.lists ?? [];
+  const totalItems = _countItems(lists);
+
+  const parts = [];
+  if (totalGoals > 0) {
+    parts.push(`${totalGoals} goal${totalGoals !== 1 ? 's' : ''} (${years.join(', ')})`);
+  }
+  if (lists.length > 0) {
+    parts.push(`${lists.length} list${lists.length !== 1 ? 's' : ''} with ${totalItems} item${totalItems !== 1 ? 's' : ''}`);
+  }
+  if (parts.length === 0) return t('sync.import-preview-empty');
+  return t('sync.import-preview', { description: parts.join(' and ') });
+}
 
 function _themeName(theme) {
   return { light: t('year-header.theme-light'), dark: t('year-header.theme-dark'), system: t('year-header.theme-system') }[theme] ?? theme;
@@ -111,6 +147,7 @@ class BottomNav extends AppElement {
           color: var(--color-text-muted);
           text-transform: uppercase;
           letter-spacing: 0.08em;
+          margin-block-start: 0;
           margin-block-end: var(--space-2);
         }
 
@@ -216,7 +253,7 @@ class BottomNav extends AppElement {
 
         .modal-btn.accent {
           background: var(--color-accent);
-          color: var(--color-text-inverse);
+          color: var(--color-text-on-accent);
         }
 
         .modal-btn:focus-visible {
@@ -225,7 +262,7 @@ class BottomNav extends AppElement {
         }
       </style>
 
-      <div class="nav-row">
+      <div class="nav-row" role="navigation">
         <div class="pills">
           <button class="pill" id="pill-years">${t('bottom-nav.years')}</button>
           <button class="pill" id="pill-lists">${t('bottom-nav.lists')}</button>
@@ -237,7 +274,7 @@ class BottomNav extends AppElement {
         <h2 class="modal-title">${t('bottom-nav.settings')}</h2>
 
         <div class="section">
-          <p class="section-label">${t('year-header.theme')}</p>
+          <h3 class="section-label">${t('year-header.theme')}</h3>
           <div class="pill-group" id="theme-group" role="group" aria-label="${t('year-header.theme')}">
             ${['light', 'system', 'dark'].map(v =>
               `<button class="option-pill" data-theme="${v}">${_themeName(v)}</button>`
@@ -246,7 +283,7 @@ class BottomNav extends AppElement {
         </div>
 
         <div class="section">
-          <p class="section-label">${t('year-header.language')}</p>
+          <h3 class="section-label">${t('year-header.language')}</h3>
           <div class="pill-group" id="lang-group" role="group" aria-label="${t('year-header.language')}">
             ${['en', 'fr', 'ca'].map(l =>
               `<button class="option-pill" data-locale="${l}">${_localeName(l)}</button>`
@@ -255,7 +292,7 @@ class BottomNav extends AppElement {
         </div>
 
         <div class="section">
-          <p class="section-label">${t('year-header.app-section')}</p>
+          <h3 class="section-label">${t('year-header.app-section')}</h3>
           <div class="actions-group">
             <button class="action-row" id="export-all-btn">
               <span>${t('sync.export-all')}</span>
@@ -278,10 +315,11 @@ class BottomNav extends AppElement {
 
       <modal-dialog id="import-modal" aria-label="${t('sync.import')}">
         <h2 class="modal-title">${t('sync.import')}</h2>
-        <p id="import-message" class="import-message"></p>
-        <button slot="footer" class="modal-btn" id="import-cancel" hidden>${t('sync.import-cancel')}</button>
-        <button slot="footer" class="modal-btn accent" id="import-reload" hidden>${t('sync.import-reload')}</button>
-        <button slot="footer" class="modal-btn" id="import-close" hidden>${t('sync.import-close')}</button>
+        <p id="import-message" class="import-message" aria-live="polite"></p>
+        <button slot="footer" class="modal-btn" id="import-cancel"  hidden>${t('sync.import-cancel')}</button>
+        <button slot="footer" class="modal-btn" id="import-replace" hidden>${t('sync.import-replace')}</button>
+        <button slot="footer" class="modal-btn accent" id="import-merge"   hidden>${t('sync.import-merge')}</button>
+        <button slot="footer" class="modal-btn" id="import-close"   hidden>${t('sync.import-close')}</button>
       </modal-dialog>
 
       <input type="file" id="import-input" accept=".telos,.json" hidden>
@@ -299,6 +337,7 @@ class BottomNav extends AppElement {
       ? window.location.pathname
       : `${BASE_PATH}lists`;
 
+    this._replaceConfirm  = false;
     this._scrollPositions = {};
     this._updateActive();
     this._subscribeNav();
@@ -400,38 +439,100 @@ class BottomNav extends AppElement {
     };
     this.shadowRoot.querySelector('#import-btn').addEventListener('click', this._onImportBtn);
 
+    const msgEl      = this.shadowRoot.querySelector('#import-message');
+    const cancelBtn  = this.shadowRoot.querySelector('#import-cancel');
+    const mergeBtn   = this.shadowRoot.querySelector('#import-merge');
+    const replaceBtn = this.shadowRoot.querySelector('#import-replace');
+    const closeBtn   = this.shadowRoot.querySelector('#import-close');
+
+    const _resetReplace = () => {
+      this._replaceConfirm = false;
+      replaceBtn.textContent = t('sync.import-replace');
+      replaceBtn.removeAttribute('aria-label');
+    };
+    const _showPreview = () => {
+      cancelBtn.hidden  = false;
+      mergeBtn.hidden   = false;
+      replaceBtn.hidden = false;
+      closeBtn.hidden   = true;
+    };
+    const _showDone = msg => {
+      msgEl.textContent = msg;
+      cancelBtn.hidden  = true;
+      mergeBtn.hidden   = true;
+      replaceBtn.hidden = true;
+      closeBtn.hidden   = false;
+    };
+
     this._onImportInput = async e => {
       const file = e.target.files?.[0];
       if (!file) return;
       e.target.value = '';
-      const msgEl     = this.shadowRoot.querySelector('#import-message');
-      const cancelBtn = this.shadowRoot.querySelector('#import-cancel');
-      const reloadBtn = this.shadowRoot.querySelector('#import-reload');
-      const closeBtn  = this.shadowRoot.querySelector('#import-close');
+      _resetReplace();
+      let parsed;
       try {
-        const raw    = await readImportFile(file);
-        const result = await importData(raw);
-        msgEl.textContent = t('sync.import-confirm', { events: result.eventsAdded, images: result.imagesAdded });
-        cancelBtn.hidden = false;
-        reloadBtn.hidden = false;
-        closeBtn.hidden  = true;
+        const raw = await readImportFile(file);
+        parsed = await previewImport(raw);
       } catch (err) {
         console.error('Import failed:', err);
-        msgEl.textContent = t('sync.import-error');
-        cancelBtn.hidden = true;
-        reloadBtn.hidden = true;
-        closeBtn.hidden  = false;
+        _showDone(t('sync.import-error'));
+        this._importModal.show();
+        return;
       }
+      this._parsed = parsed;
+      msgEl.textContent = _buildPreviewMsg(parsed);
+      _showPreview();
       this._importModal.show();
     };
     this._importInput.addEventListener('change', this._onImportInput);
 
-    this._onImportCancel = () => this._importModal.close();
-    this._onImportReload = () => location.reload();
-    this._onImportClose  = () => this._importModal.close();
+    this._onImportCancel = () => {
+      _resetReplace();
+      this._importModal.close();
+    };
+
+    this._onImportMerge = async () => {
+      if (!this._parsed) return;
+      _resetReplace();
+      try {
+        const goalsBefore = _countGoals(getState().goals);
+        const itemsBefore = _countItems(getState().lists);
+        await applyMerge(this._parsed, mergeStrategy);
+        const goalsAdded = _countGoals(getState().goals) - goalsBefore;
+        const itemsAdded = _countItems(getState().lists) - itemsBefore;
+        _showDone(t('sync.import-confirm', { goals: goalsAdded, items: itemsAdded }));
+      } catch (err) {
+        console.error('Import failed:', err);
+        _showDone(t('sync.import-error'));
+      }
+    };
+
+    this._onImportReplace = async () => {
+      if (!this._parsed) return;
+      if (!this._replaceConfirm) {
+        this._replaceConfirm = true;
+        replaceBtn.textContent = t('sync.import-sure');
+        replaceBtn.setAttribute('aria-label', t('sync.import-sure-aria'));
+        return;
+      }
+      _resetReplace();
+      try {
+        await applyReplace(this._parsed);
+        _showDone(t('sync.import-replace-confirm'));
+      } catch (err) {
+        console.error('Import failed:', err);
+        _showDone(t('sync.import-error'));
+      }
+    };
+
+    this._onImportClose = () => this._importModal.close();
+
     this.shadowRoot.querySelector('#import-cancel').addEventListener('click', this._onImportCancel);
-    this.shadowRoot.querySelector('#import-reload').addEventListener('click', this._onImportReload);
+    this.shadowRoot.querySelector('#import-merge').addEventListener('click', this._onImportMerge);
+    this.shadowRoot.querySelector('#import-replace').addEventListener('click', this._onImportReplace);
     this.shadowRoot.querySelector('#import-close').addEventListener('click', this._onImportClose);
+    this._onImportModalClose = () => _resetReplace();
+    this._importModal.addEventListener('modal-close', this._onImportModalClose);
   }
 
   _subscribeHeight() {
@@ -465,8 +566,10 @@ class BottomNav extends AppElement {
     this.shadowRoot?.querySelector('#import-btn')?.removeEventListener('click', this._onImportBtn);
     this._importInput?.removeEventListener('change', this._onImportInput);
     this.shadowRoot?.querySelector('#import-cancel')?.removeEventListener('click', this._onImportCancel);
-    this.shadowRoot?.querySelector('#import-reload')?.removeEventListener('click', this._onImportReload);
+    this.shadowRoot?.querySelector('#import-merge')?.removeEventListener('click', this._onImportMerge);
+    this.shadowRoot?.querySelector('#import-replace')?.removeEventListener('click', this._onImportReplace);
     this.shadowRoot?.querySelector('#import-close')?.removeEventListener('click', this._onImportClose);
+    this._importModal?.removeEventListener('modal-close', this._onImportModalClose);
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--bottom-nav-height');
   }

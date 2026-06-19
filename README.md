@@ -9,7 +9,7 @@ A personal yearly goal planner for your phone.
 - Hold-drag a progress bar to update any goal; swipe in Edit mode to mark failed or delete
 - Navigate between years to review past plans
 - Attach a **year photo** as a visual anchor for the year
-- Export and import all data as a single `.telos` file — no account required
+- Export and import data as a single `.telos` file — import merges with local data by default, or replaces it entirely
 - Maintain **trans-year lists** (ideas, gifts, identity anchors, etc.) and link items into goal sections
 
 Everything is stored locally on the device. No cloud sync, no sign-in.

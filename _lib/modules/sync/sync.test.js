@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { exportData, importData, downloadExport, readImportFile } from './sync.js';
-import { boot, reset, attachBlob, getBlob, getAllEvents } from '../../core/store/store.js';
+import { exportData, importData, downloadExport, readImportFile, previewImport, applyReplace, applyMerge } from './sync.js';
+import { boot, reset, attachBlob, getBlob, getAllEvents, getState } from '../../core/store/store.js';
 import * as Store from '../../core/store/store.js';
 
 // dispatch is only exported by the event-log store. In simple-store apps store.js
@@ -207,5 +207,181 @@ describe('readImportFile', () => {
   it('rejects on invalid JSON', async () => {
     const file = new File(['not json {{'], 'bad.json', { type: 'application/json' });
     await expect(readImportFile(file)).rejects.toThrow('Invalid JSON');
+  });
+});
+
+// ── previewImport ─────────────────────────────────────────────────────────────
+
+describe('previewImport', () => {
+  it('throws on bad magic bytes', async () => {
+    await expect(previewImport(new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04]))).rejects.toThrow('Invalid file (bad magic bytes)');
+  });
+
+  it('throws for invalid socleVersion in legacy JSON', async () => {
+    await expect(previewImport({ socleVersion: 99, events: [], images: [] })).rejects.toThrow('Invalid or incompatible');
+  });
+
+  it('binary event-log file → type: log, events array, empty blobs', async () => {
+    const binary = await exportData();
+    const parsed = await previewImport(binary);
+    expect(parsed.type).toBe('log');
+    expect(Array.isArray(parsed.events)).toBe(true);
+    expect(parsed.blobs).toEqual([]);
+  });
+
+  it.skipIf(!dispatch)('binary event-log file → events contain dispatched data', async () => {
+    await dispatch('item:added', { title: 'preview-me' });
+    const binary = await exportData();
+    const parsed = await previewImport(binary);
+    expect(parsed.type).toBe('log');
+    expect(parsed.events).toHaveLength(1);
+    expect(parsed.events[0].payload.title).toBe('preview-me');
+  });
+
+  it('binary simple-state file → type: simple with payload', async () => {
+    vi.spyOn(Store, 'getAllEvents').mockResolvedValueOnce([{
+      id: 'snap-preview',
+      type: 'simple:state',
+      payload: { items: ['x', 'y'] },
+      deviceId: null,
+      recordedAt: 1000,
+      occurredAt: 1000,
+    }]);
+    const binary = await exportData();
+    vi.restoreAllMocks();
+    const parsed = await previewImport(binary);
+    expect(parsed.type).toBe('simple');
+    expect(parsed.payload.items).toEqual(['x', 'y']);
+    expect(parsed.blobs).toEqual([]);
+  });
+
+  it('legacy JSON with log events → type: log', async () => {
+    const parsed = await previewImport({
+      socleVersion: 1,
+      events: [{ id: 'e1', type: 'item:added', payload: {}, deviceId: null, recordedAt: 1, occurredAt: 1 }],
+      images: [],
+    });
+    expect(parsed.type).toBe('log');
+    expect(parsed.events).toHaveLength(1);
+  });
+
+  it('legacy JSON with simple:state event → type: simple', async () => {
+    const parsed = await previewImport({
+      socleVersion: 1,
+      events: [{ id: 'snap-1', type: 'simple:state', payload: { score: 7 }, deviceId: null, recordedAt: 1, occurredAt: 1 }],
+      images: [],
+    });
+    expect(parsed.type).toBe('simple');
+    expect(parsed.payload.score).toBe(7);
+  });
+
+  it('does not write anything to IDB', async () => {
+    const binary = await exportData();
+    await previewImport(binary);
+    const all = await getAllEvents();
+    expect(all).toHaveLength(0);
+  });
+});
+
+// ── applyReplace ──────────────────────────────────────────────────────────────
+
+describe('applyReplace', () => {
+  it('log type: writes new events to IDB', async () => {
+    const parsed = await previewImport({
+      socleVersion: 1,
+      events: [{ id: 'r-e1', type: 'item:added', payload: { title: 'imported' }, deviceId: null, recordedAt: 1, occurredAt: 1 }],
+      images: [],
+    });
+    await applyReplace(parsed);
+    const all = await getAllEvents();
+    expect(all).toHaveLength(1);
+    expect(all[0].id).toBe('r-e1');
+  });
+
+  it('log type: skips duplicate events', async () => {
+    const parsed = await previewImport({
+      socleVersion: 1,
+      events: [{ id: 'r-dup', type: 'item:added', payload: {}, deviceId: null, recordedAt: 1, occurredAt: 1 }],
+      images: [],
+    });
+    await applyReplace(parsed);
+    await applyReplace(parsed);
+    const all = await getAllEvents();
+    expect(all).toHaveLength(1);
+  });
+
+  it('simple type: updates in-memory state via setState for each key', async () => {
+    const parsed = { type: 'simple', payload: { count: 42, label: 'hello' }, blobs: [] };
+    await applyReplace(parsed);
+    const state = getState();
+    expect(state.count).toBe(42);
+    expect(state.label).toBe('hello');
+  });
+
+  it('adds new blobs from parsed data', async () => {
+    const mockBlob = new Blob([new Uint8Array([0xff, 0xd8])], { type: 'image/jpeg' });
+    const parsed = { type: 'log', events: [], blobs: [{ id: 'replace-img', blob: mockBlob }] };
+    await applyReplace(parsed);
+    const stored = await getBlob('replace-img');
+    expect(stored).toBeTruthy();
+    expect(stored.type).toBe('image/jpeg');
+  });
+
+  it('skips blobs that already exist', async () => {
+    const original = new Blob([new Uint8Array([1])], { type: 'image/jpeg' });
+    await attachBlob('existing-img', original);
+    const imported = new Blob([new Uint8Array([2])], { type: 'image/png' });
+    const parsed = { type: 'log', events: [], blobs: [{ id: 'existing-img', blob: imported }] };
+    await applyReplace(parsed);
+    const stored = await getBlob('existing-img');
+    expect(stored.type).toBe('image/jpeg');
+  });
+});
+
+// ── applyMerge ────────────────────────────────────────────────────────────────
+
+describe('applyMerge', () => {
+  it('log type: writes new events (dedup is merge)', async () => {
+    const parsed = await previewImport({
+      socleVersion: 1,
+      events: [{ id: 'm-e1', type: 'item:added', payload: {}, deviceId: null, recordedAt: 1, occurredAt: 1 }],
+      images: [],
+    });
+    await applyMerge(parsed, () => { throw new Error('should not be called for log type'); });
+    const all = await getAllEvents();
+    expect(all).toHaveLength(1);
+  });
+
+  it('simple type: calls mergeStrategy(currentState, payload) and applies result', async () => {
+    const parsed = { type: 'simple', payload: { items: [10, 20] }, blobs: [] };
+    const mergeStrategy = (current, imported) => ({ items: [...(current.items ?? []), ...imported.items] });
+    await applyMerge(parsed, mergeStrategy);
+    expect(getState().items).toEqual([10, 20]);
+  });
+
+  it('simple type: mergeStrategy receives current state at call time', async () => {
+    const initial = { type: 'simple', payload: { items: ['a'] }, blobs: [] };
+    await applyReplace(initial);
+
+    const received = [];
+    const mergeStrategy = (current, imported) => {
+      received.push({ current: current.items, imported: imported.items });
+      return { items: [...current.items, ...imported.items] };
+    };
+
+    const parsed = { type: 'simple', payload: { items: ['b', 'c'] }, blobs: [] };
+    await applyMerge(parsed, mergeStrategy);
+
+    expect(received[0].current).toEqual(['a']);
+    expect(received[0].imported).toEqual(['b', 'c']);
+    expect(getState().items).toEqual(['a', 'b', 'c']);
+  });
+
+  it('adds blobs for both log and simple types', async () => {
+    const mockBlob = new Blob([new Uint8Array([9])], { type: 'image/png' });
+    const parsed = { type: 'simple', payload: {}, blobs: [{ id: 'merge-img', blob: mockBlob }] };
+    await applyMerge(parsed, (c, i) => ({ ...c, ...i }));
+    const stored = await getBlob('merge-img');
+    expect(stored).toBeTruthy();
   });
 });
