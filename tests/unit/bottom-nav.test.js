@@ -128,3 +128,30 @@ describe('bottom-nav — lists path memory', () => {
     expect(el.shadowRoot.querySelector('#pill-lists').classList.contains('active')).toBe(true);
   });
 });
+
+// ── Scroll position helpers ───────────────────────────────────────────────────
+
+describe('bottom-nav — scroll position helpers', () => {
+  it('_saveScroll stores current window.scrollY for the given path', () => {
+    const el = mount();
+    el._saveScroll('/lists');
+    expect(el._scrollPositions['/lists']).toBe(window.scrollY);
+  });
+
+  it('_restoreScroll calls scrollTo with the saved position', () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(cb => { cb(0); return 0; });
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const el = mount();
+    el._scrollPositions['/2026'] = 200;
+    el._restoreScroll('/2026');
+    expect(scrollTo).toHaveBeenCalledWith(0, 200);
+  });
+
+  it('_restoreScroll defaults to 0 when no saved position exists for path', () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(cb => { cb(0); return 0; });
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const el = mount();
+    el._restoreScroll('/unknown-path');
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
+  });
+});

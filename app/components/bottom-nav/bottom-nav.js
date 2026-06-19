@@ -299,6 +299,7 @@ class BottomNav extends AppElement {
       ? window.location.pathname
       : `${BASE_PATH}lists`;
 
+    this._scrollPositions = {};
     this._updateActive();
     this._subscribeNav();
     this._subscribeSettings();
@@ -310,10 +311,16 @@ class BottomNav extends AppElement {
     this._onPillYears = () => {
       const onLists = window.location.pathname.startsWith(`${BASE_PATH}lists`);
       if (onLists) {
-        navigate(`${BASE_PATH}${this._currentYear}`);
+        // Lists → Year: save lists scroll, navigate to year, restore year scroll
+        this._saveScroll(window.location.pathname);
+        const target = `${BASE_PATH}${this._currentYear}`;
+        navigate(target);
+        this._restoreScroll(target);
       } else {
+        // Year → Year: navigate to today's year if needed, then scroll to top
         const todayYear = new Date().getFullYear();
         if (window.location.pathname !== `${BASE_PATH}${todayYear}`) navigate(`${BASE_PATH}${todayYear}`);
+        requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
       }
     };
     this._onPillYearsKey = e => { if (e.detail === 0) this._onPillYears(); };
@@ -323,9 +330,14 @@ class BottomNav extends AppElement {
     this._onPillLists = () => {
       const onLists = window.location.pathname.startsWith(`${BASE_PATH}lists`);
       if (onLists) {
+        // Lists → Lists: go to /lists root and scroll to top (no restore)
         if (window.location.pathname !== `${BASE_PATH}lists`) navigate(`${BASE_PATH}lists`);
+        requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
       } else {
+        // Year → Lists: save year scroll, navigate to last lists path, restore lists scroll
+        this._saveScroll(window.location.pathname);
         navigate(this._lastListsPath);
+        this._restoreScroll(this._lastListsPath);
       }
     };
     this._onPillListsKey = e => { if (e.detail === 0) this._onPillLists(); };
@@ -457,6 +469,14 @@ class BottomNav extends AppElement {
     this.shadowRoot?.querySelector('#import-close')?.removeEventListener('click', this._onImportClose);
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--bottom-nav-height');
+  }
+
+  _saveScroll(path) {
+    this._scrollPositions[path] = window.scrollY;
+  }
+
+  _restoreScroll(path) {
+    requestAnimationFrame(() => window.scrollTo(0, this._scrollPositions[path] ?? 0));
   }
 
   _updateActive() {
