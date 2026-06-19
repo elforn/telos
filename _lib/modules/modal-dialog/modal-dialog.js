@@ -111,10 +111,17 @@ class ModalDialog extends AppElement {
     this._dialog?.removeEventListener('click', this._onBackdrop);
   }
 
-  show() {
+  show(focusEl = null) {
     this._justOpened = true;
     this._dialog?.showModal();
-    requestAnimationFrame(() => { this._justOpened = false; });
+    // setTimeout(0) rather than rAF: on Android Chrome the synthetic click from the
+    // touch that opened the dialog fires after a rAF but before a macrotask, so rAF
+    // would clear the guard before the click arrives and the backdrop handler would
+    // immediately close the dialog. focusEl overrides showModal()'s default focus.
+    setTimeout(() => {
+      this._justOpened = false;
+      focusEl?.focus();
+    }, 0);
   }
 
   close() { this._dialog?.close(); }

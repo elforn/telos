@@ -22,6 +22,22 @@ describe('modal-dialog — open / close', () => {
     expect(el.shadowRoot.querySelector('dialog').hasAttribute('open')).toBe(true);
   });
 
+  it('show(focusEl) calls focus() on the element after the setTimeout fires', () => {
+    vi.useFakeTimers();
+    const el = mount();
+    const focusEl = { focus: vi.fn() };
+    el.show(focusEl);
+    expect(focusEl.focus).not.toHaveBeenCalled(); // not yet — setTimeout pending
+    vi.runAllTimers();
+    expect(focusEl.focus).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
+  it('show() with no argument does not throw', () => {
+    const el = mount();
+    expect(() => el.show()).not.toThrow();
+  });
+
   it('close() removes the open attribute', () => {
     const el = mount();
     el.show();
@@ -54,7 +70,7 @@ describe('modal-dialog — backdrop dismiss', () => {
   it('clicking the dialog element (backdrop area) calls close()', () => {
     const el = mount();
     el.show();
-    el._justOpened = false; // simulate rAF callback having fired
+    el._justOpened = false; // simulate setTimeout callback having fired
     const dialog = el.shadowRoot.querySelector('dialog');
     dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(dialog.close).toHaveBeenCalledOnce();
@@ -66,6 +82,16 @@ describe('modal-dialog — backdrop dismiss', () => {
     const dialog = el.shadowRoot.querySelector('dialog');
     dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(dialog.close).not.toHaveBeenCalled();
+  });
+
+  it('_justOpened stays true until the setTimeout fires (guards against same-task synthetic click)', () => {
+    vi.useFakeTimers();
+    const el = mount();
+    el.show();
+    expect(el._justOpened).toBe(true);
+    vi.runAllTimers();
+    expect(el._justOpened).toBe(false);
+    vi.useRealTimers();
   });
 
   it('clicking dialog content (not backdrop) does not dismiss', () => {
