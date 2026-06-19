@@ -2,31 +2,29 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 
-const STATUSES = ['open', 'paused', 'done'];
+const STATUSES  = ['open', 'paused', 'done'];
+const DRAFT_KEY = 'telos.draft.new-item';
 
 class ItemDialog extends AppElement {
   open(item = null) {
-    this._titleInput.value = item?.title ?? '';
+    this._isNew = !item;
+    const draft = this._isNew ? this._loadDraft() : null;
+    this._titleInput.value = item?.title ?? draft?.title ?? '';
     this._saveBtn.disabled = !this._titleInput.value.trim();
     this._deleteBtn.hidden = !item;
+    this._deleteBtn.classList.remove('is-confirm');
+    this._deleteBtn.textContent = t('item-dialog.delete');
+    this._deleteConfirm = false;
     const status = item?.status ?? 'open';
     const radio = this.shadowRoot.querySelector(`input[name="status"][value="${status}"]`);
     if (radio) radio.checked = true;
-    this._noteInput.value = item?.note ?? '';
-    this._urlInput.value  = item?.url  ?? '';
+    this._noteInput.value = item?.note ?? draft?.note ?? '';
+    this._urlInput.value  = item?.url  ?? draft?.url  ?? '';
     this._syncUrlOpen();
-    this._showUrlField(!!item?.url);
+    this._showUrlField(!!(item?.url ?? draft?.url));
     this._saved = false;
-    // Block the synthetic click that fires after pointerup on Android Chrome — it lands
-    // on the dialog backdrop (top layer) after modal-dialog's _justOpened guard expires.
-    this._blockBackdropClick = true;
-    this._modal.show();
-    if (!item) this._titleInput.select();
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      this._blockBackdropClick = false;
-      this._syncNoteHeight();
-      if (item) this._noteInput.focus();
-    }));
+    this._modal.show(item ? this._noteInput : this._titleInput);
+    requestAnimationFrame(() => requestAnimationFrame(() => this._syncNoteHeight()));
   }
 
   template() {
@@ -113,7 +111,16 @@ class ItemDialog extends AppElement {
           color: var(--color-accent);
         }
 
-        .status-option input { display: none; }
+        .status-option input {
+          position: absolute;
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        .status-option:has(input:focus-visible) {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
 
         #url-toggle {
           display: inline-flex;
@@ -187,6 +194,7 @@ class ItemDialog extends AppElement {
         .actions-end {
           display: flex;
           gap: var(--space-2);
+          margin-inline-start: auto;
         }
 
         button {
@@ -206,6 +214,7 @@ class ItemDialog extends AppElement {
         }
 
         #delete { background: none; color: var(--color-danger); }
+        #delete.is-confirm { background: var(--color-danger); color: var(--color-text-inverse); }
         #cancel { background: none; color: var(--color-text-secondary); }
 
         #save {
@@ -269,15 +278,17 @@ class ItemDialog extends AppElement {
     this._urlRow     = this.shadowRoot.querySelector('.url-row');
     this._saveBtn    = this.shadowRoot.querySelector('#save');
     this._deleteBtn  = this.shadowRoot.querySelector('#delete');
-    this._saved      = false;
+    this._saved         = false;
+    this._deleteConfirm = false;
 
     this._onTitleInput = () => {
       this._saveBtn.disabled = !this._titleInput.value.trim();
+      this._saveDraft();
     };
 
-    this._onNoteInput = () => this._syncNoteHeight();
+    this._onNoteInput = () => { this._syncNoteHeight(); this._saveDraft(); };
 
-    this._onUrlInput = () => this._syncUrlOpen();
+    this._onUrlInput = () => { this._syncUrlOpen(); this._saveDraft(); };
 
     this._onUrlToggle = () => {
       this._showUrlField(this._urlRow.hidden);
@@ -297,15 +308,25 @@ class ItemDialog extends AppElement {
       const note   = this._noteInput.value.trim() || undefined;
       const url    = this._urlInput.value.trim()  || undefined;
       this._saved = true;
+      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
       this.dispatchEvent(new CustomEvent('item-saved', {
         bubbles: true, composed: true, detail: { title, status, note, url },
       }));
       this._modal.close();
     };
 
-    this._onCancel = () => this._modal.close();
+    this._onCancel = () => {
+      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
+      this._modal.close();
+    };
 
     this._onDelete = () => {
+      if (!this._deleteConfirm) {
+        this._deleteConfirm = true;
+        this._deleteBtn.classList.add('is-confirm');
+        this._deleteBtn.textContent = t('item-dialog.delete-confirm');
+        return;
+      }
       this.dispatchEvent(new CustomEvent('item-delete', { bubbles: true, composed: true }));
       this._modal.close();
     };
@@ -314,18 +335,6 @@ class ItemDialog extends AppElement {
       e.stopPropagation();
       this._saved = false;
     };
-
-    // Intercept backdrop clicks that fire after the dialog opens on Android Chrome.
-    // The synthetic click from the opening tap reaches the <dialog> backdrop (top layer)
-    // after modal-dialog's _justOpened guard has expired. Capture it here first.
-    this._blockBackdropClick = false;
-    this._onShadowCapture = e => {
-      if (this._blockBackdropClick && e.target === this._modal) {
-        this._blockBackdropClick = false;
-        e.stopPropagation();
-      }
-    };
-    this.shadowRoot.addEventListener('click', this._onShadowCapture, { capture: true });
 
     this._onKeyDown = e => { if (e.key === 'Enter') this._onSave(); };
 
@@ -356,7 +365,6 @@ class ItemDialog extends AppElement {
     this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).removeEventListener('resize', this._onResize);
-    this.shadowRoot?.removeEventListener('click', this._onShadowCapture, { capture: true });
   }
 
   _syncNoteHeight() {
@@ -369,6 +377,19 @@ class ItemDialog extends AppElement {
     const minH = 56;
     const maxH = Math.max(vh - 280 - urlRowH, 120);
     ta.style.blockSize = `${Math.max(Math.min(ta.scrollHeight, maxH), minH)}px`;
+  }
+
+  _loadDraft() {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { return null; }
+  }
+
+  _saveDraft() {
+    if (!this._isNew) return;
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      title: this._titleInput.value,
+      note:  this._noteInput.value,
+      url:   this._urlInput.value,
+    }));
   }
 
   _syncUrlOpen() {

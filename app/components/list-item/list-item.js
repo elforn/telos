@@ -47,7 +47,7 @@ class ListItem extends Gestures(AppElement) {
         }
 
         .done-btn.is-restore {
-          background: var(--color-accent);
+          background: var(--color-app-accent);
           font-size: var(--font-size-heading);
         }
 
@@ -70,7 +70,7 @@ class ListItem extends Gestures(AppElement) {
           gap: var(--space-2);
           cursor: pointer;
           user-select: none;
-          touch-action: manipulation;
+          touch-action: pan-y;
           transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
           will-change: transform;
         }
@@ -84,9 +84,13 @@ class ListItem extends Gestures(AppElement) {
           word-break: break-word;
         }
 
-        .row[data-status="done"] .title {
-          color: var(--color-text-muted);
-          font-weight: var(--font-weight-normal);
+        .row[data-status="done"] {
+          background: color-mix(in srgb, var(--color-app-accent) 15%, var(--color-surface));
+        }
+
+        .row[data-status="done"] .badge {
+          background: var(--color-success);
+          color: var(--color-text-inverse);
         }
 
         .note-icon,
@@ -174,21 +178,33 @@ class ListItem extends Gestures(AppElement) {
     this._badge    = this.shadowRoot.querySelector('.badge');
     this._deleteEl = this.shadowRoot.querySelector('#delete-btn');
     this._doneEl   = this.shadowRoot.querySelector('#done-btn');
-    this._revealedDir = null;
+    this._revealedDir  = null;
+    this._deleteConfirm = false;
 
     this._update();
 
     this._stopPointerDown = e => e.stopPropagation();
 
-    this._onDeleteBtn = () => {
-      this.dispatchEvent(new CustomEvent('item-delete', {
-        bubbles: true, composed: true, detail: { item: this._item },
-      }));
-      this._closeReveal();
+    // useDelay: rAF lets the browser's synthesized click fire on the still-present button before DOM removal
+    this._onDeleteBtn = (useDelay = false) => {
+      if (!this._deleteConfirm) {
+        this._deleteConfirm = true;
+        this._deleteEl.textContent = t('list-item.delete-confirm');
+        return;
+      }
+      const fire = () => {
+        this.dispatchEvent(new CustomEvent('item-delete', {
+          bubbles: true, composed: true, detail: { item: this._item },
+        }));
+        this._closeReveal();
+      };
+      if (useDelay) requestAnimationFrame(fire);
+      else fire();
     };
-    this._onDeleteBtnKey = e => { if (e.detail === 0) this._onDeleteBtn(); };
+    this._onDeletePointerUp = e => { e.stopPropagation(); e.preventDefault(); this._onDeleteBtn(true); };
+    this._onDeleteBtnKey = e => { e.stopPropagation(); if (e.detail === 0) this._onDeleteBtn(); };
     this._deleteEl.addEventListener('pointerdown', this._stopPointerDown);
-    this._deleteEl.addEventListener('pointerup', this._onDeleteBtn);
+    this._deleteEl.addEventListener('pointerup', this._onDeletePointerUp);
     this._deleteEl.addEventListener('click', this._onDeleteBtnKey);
 
     this._onDoneBtn = () => {
@@ -199,9 +215,10 @@ class ListItem extends Gestures(AppElement) {
       this._closeReveal();
       if (willBeDone) this._celebrate();
     };
-    this._onDoneBtnKey = e => { if (e.detail === 0) this._onDoneBtn(); };
+    this._onDonePointerUp = e => { e.stopPropagation(); e.preventDefault(); this._onDoneBtn(); };
+    this._onDoneBtnKey = e => { e.stopPropagation(); if (e.detail === 0) this._onDoneBtn(); };
     this._doneEl.addEventListener('pointerdown', this._stopPointerDown);
-    this._doneEl.addEventListener('pointerup', this._onDoneBtn);
+    this._doneEl.addEventListener('pointerup', this._onDonePointerUp);
     this._doneEl.addEventListener('click', this._onDoneBtnKey);
 
     this._onKeyDown = e => {
@@ -212,10 +229,10 @@ class ListItem extends Gestures(AppElement) {
 
   unsubscribe() {
     this._deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
-    this._deleteEl?.removeEventListener('pointerup', this._onDeleteBtn);
+    this._deleteEl?.removeEventListener('pointerup', this._onDeletePointerUp);
     this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
     this._doneEl?.removeEventListener('pointerdown', this._stopPointerDown);
-    this._doneEl?.removeEventListener('pointerup', this._onDoneBtn);
+    this._doneEl?.removeEventListener('pointerup', this._onDonePointerUp);
     this._doneEl?.removeEventListener('click', this._onDoneBtnKey);
     this._row?.removeEventListener('keydown', this._onKeyDown);
   }
@@ -230,6 +247,11 @@ class ListItem extends Gestures(AppElement) {
     this.dispatchEvent(new CustomEvent('item-tap', {
       bubbles: true, composed: true, detail: { item: this._item },
     }));
+  }
+
+  _gestureCancel(e) {
+    if (this._gesture?.phase === 'swipe') this._closeReveal();
+    super._gestureCancel(e);
   }
 
   onSwipeMove(e) {
@@ -274,6 +296,10 @@ class ListItem extends Gestures(AppElement) {
     this._row.style.transition = 'transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1)';
     this._row.style.transform  = '';
     this._revealedDir = null;
+    if (this._deleteConfirm) {
+      this._deleteConfirm = false;
+      this._deleteEl.textContent = t('list-item.delete');
+    }
   }
 
   _celebrate() {

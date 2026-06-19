@@ -2,6 +2,8 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 
+const DRAFT_KEY = 'telos.draft.new-list';
+
 const SWATCHES = [
   { color: null,      label: 'No colour' },
   { color: '#E5534B', label: 'Red'    },
@@ -15,22 +17,22 @@ const SWATCHES = [
 
 class ListDialog extends AppElement {
   open(list = null) {
+    this._isNew = !list;
+    const draft = this._isNew ? this._loadDraft() : null;
     this._heading.textContent = list
       ? t('list-dialog.heading-edit')
       : t('list-dialog.heading-create');
-    this._input.value = list?.name ?? '';
+    this._input.value = list?.name ?? draft?.name ?? '';
     this._saveBtn.disabled = !this._input.value.trim();
     this._deleteBtn.hidden = !list;
-    this._selectColor(list?.color ?? null, false);
+    this._deleteBtn.classList.remove('is-confirm');
+    this._deleteBtn.textContent = t('list-dialog.delete');
+    this._deleteConfirm = false;
+    this._selectColor(list?.color ?? draft?.color ?? null, false);
     this._colorSwatches.hidden = true;
     this._colorToggle.setAttribute('aria-expanded', 'false');
     this._saved = false;
-    this._blockBackdropClick = true;
-    this._modal.show();
-    this._input.select();
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      this._blockBackdropClick = false;
-    }));
+    this._modal.show(this._input);
   }
 
   template() {
@@ -160,6 +162,7 @@ class ListDialog extends AppElement {
         .actions-end {
           display: flex;
           gap: var(--space-2);
+          margin-inline-start: auto;
         }
 
         button {
@@ -179,6 +182,7 @@ class ListDialog extends AppElement {
         }
 
         #delete { background: none; color: var(--color-danger); }
+        #delete.is-confirm { background: var(--color-danger); color: var(--color-text-inverse); }
         #cancel { background: none; color: var(--color-text-secondary); }
 
         #save {
@@ -236,17 +240,21 @@ class ListDialog extends AppElement {
     this._colorSwatches = this.shadowRoot.querySelector('.color-swatches');
     this._saveBtn       = this.shadowRoot.querySelector('#save');
     this._deleteBtn     = this.shadowRoot.querySelector('#delete');
-    this._selectedColor = null;
-    this._saved         = false;
+    this._selectedColor  = null;
+    this._saved          = false;
+    this._deleteConfirm  = false;
+    this._isNew          = false;
 
     this._onInput = () => {
       this._saveBtn.disabled = !this._input.value.trim();
+      this._saveDraft();
     };
 
     this._onSave = () => {
       const name = this._input.value.trim();
       if (!name) return;
       this._saved = true;
+      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
       this.dispatchEvent(new CustomEvent('list-saved', {
         bubbles: true, composed: true,
         detail: { name, color: this._selectedColor },
@@ -254,9 +262,18 @@ class ListDialog extends AppElement {
       this._modal.close();
     };
 
-    this._onCancel = () => this._modal.close();
+    this._onCancel = () => {
+      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
+      this._modal.close();
+    };
 
     this._onDelete = () => {
+      if (!this._deleteConfirm) {
+        this._deleteConfirm = true;
+        this._deleteBtn.classList.add('is-confirm');
+        this._deleteBtn.textContent = t('list-dialog.delete-confirm');
+        return;
+      }
       this.dispatchEvent(new CustomEvent('list-delete', { bubbles: true, composed: true }));
       this._modal.close();
     };
@@ -278,14 +295,7 @@ class ListDialog extends AppElement {
       const swatch = e.target.closest('.swatch');
       if (!swatch) return;
       this._selectColor(swatch.dataset.color || null, true);
-    };
-
-    this._blockBackdropClick = false;
-    this._onShadowCapture = e => {
-      if (this._blockBackdropClick && e.target === this._modal) {
-        this._blockBackdropClick = false;
-        e.stopPropagation();
-      }
+      this._saveDraft();
     };
 
     this._input.addEventListener('input',   this._onInput);
@@ -296,7 +306,6 @@ class ListDialog extends AppElement {
     this._colorToggle.addEventListener('click',   this._onColorToggle);
     this._colorSwatches.addEventListener('click', this._onSwatchClick);
     this._modal.addEventListener('modal-close', this._onModalClose);
-    this.shadowRoot.addEventListener('click', this._onShadowCapture, { capture: true });
   }
 
   unsubscribe() {
@@ -308,7 +317,18 @@ class ListDialog extends AppElement {
     this._colorToggle?.removeEventListener('click',   this._onColorToggle);
     this._colorSwatches?.removeEventListener('click', this._onSwatchClick);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
-    this.shadowRoot?.removeEventListener('click', this._onShadowCapture, { capture: true });
+  }
+
+  _loadDraft() {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { return null; }
+  }
+
+  _saveDraft() {
+    if (!this._isNew) return;
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      name:  this._input.value,
+      color: this._selectedColor,
+    }));
   }
 
   _selectColor(color, collapse) {

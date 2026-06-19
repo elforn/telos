@@ -21,7 +21,7 @@ function mount() {
   return el;
 }
 
-afterEach(() => { document.body.innerHTML = ''; vi.restoreAllMocks(); });
+afterEach(() => { document.body.innerHTML = ''; localStorage.clear(); vi.restoreAllMocks(); });
 
 // ── open() ────────────────────────────────────────────────────────────────────
 
@@ -289,11 +289,22 @@ describe('item-dialog — save', () => {
 // ── delete ────────────────────────────────────────────────────────────────────
 
 describe('item-dialog — delete', () => {
-  it('dispatches item-delete when delete is clicked', () => {
+  it('first click enters confirm state — does not dispatch event', () => {
     const el = mount();
     el.open(ITEM);
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
+    el.shadowRoot.querySelector('#delete').click();
+    expect(events).toHaveLength(0);
+    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(true);
+  });
+
+  it('dispatches item-delete on second click', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-delete', e => events.push(e));
+    el.shadowRoot.querySelector('#delete').click();
     el.shadowRoot.querySelector('#delete').click();
     expect(events).toHaveLength(1);
   });
@@ -304,16 +315,26 @@ describe('item-dialog — delete', () => {
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
     el.shadowRoot.querySelector('#delete').click();
+    el.shadowRoot.querySelector('#delete').click();
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
   });
 
-  it('closes the dialog after delete', () => {
+  it('closes the dialog after second click', () => {
     const el = mount();
     const modal = el.shadowRoot.querySelector('#modal');
     el.open(ITEM);
     el.shadowRoot.querySelector('#delete').click();
+    el.shadowRoot.querySelector('#delete').click();
     expect(modal.close).toHaveBeenCalledOnce();
+  });
+
+  it('re-opening the dialog resets the confirm state', () => {
+    const el = mount();
+    el.open(ITEM);
+    el.shadowRoot.querySelector('#delete').click();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(false);
   });
 });
 
@@ -326,5 +347,106 @@ describe('item-dialog — cancel', () => {
     el.open(null);
     el.shadowRoot.querySelector('#cancel').click();
     expect(modal.close).toHaveBeenCalledOnce();
+  });
+});
+
+// ── draft ─────────────────────────────────────────────────────────────────────
+
+const DRAFT_KEY = 'telos.draft.new-item';
+
+describe('item-dialog — draft', () => {
+  it('loads draft title when opening a new item', () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'Draft title', note: '', url: '' }));
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#title-input').value).toBe('Draft title');
+  });
+
+  it('loads draft note when opening a new item', () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'T', note: 'Draft note', url: '' }));
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#note-input').value).toBe('Draft note');
+  });
+
+  it('loads draft url and shows the url field', () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'T', note: '', url: 'https://draft.com' }));
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#url-input').value).toBe('https://draft.com');
+    expect(el.shadowRoot.querySelector('.url-row').hidden).toBe(false);
+  });
+
+  it('does not load draft when opening an existing item', () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'Draft', note: '', url: '' }));
+    const el = mount();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('#title-input').value).toBe('Buy flowers');
+  });
+
+  it('saves draft on title input', () => {
+    const el = mount();
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.value = 'Typing a draft';
+    inp.dispatchEvent(new Event('input'));
+    expect(JSON.parse(localStorage.getItem(DRAFT_KEY)).title).toBe('Typing a draft');
+  });
+
+  it('saves draft on note input', () => {
+    const el = mount();
+    el.open(null);
+    const ta = el.shadowRoot.querySelector('#note-input');
+    ta.value = 'Draft note';
+    ta.dispatchEvent(new Event('input'));
+    expect(JSON.parse(localStorage.getItem(DRAFT_KEY)).note).toBe('Draft note');
+  });
+
+  it('saves draft on url input', () => {
+    const el = mount();
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#url-input');
+    inp.value = 'https://typed.com';
+    inp.dispatchEvent(new Event('input'));
+    expect(JSON.parse(localStorage.getItem(DRAFT_KEY)).url).toBe('https://typed.com');
+  });
+
+  it('does not save draft when editing an existing item', () => {
+    const el = mount();
+    el.open(ITEM);
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.value = 'Modified';
+    inp.dispatchEvent(new Event('input'));
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+  });
+
+  it('clears draft on save', () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'Draft', note: '', url: '' }));
+    const el = mount();
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.value = 'Saved item';
+    inp.dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#save').click();
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+  });
+
+  it('clears draft on cancel', () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'Draft', note: '', url: '' }));
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#cancel').click();
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+  });
+
+  it('preserves draft on backdrop close', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.value = 'In progress';
+    inp.dispatchEvent(new Event('input'));
+    modal.dispatchEvent(new CustomEvent('modal-close', { bubbles: true, composed: true }));
+    expect(JSON.parse(localStorage.getItem(DRAFT_KEY)).title).toBe('In progress');
   });
 });

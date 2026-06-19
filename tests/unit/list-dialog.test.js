@@ -22,7 +22,7 @@ function mount() {
   return el;
 }
 
-afterEach(() => { document.body.innerHTML = ''; vi.restoreAllMocks(); });
+afterEach(() => { document.body.innerHTML = ''; localStorage.clear(); vi.restoreAllMocks(); });
 
 // ── open() ────────────────────────────────────────────────────────────────────
 
@@ -155,11 +155,22 @@ describe('list-dialog — save', () => {
 // ── delete ────────────────────────────────────────────────────────────────────
 
 describe('list-dialog — delete', () => {
-  it('dispatches list-delete when delete is clicked', () => {
+  it('first click enters confirm state — does not dispatch event', () => {
     const el = mount();
     el.open(LIST);
     const events = [];
     el.addEventListener('list-delete', e => events.push(e));
+    el.shadowRoot.querySelector('#delete').click();
+    expect(events).toHaveLength(0);
+    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(true);
+  });
+
+  it('dispatches list-delete on second click', () => {
+    const el = mount();
+    el.open(LIST);
+    const events = [];
+    el.addEventListener('list-delete', e => events.push(e));
+    el.shadowRoot.querySelector('#delete').click();
     el.shadowRoot.querySelector('#delete').click();
     expect(events).toHaveLength(1);
   });
@@ -170,16 +181,26 @@ describe('list-dialog — delete', () => {
     const events = [];
     el.addEventListener('list-delete', e => events.push(e));
     el.shadowRoot.querySelector('#delete').click();
+    el.shadowRoot.querySelector('#delete').click();
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
   });
 
-  it('closes the dialog after delete', () => {
+  it('closes the dialog after second click', () => {
     const el = mount();
     const modal = el.shadowRoot.querySelector('#modal');
     el.open(LIST);
     el.shadowRoot.querySelector('#delete').click();
+    el.shadowRoot.querySelector('#delete').click();
     expect(modal.close).toHaveBeenCalledOnce();
+  });
+
+  it('re-opening the dialog resets the confirm state', () => {
+    const el = mount();
+    el.open(LIST);
+    el.shadowRoot.querySelector('#delete').click();
+    el.open(LIST);
+    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(false);
   });
 });
 
@@ -192,6 +213,90 @@ describe('list-dialog — cancel', () => {
     el.open(null);
     el.shadowRoot.querySelector('#cancel').click();
     expect(modal.close).toHaveBeenCalledOnce();
+  });
+});
+
+// ── draft ─────────────────────────────────────────────────────────────────────
+
+const LIST_DRAFT_KEY = 'telos.draft.new-list';
+
+describe('list-dialog — draft', () => {
+  it('loads draft name when opening a new list', () => {
+    localStorage.setItem(LIST_DRAFT_KEY, JSON.stringify({ name: 'Draft list', color: null }));
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Draft list');
+  });
+
+  it('loads draft color when opening a new list', () => {
+    localStorage.setItem(LIST_DRAFT_KEY, JSON.stringify({ name: '', color: '#3DAD6A' }));
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#color-toggle').click();
+    expect(el.shadowRoot.querySelector('.swatch[data-color="#3DAD6A"]').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('does not load draft when opening an existing list', () => {
+    localStorage.setItem(LIST_DRAFT_KEY, JSON.stringify({ name: 'Draft', color: null }));
+    const el = mount();
+    el.open(LIST);
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Gift ideas');
+  });
+
+  it('saves draft on name input', () => {
+    const el = mount();
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'My new list';
+    inp.dispatchEvent(new Event('input'));
+    expect(JSON.parse(localStorage.getItem(LIST_DRAFT_KEY)).name).toBe('My new list');
+  });
+
+  it('saves draft when a color swatch is selected', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#color-toggle').click();
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    expect(JSON.parse(localStorage.getItem(LIST_DRAFT_KEY)).color).toBe('#4A94D4');
+  });
+
+  it('does not save draft when editing an existing list', () => {
+    const el = mount();
+    el.open(LIST);
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'Modified';
+    inp.dispatchEvent(new Event('input'));
+    expect(localStorage.getItem(LIST_DRAFT_KEY)).toBeNull();
+  });
+
+  it('clears draft on save', () => {
+    localStorage.setItem(LIST_DRAFT_KEY, JSON.stringify({ name: 'Draft', color: null }));
+    const el = mount();
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'Saved list';
+    inp.dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#save').click();
+    expect(localStorage.getItem(LIST_DRAFT_KEY)).toBeNull();
+  });
+
+  it('clears draft on cancel', () => {
+    localStorage.setItem(LIST_DRAFT_KEY, JSON.stringify({ name: 'Draft', color: null }));
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#cancel').click();
+    expect(localStorage.getItem(LIST_DRAFT_KEY)).toBeNull();
+  });
+
+  it('preserves draft on backdrop close', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'In progress';
+    inp.dispatchEvent(new Event('input'));
+    modal.dispatchEvent(new CustomEvent('modal-close', { bubbles: true, composed: true }));
+    expect(JSON.parse(localStorage.getItem(LIST_DRAFT_KEY)).name).toBe('In progress');
   });
 });
 

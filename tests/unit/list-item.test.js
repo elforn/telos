@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/list-item/list-item.js';
 
@@ -134,10 +134,19 @@ describe('list-item — item-tap event', () => {
 });
 
 describe('list-item — item-delete event', () => {
-  it('dispatches item-delete when delete button is clicked', () => {
+  it('first click on delete enters confirm state — does not dispatch event', () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
+    el.shadowRoot.querySelector('#delete-btn').click();
+    expect(events).toHaveLength(0);
+  });
+
+  it('dispatches item-delete on second click of delete button', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('item-delete', e => events.push(e));
+    el.shadowRoot.querySelector('#delete-btn').click();
     el.shadowRoot.querySelector('#delete-btn').click();
     expect(events).toHaveLength(1);
   });
@@ -147,6 +156,7 @@ describe('list-item — item-delete event', () => {
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
     el.shadowRoot.querySelector('#delete-btn').click();
+    el.shadowRoot.querySelector('#delete-btn').click();
     expect(events[0].detail.item.id).toBe('i1');
   });
 
@@ -155,17 +165,19 @@ describe('list-item — item-delete event', () => {
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
     el.shadowRoot.querySelector('#delete-btn').click();
+    el.shadowRoot.querySelector('#delete-btn').click();
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
   });
 
-  it('does not dispatch item-tap when delete button is clicked', () => {
+  it('does not dispatch item-tap on either delete click', () => {
     const el = mount();
     const tapEvents = [];
     el.addEventListener('item-tap', e => tapEvents.push(e));
     el.shadowRoot.querySelector('#delete-btn').dispatchEvent(
       new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, button: 0 })
     );
+    el.shadowRoot.querySelector('#delete-btn').click();
     el.shadowRoot.querySelector('#delete-btn').click();
     expect(tapEvents).toHaveLength(0);
   });
@@ -282,14 +294,14 @@ describe('list-item — aria labels', () => {
 });
 
 describe('list-item — pointerup fires actions', () => {
-  it('dispatches item-delete when delete button fires pointerup', () => {
+  it('dispatches item-delete when delete button fires pointerup twice', async () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete-btn').dispatchEvent(
-      new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 })
-    );
-    expect(events).toHaveLength(1);
+    const btn = el.shadowRoot.querySelector('#delete-btn');
+    btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 }));
+    btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 }));
+    await vi.waitFor(() => expect(events).toHaveLength(1));
     expect(events[0].detail.item.id).toBe('i1');
   });
 
@@ -304,26 +316,27 @@ describe('list-item — pointerup fires actions', () => {
     expect(events[0].detail.item.id).toBe('i1');
   });
 
-  it('keyboard click (detail=0) on delete button dispatches item-delete', () => {
+  it('keyboard click (detail=0) on delete button requires two presses to dispatch item-delete', () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete-btn').dispatchEvent(
-      new MouseEvent('click', { bubbles: true, composed: true, detail: 0 })
-    );
+    const btn = el.shadowRoot.querySelector('#delete-btn');
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, detail: 0 }));
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, detail: 0 }));
     expect(events).toHaveLength(1);
   });
 
-  it('pointer click (detail=1) on delete button does not double-fire', () => {
+  it('pointer click (detail=1) after pointerup does not double-fire on confirm', async () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete-btn').dispatchEvent(
-      new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 })
-    );
-    el.shadowRoot.querySelector('#delete-btn').dispatchEvent(
-      new MouseEvent('click', { bubbles: true, composed: true, detail: 1 })
-    );
-    expect(events).toHaveLength(1);
+    const btn = el.shadowRoot.querySelector('#delete-btn');
+    // First touch: enter confirm state
+    btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 }));
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, detail: 1 }));
+    // Second touch: fire delete (rAF-delayed)
+    btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 }));
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, detail: 1 }));
+    await vi.waitFor(() => expect(events).toHaveLength(1));
   });
 });
