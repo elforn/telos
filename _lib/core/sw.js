@@ -4,9 +4,18 @@ const BASE_PATH = '%%BASE_PATH%%';
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_VERSION).then(cache =>
-      Promise.allSettled(ASSETS.map(url => cache.add(url)))
-    )
+    caches.open(CACHE_VERSION)
+      .then(cache => Promise.allSettled(ASSETS.map(url => cache.add(url))).then(() => cache))
+      .then(cache => cache.match(BASE_PATH))
+      .then(async resp => {
+        if (!resp) return; // offline at install time — partial cache, allow through
+        const text = await resp.text();
+        const mainJs = ASSETS.find(a => /main\.[a-f0-9]+\.js$/.test(a));
+        if (mainJs && !text.includes(mainJs)) {
+          await caches.delete(CACHE_VERSION);
+          throw new Error(`SW install aborted: stale index.html (expected ${mainJs})`);
+        }
+      })
   );
 });
 
