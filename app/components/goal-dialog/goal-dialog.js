@@ -2,19 +2,27 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 
+const DRAFT_KEY = 'telos.draft.new-goal';
+
 class GoalDialog extends AppElement {
   open(goal = null) {
-    this._input.value = goal?.title ?? '';
+    this._isNew = !goal;
+    const draft = this._isNew ? this._loadDraft() : null;
+    this._input.value = goal?.title ?? draft?.title ?? '';
     this._saveBtn.disabled = !this._input.value.trim();
-    if (this._deleteBtn) this._deleteBtn.hidden = !goal;
-    this._blockBackdropClick = true;
-    this._modal.show();
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      this._blockBackdropClick = false;
-      this._input.focus();
+    if (this._deleteBtn) {
+      this._deleteBtn.hidden = !goal;
+      this._deleteBtn.classList.remove('is-confirm');
+      this._deleteBtn.textContent = t('goal-dialog.delete');
+    }
+    this._deleteConfirm = false;
+    this._modal.show(this._input);
+    // setSelectionRange must run after show()'s internal focus (both setTimeout 0,
+    // but ours is queued second so it fires after the library has focused the element)
+    setTimeout(() => {
       const len = this._input.value.length;
       this._input.setSelectionRange(len, len);
-    }));
+    }, 0);
   }
 
   template() {
@@ -60,6 +68,7 @@ class GoalDialog extends AppElement {
         .actions-end {
           display: flex;
           gap: var(--space-2);
+          margin-inline-start: auto;
         }
 
         button {
@@ -81,6 +90,11 @@ class GoalDialog extends AppElement {
         #delete {
           background: none;
           color: var(--color-danger);
+        }
+
+        #delete.is-confirm {
+          background: var(--color-danger);
+          color: var(--color-text-inverse);
         }
 
         #cancel {
@@ -123,25 +137,38 @@ class GoalDialog extends AppElement {
     this._input     = this.shadowRoot.querySelector('#input');
     this._saveBtn   = this.shadowRoot.querySelector('#save');
     this._deleteBtn = this.shadowRoot.querySelector('#delete');
-    this._saved     = false;
+    this._saved          = false;
+    this._deleteConfirm  = false;
+    this._isNew          = false;
 
     this._onInput = () => {
       this._saveBtn.disabled = !this._input.value.trim();
+      this._saveDraft();
     };
 
     this._onSave = () => {
       const title = this._input.value.trim();
       if (!title) return;
       this._saved = true;
+      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
       this.dispatchEvent(new CustomEvent('goal-saved', {
         bubbles: true, composed: true, detail: { title },
       }));
       this._modal.close();
     };
 
-    this._onCancel = () => this._modal.close();
+    this._onCancel = () => {
+      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
+      this._modal.close();
+    };
 
     this._onDelete = () => {
+      if (!this._deleteConfirm) {
+        this._deleteConfirm = true;
+        this._deleteBtn.classList.add('is-confirm');
+        this._deleteBtn.textContent = t('goal-dialog.delete-confirm');
+        return;
+      }
       this.dispatchEvent(new CustomEvent('goal-delete', { bubbles: true, composed: true }));
       this._modal.close();
     };
@@ -156,21 +183,21 @@ class GoalDialog extends AppElement {
 
     this._onKeyDown = e => { if (e.key === 'Enter') this._onSave(); };
 
-    this._blockBackdropClick = false;
-    this._onShadowCapture = e => {
-      if (this._blockBackdropClick && e.target === this._modal) {
-        this._blockBackdropClick = false;
-        e.stopPropagation();
-      }
-    };
-
     this._input.addEventListener('input',   this._onInput);
     this._input.addEventListener('keydown', this._onKeyDown);
     this._saveBtn.addEventListener('click', this._onSave);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
     this._modal.addEventListener('modal-close', this._onModalClose);
-    this.shadowRoot.addEventListener('click', this._onShadowCapture, { capture: true });
+  }
+
+  _loadDraft() {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { return null; }
+  }
+
+  _saveDraft() {
+    if (!this._isNew) return;
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: this._input.value }));
   }
 
   unsubscribe() {
@@ -180,7 +207,6 @@ class GoalDialog extends AppElement {
     this._deleteBtn?.removeEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
-    this.shadowRoot?.removeEventListener('click', this._onShadowCapture, { capture: true });
   }
 }
 

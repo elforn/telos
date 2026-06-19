@@ -22,7 +22,7 @@ function mount() {
   return el;
 }
 
-afterEach(() => { document.body.innerHTML = ''; vi.restoreAllMocks(); });
+afterEach(() => { document.body.innerHTML = ''; localStorage.clear(); vi.restoreAllMocks(); });
 
 describe('goal-dialog — open', () => {
   it('calls show() when open() is invoked', () => {
@@ -136,21 +136,109 @@ describe('goal-dialog — delete', () => {
     expect(el.shadowRoot.querySelector('#delete').hidden).toBe(false);
   });
 
-  it('dispatches goal-delete when delete is clicked', () => {
+  it('first click enters confirm state — does not dispatch event', () => {
     const el = mount();
     el.open({ id: '1', title: 'My goal' });
     const events = [];
     el.addEventListener('goal-delete', e => events.push(e));
     el.shadowRoot.querySelector('#delete').click();
+    expect(events).toHaveLength(0);
+    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(true);
+  });
+
+  it('dispatches goal-delete on second click', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'My goal' });
+    const events = [];
+    el.addEventListener('goal-delete', e => events.push(e));
+    el.shadowRoot.querySelector('#delete').click();
+    el.shadowRoot.querySelector('#delete').click();
     expect(events).toHaveLength(1);
   });
 
-  it('closes the dialog after delete', () => {
+  it('closes the dialog after second click', () => {
     const el = mount();
     const modal = el.shadowRoot.querySelector('#modal');
     el.open({ id: '1', title: 'My goal' });
     el.shadowRoot.querySelector('#delete').click();
+    el.shadowRoot.querySelector('#delete').click();
     expect(modal.close).toHaveBeenCalledOnce();
+  });
+
+  it('re-opening the dialog resets the confirm state', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'My goal' });
+    el.shadowRoot.querySelector('#delete').click();
+    el.open({ id: '1', title: 'My goal' });
+    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(false);
+  });
+});
+
+// ── draft ─────────────────────────────────────────────────────────────────────
+
+const GOAL_DRAFT_KEY = 'telos.draft.new-goal';
+
+describe('goal-dialog — draft', () => {
+  it('loads draft title when opening a new goal', () => {
+    localStorage.setItem(GOAL_DRAFT_KEY, JSON.stringify({ title: 'Draft goal' }));
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Draft goal');
+  });
+
+  it('does not load draft when opening an existing goal', () => {
+    localStorage.setItem(GOAL_DRAFT_KEY, JSON.stringify({ title: 'Draft goal' }));
+    const el = mount();
+    el.open({ title: 'Real goal' });
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Real goal');
+  });
+
+  it('saves draft on title input', () => {
+    const el = mount();
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'Typing a draft';
+    inp.dispatchEvent(new Event('input'));
+    expect(JSON.parse(localStorage.getItem(GOAL_DRAFT_KEY)).title).toBe('Typing a draft');
+  });
+
+  it('does not save draft when editing an existing goal', () => {
+    const el = mount();
+    el.open({ title: 'Existing' });
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'Modified';
+    inp.dispatchEvent(new Event('input'));
+    expect(localStorage.getItem(GOAL_DRAFT_KEY)).toBeNull();
+  });
+
+  it('clears draft on save', () => {
+    localStorage.setItem(GOAL_DRAFT_KEY, JSON.stringify({ title: 'Draft goal' }));
+    const el = mount();
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'Saved goal';
+    inp.dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#save').click();
+    expect(localStorage.getItem(GOAL_DRAFT_KEY)).toBeNull();
+  });
+
+  it('clears draft on cancel', () => {
+    localStorage.setItem(GOAL_DRAFT_KEY, JSON.stringify({ title: 'Draft goal' }));
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#cancel').click();
+    expect(localStorage.getItem(GOAL_DRAFT_KEY)).toBeNull();
+  });
+
+  it('preserves draft on backdrop close', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'In progress';
+    inp.dispatchEvent(new Event('input'));
+    modal.dispatchEvent(new CustomEvent('modal-close', { bubbles: true, composed: true }));
+    expect(JSON.parse(localStorage.getItem(GOAL_DRAFT_KEY)).title).toBe('In progress');
   });
 });
 
