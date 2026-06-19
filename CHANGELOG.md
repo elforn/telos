@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Goals now have an optional **description field** — add notes or context to any goal via the edit dialog
+- A small `ℹ` indicator appears on the goal card when a description is set
+
 ---
 
 ## [1.2.0] — 2026-06-13

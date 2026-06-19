@@ -16,12 +16,13 @@ class GoalDialog extends AppElement {
       this._deleteBtn.textContent = t('goal-dialog.delete');
     }
     this._deleteConfirm = false;
+    this._descInput.value = goal?.description ?? draft?.description ?? '';
+    this._saved = false;
     this._modal.show(this._input);
-    // setSelectionRange must run after show()'s internal focus (both setTimeout 0,
-    // but ours is queued second so it fires after the library has focused the element)
     setTimeout(() => {
       const len = this._input.value.length;
       this._input.setSelectionRange(len, len);
+      requestAnimationFrame(() => this._syncDescHeight());
     }, 0);
   }
 
@@ -36,7 +37,10 @@ class GoalDialog extends AppElement {
           line-height: var(--line-height-tight);
         }
 
-        input {
+        /* Halve the modal's default 24px top/bottom padding */
+        #modal { --space-6: var(--space-3); }
+
+        input[type="text"] {
           display: block;
           inline-size: 100%;
           background: var(--color-surface-raised);
@@ -48,15 +52,36 @@ class GoalDialog extends AppElement {
           color: var(--color-text-primary);
           outline: none;
           box-sizing: border-box;
+          margin-block-end: var(--space-3);
         }
 
-        input:focus {
-          border-color: var(--color-accent);
+        input[type="text"]:focus { border-color: var(--color-accent); }
+        input[type="text"]::placeholder { color: var(--color-text-muted); }
+
+        /* ── Description textarea ────────────────────────────────────────── */
+
+        textarea {
+          display: block;
+          inline-size: 100%;
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding: var(--space-3);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          outline: none;
+          box-sizing: border-box;
+          resize: none;
+          min-block-size: 3.5rem;
+          overflow-y: auto;
+          margin-block-end: var(--space-4);
         }
 
-        input::placeholder {
-          color: var(--color-text-muted);
-        }
+        textarea:focus { border-color: var(--color-accent); }
+        textarea::placeholder { color: var(--color-text-muted); }
+
+        /* ── Footer ──────────────────────────────────────────────────────── */
 
         .actions {
           display: flex;
@@ -121,6 +146,9 @@ class GoalDialog extends AppElement {
                placeholder="${t('goal-dialog.placeholder')}"
                autocomplete="off"
                maxlength="80" />
+        <textarea id="desc-input"
+                  aria-label="${t('goal-dialog.description-placeholder')}"
+                  placeholder="${t('goal-dialog.description-placeholder')}"></textarea>
         <div slot="footer" class="actions">
           <button type="button" id="delete" hidden>${t('goal-dialog.delete')}</button>
           <div class="actions-end">
@@ -135,6 +163,7 @@ class GoalDialog extends AppElement {
   subscribe() {
     this._modal     = this.shadowRoot.querySelector('#modal');
     this._input     = this.shadowRoot.querySelector('#input');
+    this._descInput = this.shadowRoot.querySelector('#desc-input');
     this._saveBtn   = this.shadowRoot.querySelector('#save');
     this._deleteBtn = this.shadowRoot.querySelector('#delete');
     this._saved          = false;
@@ -146,13 +175,19 @@ class GoalDialog extends AppElement {
       this._saveDraft();
     };
 
+    this._onDescInput = () => {
+      this._syncDescHeight();
+      this._saveDraft();
+    };
+
     this._onSave = () => {
       const title = this._input.value.trim();
       if (!title) return;
       this._saved = true;
       if (this._isNew) localStorage.removeItem(DRAFT_KEY);
+      const description = this._descInput.value.trim() || undefined;
       this.dispatchEvent(new CustomEvent('goal-saved', {
-        bubbles: true, composed: true, detail: { title },
+        bubbles: true, composed: true, detail: { title, description },
       }));
       this._modal.close();
     };
@@ -183,12 +218,37 @@ class GoalDialog extends AppElement {
 
     this._onKeyDown = e => { if (e.key === 'Enter') this._onSave(); };
 
+    this._onResize = () => this._syncDescHeight();
+
     this._input.addEventListener('input',   this._onInput);
     this._input.addEventListener('keydown', this._onKeyDown);
+    this._descInput.addEventListener('input', this._onDescInput);
     this._saveBtn.addEventListener('click', this._onSave);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
     this._modal.addEventListener('modal-close', this._onModalClose);
+    (window.visualViewport ?? window).addEventListener('resize', this._onResize);
+  }
+
+  unsubscribe() {
+    this._input?.removeEventListener('input',   this._onInput);
+    this._input?.removeEventListener('keydown', this._onKeyDown);
+    this._descInput?.removeEventListener('input', this._onDescInput);
+    this._saveBtn?.removeEventListener('click', this._onSave);
+    this._deleteBtn?.removeEventListener('click', this._onDelete);
+    this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
+    this._modal?.removeEventListener('modal-close', this._onModalClose);
+    (window.visualViewport ?? window).removeEventListener('resize', this._onResize);
+  }
+
+  _syncDescHeight() {
+    const ta = this._descInput;
+    if (!ta) return;
+    ta.style.blockSize = 'auto';
+    const vh = window.visualViewport?.height ?? window.innerHeight;
+    const minH = 56;
+    const maxH = Math.max(vh - 260, 100);
+    ta.style.blockSize = `${Math.max(Math.min(ta.scrollHeight, maxH), minH)}px`;
   }
 
   _loadDraft() {
@@ -197,16 +257,10 @@ class GoalDialog extends AppElement {
 
   _saveDraft() {
     if (!this._isNew) return;
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: this._input.value }));
-  }
-
-  unsubscribe() {
-    this._input?.removeEventListener('input',   this._onInput);
-    this._input?.removeEventListener('keydown', this._onKeyDown);
-    this._saveBtn?.removeEventListener('click', this._onSave);
-    this._deleteBtn?.removeEventListener('click', this._onDelete);
-    this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
-    this._modal?.removeEventListener('modal-close', this._onModalClose);
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      title:       this._input.value,
+      description: this._descInput.value,
+    }));
   }
 }
 

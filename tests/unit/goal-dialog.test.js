@@ -242,6 +242,71 @@ describe('goal-dialog — draft', () => {
   });
 });
 
+describe('goal-dialog — description', () => {
+  it('description textarea is always visible', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#desc-input').hidden).toBe(false);
+  });
+
+  it('populates description when opening an existing goal', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Goal', description: 'My notes' });
+    expect(el.shadowRoot.querySelector('#desc-input').value).toBe('My notes');
+  });
+
+  it('clears description when opening a goal without one', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Goal', description: 'Has desc' });
+    el.open({ id: '2', title: 'Other' });
+    expect(el.shadowRoot.querySelector('#desc-input').value).toBe('');
+  });
+
+  it('includes description in goal-saved event', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('goal-saved', e => events.push(e));
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = 'My goal';
+    input.dispatchEvent(new Event('input'));
+    const desc = el.shadowRoot.querySelector('#desc-input');
+    desc.value = 'Some details';
+    desc.dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#save').click();
+    expect(events[0].detail.description).toBe('Some details');
+  });
+
+  it('emits undefined description when textarea is empty', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('goal-saved', e => events.push(e));
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = 'My goal';
+    input.dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#save').click();
+    expect(events[0].detail.description).toBeUndefined();
+  });
+
+  it('saves description in draft', () => {
+    const el = mount();
+    el.open(null);
+    const desc = el.shadowRoot.querySelector('#desc-input');
+    desc.value = 'Draft desc';
+    desc.dispatchEvent(new Event('input'));
+    const draft = JSON.parse(localStorage.getItem('telos.draft.new-goal'));
+    expect(draft.description).toBe('Draft desc');
+  });
+
+  it('restores description from draft when opening new goal', () => {
+    localStorage.setItem('telos.draft.new-goal', JSON.stringify({ title: 'T', description: 'Saved desc' }));
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#desc-input').value).toBe('Saved desc');
+  });
+});
+
 describe('goal-dialog — cancel', () => {
   it('dispatches goal-cancelled when cancel is clicked', () => {
     const el = mount();

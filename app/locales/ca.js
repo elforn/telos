@@ -14,7 +14,8 @@ defineStrings({
   'home-page.year-progress':     'Progrés anual',
 
   'goal-dialog.heading':         'Defineix el teu objectiu',
-  'goal-dialog.placeholder':     'Què aconseguiràs aquest any?',
+  'goal-dialog.placeholder':            'Què aconseguiràs aquest any?',
+  'goal-dialog.description-placeholder': 'Descripció',
   'goal-dialog.save':            'Desa',
   'goal-dialog.cancel':          'Cancel·la',
   'goal-dialog.delete':          'Elimina',

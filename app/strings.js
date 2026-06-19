@@ -17,6 +17,7 @@ defineStrings({
 
   'goal-dialog.heading':     'Set your goal',
   'goal-dialog.placeholder': 'What will you achieve this year?',
+  'goal-dialog.description-placeholder': 'Description',
   'goal-dialog.save':        'Save',
   'goal-dialog.cancel':      'Cancel',
   'goal-dialog.delete':         'Delete',

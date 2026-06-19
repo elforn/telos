@@ -112,6 +112,19 @@ class GoalItem extends Gestures(AppElement) {
           color: var(--color-text-muted);
         }
 
+        .desc-icon {
+          position: relative;
+          z-index: 1;
+          flex-shrink: 0;
+          font-size: var(--font-size-caption);
+          color: var(--color-text-muted);
+          display: none;
+          line-height: 1;
+          margin-inline-start: var(--space-1);
+        }
+
+        .bar[data-has-desc="true"] .desc-icon { display: block; }
+
         .pct-label {
           position: relative;
           z-index: 1;
@@ -316,6 +329,7 @@ class GoalItem extends Gestures(AppElement) {
            aria-valuenow="0">
         <div class="fill" style="width:0%"></div>
         <span class="title"></span>
+        <span class="desc-icon" aria-hidden="true">ℹ</span>
         <span class="pct-label" hidden></span>
       </div>
     `;
@@ -571,6 +585,7 @@ class GoalItem extends Gestures(AppElement) {
     this.classList.toggle('failed', this._failed);
     this._title.textContent = this._goal?.title ?? '';
     this._bar.setAttribute('aria-label', this._goal?.title ?? '');
+    this._bar.dataset.hasDesc = String(!!this._goal?.description);
     this._setPct(this._pct);
     this._updateActionBtn();
     if (this._pct === 100 && prevPct !== undefined && prevPct < 100) this._celebrate();

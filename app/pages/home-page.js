@@ -360,11 +360,11 @@ class HomePage extends AppElement {
     // ── Dialog save ───────────────────────────────────────────────────────────
 
     this._onGoalSaved = e => {
-      const title = e.detail.title;
+      const { title, description } = e.detail;
       if (this._editingGoal) {
-        this._editGoal(this._editingSection, this._editingGoal.id, title);
+        this._editGoal(this._editingSection, this._editingGoal.id, title, description);
       } else {
-        this._addGoal(this._editingSection, title);
+        this._addGoal(this._editingSection, title, description);
       }
       toast(t('home.toast-goal-saved'), 'success');
     };
@@ -447,13 +447,13 @@ class HomePage extends AppElement {
     setState('goals', { ...getState().goals, [year]: { ...yg, [section]: fn(yg[section] ?? []) } });
   }
 
-  _addGoal(section, title) {
-    const goal = { id: crypto.randomUUID(), title, percentage: 0 };
+  _addGoal(section, title, description) {
+    const goal = { id: crypto.randomUUID(), title, description, percentage: 0 };
     this._mutateSection(section, list => [...list, goal]);
   }
 
-  _editGoal(section, id, title) {
-    this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, title } : g));
+  _editGoal(section, id, title, description) {
+    this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, title, description } : g));
   }
 
   _setProgress(section, id, percentage) {
