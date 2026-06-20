@@ -9,11 +9,6 @@ import '../components/goal-item/goal-item.js';
 import '../components/goal-dialog/goal-dialog.js';
 import '../components/add-row/add-row.js';
 
-const _sectionEdit = { capstone: false, milestones: false, wow: false, focus: false };
-export function _resetSectionEditForTest() {
-  Object.assign(_sectionEdit, { capstone: false, milestones: false, wow: false, focus: false });
-}
-
 class HomePage extends AppElement {
   template() {
     return `
@@ -26,7 +21,7 @@ class HomePage extends AppElement {
         main {
           display: flex;
           flex-direction: column;
-          gap: var(--space-4);
+          gap: var(--space-2);
           padding: 0 var(--page-padding);
           padding-block-start: calc(var(--update-banner-height, 0px) + var(--year-header-height, 81px) + var(--space-2));
           padding-block-end: calc(var(--bottom-nav-height) + var(--space-2));
@@ -45,23 +40,6 @@ class HomePage extends AppElement {
           align-items: center;
           justify-content: space-between;
           margin-block-end: var(--space-1);
-        }
-
-        .edit-btn {
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-semibold);
-          color: var(--color-text-muted);
-          background: none;
-          border: none;
-          cursor: pointer;
-          padding-block: var(--space-1);
-          padding-inline: var(--space-2);
-          border-radius: var(--radius-sm);
-        }
-
-        .edit-btn:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
         }
 
         .list-section {
@@ -84,54 +62,101 @@ class HomePage extends AppElement {
         }
 
         add-row {
-          display: none;
+          display: block;
           font-style: italic;
         }
 
-        .list-section.edit add-row { display: block; }
+        .add-line {
+          display: none;
+          align-items: center;
+          gap: var(--space-2);
+          inline-size: 100%;
+          min-block-size: calc(var(--touch-target) / 2);
+          border: none;
+          background: none;
+          cursor: pointer;
+          touch-action: manipulation;
+          padding: 0;
+          padding-block-start: 6px;
+          padding-block-end: 0;
+          color: var(--color-accent);
+          font-size: var(--font-size-caption);
+          font-family: var(--font-family);
+          font-weight: var(--font-weight-semibold);
+        }
 
-        .list-section.edit .section-heading { color: var(--color-text-secondary); }
+        .add-line::before,
+        .add-line::after {
+          content: '';
+          flex: 1;
+          block-size: 1.5px;
+          background: var(--color-border);
+        }
 
-        .list-section.edit .edit-btn { color: var(--color-accent); }
+        .fold-btn {
+          display: none;
+          align-self: flex-end;
+          align-items: center;
+          min-block-size: var(--touch-target);
+          padding-inline: var(--space-2);
+          border: none;
+          background: none;
+          cursor: pointer;
+          touch-action: manipulation;
+          color: var(--color-text-muted);
+          font-size: var(--font-size-caption);
+          font-family: var(--font-family);
+        }
+
+        .fold-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          border-radius: var(--radius-sm);
+          outline-offset: 2px;
+        }
+
+        /* non-empty, closed: hairline only */
+        .list-section:not(.empty):not(.add-open) add-row  { display: none; }
+        .list-section:not(.empty):not(.add-open) .add-line { display: flex; }
+
+        /* non-empty, open: full row + fold */
+        .list-section:not(.empty).add-open add-row   { display: block; }
+        .list-section:not(.empty).add-open .fold-btn { display: flex; }
+
       </style>
 
       <year-header id="header"></year-header>
 
       <main>
         <section id="capstone-section" class="list-section empty" aria-label="${t('home-page.capstone-section')}">
-          <div class="section-header">
-            <h2 class="section-heading">${t('home-page.capstone-section')}</h2>
-            <button class="edit-btn" id="capstone-edit-btn">${t('home-page.edit')}</button>
-          </div>
+          <h2 class="section-heading">${t('home-page.capstone-section')}</h2>
           <div id="capstone-list" class="item-list" role="list"></div>
+          <button class="add-line" id="add-line-capstone" aria-label="${t('goal-item.add-capstone')}">+</button>
           <add-row id="add-capstone">+ ${t('goal-item.add-capstone')}</add-row>
+          <button class="fold-btn" id="fold-capstone" aria-label="${t('home-page.done')}">${t('home-page.done')}</button>
         </section>
 
         <section id="milestone-section" class="list-section empty" aria-label="${t('home-page.milestone-section')}">
-          <div class="section-header">
-            <h2 class="section-heading">${t('home-page.milestone-section')}</h2>
-            <button class="edit-btn" id="milestone-edit-btn">${t('home-page.edit')}</button>
-          </div>
+          <h2 class="section-heading">${t('home-page.milestone-section')}</h2>
           <div id="milestone-list" class="item-list" role="list"></div>
+          <button class="add-line" id="add-line-milestone" aria-label="${t('goal-item.add-milestone')}">+</button>
           <add-row id="add-milestone">+ ${t('goal-item.add-milestone')}</add-row>
+          <button class="fold-btn" id="fold-milestone" aria-label="${t('home-page.done')}">${t('home-page.done')}</button>
         </section>
 
         <section id="wow-section" class="list-section empty" aria-label="${t('home-page.wow-section')}">
-          <div class="section-header">
-            <h2 class="section-heading">${t('home-page.wow-section')}</h2>
-            <button class="edit-btn" id="wow-edit-btn">${t('home-page.edit')}</button>
-          </div>
+          <h2 class="section-heading">${t('home-page.wow-section')}</h2>
           <div id="wow-list" class="item-list" role="list"></div>
+          <button class="add-line" id="add-line-wow" aria-label="${t('goal-item.add-wow')}">+</button>
           <add-row id="add-wow">+ ${t('goal-item.add-wow')}</add-row>
+          <button class="fold-btn" id="fold-wow" aria-label="${t('home-page.done')}">${t('home-page.done')}</button>
         </section>
 
         <section id="focus-section" class="list-section empty" aria-label="${t('home-page.focus-section')}">
-          <div class="section-header">
-            <h2 class="section-heading">${t('home-page.focus-section')}</h2>
-            <button class="edit-btn" id="focus-edit-btn">${t('home-page.edit')}</button>
-          </div>
+          <h2 class="section-heading">${t('home-page.focus-section')}</h2>
           <div id="focus-list" class="item-list" role="list"></div>
+          <button class="add-line" id="add-line-focus" aria-label="${t('goal-item.add-focus')}">+</button>
           <add-row id="add-focus">+ ${t('goal-item.add-focus')}</add-row>
+          <button class="fold-btn" id="fold-focus" aria-label="${t('home-page.done')}">${t('home-page.done')}</button>
         </section>
       </main>
 
@@ -149,11 +174,13 @@ class HomePage extends AppElement {
     this._dialog = this.shadowRoot.querySelector('#dialog');
     this._editingSection = 'capstone';
     this._editingGoal    = null;
+    this._drag           = null;
+    this._insertLine     = null;
 
-    const capstoneSection  = this.shadowRoot.querySelector('#capstone-section');
-    const milestoneSection = this.shadowRoot.querySelector('#milestone-section');
-    const wowSection       = this.shadowRoot.querySelector('#wow-section');
-    const focusSection     = this.shadowRoot.querySelector('#focus-section');
+    this._capstoneSection  = this.shadowRoot.querySelector('#capstone-section');
+    this._milestoneSection = this.shadowRoot.querySelector('#milestone-section');
+    this._wowSection       = this.shadowRoot.querySelector('#wow-section');
+    this._focusSection     = this.shadowRoot.querySelector('#focus-section');
     this._capstoneList  = this.shadowRoot.querySelector('#capstone-list');
     this._milestoneList = this.shadowRoot.querySelector('#milestone-list');
     this._wowList       = this.shadowRoot.querySelector('#wow-list');
@@ -166,70 +193,6 @@ class HomePage extends AppElement {
     this._onYearNavigate = e => navigate(`${BASE_PATH}${e.detail.year}`);
     this._header.addEventListener('year-navigate', this._onYearNavigate);
 
-    // ── Per-section edit ─────────────────────────────────────────────────────
-
-    const capstoneEditBtn  = this.shadowRoot.querySelector('#capstone-edit-btn');
-    const milestoneEditBtn = this.shadowRoot.querySelector('#milestone-edit-btn');
-    const wowEditBtn       = this.shadowRoot.querySelector('#wow-edit-btn');
-    const focusEditBtn     = this.shadowRoot.querySelector('#focus-edit-btn');
-    this._capstoneEdit  = _sectionEdit.capstone;
-    this._milestoneEdit = _sectionEdit.milestones;
-    this._wowEdit       = _sectionEdit.wow;
-    this._focusEdit     = _sectionEdit.focus;
-
-    if (this._capstoneEdit)  { capstoneSection.classList.add('edit');  capstoneEditBtn.textContent  = t('home-page.done'); }
-    if (this._milestoneEdit) { milestoneSection.classList.add('edit'); milestoneEditBtn.textContent = t('home-page.done'); }
-    if (this._wowEdit)       { wowSection.classList.add('edit');       wowEditBtn.textContent       = t('home-page.done'); }
-    if (this._focusEdit)     { focusSection.classList.add('edit');     focusEditBtn.textContent     = t('home-page.done'); }
-
-    this._onCapstoneEdit = () => {
-      this._capstoneEdit = !this._capstoneEdit;
-      _sectionEdit.capstone = this._capstoneEdit;
-      capstoneSection.classList.toggle('edit', this._capstoneEdit);
-      capstoneEditBtn.textContent = this._capstoneEdit ? t('home-page.done') : t('home-page.edit');
-      const items = [...this._capstoneList.querySelectorAll('goal-item')];
-      items.forEach(el => { el.editMode = this._capstoneEdit; });
-      if (this._capstoneEdit)  items.forEach((el, i) => el.peekHint(i * 80));
-      else                     items.forEach((el, i) => el.popConfirm(i * 50));
-    };
-    capstoneEditBtn.addEventListener('click', this._onCapstoneEdit);
-
-    this._onMilestoneEdit = () => {
-      this._milestoneEdit = !this._milestoneEdit;
-      _sectionEdit.milestones = this._milestoneEdit;
-      milestoneSection.classList.toggle('edit', this._milestoneEdit);
-      milestoneEditBtn.textContent = this._milestoneEdit ? t('home-page.done') : t('home-page.edit');
-      const items = [...this._milestoneList.querySelectorAll('goal-item')];
-      items.forEach(el => { el.editMode = this._milestoneEdit; });
-      if (this._milestoneEdit) items.forEach((el, i) => el.peekHint(i * 80));
-      else                     items.forEach((el, i) => el.popConfirm(i * 50));
-    };
-    milestoneEditBtn.addEventListener('click', this._onMilestoneEdit);
-
-    this._onWowEdit = () => {
-      this._wowEdit = !this._wowEdit;
-      _sectionEdit.wow = this._wowEdit;
-      wowSection.classList.toggle('edit', this._wowEdit);
-      wowEditBtn.textContent = this._wowEdit ? t('home-page.done') : t('home-page.edit');
-      const items = [...this._wowList.querySelectorAll('goal-item')];
-      items.forEach(el => { el.editMode = this._wowEdit; });
-      if (this._wowEdit) items.forEach((el, i) => el.peekHint(i * 80));
-      else               items.forEach((el, i) => el.popConfirm(i * 50));
-    };
-    wowEditBtn.addEventListener('click', this._onWowEdit);
-
-    this._onFocusEdit = () => {
-      this._focusEdit = !this._focusEdit;
-      _sectionEdit.focus = this._focusEdit;
-      focusSection.classList.toggle('edit', this._focusEdit);
-      focusEditBtn.textContent = this._focusEdit ? t('home-page.done') : t('home-page.edit');
-      const items = [...this._focusList.querySelectorAll('goal-item')];
-      items.forEach(el => { el.editMode = this._focusEdit; });
-      if (this._focusEdit) items.forEach((el, i) => el.peekHint(i * 80));
-      else                 items.forEach((el, i) => el.popConfirm(i * 50));
-    };
-    focusEditBtn.addEventListener('click', this._onFocusEdit);
-
     // ── Store subscription ────────────────────────────────────────────────────
 
     this._onAccentColors = colors => this._applyAccent(colors?.[String(this._year)]);
@@ -239,19 +202,149 @@ class HomePage extends AppElement {
       const year = String(this._year);
       const yg   = goals?.[year] ?? { capstone: [], milestones: [], wow: [], focus: [] };
 
-      this._renderList(this._capstoneList,  yg.capstone  ?? [], this._capstoneEdit);
-      capstoneSection.classList.toggle('empty',  (yg.capstone  ?? []).length === 0);
+      this._renderList(this._capstoneList,  yg.capstone  ?? []);
+      this._capstoneSection.classList.toggle('empty',  (yg.capstone  ?? []).length === 0);
+      if ((yg.capstone  ?? []).length === 0) this._capstoneSection.classList.remove('add-open');
 
-      this._renderList(this._milestoneList, yg.milestones ?? [], this._milestoneEdit);
-      milestoneSection.classList.toggle('empty', (yg.milestones ?? []).length === 0);
+      this._renderList(this._milestoneList, yg.milestones ?? []);
+      this._milestoneSection.classList.toggle('empty', (yg.milestones ?? []).length === 0);
+      if ((yg.milestones ?? []).length === 0) this._milestoneSection.classList.remove('add-open');
 
-      this._renderList(this._wowList,       yg.wow       ?? [], this._wowEdit);
-      wowSection.classList.toggle('empty',       (yg.wow       ?? []).length === 0);
+      this._renderList(this._wowList,       yg.wow       ?? []);
+      this._wowSection.classList.toggle('empty',       (yg.wow       ?? []).length === 0);
+      if ((yg.wow       ?? []).length === 0) this._wowSection.classList.remove('add-open');
 
-      this._renderList(this._focusList,     yg.focus     ?? [], this._focusEdit);
-      focusSection.classList.toggle('empty',     (yg.focus     ?? []).length === 0);
+      this._renderList(this._focusList,     yg.focus     ?? []);
+      this._focusSection.classList.toggle('empty',     (yg.focus     ?? []).length === 0);
+      if ((yg.focus     ?? []).length === 0) this._focusSection.classList.remove('add-open');
     };
     subscribe('goals', this._onGoals);
+
+    // ── Add-line / fold ───────────────────────────────────────────────────────
+
+    const makeAddLine = (section, sectionEl) => () => {
+      sectionEl.classList.add('add-open');
+      this._editingSection = section;
+      this._editingGoal    = null;
+      this._dialog.open(null);
+    };
+    const makeFold = sectionEl => () => sectionEl.classList.remove('add-open');
+
+    this._onAddLineCapstone  = makeAddLine('capstone',   this._capstoneSection);
+    this._onAddLineMilestone = makeAddLine('milestones', this._milestoneSection);
+    this._onAddLineWow       = makeAddLine('wow',        this._wowSection);
+    this._onAddLineFocus     = makeAddLine('focus',      this._focusSection);
+    this._onFoldCapstone     = makeFold(this._capstoneSection);
+    this._onFoldMilestone    = makeFold(this._milestoneSection);
+    this._onFoldWow          = makeFold(this._wowSection);
+    this._onFoldFocus        = makeFold(this._focusSection);
+
+    this.shadowRoot.querySelector('#add-line-capstone').addEventListener('click',  this._onAddLineCapstone);
+    this.shadowRoot.querySelector('#add-line-milestone').addEventListener('click', this._onAddLineMilestone);
+    this.shadowRoot.querySelector('#add-line-wow').addEventListener('click',       this._onAddLineWow);
+    this.shadowRoot.querySelector('#add-line-focus').addEventListener('click',     this._onAddLineFocus);
+    this.shadowRoot.querySelector('#fold-capstone').addEventListener('click',      this._onFoldCapstone);
+    this.shadowRoot.querySelector('#fold-milestone').addEventListener('click',     this._onFoldMilestone);
+    this.shadowRoot.querySelector('#fold-wow').addEventListener('click',           this._onFoldWow);
+    this.shadowRoot.querySelector('#fold-focus').addEventListener('click',         this._onFoldFocus);
+
+    // ── Drag-to-reorder ───────────────────────────────────────────────────────
+
+    this._onGoalDragStart = e => {
+      const { goal, element: dragEl, startX, startY } = e.detail;
+      const fromSection = this._sectionOf(dragEl);
+      if (!fromSection) return;
+
+      const items     = [...this._listForSection(fromSection).querySelectorAll('goal-item')];
+      const fromIndex = items.indexOf(dragEl);
+      const rect      = dragEl.getBoundingClientRect();
+
+      dragEl.style.opacity = '0.4';
+
+      const clone = this._createDragClone(rect, goal.title);
+      clone.style.left = `${rect.left}px`;
+      clone.style.top  = `${rect.top}px`;
+      document.body.appendChild(clone);
+
+      if (!this._insertLine) {
+        this._insertLine = document.createElement('div');
+        this._insertLine.style.cssText = 'height:2px;border-radius:1px;margin-block:calc(var(--space-2)/2);pointer-events:none;background:var(--color-accent)';
+      }
+
+      this._drag = {
+        goal, fromSection, fromIndex, dragEl, clone,
+        offsetX: startX - rect.left, offsetY: startY - rect.top,
+        targetSection: fromSection, targetIndex: fromIndex,
+        scrollSpeed: 0, scrollRaf: null,
+      };
+
+      const scrollLoop = () => {
+        if (!this._drag) return;
+        if (this._drag.scrollSpeed !== 0) window.scrollBy(0, this._drag.scrollSpeed);
+        this._drag.scrollRaf = requestAnimationFrame(scrollLoop);
+      };
+      this._drag.scrollRaf = requestAnimationFrame(scrollLoop);
+
+      dragEl.addEventListener('pointermove',   this._onDragMove);
+      dragEl.addEventListener('pointerup',     this._onDragEnd);
+      dragEl.addEventListener('pointercancel', this._onDragEnd);
+    };
+
+    this._onDragMove = e => {
+      if (!this._drag) return;
+      const { dragEl, clone, offsetX, offsetY } = this._drag;
+
+      clone.style.left = `${e.clientX - offsetX}px`;
+      clone.style.top  = `${e.clientY - offsetY}px`;
+
+      const targetSection = this._sectionAtY(e.clientY) ?? this._drag.targetSection;
+      this._drag.targetSection = targetSection;
+
+      const SCROLL_ZONE = 100;
+      const MAX_SPEED   = 14;
+      const vh = window.innerHeight;
+      if (e.clientY < SCROLL_ZONE)
+        this._drag.scrollSpeed = -MAX_SPEED * (1 - e.clientY / SCROLL_ZONE);
+      else if (e.clientY > vh - SCROLL_ZONE)
+        this._drag.scrollSpeed =  MAX_SPEED * (1 - (vh - e.clientY) / SCROLL_ZONE);
+      else
+        this._drag.scrollSpeed = 0;
+
+      const list = this._listForSection(targetSection);
+      const idx  = this._insertIndexAt(list, e.clientY, dragEl);
+      this._drag.targetIndex = idx;
+      this._updateInsertLine(list, idx, dragEl);
+    };
+
+    this._onDragEnd = () => {
+      if (!this._drag) return;
+      const { fromSection, fromIndex, dragEl, clone, targetSection, targetIndex } = this._drag;
+
+      dragEl.removeEventListener('pointermove',   this._onDragMove);
+      dragEl.removeEventListener('pointerup',     this._onDragEnd);
+      dragEl.removeEventListener('pointercancel', this._onDragEnd);
+      dragEl.style.opacity = '';
+      cancelAnimationFrame(this._drag.scrollRaf);
+      clone.remove();
+      this._insertLine?.remove();
+      this._drag = null;
+
+      this._placeGoal(fromSection, fromIndex, targetSection, targetIndex);
+    };
+
+    this._onGoalReorderKey = e => {
+      const { goal, direction } = e.detail;
+      const section = this._sectionOf(e.target);
+      if (!section) return;
+      const items = [...this._listForSection(section).querySelectorAll('goal-item')];
+      const fromIndex = items.findIndex(el => el._goal?.id === goal.id);
+      if (fromIndex === -1) return;
+      const toIndex = direction === -1 ? Math.max(0, fromIndex - 1) : fromIndex + 2;
+      this._placeGoal(section, fromIndex, section, toIndex);
+    };
+
+    this.shadowRoot.addEventListener('goal-drag-start',  this._onGoalDragStart);
+    this.shadowRoot.addEventListener('goal-reorder-key', this._onGoalReorderKey);
 
     // ── Capstone events ───────────────────────────────────────────────────────
 
@@ -385,10 +478,6 @@ class HomePage extends AppElement {
 
     this._header?.removeEventListener('year-navigate', this._onYearNavigate);
 
-    this.shadowRoot.querySelector('#capstone-edit-btn')?.removeEventListener('click', this._onCapstoneEdit);
-    this.shadowRoot.querySelector('#milestone-edit-btn')?.removeEventListener('click', this._onMilestoneEdit);
-    this.shadowRoot.querySelector('#wow-edit-btn')?.removeEventListener('click', this._onWowEdit);
-
     this._capstoneList?.removeEventListener('goal-tap',      this._onCapstoneGoalTap);
     this._capstoneList?.removeEventListener('goal-progress', this._onCapstoneProgress);
     this._capstoneList?.removeEventListener('goal-delete',   this._onCapstoneDelete);
@@ -408,10 +497,32 @@ class HomePage extends AppElement {
     this._focusList?.removeEventListener('goal-progress', this._onFocusProgress);
     this._focusList?.removeEventListener('goal-delete',   this._onFocusDelete);
     this.shadowRoot.querySelector('#add-focus')?.removeEventListener('click', this._onAddFocus);
-    this.shadowRoot.querySelector('#focus-edit-btn')?.removeEventListener('click', this._onFocusEdit);
 
-    this.shadowRoot.removeEventListener('goal-saved', this._onGoalSaved);
+    this.shadowRoot.querySelector('#add-line-capstone')?.removeEventListener('click',  this._onAddLineCapstone);
+    this.shadowRoot.querySelector('#add-line-milestone')?.removeEventListener('click', this._onAddLineMilestone);
+    this.shadowRoot.querySelector('#add-line-wow')?.removeEventListener('click',       this._onAddLineWow);
+    this.shadowRoot.querySelector('#add-line-focus')?.removeEventListener('click',     this._onAddLineFocus);
+    this.shadowRoot.querySelector('#fold-capstone')?.removeEventListener('click',      this._onFoldCapstone);
+    this.shadowRoot.querySelector('#fold-milestone')?.removeEventListener('click',     this._onFoldMilestone);
+    this.shadowRoot.querySelector('#fold-wow')?.removeEventListener('click',           this._onFoldWow);
+    this.shadowRoot.querySelector('#fold-focus')?.removeEventListener('click',         this._onFoldFocus);
+
+    this.shadowRoot.removeEventListener('goal-saved',       this._onGoalSaved);
+    this.shadowRoot.removeEventListener('goal-drag-start',  this._onGoalDragStart);
+    this.shadowRoot.removeEventListener('goal-reorder-key', this._onGoalReorderKey);
     this._dialog?.removeEventListener('goal-delete', this._onDialogDelete);
+
+    if (this._drag) {
+      const { dragEl, clone } = this._drag;
+      dragEl.removeEventListener('pointermove',   this._onDragMove);
+      dragEl.removeEventListener('pointerup',     this._onDragEnd);
+      dragEl.removeEventListener('pointercancel', this._onDragEnd);
+      dragEl.style.opacity = '';
+      cancelAnimationFrame(this._drag.scrollRaf);
+      clone.remove();
+      this._insertLine?.remove();
+      this._drag = null;
+    }
   }
 
   // ── Accent colour ─────────────────────────────────────────────────────────
@@ -466,7 +577,7 @@ class HomePage extends AppElement {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  _renderList(container, items, editMode = false) {
+  _renderList(container, items) {
     const byId = new Map();
     container.querySelectorAll('goal-item').forEach(el => {
       if (el._goal?.id) byId.set(el._goal.id, el);
@@ -475,13 +586,105 @@ class HomePage extends AppElement {
     const ordered = items.map(goal => {
       const el = byId.get(goal.id) ?? document.createElement('goal-item');
       byId.delete(goal.id);
-      el.editMode = editMode;
       el.goal = goal;
       return el;
     });
 
     byId.forEach(el => el.remove());
     ordered.forEach(el => container.appendChild(el));
+  }
+
+  // ── Drag helpers ──────────────────────────────────────────────────────────
+
+  _sectionOf(el) {
+    if (this._capstoneList.contains(el))  return 'capstone';
+    if (this._milestoneList.contains(el)) return 'milestones';
+    if (this._wowList.contains(el))       return 'wow';
+    if (this._focusList.contains(el))     return 'focus';
+    return null;
+  }
+
+  _sectionAtY(y) {
+    for (const [name, el] of [
+      ['capstone',   this._capstoneSection],
+      ['milestones', this._milestoneSection],
+      ['wow',        this._wowSection],
+      ['focus',      this._focusSection],
+    ]) {
+      const r = el.getBoundingClientRect();
+      if (y >= r.top && y <= r.bottom) return name;
+    }
+    return null;
+  }
+
+  _listForSection(section) {
+    return { capstone: this._capstoneList, milestones: this._milestoneList, wow: this._wowList, focus: this._focusList }[section];
+  }
+
+  _sectionElOf(section) {
+    return { capstone: this._capstoneSection, milestones: this._milestoneSection, wow: this._wowSection, focus: this._focusSection }[section];
+  }
+
+  _insertIndexAt(list, y, ghostEl) {
+    const items    = [...list.querySelectorAll('goal-item')];
+    const nonGhost = items.filter(el => el !== ghostEl);
+    for (const item of nonGhost) {
+      const r = item.getBoundingClientRect();
+      if (y < r.top + r.height / 2) return items.indexOf(item);
+    }
+    return items.length;
+  }
+
+  _updateInsertLine(list, targetIndex, ghostEl) {
+    const items = [...list.querySelectorAll('goal-item')];
+    if (targetIndex >= items.length) {
+      list.appendChild(this._insertLine);
+    } else {
+      list.insertBefore(this._insertLine, items[targetIndex]);
+    }
+  }
+
+  _createDragClone(rect, title) {
+    const clone = document.createElement('div');
+    clone.setAttribute('aria-hidden', 'true');
+    clone.style.cssText = [
+      'position:fixed',
+      `width:${rect.width}px`,
+      `height:${rect.height}px`,
+      'background:var(--color-surface)',
+      'border:0.5px solid var(--color-border)',
+      'border-radius:var(--radius-md)',
+      'box-shadow:0 8px 24px rgba(0,0,0,0.18)',
+      'display:flex',
+      'align-items:center',
+      'padding:0 var(--space-3)',
+      'pointer-events:none',
+      'z-index:9999',
+      'overflow:hidden',
+      'white-space:nowrap',
+      'text-overflow:ellipsis',
+      'font-family:var(--font-family)',
+      'font-size:var(--font-size-body)',
+      'font-weight:var(--font-weight-medium)',
+      'color:var(--color-text-primary)',
+    ].join(';');
+    clone.textContent = title;
+    return clone;
+  }
+
+  _placeGoal(fromSection, fromIndex, toSection, toIndex) {
+    if (fromSection === toSection && (fromIndex === toIndex || fromIndex === toIndex - 1)) return;
+    const yg   = this._yearGoals();
+    const from = [...(yg[fromSection] ?? [])];
+    const [goal] = from.splice(fromIndex, 1);
+    if (fromSection === toSection) {
+      from.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, goal);
+      setState('goals', { ...getState().goals, [String(this._year)]: { ...yg, [fromSection]: from } });
+    } else {
+      const to = [...(yg[toSection] ?? [])];
+      to.splice(toIndex, 0, goal);
+      setState('goals', { ...getState().goals, [String(this._year)]: { ...yg, [fromSection]: from, [toSection]: to } });
+    }
   }
 }
 

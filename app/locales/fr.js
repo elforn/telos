@@ -21,7 +21,6 @@ defineStrings({
   'goal-dialog.delete':          'Supprimer',
   'goal-dialog.delete-confirm':  'Sûr ?',
 
-  'home-page.edit':              'Modifier',
   'home-page.done':              'Terminé',
 
   'goal-item.delete':            'Supprimer',
@@ -34,6 +33,7 @@ defineStrings({
   'goal-item.add-focus':         'Ajouter une priorité',
   'goal-item.status-failed':     'Objectif marqué comme abandonné',
   'goal-item.status-restored':   'Objectif restauré',
+  'goal-item.drag':              'Glisser pour réordonner',
 
   'home.toast-goal-saved':       'Objectif enregistré',
   'home.toast-goal-deleted':     'Objectif supprimé',

@@ -21,7 +21,6 @@ defineStrings({
   'goal-dialog.delete':          'Elimina',
   'goal-dialog.delete-confirm':  'Segur?',
 
-  'home-page.edit':              'Edita',
   'home-page.done':              'Fet',
 
   'goal-item.delete':            'Elimina',
@@ -34,6 +33,7 @@ defineStrings({
   'goal-item.add-focus':         'Afegeix una prioritat',
   'goal-item.status-failed':     'Objectiu marcat com a abandonat',
   'goal-item.status-restored':   'Objectiu restaurat',
+  'goal-item.drag':              'Arrossega per reordenar',
 
   'home.toast-goal-saved':       'Objectiu desat',
   'home.toast-goal-deleted':     'Objectiu eliminat',

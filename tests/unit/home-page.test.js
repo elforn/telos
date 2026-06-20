@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { boot, setState, reset } from '../../_lib/core/store/store.js';
+import { boot, setState, getState, reset } from '../../_lib/core/store/store.js';
 import '../../app/strings.js';
 import '../../app/pages/home-page.js';
-import { _resetSectionEditForTest } from '../../app/pages/home-page.js';
 import '../../app/components/goal-item/goal-item.js';
 import '../../app/components/year-header/year-header.js';
 import '../../app/components/goal-dialog/goal-dialog.js';
@@ -28,7 +27,7 @@ function mount(year = 2026) {
   return el;
 }
 
-afterEach(() => { document.body.innerHTML = ''; reset(); _resetSectionEditForTest(); });
+afterEach(() => { document.body.innerHTML = ''; reset(); });
 
 describe('home-page — structure', () => {
   it('renders a <main> landmark', () => {
@@ -50,47 +49,6 @@ describe('home-page — structure', () => {
     const el = mount();
     expect(el.shadowRoot.querySelector('#milestone-section')).not.toBeNull();
     expect(el.shadowRoot.querySelector('#wow-section')).not.toBeNull();
-  });
-});
-
-describe('home-page — edit mode', () => {
-  it('capstone section gets edit class when edit button clicked', () => {
-    const el = mount();
-    el.shadowRoot.querySelector('#capstone-edit-btn').click();
-    expect(el.shadowRoot.querySelector('#capstone-section').classList.contains('edit')).toBe(true);
-  });
-
-  it('capstone edit button text becomes Done when active', () => {
-    const el = mount();
-    el.shadowRoot.querySelector('#capstone-edit-btn').click();
-    expect(el.shadowRoot.querySelector('#capstone-edit-btn').textContent).toBe('Done');
-  });
-
-  it('capstone edit toggles off on second click', () => {
-    const el = mount();
-    el.shadowRoot.querySelector('#capstone-edit-btn').click();
-    el.shadowRoot.querySelector('#capstone-edit-btn').click();
-    expect(el.shadowRoot.querySelector('#capstone-edit-btn').textContent).toBe('Edit');
-    expect(el.shadowRoot.querySelector('#capstone-section').classList.contains('edit')).toBe(false);
-  });
-
-  it('capstone edit is independent of milestone and wow edits', () => {
-    const el = mount();
-    el.shadowRoot.querySelector('#capstone-edit-btn').click();
-    expect(el.shadowRoot.querySelector('#milestone-section').classList.contains('edit')).toBe(false);
-    expect(el.shadowRoot.querySelector('#wow-section').classList.contains('edit')).toBe(false);
-  });
-
-  it('milestone section gets edit class when edit button clicked', () => {
-    const el = mount();
-    el.shadowRoot.querySelector('#milestone-edit-btn').click();
-    expect(el.shadowRoot.querySelector('#milestone-section').classList.contains('edit')).toBe(true);
-  });
-
-  it('wow section gets edit class when edit button clicked', () => {
-    const el = mount();
-    el.shadowRoot.querySelector('#wow-edit-btn').click();
-    expect(el.shadowRoot.querySelector('#wow-section').classList.contains('edit')).toBe(true);
   });
 });
 
@@ -174,20 +132,6 @@ describe('home-page — store integration', () => {
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#focus-list').querySelectorAll('goal-item').length).toBe(1)
     );
-  });
-});
-
-describe('home-page — edit mode (focus)', () => {
-  it('focus section gets edit class when edit button clicked', () => {
-    const el = mount();
-    el.shadowRoot.querySelector('#focus-edit-btn').click();
-    expect(el.shadowRoot.querySelector('#focus-section').classList.contains('edit')).toBe(true);
-  });
-
-  it('focus edit is independent of capstone edit', () => {
-    const el = mount();
-    el.shadowRoot.querySelector('#focus-edit-btn').click();
-    expect(el.shadowRoot.querySelector('#capstone-section').classList.contains('edit')).toBe(false);
   });
 });
 
@@ -366,5 +310,57 @@ describe('home-page — _renderList key diffing', () => {
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
     );
     expect(el.shadowRoot.querySelector('#capstone-list goal-item')._goal.id).toBe('c2');
+  });
+});
+
+describe('home-page — goal reorder', () => {
+  it('_placeGoal reorders within a section', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'A', percentage: 0 },
+      { id: 'c2', title: 'B', percentage: 0 },
+      { id: 'c3', title: 'C', percentage: 0 },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
+    );
+    el._placeGoal('capstone', 0, 'capstone', 3); // move A to end
+    await vi.waitFor(() =>
+      expect(getState().goals['2026'].capstone.map(g => g.title)).toEqual(['B', 'C', 'A'])
+    );
+  });
+
+  it('_placeGoal is a no-op when dropping in same position', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'A', percentage: 0 },
+      { id: 'c2', title: 'B', percentage: 0 },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
+    );
+    el._placeGoal('capstone', 0, 'capstone', 0);
+    expect(getState().goals['2026'].capstone.map(g => g.title)).toEqual(['A', 'B']);
+  });
+
+  it('_placeGoal moves a goal to a precise position in another section', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'A', percentage: 0 },
+    ], milestones: [
+      { id: 'm1', title: 'M', percentage: 0 },
+    ], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    el._placeGoal('capstone', 0, 'milestones', 0); // drop A before M
+    await vi.waitFor(() => {
+      const goals = getState().goals['2026'];
+      expect(goals.capstone).toHaveLength(0);
+      expect(goals.milestones.map(g => g.title)).toEqual(['A', 'M']);
+    });
   });
 });

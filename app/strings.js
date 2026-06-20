@@ -12,7 +12,6 @@ defineStrings({
   'home-page.prev-year':         'Previous year',
   'home-page.next-year':         'Next year',
   'home-page.year-progress':     'Year progress',
-  'home-page.edit':              'Edit',
   'home-page.done':              'Done',
 
   'goal-dialog.heading':     'Set your goal',
@@ -33,6 +32,7 @@ defineStrings({
   'goal-item.add-focus':       'Add to Forward Focus',
   'goal-item.status-failed':   'Goal marked as failed',
   'goal-item.status-restored': 'Goal restored',
+  'goal-item.drag':            'Drag to reorder',
 
   'home.toast-goal-saved':   'Goal saved',
   'home.toast-goal-deleted': 'Goal deleted',

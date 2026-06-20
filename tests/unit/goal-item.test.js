@@ -87,18 +87,8 @@ describe('goal-item — failed state', () => {
 });
 
 describe('goal-item — tap', () => {
-  it('does not dispatch goal-tap on tap in view mode', () => {
+  it('dispatches goal-tap on tap', () => {
     const el = mount();
-    const events = [];
-    el.addEventListener('goal-tap', e => events.push(e));
-    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
-    el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
-    expect(events).toHaveLength(0);
-  });
-
-  it('dispatches goal-tap on tap in edit mode', () => {
-    const el = mount();
-    el.editMode = true;
     const events = [];
     el.addEventListener('goal-tap', e => events.push(e));
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
@@ -107,19 +97,8 @@ describe('goal-item — tap', () => {
     expect(events[0].detail.goal.title).toBe('Test goal');
   });
 
-  it('does not dispatch goal-tap on Enter key in view mode', () => {
+  it('dispatches goal-tap on Enter key', () => {
     const el = mount();
-    const events = [];
-    el.addEventListener('goal-tap', e => events.push(e));
-    el.shadowRoot.querySelector('.bar').dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
-    );
-    expect(events).toHaveLength(0);
-  });
-
-  it('dispatches goal-tap on Enter key in edit mode', () => {
-    const el = mount();
-    el.editMode = true;
     const events = [];
     el.addEventListener('goal-tap', e => events.push(e));
     el.shadowRoot.querySelector('.bar').dispatchEvent(
@@ -216,7 +195,7 @@ describe('goal-item — hold drag', () => {
 });
 
 describe('goal-item — failed goal is non-interactive', () => {
-  it('does not dispatch goal-tap when tapped while failed', () => {
+  it('does not dispatch goal-tap when tapped while failed (failed guard)', () => {
     const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
     const events = [];
     el.addEventListener('goal-tap', e => events.push(e));

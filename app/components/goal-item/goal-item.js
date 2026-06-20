@@ -12,13 +12,6 @@ class GoalItem extends Gestures(AppElement) {
     if (this.shadowRoot) this._update();
   }
 
-  set editMode(v) {
-    this._editMode = Boolean(v);
-    this.classList.toggle('edit-mode', this._editMode);
-    if (this._bar) this._closeReveal();
-    if (this.shadowRoot) this._updateActionBtn();
-  }
-
   template() {
     return `
       <style>
@@ -135,8 +128,23 @@ class GoalItem extends Gestures(AppElement) {
           margin-inline-start: var(--space-2);
         }
 
-        :host(.edit-mode) .title {
-          font-style: italic;
+        .drag-btn {
+          position: relative;
+          z-index: 1;
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          background: none;
+          border: none;
+          cursor: grab;
+          color: var(--color-text-muted);
+          font-size: var(--font-size-body);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding-block: 0;
+          padding-inline: 0 6px;
+          font-family: var(--font-family);
+          touch-action: none;
         }
 
         :host(.hold-active) .bar {
@@ -328,6 +336,7 @@ class GoalItem extends Gestures(AppElement) {
            aria-valuemax="100"
            aria-valuenow="0">
         <div class="fill" style="width:0%"></div>
+        <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="title"></span>
         <span class="desc-icon" aria-hidden="true">ℹ</span>
         <span class="pct-label" hidden></span>
@@ -344,7 +353,6 @@ class GoalItem extends Gestures(AppElement) {
     this._announce = this.shadowRoot.querySelector('#announce');
     this._revealedDir   = null;
     this._failed        = false;
-    this._editMode      = this._editMode ?? false;
     this._deleteConfirm = false;
 
     this._update();
@@ -401,6 +409,28 @@ class GoalItem extends Gestures(AppElement) {
       if (e.key === 'ArrowLeft')  this.onHoldDragKey('left');
     };
     this._bar.addEventListener('keydown', this._onKeyDown);
+
+    this._dragBtn = this.shadowRoot.querySelector('#drag-btn');
+    this._dragBtn.setAttribute('aria-label', t('goal-item.drag'));
+    this._dragBtn.textContent = '⠿';
+    this._onDragBtnDown = e => {
+      e.stopPropagation();
+      this._dragBtn.setPointerCapture(e.pointerId);
+      this.dispatchEvent(new CustomEvent('goal-drag-start', {
+        bubbles: true, composed: true,
+        detail: { goal: this._goal, element: this, startX: e.clientX, startY: e.clientY },
+      }));
+    };
+    this._onDragBtnKey = e => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      this.dispatchEvent(new CustomEvent('goal-reorder-key', {
+        bubbles: true, composed: true,
+        detail: { goal: this._goal, direction: e.key === 'ArrowUp' ? -1 : 1 },
+      }));
+    };
+    this._dragBtn.addEventListener('pointerdown', this._onDragBtnDown);
+    this._dragBtn.addEventListener('keydown',     this._onDragBtnKey);
   }
 
   unsubscribe() {
@@ -411,6 +441,8 @@ class GoalItem extends Gestures(AppElement) {
     this._failEl?.removeEventListener('pointerup', this._onFailPointerUp);
     this._failEl?.removeEventListener('click', this._onFailBtnKey);
     this._bar?.removeEventListener('keydown', this._onKeyDown);
+    this._dragBtn?.removeEventListener('pointerdown', this._onDragBtnDown);
+    this._dragBtn?.removeEventListener('keydown',     this._onDragBtnKey);
   }
 
   // ── Gestures ──────────────────────────────────────────────────────────────
@@ -462,7 +494,6 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   onSwipeMove(e) {
-    if (!this._editMode) return;
     this._bar.style.transition = 'none';
     let offset;
     if (this._revealedDir === 'left') {
@@ -476,11 +507,6 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   onSwipe(e) {
-    if (!this._editMode) {
-      this._bar.style.transition = '';
-      return;
-    }
-
     if (this._revealedDir) {
       this._closeReveal();
       return;
@@ -502,27 +528,9 @@ class GoalItem extends Gestures(AppElement) {
   // ── Private ───────────────────────────────────────────────────────────────
 
   _tap() {
-    if (!this._editMode) return;
     this.dispatchEvent(new CustomEvent('goal-tap', {
       bubbles: true, composed: true, detail: { goal: this._goal },
     }));
-  }
-
-  popConfirm(delay = 0) {
-    this.style.setProperty('--pop-delay', `${delay}ms`);
-    this.classList.remove('pop-confirm');
-    void this.offsetWidth; // force reflow to restart animation
-    this.classList.add('pop-confirm');
-    setTimeout(() => this.classList.remove('pop-confirm'), delay + 350);
-  }
-
-  peekHint(delay = 0) {
-    if (!this._editMode) return;
-    this.style.setProperty('--peek-delay', `${delay}ms`);
-    this.classList.remove('peek-hint');
-    void this.offsetWidth; // force reflow to restart animation
-    this.classList.add('peek-hint');
-    setTimeout(() => this.classList.remove('peek-hint'), delay + 700);
   }
 
   _closeReveal() {
