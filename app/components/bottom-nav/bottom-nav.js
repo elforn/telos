@@ -49,6 +49,9 @@ function _themeName(theme) {
 const LOCALE_LABELS = { en: 'English', fr: 'Français', ca: 'Català' };
 function _localeName(locale) { return LOCALE_LABELS[locale] ?? locale; }
 
+const SW_LOOP_WINDOW_MS       = 15_000;
+const SERVER_CHECK_TIMEOUT_MS =  5_000;
+
 class BottomNav extends AppElement {
   template() {
     return `
@@ -348,6 +351,7 @@ class BottomNav extends AppElement {
     this._subscribeNav();
     this._subscribeSettings();
     this._subscribeSync();
+    this._subscribeVersion();
     this._subscribeHeight();
     this._subscribeUpdateSafety();
   }
@@ -362,25 +366,39 @@ class BottomNav extends AppElement {
         navigate(target);
         this._restoreScroll(target);
       } else {
-        // Year → Year: navigate to today's year if needed, then scroll to top
-        const todayYear = new Date().getFullYear();
-        if (window.location.pathname !== `${BASE_PATH}${todayYear}`) navigate(`${BASE_PATH}${todayYear}`);
-        requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        const todayPath = `${BASE_PATH}${new Date().getFullYear()}`;
+        if (window.location.pathname === todayPath) {
+          // Same year → scroll to top
+          requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        } else {
+          // Different year → save current year scroll, navigate to today, restore today's scroll
+          this._saveScroll(window.location.pathname);
+          navigate(todayPath);
+          this._restoreScroll(todayPath);
+        }
       }
     };
+    // click fires on both pointer and keyboard; e.detail === 0 means keyboard-only, preventing double-fire with pointerup
     this._onPillYearsKey = e => { if (e.detail === 0) this._onPillYears(); };
     this._pillYears.addEventListener('pointerup', this._onPillYears);
     this._pillYears.addEventListener('click', this._onPillYearsKey);
 
     this._onPillLists = () => {
-      const onLists = window.location.pathname.startsWith(`${BASE_PATH}lists`);
+      const currentPath = window.location.pathname;
+      const listsRoot   = `${BASE_PATH}lists`;
+      const onLists     = currentPath.startsWith(listsRoot);
       if (onLists) {
-        // Lists → Lists: go to /lists root and scroll to top (no restore)
-        if (window.location.pathname !== `${BASE_PATH}lists`) navigate(`${BASE_PATH}lists`);
-        requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        if (currentPath === listsRoot) {
+          // Already on /lists root → scroll to top
+          requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        } else {
+          // On a list detail → go to /lists root and restore its scroll position
+          navigate(listsRoot);
+          this._restoreScroll(listsRoot);
+        }
       } else {
         // Year → Lists: save year scroll, navigate to last lists path, restore lists scroll
-        this._saveScroll(window.location.pathname);
+        this._saveScroll(currentPath);
         navigate(this._lastListsPath);
         this._restoreScroll(this._lastListsPath);
       }
@@ -389,12 +407,29 @@ class BottomNav extends AppElement {
     this._pillLists.addEventListener('pointerup', this._onPillLists);
     this._pillLists.addEventListener('click', this._onPillListsKey);
 
+    // Capture scroll before lists-page calls navigate() on list-tap
+    this._onListTapCapture = () => {
+      if (window.location.pathname === `${BASE_PATH}lists`) {
+        this._saveScroll(`${BASE_PATH}lists`);
+      }
+    };
+    window.addEventListener('list-tap', this._onListTapCapture, { capture: true });
+
+    // Capture scroll before home-page calls navigate() on year-navigate (swipe or prev/next)
+    this._onYearNavigateCapture = () => {
+      this._saveScroll(window.location.pathname);
+    };
+    window.addEventListener('year-navigate', this._onYearNavigateCapture, { capture: true });
+
     this._onNavEvent = e => {
       const path = e?.detail?.path ?? window.location.pathname;
       if (path.startsWith(`${BASE_PATH}lists`)) this._lastListsPath = path;
       const rest = path.startsWith(BASE_PATH) ? path.slice(BASE_PATH.length) : path;
       const m = rest.match(/^(\d{4})$/);
-      if (m) this._currentYear = parseInt(m[1], 10);
+      if (m) {
+        this._currentYear = parseInt(m[1], 10);
+        this._restoreScroll(path);
+      }
       this._updateActive();
     };
     window.addEventListener('navigate', this._onNavEvent);
@@ -445,71 +480,38 @@ class BottomNav extends AppElement {
     };
     this.shadowRoot.querySelector('#import-btn').addEventListener('click', this._onImportBtn);
 
-    const msgEl      = this.shadowRoot.querySelector('#import-message');
-    const cancelBtn  = this.shadowRoot.querySelector('#import-cancel');
-    const mergeBtn   = this.shadowRoot.querySelector('#import-merge');
-    const replaceBtn = this.shadowRoot.querySelector('#import-replace');
-    const closeBtn   = this.shadowRoot.querySelector('#import-close');
-
-    const _resetReplace = () => {
-      this._replaceConfirm = false;
-      replaceBtn.textContent = t('sync.import-replace');
-      replaceBtn.removeAttribute('aria-label');
-    };
-    const _showPreview = () => {
-      cancelBtn.hidden  = false;
-      mergeBtn.hidden   = false;
-      replaceBtn.hidden = false;
-      closeBtn.hidden   = true;
-    };
-    const _showDone = msg => {
-      msgEl.textContent = msg;
-      cancelBtn.hidden  = true;
-      mergeBtn.hidden   = true;
-      replaceBtn.hidden = true;
-      closeBtn.hidden   = false;
-    };
+    this._msgEl      = this.shadowRoot.querySelector('#import-message');
+    this._cancelBtn  = this.shadowRoot.querySelector('#import-cancel');
+    this._mergeBtn   = this.shadowRoot.querySelector('#import-merge');
+    this._replaceBtn = this.shadowRoot.querySelector('#import-replace');
+    this._closeBtn   = this.shadowRoot.querySelector('#import-close');
 
     this._onImportInput = async e => {
       const file = e.target.files?.[0];
       if (!file) return;
       e.target.value = '';
-      _resetReplace();
-      let parsed;
-      try {
-        const raw = await readImportFile(file);
-        parsed = await previewImport(raw);
-      } catch (err) {
-        console.error('Import failed:', err);
-        _showDone(t('sync.import-error'));
-        this._importModal.show();
-        return;
-      }
-      this._parsed = parsed;
-      msgEl.textContent = _buildPreviewMsg(parsed);
-      _showPreview();
-      this._importModal.show();
+      await this._openImportFile(file);
     };
     this._importInput.addEventListener('change', this._onImportInput);
 
     this._onImportCancel = () => {
-      _resetReplace();
+      this._resetReplace();
       this._importModal.close();
     };
 
     this._onImportMerge = async () => {
       if (!this._parsed) return;
-      _resetReplace();
+      this._resetReplace();
       try {
         const goalsBefore = _countGoals(getState().goals);
         const itemsBefore = _countItems(getState().lists);
         await applyMerge(this._parsed, mergeStrategy);
         const goalsAdded = _countGoals(getState().goals) - goalsBefore;
         const itemsAdded = _countItems(getState().lists) - itemsBefore;
-        _showDone(t('sync.import-confirm', { goals: goalsAdded, items: itemsAdded }));
+        this._showDone(t('sync.import-confirm', { goals: goalsAdded, items: itemsAdded }));
       } catch (err) {
         console.error('Import failed:', err);
-        _showDone(t('sync.import-error'));
+        this._showDone(t('sync.import-error'));
       }
     };
 
@@ -517,38 +519,81 @@ class BottomNav extends AppElement {
       if (!this._parsed) return;
       if (!this._replaceConfirm) {
         this._replaceConfirm = true;
-        replaceBtn.textContent = t('sync.import-sure');
-        replaceBtn.setAttribute('aria-label', t('sync.import-sure-aria'));
+        this._replaceBtn.textContent = t('sync.import-sure');
+        this._replaceBtn.setAttribute('aria-label', t('sync.import-sure-aria'));
         return;
       }
-      _resetReplace();
+      this._resetReplace();
       try {
         await applyReplace(this._parsed);
-        _showDone(t('sync.import-replace-confirm'));
+        this._showDone(t('sync.import-replace-confirm'));
       } catch (err) {
         console.error('Import failed:', err);
-        _showDone(t('sync.import-error'));
+        this._showDone(t('sync.import-error'));
       }
     };
 
     this._onImportClose = () => this._importModal.close();
 
+    this._onImportFile = async e => {
+      await this._openImportFile(e.detail.file, { closeSettings: true });
+    };
+    window.addEventListener('telos-import-file', this._onImportFile);
+
     this.shadowRoot.querySelector('#import-cancel').addEventListener('click', this._onImportCancel);
     this.shadowRoot.querySelector('#import-merge').addEventListener('click', this._onImportMerge);
     this.shadowRoot.querySelector('#import-replace').addEventListener('click', this._onImportReplace);
     this.shadowRoot.querySelector('#import-close').addEventListener('click', this._onImportClose);
-    this._onImportModalClose = () => _resetReplace();
+    this._onImportModalClose = () => this._resetReplace();
     this._importModal.addEventListener('modal-close', this._onImportModalClose);
   }
 
+  async _openImportFile(file, { closeSettings = false } = {}) {
+    this._resetReplace();
+    let parsed;
+    try {
+      const raw = await readImportFile(file);
+      parsed = await previewImport(raw);
+    } catch (err) {
+      console.error('Import failed:', err);
+      this._showDone(t('sync.import-error'));
+      this._importModal.show();
+      return;
+    }
+    this._parsed = parsed;
+    this._msgEl.textContent = _buildPreviewMsg(parsed);
+    this._showPreview();
+    if (closeSettings) this._settingsModal.close();
+    this._importModal.show();
+  }
+
+  _resetReplace() {
+    this._replaceConfirm = false;
+    this._replaceBtn.textContent = t('sync.import-replace');
+    this._replaceBtn.removeAttribute('aria-label');
+  }
+
+  _showPreview() {
+    this._cancelBtn.hidden  = false;
+    this._mergeBtn.hidden   = false;
+    this._replaceBtn.hidden = false;
+    this._closeBtn.hidden   = true;
+  }
+
+  _showDone(msg) {
+    this._msgEl.textContent = msg;
+    this._cancelBtn.hidden  = true;
+    this._mergeBtn.hidden   = true;
+    this._replaceBtn.hidden = true;
+    this._closeBtn.hidden   = false;
+  }
+
   _subscribeUpdateSafety() {
-    // Detect SW update loops and auto-repair. A loop = updateAvailable fired within
-    // 15s of a SW-triggered reload (controllerchange). Happens when the SW cached
-    // stale assets during a deploy race (poisoned cache).
+    // updateAvailable within SW_LOOP_WINDOW_MS of a SW reload = poisoned-cache update loop; auto-repair.
     this._onUpdateAvailable = (available) => {
       if (!available) return;
       const lastReload = parseInt(sessionStorage.getItem('telos:swReloadAt') || '0', 10);
-      if (lastReload && (Date.now() - lastReload) < 15_000) {
+      if (lastReload && (Date.now() - lastReload) < SW_LOOP_WINDOW_MS) {
         sessionStorage.removeItem('telos:swReloadAt');
         this._repairInstallation(false);
       }
@@ -569,7 +614,7 @@ class BottomNav extends AppElement {
     if (checkServer) {
       try {
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 5000);
+        const timer = setTimeout(() => ctrl.abort(), SERVER_CHECK_TIMEOUT_MS);
         const r = await fetch(`version.json?_=${Date.now()}`, { cache: 'no-store', signal: ctrl.signal });
         clearTimeout(timer);
         if (!r.ok) return;
@@ -582,7 +627,7 @@ class BottomNav extends AppElement {
       const ts = new Date().toISOString().replace(/\D/g, '').slice(0, 12);
       downloadExport(data, `telos-backup-before-update-${ts}.telos`);
       toast(t('sync.backup-downloaded'), 'info');
-    } catch {}
+    } catch (err) { console.error('Backup before repair failed:', err); }
     caches.keys()
       .then(keys => Promise.all(keys.map(k => caches.delete(k))))
       .then(() => navigator.serviceWorker.getRegistrations())
@@ -591,14 +636,16 @@ class BottomNav extends AppElement {
       .catch(() => location.reload());
   }
 
-  _subscribeHeight() {
+  _subscribeVersion() {
     fetch('version.json').then(r => r.json()).then(data => {
       const el = this.shadowRoot?.querySelector('#version-text');
       if (el && data?.buildHash) {
         el.textContent = `${t('year-header.version')} ${__APP_VERSION__} (${data.buildHash})`;
       }
     }).catch(() => {});
+  }
 
+  _subscribeHeight() {
     this._ro = new ResizeObserver(() => {
       document.documentElement.style.setProperty('--bottom-nav-height', `${this.offsetHeight}px`);
     });
@@ -613,6 +660,9 @@ class BottomNav extends AppElement {
     this._pillLists?.removeEventListener('click', this._onPillListsKey);
     window.removeEventListener('navigate', this._onNavEvent);
     window.removeEventListener('popstate', this._onNavEvent);
+    window.removeEventListener('list-tap', this._onListTapCapture, { capture: true });
+    window.removeEventListener('year-navigate', this._onYearNavigateCapture, { capture: true });
+    window.removeEventListener('telos-import-file', this._onImportFile);
     this.shadowRoot?.querySelector('#gear-btn')?.removeEventListener('pointerup', this._onGear);
     this.shadowRoot?.querySelector('#gear-btn')?.removeEventListener('click', this._onGearKey);
     this.shadowRoot?.querySelector('#theme-group')?.removeEventListener('click', this._onThemeGroup);

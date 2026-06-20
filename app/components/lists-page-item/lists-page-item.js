@@ -80,6 +80,10 @@ class ListsPageItem extends Gestures(AppElement) {
           will-change: transform;
         }
 
+        @media (prefers-reduced-motion: reduce) {
+          .row { transition: none; }
+        }
+
         .row:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
@@ -95,6 +99,7 @@ class ListsPageItem extends Gestures(AppElement) {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+          transform: translateY(1px);
         }
 
         .item-count {
@@ -102,6 +107,8 @@ class ListsPageItem extends Gestures(AppElement) {
           font-size: var(--font-size-caption);
           line-height: 1;
           color: var(--color-text-muted);
+          margin-inline-end: 2px;
+          transform: translateY(1px);
         }
 
         .drag-btn {
@@ -113,33 +120,49 @@ class ListsPageItem extends Gestures(AppElement) {
           border: none;
           cursor: grab;
           color: var(--color-text-muted);
-          font-size: var(--font-size-body);
           display: flex;
           align-items: center;
           justify-content: center;
           padding-block: 0;
           padding-inline: 0;
-          font-family: var(--font-family);
           touch-action: none;
+        }
+
+        .drag-btn::before {
+          content: '';
+          display: block;
+          inline-size: 10px;
+          block-size: 15px;
+          background-image: radial-gradient(circle 1.5px at center, currentColor 100%, transparent 100%);
+          background-size: 5px 5px;
+          background-repeat: repeat;
         }
 
         .nav-btn {
           align-self: stretch;
           flex-shrink: 0;
           min-inline-size: calc(var(--touch-target) + 35px);
-          background: none;
+          background: var(--color-accent-subtle);
           border: none;
-          border-inline-start: 1px solid var(--color-border);
+          border-inline-start: 1px solid color-mix(in srgb, var(--color-accent) 25%, transparent);
           cursor: pointer;
-          font-size: var(--font-size-heading);
-          line-height: 1;
-          color: var(--color-text-secondary);
+          color: var(--color-accent);
           display: flex;
           align-items: center;
           justify-content: center;
           padding-inline: var(--space-2) var(--space-3);
           margin-inline-end: calc(-1 * var(--space-3));
-          font-family: var(--font-family);
+        }
+
+        .nav-btn::before {
+          content: '';
+          display: block;
+          inline-size: 7px;
+          block-size: 7px;
+          border-inline-end: 2px solid currentColor;
+          border-block-start: 2px solid currentColor;
+          transform: rotate(45deg);
+          flex-shrink: 0;
         }
 
         .nav-btn:focus-visible {
@@ -154,7 +177,7 @@ class ListsPageItem extends Gestures(AppElement) {
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="list-name"></span>
         <span class="item-count"></span>
-        <button class="nav-btn" id="nav-btn" type="button" aria-label="">›</button>
+        <button class="nav-btn" id="nav-btn" type="button" aria-label=""></button>
       </div>
     `;
   }
@@ -216,7 +239,6 @@ class ListsPageItem extends Gestures(AppElement) {
     // ── Drag handle ──────────────────────────────────────────────────────────
     this._dragBtn = this.shadowRoot.querySelector('#drag-btn');
     this._dragBtn.setAttribute('aria-label', t('lists-page.drag'));
-    this._dragBtn.textContent = '⠿';
     this._onDragBtnDown = e => {
       e.stopPropagation();
       this._dragBtn.setPointerCapture(e.pointerId);

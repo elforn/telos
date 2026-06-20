@@ -528,7 +528,7 @@ class HomePage extends AppElement {
   // ── Accent colour ─────────────────────────────────────────────────────────
 
   _applyAccent(hex) {
-    const s = document.documentElement.style;
+    const s = this.style;
     if (!hex) {
       s.setProperty('--color-accent',        '#5BADE0');
       s.setProperty('--color-accent-light',  '#E2F3FB');

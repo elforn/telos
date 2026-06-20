@@ -48,7 +48,7 @@ class ListDialog extends AppElement {
           gap: var(--space-3);
           flex-wrap: wrap;
           padding-inline-start: var(--space-1);
-          margin-block-end: var(--space-3);
+          margin-block-end: var(--space-5);
         }
 
         .swatch {

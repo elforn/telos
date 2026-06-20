@@ -419,16 +419,25 @@ class YearHeader extends Gestures(AppElement) {
     this._ro.observe(this);
 
     this._setupScroll();
+    this._setupScrollToTop();
     this._setupNav();
     this._setupMenu();
     this._setupPhoto();
     this._setupColor();
   }
 
+  onTap() {
+    if (this._menuDialog?.open || this._colorSheet?.open || this._photoSheet?.open) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   unsubscribe() {
     Store.unsubscribe('images', this._onImages);
     if (this._imageUrl) URL.revokeObjectURL(this._imageUrl);
 
+    ['#prev', '#next', '#menu-btn', '#year'].forEach(sel =>
+      this.shadowRoot.querySelector(sel)?.removeEventListener('pointerdown', this._stopGesture)
+    );
     this.shadowRoot.querySelector('#prev')?.removeEventListener('click', this._onPrev);
     this.shadowRoot.querySelector('#next')?.removeEventListener('click', this._onNext);
     this.shadowRoot.querySelector('#menu-btn')?.removeEventListener('click', this._onMenuBtn);
@@ -446,6 +455,14 @@ class YearHeader extends Gestures(AppElement) {
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--year-header-height');
     window.removeEventListener('scroll', this._onScroll);
+  }
+
+  _setupScrollToTop() {
+    // Prevent pointerdown on interactive elements from reaching the Gestures mixin — they are not scroll-to-top targets
+    this._stopGesture = e => e.stopPropagation();
+    ['#prev', '#next', '#menu-btn', '#year'].forEach(sel =>
+      this.shadowRoot.querySelector(sel).addEventListener('pointerdown', this._stopGesture)
+    );
   }
 
   _setupScroll() {

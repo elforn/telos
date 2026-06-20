@@ -107,6 +107,18 @@ describe('year-header — year navigation', () => {
   });
 });
 
+describe('year-header — scroll to top on background tap', () => {
+  it('onTap scrolls to the top when no dialog is open', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const el = mount();
+    el.onTap();
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+  });
+
+  // No test for "dialog open" guard — when a modal dialog is open it captures
+  // all pointer events, making onTap() physically unreachable from the background.
+});
+
 describe('year-header — accent color picker', () => {
   it('opens color sheet when color menu item is clicked', () => {
     const el = mount();

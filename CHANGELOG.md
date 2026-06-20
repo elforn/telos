@@ -7,9 +7,77 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [1.5.1] — 2026-06-20
+
 ### Added
-- Goals now have an optional **description field** — add notes or context to any goal via the edit dialog
-- A small `ℹ` indicator appears on the goal card when a description is set
+- Opening a `.telos` file on desktop (Chrome/Edge) launches Telos and shows the import preview dialog — merge or replace as usual
+
+### Changed
+- Lists page navigation arrow is now styled with a muted accent tint, making it visually distinct as a navigation action
+- Navigating back to the Lists page from a list detail restores your previous scroll position
+- Swiping between years (or tapping prev/next) now preserves each year's scroll position — you can compare sections across years by swiping without losing your place
+- Tapping the Years pill while already on today's year scrolls to the top; tapping it from a different year navigates to today's year and restores that year's last scroll position
+- Per-year accent colour is now scoped to the year view only — the Lists page and navigation bar always use the app's default blue regardless of which year you last visited
+- Colour swatch row in the list edit dialog has more breathing room below it
+
+### Fixed
+- Vertical alignment of elements in list row items — drag handle dots and navigation chevron are now CSS-drawn (immune to font metric variance), text nudged 1 px down for optical centering
+
+---
+
+## [1.5.0] — 2026-06-20
+
+### Added
+- Drag-to-reorder goals within each section — hold-drag the grip handle (⠿) to rearrange, or use the up/down arrow buttons as a keyboard alternative
+- Drag-to-reorder lists on the Lists page — same grip-handle interaction
+
+### Changed
+- Swipe-to-reveal actions (delete, fail) refined across goal items, list rows, and list detail items — consistent snap behaviour and feel
+
+---
+
+## [1.4.2] — 2026-06-19
+
+### Changed
+- Socle updated to 0.9.18 — includes SW update-loop fix and improved sync test reliability
+
+---
+
+## [1.4.1] — 2026-06-19
+
+### Fixed
+- Service worker update loop is now detected and automatically repaired — a **Repair** button appears if the app gets stuck in an infinite reload cycle
+
+---
+
+## [1.4.0] — 2026-06-19
+
+### Added
+- Sync import now shows a preview of incoming data with conflict resolution — review changes before committing
+- List items can have an optional **note** and **URL** — stored per item, shown in the detail view
+- **List colour picker** — assign a colour to each list for visual differentiation; shown as a tinted badge
+- Swipe-left to delete a list from the Lists page
+- Goals can have an optional **description** — add context via the edit dialog; a small `ℹ` indicator appears on the card when set
+- Goal dialog: edits auto-save as a draft so changes survive accidental dismissal
+- Goal and list-item delete now requires a second tap to confirm, preventing accidental deletions
+
+---
+
+## [1.3.0] — 2026-06-17
+
+### Added
+- **Persistent bottom navigation bar** — switch between Years and Lists; includes a settings panel with theme, language, and import/export controls
+- **Lists** — create named lists, add items, and manage them independently of any year
+
+### Changed
+- Theme and language settings moved from the year-header menu to the bottom nav settings panel
+- Edit mode now persists when you navigate between years
+
+### Fixed
+- Year-header swipe gesture corrected for reliability after a year change
+- Header height standardised across all pages
 
 ---
 

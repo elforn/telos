@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
+
+vi.mock('../../_lib/core/router/router.js', () => ({ navigate: vi.fn() }));
+
 import '../../app/components/bottom-nav/bottom-nav.js';
+import { navigate } from '../../_lib/core/router/router.js';
 
 // happy-dom does not implement ResizeObserver
 globalThis.ResizeObserver = class {
@@ -26,7 +30,7 @@ function mount() {
   return el;
 }
 
-afterEach(() => { document.body.innerHTML = ''; vi.restoreAllMocks(); });
+afterEach(() => { document.body.innerHTML = ''; vi.restoreAllMocks(); vi.clearAllMocks(); });
 
 // ── Structure ─────────────────────────────────────────────────────────────────
 
@@ -126,6 +130,55 @@ describe('bottom-nav — lists path memory', () => {
     const el = mount();
     navTo('/lists/abc123');
     expect(el.shadowRoot.querySelector('#pill-lists').classList.contains('active')).toBe(true);
+  });
+});
+
+// ── Scroll position helpers ───────────────────────────────────────────────────
+
+// ── Year pill navigation ──────────────────────────────────────────────────────
+
+describe('bottom-nav — year pill navigation', () => {
+  it('scrolls to top when Years pill is tapped while already on today\'s year', () => {
+    const year = new Date().getFullYear();
+    navTo(`/${year}`);
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(cb => { cb(0); return 0; });
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const el = mount();
+    el._onPillYears();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+  });
+
+  it('saves scroll and navigates to today\'s year when tapped from a different year', () => {
+    navTo('/2020');
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(cb => { cb(0); return 0; });
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const el = mount();
+    const saveSpy = vi.spyOn(el, '_saveScroll');
+    el._onPillYears();
+    expect(saveSpy).toHaveBeenCalledWith('/2020');
+    expect(navigate).toHaveBeenCalledWith(`/${new Date().getFullYear()}`);
+  });
+});
+
+// ── Year navigate scroll restoration ─────────────────────────────────────────
+
+describe('bottom-nav — year navigate scroll restoration', () => {
+  it('restores saved scroll position when a navigate event lands on a year path', () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(cb => { cb(0); return 0; });
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const el = mount();
+    el._scrollPositions['/2026'] = 350;
+    navTo('/2026');
+    expect(scrollTo).toHaveBeenCalledWith(0, 350);
+  });
+
+  it('restores to 0 when navigating to a year with no saved scroll position', () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(cb => { cb(0); return 0; });
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    mount();
+    navTo('/2025');
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
   });
 });
 

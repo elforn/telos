@@ -29,6 +29,18 @@ await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColor
 
 console.log('Telos', __APP_VERSION__);
 
+if ('launchQueue' in window) {
+  window.launchQueue.setConsumer(async launchParams => {
+    if (!launchParams.files.length) return;
+    try {
+      const file = await launchParams.files[0].getFile();
+      window.dispatchEvent(new CustomEvent('telos-import-file', { detail: { file } }));
+    } catch (err) {
+      console.error('Failed to read launched file:', err);
+    }
+  });
+}
+
 const swm = document.createElement('sw-manager');
 swm.setAttribute('base-path', BASE_PATH);
 swm.setAttribute('app-version', __APP_VERSION__);

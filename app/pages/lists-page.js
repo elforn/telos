@@ -60,6 +60,7 @@ class ListsPage extends AppElement {
           flex-direction: column;
           gap: var(--space-2);
         }
+
       </style>
 
       <div class="page-header">
@@ -79,6 +80,7 @@ class ListsPage extends AppElement {
     this._container   = this.shadowRoot.querySelector('#list-container');
     this._dialog      = this.shadowRoot.querySelector('#dialog');
     this._editingList = null;
+
 
     this._onAddRow = () => {
       this._editingList = null;

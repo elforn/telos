@@ -1,6 +1,6 @@
 # /test
 
-Write or complete tests for a given file or module.
+Write or complete tests for a given file or module. Unit tests and E2E tests are equally important — both must be written and passing before a feature is done.
 
 ## Usage
 /test <filepath>
@@ -11,36 +11,36 @@ Example: `/test app/store/reducer.js`
 
 1. **Read the target file in full.** Understand every exported function, class, and behaviour.
 
-2. **Read the existing test file** if one exists (same path, `.test.js` suffix). Identify what is already covered and what is missing.
+2. **Read the existing test files** — both the unit test (same path, `.test.js` suffix) and any relevant E2E spec in `tests/e2e/`. Identify what is already covered and what is missing in each.
 
-3. **Identify what must be tested:**
+3. **Identify what must be tested and where:**
+
+   Unit tests (Vitest) — logic that runs in isolation:
    - Every exported function with at least one happy-path test
    - Every known edge case (empty input, missing keys, concurrent writes)
    - Every error condition that should throw or fail loudly
-   - For Web Components: mount, attribute reflection, event emission
-   - For store/IDB modules: use `fake-indexeddb` (loaded globally via `_lib/core/test-setup.js`) — never mock IDB, run against the real API. Only add `// @vitest-environment happy-dom` if the test actually uses `document`, `customElements`, or Shadow DOM.
-   - For SW behaviour: note what cannot be unit tested and flag it for Playwright E2E coverage instead
+   - Web Component: mount, attribute reflection, event emission
+   - Store/IDB modules: use `fake-indexeddb` (loaded globally via `_lib/core/test-setup.js`) — never mock IDB, run against the real API
 
-4. **Write the unit tests** using Vitest. Follow these rules:
+   E2E tests (Playwright) — anything that requires a real browser:
+   - State that persists to IDB and must survive a full page reload
+   - Gestures via real pointer events (`happy-dom` does not fire these correctly)
+   - Navigation flows and URL routing
+   - Shadow DOM state changes that depend on the full Store → IDB → reload → replay cycle
+   - File input / camera / device APIs
+   - SW behaviour — use `/test-pwa` instead for offline/install scenarios
+
+4. **Write the unit tests** using Vitest:
    - Test file lives alongside the source file: `foo.js` → `foo.test.js`
+   - Only add `// @vitest-environment happy-dom` if the test actually uses `document`, `customElements`, or Shadow DOM
    - Test descriptions are plain English statements of behaviour: `'emits an event when a new score is appended'` not `'test score append'`
    - No test should depend on another test's side effects — each test is fully isolated
    - Do not mock what you can run for real
-   - If a behaviour cannot be tested without a full browser (gestures, SW, Pointer Events), write the test structure with a clear skip and a comment explaining what Playwright should cover instead
 
-5. **Identify what needs E2E coverage.** After writing unit tests, check for behaviours that require a real browser and cannot be unit-tested with `happy-dom`:
-   - State that persists to IDB and must survive a full page reload
-   - Gestures via real pointer events (`happy-dom` does not fire these correctly)
-   - File input / camera / device APIs
-   - Shadow DOM state changes that depend on the full Store → IDB → reload → replay cycle
-
-   **E2E test file location:** `tests/e2e/<feature-name>.spec.js`
-
-   **Standard patterns for Playwright tests:**
+5. **Write the E2E tests** using Playwright in `tests/e2e/<feature-name>.spec.js`:
 
    Shadow DOM traversal (components are nested behind shadow roots — `querySelector` stops at the first boundary):
    ```js
-   // Use page.evaluate() for shadow DOM access
    await page.evaluate((sel) => {
      document.querySelector('app-router').shadowRoot
        .querySelector('home-page').shadowRoot
@@ -66,6 +66,14 @@ Example: `/test app/store/reducer.js`
    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
    ```
 
-   For PWA-specific scenarios (offline, SW update flow, install), use `/test-pwa` instead.
+6. **Run all tests** (`npm test`) and confirm both unit and E2E suites pass before reporting done.
 
-6. **Report** a summary: how many unit tests written, what is covered, what E2E tests were written, what is explicitly deferred to E2E but not yet written, and any gaps that need the developer's input.
+7. **Report** a summary: unit tests written/updated, E2E tests written/updated, what is covered in each, and any gaps that need the developer's input.
+
+---
+
+## Rules
+
+- **Never edit working production code to make a failing test pass.** If a test fails, fix the test — rewrite it to match the correct behaviour, or drop it if the scenario being tested is impossible in practice. The production code is ground truth; tests are a description of expected behaviour. Editing code to satisfy a test inverts this relationship.
+
+- **Drop tests for impossible scenarios.** For example, a test that checks behaviour "when a modal dialog is open" is testing a state that's physically unreachable if the dialog captures all pointer events. These tests add noise and create pressure to write incorrect guards. Remove them and leave a comment explaining why the scenario can't occur.

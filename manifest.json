@@ -22,5 +22,13 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "file_handlers": [
+    {
+      "action": "%%BASE_PATH%%",
+      "accept": {
+        "application/vnd.telos": [".telos"]
+      }
+    }
   ]
 }

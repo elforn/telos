@@ -283,6 +283,23 @@ describe('lists-page-item — accessibility', () => {
     el.list = { ...LIST, name: 'Books' };
     expect(el.getAttribute('aria-label')).toBe('Books');
   });
+
+  it('drag button has an aria-label', () => {
+    const el = mount();
+    const label = el.shadowRoot.querySelector('#drag-btn').getAttribute('aria-label');
+    expect(label).toBeTruthy();
+    expect(label.length).toBeGreaterThan(0);
+  });
+
+  it('drag button has no visible text content', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#drag-btn').textContent.trim()).toBe('');
+  });
+
+  it('nav button has no visible text content', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#nav-btn').textContent.trim()).toBe('');
+  });
 });
 
 // ── Swipe ─────────────────────────────────────────────────────────────────────

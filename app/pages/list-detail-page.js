@@ -219,6 +219,7 @@ class ListDetailPage extends AppElement {
     this._listId = this.params?.listId;
     if (!this._listId) { navigate(`${BASE_PATH}lists`); return; }
 
+
     this._itemList    = this.shadowRoot.querySelector('#item-list');
     this._nameEl      = this.shadowRoot.querySelector('#list-name');
     this._dialog      = this.shadowRoot.querySelector('#dialog');
