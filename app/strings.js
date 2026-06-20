@@ -73,10 +73,11 @@ defineStrings({
   'sync.import-close':           'Close',
   'sync.import-error':           'Invalid or incompatible export file.',
 
-  'lists-page.heading': 'Lists',
-  'lists-page.empty':   'No lists yet',
-  'lists-page.add':     'New list',
-  'lists-page.edit':    'Edit',
+  'lists-page.heading':   'Lists',
+  'lists-page.empty':     'No lists yet',
+  'lists-page.add':       'New list',
+  'lists-page.navigate': 'Open',
+  'lists-page.drag':     'Drag to reorder',
 
   'list-detail.back':        'Lists',
   'list-detail.empty':       'No items yet',
@@ -117,6 +118,7 @@ defineStrings({
   'list-item.delete-confirm':  'Sure?',
   'list-item.mark-done': 'Mark done',
   'list-item.restore':   'Restore',
+  'list-item.drag':      'Drag to reorder',
 
   'lists.toast-list-saved':   'List saved',
   'lists.toast-list-deleted': 'List deleted',

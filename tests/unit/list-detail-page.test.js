@@ -326,6 +326,104 @@ describe('list-detail-page — done toggle', () => {
   });
 });
 
+// ── Drag reorder ─────────────────────────────────────────────────────────────
+
+const ITEM_A = { id: 'a', title: 'A', status: 'open', tags: [], inGoals: [] };
+const ITEM_B = { id: 'b', title: 'B', status: 'open', tags: [], inGoals: [] };
+const ITEM_C = { id: 'c', title: 'C', status: 'open', tags: [], inGoals: [] };
+
+describe('list-detail-page — _placeItem', () => {
+  it('moves an item forward in the list', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_A, ITEM_B, ITEM_C] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
+    el._placeItem(0, 2); // move A after B → [B, A, C]
+    await vi.waitFor(() => {
+      const ids = getState().lists[0].items.map(i => i.id);
+      expect(ids).toEqual(['b', 'a', 'c']);
+    });
+  });
+
+  it('moves an item backward in the list', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_A, ITEM_B, ITEM_C] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
+    el._placeItem(2, 0); // move C before A → [C, A, B]
+    await vi.waitFor(() => {
+      const ids = getState().lists[0].items.map(i => i.id);
+      expect(ids).toEqual(['c', 'a', 'b']);
+    });
+  });
+
+  it('moves an item to the end of the list', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_A, ITEM_B, ITEM_C] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
+    el._placeItem(0, 3); // move A to end → [B, C, A]
+    await vi.waitFor(() => {
+      const ids = getState().lists[0].items.map(i => i.id);
+      expect(ids).toEqual(['b', 'c', 'a']);
+    });
+  });
+
+  it('is a no-op when fromIndex equals toIndex', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_A, ITEM_B, ITEM_C] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
+    el._placeItem(1, 1);
+    const ids = getState().lists[0].items.map(i => i.id);
+    expect(ids).toEqual(['a', 'b', 'c']);
+  });
+
+  it('is a no-op when dropping one position below its current slot', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_A, ITEM_B, ITEM_C] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
+    el._placeItem(1, 2); // adjacent — no real move
+    const ids = getState().lists[0].items.map(i => i.id);
+    expect(ids).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('list-detail-page — item-reorder-key', () => {
+  it('ArrowDown on first item moves it down one slot', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_A, ITEM_B, ITEM_C] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-reorder-key', {
+      bubbles: true, detail: { item: ITEM_A, direction: 1 },
+    }));
+    await vi.waitFor(() => {
+      const ids = getState().lists[0].items.map(i => i.id);
+      expect(ids).toEqual(['b', 'a', 'c']);
+    });
+  });
+
+  it('ArrowUp on last item moves it up one slot', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_A, ITEM_B, ITEM_C] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-reorder-key', {
+      bubbles: true, detail: { item: ITEM_C, direction: -1 },
+    }));
+    await vi.waitFor(() => {
+      const ids = getState().lists[0].items.map(i => i.id);
+      expect(ids).toEqual(['a', 'c', 'b']);
+    });
+  });
+
+  it('ArrowUp on first item is a no-op', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_A, ITEM_B] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-reorder-key', {
+      bubbles: true, detail: { item: ITEM_A, direction: -1 },
+    }));
+    const ids = getState().lists[0].items.map(i => i.id);
+    expect(ids).toEqual(['a', 'b']);
+  });
+});
+
 // ── E2E deferred ─────────────────────────────────────────────────────────────
 // The following behaviours require a real browser and are covered by tests/e2e/lists.spec.js:
 // - Back button navigates to /lists

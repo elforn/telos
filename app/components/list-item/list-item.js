@@ -68,12 +68,31 @@ class ListItem extends Gestures(AppElement) {
           display: flex;
           align-items: center;
           padding-inline: var(--space-3);
-          gap: var(--space-2);
+          gap: 6px;
           cursor: pointer;
           user-select: none;
           touch-action: pan-y;
           transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
           will-change: transform;
+        }
+
+        .drag-btn {
+          position: relative;
+          z-index: 1;
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          background: none;
+          border: none;
+          cursor: grab;
+          color: var(--color-text-muted);
+          font-size: var(--font-size-body);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding-block: 0;
+          padding-inline: 0;
+          font-family: var(--font-family);
+          touch-action: none;
         }
 
         .title {
@@ -162,6 +181,7 @@ class ListItem extends Gestures(AppElement) {
       <button class="action-btn done-btn" id="done-btn">✓</button>
       <button class="action-btn delete-btn" id="delete-btn">${t('list-item.delete')}</button>
       <div class="row" tabindex="0" role="button" aria-label="">
+        <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="title"></span>
         <span class="note-icon" aria-hidden="true">✎</span>
         <span class="url-icon"  aria-hidden="true">🔗</span>
@@ -226,6 +246,28 @@ class ListItem extends Gestures(AppElement) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onTap(); }
     };
     this._row.addEventListener('keydown', this._onKeyDown);
+
+    this._dragBtn = this.shadowRoot.querySelector('#drag-btn');
+    this._dragBtn.setAttribute('aria-label', t('list-item.drag'));
+    this._dragBtn.textContent = '⠿';
+    this._onDragBtnDown = e => {
+      e.stopPropagation();
+      this._dragBtn.setPointerCapture(e.pointerId);
+      this.dispatchEvent(new CustomEvent('item-drag-start', {
+        bubbles: true, composed: true,
+        detail: { item: this._item, element: this, startX: e.clientX, startY: e.clientY },
+      }));
+    };
+    this._onDragBtnKey = e => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      this.dispatchEvent(new CustomEvent('item-reorder-key', {
+        bubbles: true, composed: true,
+        detail: { item: this._item, direction: e.key === 'ArrowUp' ? -1 : 1 },
+      }));
+    };
+    this._dragBtn.addEventListener('pointerdown', this._onDragBtnDown);
+    this._dragBtn.addEventListener('keydown',     this._onDragBtnKey);
   }
 
   unsubscribe() {
@@ -236,6 +278,8 @@ class ListItem extends Gestures(AppElement) {
     this._doneEl?.removeEventListener('pointerup', this._onDonePointerUp);
     this._doneEl?.removeEventListener('click', this._onDoneBtnKey);
     this._row?.removeEventListener('keydown', this._onKeyDown);
+    this._dragBtn?.removeEventListener('pointerdown', this._onDragBtnDown);
+    this._dragBtn?.removeEventListener('keydown',     this._onDragBtnKey);
   }
 
   // ── Gestures ──────────────────────────────────────────────────────────────

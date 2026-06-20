@@ -74,10 +74,11 @@ defineStrings({
   'sync.import-close':           'Tanca',
   'sync.import-error':           'Fitxer d\'exportació invàlid o incompatible.',
 
-  'lists-page.heading': 'Llistes',
-  'lists-page.empty':   'Cap llista',
-  'lists-page.add':     'Nova llista',
-  'lists-page.edit':    'Edita',
+  'lists-page.heading':   'Llistes',
+  'lists-page.empty':     'Cap llista',
+  'lists-page.add':       'Nova llista',
+  'lists-page.navigate': 'Obre',
+  'lists-page.drag':     'Arrossega per reordenar',
 
   'list-detail.back':        'Llistes',
   'list-detail.empty':       'Cap item',
@@ -118,6 +119,7 @@ defineStrings({
   'list-item.delete-confirm':  'Segur?',
   'list-item.mark-done': 'Marca com a fet',
   'list-item.restore':   'Restaura',
+  'list-item.drag':      'Arrossega per reordenar',
 
   'lists.toast-list-saved':   'Llista desada',
   'lists.toast-list-deleted': 'Llista eliminada',

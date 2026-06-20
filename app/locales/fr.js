@@ -74,10 +74,11 @@ defineStrings({
   'sync.import-close':           'Fermer',
   'sync.import-error':           'Fichier d\'export invalide ou incompatible.',
 
-  'lists-page.heading': 'Listes',
-  'lists-page.empty':   'Aucune liste',
-  'lists-page.add':     'Nouvelle liste',
-  'lists-page.edit':    'Modifier',
+  'lists-page.heading':   'Listes',
+  'lists-page.empty':     'Aucune liste',
+  'lists-page.add':       'Nouvelle liste',
+  'lists-page.navigate': 'Ouvrir',
+  'lists-page.drag':     'Glisser pour réordonner',
 
   'list-detail.back':        'Listes',
   'list-detail.empty':       'Aucun élément',
@@ -118,6 +119,7 @@ defineStrings({
   'list-item.delete-confirm':  'Sûr ?',
   'list-item.mark-done': 'Marquer comme terminé',
   'list-item.restore':   'Restaurer',
+  'list-item.drag':      'Glisser pour réordonner',
 
   'lists.toast-list-saved':   'Liste enregistrée',
   'lists.toast-list-deleted': 'Liste supprimée',

@@ -5,6 +5,12 @@ const currentYear = new Date().getFullYear();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function listsPage(page) {
+  return page.evaluate(() =>
+    document.querySelector('app-router').shadowRoot.querySelector('lists-page').shadowRoot
+  );
+}
+
 async function navToLists(page) {
   await page.evaluate(() =>
     document.querySelector('bottom-nav').shadowRoot.querySelector('#pill-lists').click()
@@ -19,7 +25,7 @@ async function navToYears(page) {
   await waitForPage(page);
 }
 
-async function createList(page, name) {
+async function createList(page, name, expectedCount = 1) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('lists-page').shadowRoot
@@ -46,10 +52,11 @@ async function createList(page, name) {
       .querySelector('list-dialog').shadowRoot
       .querySelector('#save').click();
   });
-  await page.waitForFunction(() =>
+  await page.waitForFunction((count) =>
     (document.querySelector('app-router')?.shadowRoot
       ?.querySelector('lists-page')?.shadowRoot
-      ?.querySelector('#list-container')?.querySelectorAll('.list-row').length ?? 0) > 0
+      ?.querySelector('#list-container')?.querySelectorAll('lists-page-item').length ?? 0) >= count,
+    expectedCount
   );
 }
 
@@ -57,9 +64,33 @@ async function enterFirstList(page) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('lists-page').shadowRoot
-      .querySelector('.list-row').click();
+      .querySelector('#list-container')
+      .querySelector('lists-page-item').shadowRoot
+      .querySelector('#nav-btn').click();
   });
   await waitForListDetailPage(page);
+}
+
+async function tapListRow(page, index = 0) {
+  await page.evaluate((idx) => {
+    const item = document.querySelector('app-router').shadowRoot
+      .querySelector('lists-page').shadowRoot
+      .querySelector('#list-container')
+      .querySelectorAll('lists-page-item')[idx];
+    const row = item.shadowRoot.querySelector('.row');
+    row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+    row.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+  }, index);
+}
+
+async function getListNames(page) {
+  return page.evaluate(() =>
+    [...document.querySelector('app-router').shadowRoot
+      .querySelector('lists-page').shadowRoot
+      .querySelector('#list-container')
+      .querySelectorAll('lists-page-item')]
+      .map(item => item.shadowRoot.querySelector('.list-name')?.textContent ?? '')
+  );
 }
 
 async function createItem(page, title) {
@@ -276,15 +307,78 @@ test.describe('Lists — navigation', () => {
     expect(path).toMatch(/\/lists$/);
   });
 
-  test('keyboard Enter on a list row navigates to list detail', async ({ page }) => {
+  test('keyboard Enter on list row opens edit dialog', async ({ page }) => {
     await createList(page, 'Keyboard nav test');
     await page.evaluate(() => {
       const row = document.querySelector('app-router').shadowRoot
         .querySelector('lists-page').shadowRoot
-        .querySelector('.list-row');
+        .querySelector('#list-container')
+        .querySelector('lists-page-item').shadowRoot
+        .querySelector('.row');
       row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true }));
     });
+    await page.waitForFunction(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('list-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open;
+    });
+  });
+});
+
+// ── List row navigation ───────────────────────────────────────────────────────
+
+test.describe('Lists — list row navigation', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    await navToLists(page);
+    await createList(page, 'Nav test list');
+  });
+
+  test('nav button (›) navigates to list detail page', async ({ page }) => {
+    await enterFirstList(page);
+    const path = await page.evaluate(() => window.location.pathname);
+    expect(path).toMatch(/\/lists\/.+/);
+  });
+
+  test('nav button navigates to the correct list', async ({ page }) => {
+    await createList(page, 'Second list', 2);
+    // Navigate to first list
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelectorAll('lists-page-item')[0].shadowRoot
+        .querySelector('#nav-btn').click();
+    });
     await waitForListDetailPage(page);
+    const heading = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('h1')?.textContent
+    );
+    expect(heading).toBe('Nav test list');
+  });
+
+  test('tapping the row opens the edit dialog with the list name pre-filled', async ({ page }) => {
+    await tapListRow(page, 0);
+    await page.waitForFunction(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('list-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open;
+    });
+    const name = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('list-dialog').shadowRoot
+        .querySelector('#input').value
+    );
+    expect(name).toBe('Nav test list');
   });
 });
 
@@ -304,9 +398,16 @@ test.describe('Lists — list management', () => {
     await page.reload();
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await navToLists(page);
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('#list-container')?.querySelectorAll('lists-page-item').length ?? 0) > 0
+    );
     const name = await page.evaluate(() =>
       document.querySelector('app-router').shadowRoot
         .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelector('lists-page-item').shadowRoot
         .querySelector('.list-name')?.textContent
     );
     expect(name).toBe('Persist me');
@@ -314,11 +415,7 @@ test.describe('Lists — list management', () => {
 
   test('renaming a list updates the row name', async ({ page }) => {
     await createList(page, 'Old name');
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('lists-page').shadowRoot
-        .querySelector('.edit-btn').click();
-    });
+    await tapListRow(page, 0);
     await page.waitForFunction(() => {
       const d = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('lists-page')?.shadowRoot
@@ -341,20 +438,17 @@ test.describe('Lists — list management', () => {
         .querySelector('#save').click();
     });
     await page.waitForFunction(() => {
-      const el = document.querySelector('app-router')?.shadowRoot
+      const item = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('lists-page')?.shadowRoot
-        ?.querySelector('.list-name');
-      return el?.textContent === 'New name';
+        ?.querySelector('#list-container')
+        ?.querySelector('lists-page-item');
+      return item?.shadowRoot?.querySelector('.list-name')?.textContent === 'New name';
     });
   });
 
   test('deleting a list removes it from the page', async ({ page }) => {
     await createList(page, 'Delete me');
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('lists-page').shadowRoot
-        .querySelector('.edit-btn').click();
-    });
+    await tapListRow(page, 0);
     await page.waitForFunction(() => {
       const d = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('lists-page')?.shadowRoot
@@ -369,11 +463,167 @@ test.describe('Lists — list management', () => {
         .querySelector('#delete').click();
     });
     await page.waitForFunction(() => {
-      const count = document.querySelector('app-router')?.shadowRoot
+      const d = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('lists-page')?.shadowRoot
-        ?.querySelector('#list-container')?.querySelectorAll('.list-row').length ?? 0;
-      return count === 0;
+        ?.querySelector('list-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open;
     });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('list-dialog').shadowRoot
+        .querySelector('#delete').click();
+    });
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('#list-container')?.querySelectorAll('lists-page-item').length ?? 0) === 0
+    );
+  });
+});
+
+// ── Drag to reorder ───────────────────────────────────────────────────────────
+
+test.describe('Lists — drag to reorder', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    await navToLists(page);
+    await createList(page, 'Alpha', 1);
+    await createList(page, 'Beta', 2);
+    await createList(page, 'Gamma', 3);
+  });
+
+  test('keyboard ArrowDown on drag button moves list down one position', async ({ page }) => {
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelectorAll('lists-page-item')[0].shadowRoot
+        .querySelector('#drag-btn').focus();
+    });
+    await page.keyboard.press('ArrowDown');
+    await page.waitForFunction(() => {
+      const items = document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelectorAll('lists-page-item');
+      return items[0]?.shadowRoot?.querySelector('.list-name')?.textContent === 'Beta';
+    });
+    const names = await getListNames(page);
+    expect(names).toEqual(['Beta', 'Alpha', 'Gamma']);
+  });
+
+  test('keyboard ArrowUp on drag button moves list up one position', async ({ page }) => {
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelectorAll('lists-page-item')[2].shadowRoot
+        .querySelector('#drag-btn').focus();
+    });
+    await page.keyboard.press('ArrowUp');
+    await page.waitForFunction(() => {
+      const items = document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelectorAll('lists-page-item');
+      return items[1]?.shadowRoot?.querySelector('.list-name')?.textContent === 'Gamma';
+    });
+    const names = await getListNames(page);
+    expect(names).toEqual(['Alpha', 'Gamma', 'Beta']);
+  });
+
+  test('ArrowDown on the last item is a no-op', async ({ page }) => {
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelectorAll('lists-page-item')[2].shadowRoot
+        .querySelector('#drag-btn').focus();
+    });
+    await page.keyboard.press('ArrowDown');
+    const names = await getListNames(page);
+    expect(names).toEqual(['Alpha', 'Beta', 'Gamma']);
+  });
+
+  test('ArrowUp on the first item is a no-op', async ({ page }) => {
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelectorAll('lists-page-item')[0].shadowRoot
+        .querySelector('#drag-btn').focus();
+    });
+    await page.keyboard.press('ArrowUp');
+    const names = await getListNames(page);
+    expect(names).toEqual(['Alpha', 'Beta', 'Gamma']);
+  });
+
+  test('mouse drag moves list to a new position', async ({ page }) => {
+    const positions = await page.evaluate(() => {
+      const items = [...document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelectorAll('lists-page-item')];
+      return items.map(item => {
+        const btn  = item.shadowRoot.querySelector('#drag-btn');
+        const br   = btn.getBoundingClientRect();
+        const ir   = item.getBoundingClientRect();
+        return {
+          dragX:  br.x + br.width / 2,
+          dragY:  br.y + br.height / 2,
+          bottom: ir.y + ir.height,
+        };
+      });
+    });
+
+    // Drag Alpha (0) below Gamma (2)
+    await page.mouse.move(positions[0].dragX, positions[0].dragY);
+    await page.mouse.down();
+    await page.mouse.move(positions[2].dragX, positions[2].bottom + 10, { steps: 20 });
+    await page.mouse.up();
+
+    await page.waitForFunction(() => {
+      const items = document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelectorAll('lists-page-item');
+      return items[0]?.shadowRoot?.querySelector('.list-name')?.textContent === 'Beta';
+    });
+    const names = await getListNames(page);
+    expect(names).toEqual(['Beta', 'Gamma', 'Alpha']);
+  });
+
+  test('reordered list persists after page reload', async ({ page }) => {
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelectorAll('lists-page-item')[0].shadowRoot
+        .querySelector('#drag-btn').focus();
+    });
+    await page.keyboard.press('ArrowDown');
+    await page.waitForFunction(() => {
+      const items = document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelectorAll('lists-page-item');
+      return items[0]?.shadowRoot?.querySelector('.list-name')?.textContent === 'Beta';
+    });
+    await waitForIDBFlush(page);
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await navToLists(page);
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('#list-container')?.querySelectorAll('lists-page-item').length ?? 0) >= 3
+    );
+    const names = await getListNames(page);
+    expect(names).toEqual(['Beta', 'Alpha', 'Gamma']);
   });
 });
 
@@ -404,7 +654,6 @@ test.describe('Lists — item management', () => {
     await waitForIDBFlush(page);
     await page.reload();
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
-    // After reload, the browser returns to the list-detail URL directly
     await waitForListDetailPage(page);
     await page.waitForFunction(() =>
       (document.querySelector('app-router')?.shadowRoot

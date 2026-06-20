@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/lists-page-item/lists-page-item.js';
+import { COLOR_PALETTE } from '../../app/components/lists-page-item/lists-page-item.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
@@ -21,6 +22,26 @@ function tap(el) {
 }
 
 afterEach(() => { document.body.innerHTML = ''; });
+
+// ── COLOR_PALETTE export ──────────────────────────────────────────────────────
+
+describe('COLOR_PALETTE', () => {
+  it('starts with null (no colour)', () => {
+    expect(COLOR_PALETTE[0]).toBeNull();
+  });
+
+  it('has 8 entries', () => {
+    expect(COLOR_PALETTE).toHaveLength(8);
+  });
+
+  it('all non-null entries are hex colour strings', () => {
+    COLOR_PALETTE.filter(Boolean).forEach(c => {
+      expect(c).toMatch(/^#[0-9A-Fa-f]{6}$/);
+    });
+  });
+});
+
+// ── Structure ─────────────────────────────────────────────────────────────────
 
 describe('lists-page-item — structure', () => {
   it('renders the list name', () => {
@@ -46,9 +67,9 @@ describe('lists-page-item — structure', () => {
     expect(el.shadowRoot.querySelector('#delete-btn')).not.toBeNull();
   });
 
-  it('has an edit button', () => {
+  it('has a nav button', () => {
     const el = mount();
-    expect(el.shadowRoot.querySelector('#edit-btn')).not.toBeNull();
+    expect(el.shadowRoot.querySelector('#nav-btn')).not.toBeNull();
   });
 
   it('has role=listitem on host', () => {
@@ -69,12 +90,52 @@ describe('lists-page-item — structure', () => {
   });
 });
 
+// ── list-edit event (tap on row) ──────────────────────────────────────────────
+
+describe('lists-page-item — list-edit event', () => {
+  it('dispatches list-edit on tap', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('list-edit', e => events.push(e));
+    tap(el);
+    expect(events).toHaveLength(1);
+  });
+
+  it('list-edit detail contains the list', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('list-edit', e => events.push(e));
+    tap(el);
+    expect(events[0].detail.list.id).toBe('l1');
+    expect(events[0].detail.list.name).toBe('Gift ideas');
+  });
+
+  it('list-edit bubbles and is composed', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('list-edit', e => events.push(e));
+    tap(el);
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
+  });
+
+  it('tap does not dispatch list-tap', () => {
+    const el = mount();
+    const tapEvents = [];
+    el.addEventListener('list-tap', e => tapEvents.push(e));
+    tap(el);
+    expect(tapEvents).toHaveLength(0);
+  });
+});
+
+// ── list-tap event (nav button) ───────────────────────────────────────────────
+
 describe('lists-page-item — list-tap event', () => {
-  it('dispatches list-tap on tap', () => {
+  it('dispatches list-tap when nav button is clicked', () => {
     const el = mount();
     const events = [];
     el.addEventListener('list-tap', e => events.push(e));
-    tap(el);
+    el.shadowRoot.querySelector('#nav-btn').click();
     expect(events).toHaveLength(1);
   });
 
@@ -82,7 +143,7 @@ describe('lists-page-item — list-tap event', () => {
     const el = mount();
     const events = [];
     el.addEventListener('list-tap', e => events.push(e));
-    tap(el);
+    el.shadowRoot.querySelector('#nav-btn').click();
     expect(events[0].detail.list.id).toBe('l1');
     expect(events[0].detail.list.name).toBe('Gift ideas');
   });
@@ -91,46 +152,21 @@ describe('lists-page-item — list-tap event', () => {
     const el = mount();
     const events = [];
     el.addEventListener('list-tap', e => events.push(e));
-    tap(el);
-    expect(events[0].bubbles).toBe(true);
-    expect(events[0].composed).toBe(true);
-  });
-});
-
-describe('lists-page-item — list-edit event', () => {
-  it('dispatches list-edit when edit button is clicked', () => {
-    const el = mount();
-    const events = [];
-    el.addEventListener('list-edit', e => events.push(e));
-    el.shadowRoot.querySelector('#edit-btn').click();
-    expect(events).toHaveLength(1);
-  });
-
-  it('list-edit detail contains the list', () => {
-    const el = mount();
-    const events = [];
-    el.addEventListener('list-edit', e => events.push(e));
-    el.shadowRoot.querySelector('#edit-btn').click();
-    expect(events[0].detail.list.id).toBe('l1');
-  });
-
-  it('list-edit bubbles and is composed', () => {
-    const el = mount();
-    const events = [];
-    el.addEventListener('list-edit', e => events.push(e));
-    el.shadowRoot.querySelector('#edit-btn').click();
+    el.shadowRoot.querySelector('#nav-btn').click();
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
   });
 
-  it('edit click does not dispatch list-tap', () => {
+  it('nav click does not dispatch list-edit', () => {
     const el = mount();
-    const tapEvents = [];
-    el.addEventListener('list-tap', e => tapEvents.push(e));
-    el.shadowRoot.querySelector('#edit-btn').click();
-    expect(tapEvents).toHaveLength(0);
+    const editEvents = [];
+    el.addEventListener('list-edit', e => editEvents.push(e));
+    el.shadowRoot.querySelector('#nav-btn').click();
+    expect(editEvents).toHaveLength(0);
   });
 });
+
+// ── list-delete event ─────────────────────────────────────────────────────────
 
 describe('lists-page-item — list-delete event', () => {
   it('first click on delete enters confirm state — does not dispatch event', () => {
@@ -178,9 +214,9 @@ describe('lists-page-item — list-delete event', () => {
   it('delete button text resets after confirm fires', () => {
     const el = mount();
     const btn = el.shadowRoot.querySelector('#delete-btn');
-    btn.click(); // enter confirm
+    btn.click();
     expect(btn.textContent).toBe('Sure?');
-    btn.click(); // fire delete (synchronous path) — _closeReveal resets text
+    btn.click();
     expect(btn.textContent).toBe('Delete');
   });
 
@@ -207,6 +243,8 @@ describe('lists-page-item — list-delete event', () => {
   });
 });
 
+// ── Accessibility ─────────────────────────────────────────────────────────────
+
 describe('lists-page-item — accessibility', () => {
   it('row has role=button', () => {
     const el = mount();
@@ -224,15 +262,15 @@ describe('lists-page-item — accessibility', () => {
     expect(el.shadowRoot.querySelector('.row').getAttribute('aria-label')).toBe('Books');
   });
 
-  it('edit button aria-label includes the list name', () => {
+  it('nav button aria-label includes the list name', () => {
     const el = mount();
-    expect(el.shadowRoot.querySelector('#edit-btn').getAttribute('aria-label')).toContain('Gift ideas');
+    expect(el.shadowRoot.querySelector('#nav-btn').getAttribute('aria-label')).toContain('Gift ideas');
   });
 
-  it('edit button aria-label updates when name changes', () => {
+  it('nav button aria-label updates when name changes', () => {
     const el = mount();
     el.list = { ...LIST, name: 'Books' };
-    expect(el.shadowRoot.querySelector('#edit-btn').getAttribute('aria-label')).toContain('Books');
+    expect(el.shadowRoot.querySelector('#nav-btn').getAttribute('aria-label')).toContain('Books');
   });
 
   it('host aria-label matches the list name', () => {
@@ -247,22 +285,30 @@ describe('lists-page-item — accessibility', () => {
   });
 });
 
+// ── Swipe ─────────────────────────────────────────────────────────────────────
+
 describe('lists-page-item — swipe', () => {
-  it('row does not move for dx within dead zone (dx=-5)', () => {
+  it('row does not move for left dx within dead zone (dx=-5)', () => {
     const el = mount();
     el.onSwipeMove({ dx: -5 });
     expect(el.shadowRoot.querySelector('.row').style.transform).toBe('translateX(0px)');
   });
 
-  it('row moves left by dx plus dead zone when swiping left past dead zone (dx=-20)', () => {
+  it('row moves left past dead zone (dx=-20 → offset -5)', () => {
     const el = mount();
     el.onSwipeMove({ dx: -20 });
     expect(el.shadowRoot.querySelector('.row').style.transform).toBe('translateX(-5px)');
   });
 
-  it('right swipe does not move row (only left reveals delete)', () => {
+  it('right swipe past dead zone moves row right (dx=20 → offset 5)', () => {
     const el = mount();
     el.onSwipeMove({ dx: 20 });
+    expect(el.shadowRoot.querySelector('.row').style.transform).toBe('translateX(5px)');
+  });
+
+  it('right swipe within dead zone does not move row (dx=15)', () => {
+    const el = mount();
+    el.onSwipeMove({ dx: 15 });
     expect(el.shadowRoot.querySelector('.row').style.transform).toBe('translateX(0px)');
   });
 
@@ -278,10 +324,41 @@ describe('lists-page-item — swipe', () => {
     expect(el._revealedDir).toBeNull();
   });
 
-  it('fast flick commits despite short distance', () => {
+  it('fast left flick commits despite short distance', () => {
     const el = mount();
     el.onSwipe({ direction: 'left', distance: 10, velocity: 0.5 });
     expect(el._revealedDir).toBe('left');
+  });
+
+  it('right swipe at 2× color-panel width (112px) dispatches list-color-cycle', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('list-color-cycle', e => events.push(e));
+    el.onSwipe({ direction: 'right', distance: 112, velocity: 0 });
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.list.id).toBe('l1');
+  });
+
+  it('right swipe below commit threshold does not dispatch list-color-cycle', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('list-color-cycle', e => events.push(e));
+    el.onSwipe({ direction: 'right', distance: 111, velocity: 0 });
+    expect(events).toHaveLength(0);
+  });
+
+  it('fast right flick commits color cycle regardless of distance', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('list-color-cycle', e => events.push(e));
+    el.onSwipe({ direction: 'right', distance: 10, velocity: 0.5 });
+    expect(events).toHaveLength(1);
+  });
+
+  it('right swipe always snaps back (never stays open)', () => {
+    const el = mount();
+    el.onSwipe({ direction: 'right', distance: 112, velocity: 0 });
+    expect(el._revealedDir).toBeNull();
   });
 
   it('_closeReveal applies spring snap-back transition', () => {
@@ -291,6 +368,54 @@ describe('lists-page-item — swipe', () => {
       .toBe('transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)');
   });
 });
+
+// ── Drag handle ───────────────────────────────────────────────────────────────
+
+describe('lists-page-item — drag', () => {
+  it('dispatches list-drag-start on drag-btn pointerdown', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('list-drag-start', e => events.push(e));
+    el.shadowRoot.querySelector('#drag-btn').dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 10, clientY: 10 })
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.list.id).toBe('l1');
+  });
+
+  it('dispatches list-reorder-key with direction -1 on ArrowUp', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('list-reorder-key', e => events.push(e));
+    el.shadowRoot.querySelector('#drag-btn').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })
+    );
+    expect(events[0].detail.direction).toBe(-1);
+    expect(events[0].detail.list.id).toBe('l1');
+  });
+
+  it('dispatches list-reorder-key with direction 1 on ArrowDown', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('list-reorder-key', e => events.push(e));
+    el.shadowRoot.querySelector('#drag-btn').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })
+    );
+    expect(events[0].detail.direction).toBe(1);
+  });
+
+  it('other keys on drag-btn do not dispatch list-reorder-key', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('list-reorder-key', e => events.push(e));
+    el.shadowRoot.querySelector('#drag-btn').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
+    expect(events).toHaveLength(0);
+  });
+});
+
+// ── Color ─────────────────────────────────────────────────────────────────────
 
 describe('lists-page-item — color', () => {
   it('applies color to row via CSS custom property', () => {
@@ -303,5 +428,17 @@ describe('lists-page-item — color', () => {
     const el = mount();
     const val = el.shadowRoot.querySelector('.row').style.getPropertyValue('--list-item-color');
     expect(val).toBe('transparent');
+  });
+
+  it('sets color-panel background when list has a color', () => {
+    const el = mount({ ...LIST, color: '#3DAD6A' });
+    const val = el.shadowRoot.querySelector('#color-panel').style.getPropertyValue('--color-panel-bg');
+    expect(val).toBe('#3DAD6A');
+  });
+
+  it('removes color-panel background when list has no color', () => {
+    const el = mount();
+    const val = el.shadowRoot.querySelector('#color-panel').style.getPropertyValue('--color-panel-bg');
+    expect(val).toBe('');
   });
 });

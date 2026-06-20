@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { boot, setState, reset } from '../../_lib/core/store/store.js';
+import { boot, setState, getState, reset } from '../../_lib/core/store/store.js';
 import '../../app/strings.js';
 import '../../app/pages/lists-page.js';
 import '../../app/components/list-dialog/list-dialog.js';
+import { COLOR_PALETTE } from '../../app/components/lists-page-item/lists-page-item.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
@@ -124,7 +125,7 @@ describe('lists-page — create list', () => {
       bubbles: true, composed: true, detail: { name: 'Ideas' },
     }));
     await vi.waitFor(() => expect(getItems(el).length).toBe(1));
-    const { lists } = (await import('../../_lib/core/store/store.js')).getState();
+    const lists = getState().lists;
     expect(lists).toHaveLength(1);
     expect(lists[0].name).toBe('Ideas');
     expect(lists[0].items).toEqual([]);
@@ -132,14 +133,17 @@ describe('lists-page — create list', () => {
 });
 
 describe('lists-page — rename list', () => {
-  it('renames a list when list-saved fires after edit click', async () => {
+  it('renames a list when list-saved fires after list-edit event', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
-    setState('lists', [{ id: 'l1', name: 'Old name', items: [] }]);
+    const list = { id: 'l1', name: 'Old name', items: [] };
+    setState('lists', [list]);
     await vi.waitFor(() => expect(getItems(el).length).toBe(1));
 
-    // Click the edit button inside the lists-page-item shadow DOM
-    getItemInner(getItems(el)[0], '#edit-btn').click();
+    // Fire list-edit to set _editingList on the page
+    getItems(el)[0].dispatchEvent(new CustomEvent('list-edit', {
+      bubbles: true, composed: true, detail: { list },
+    }));
     el.shadowRoot.dispatchEvent(new CustomEvent('list-saved', {
       bubbles: true, composed: true, detail: { name: 'New name' },
     }));
@@ -153,10 +157,14 @@ describe('lists-page — delete list', () => {
   it('removes a list when list-delete fires on dialog', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
-    setState('lists', [{ id: 'l1', name: 'To delete', items: [] }]);
+    const list = { id: 'l1', name: 'To delete', items: [] };
+    setState('lists', [list]);
     await vi.waitFor(() => expect(getItems(el).length).toBe(1));
 
-    getItemInner(getItems(el)[0], '#edit-btn').click();
+    // Fire list-edit to set _editingList on the page
+    getItems(el)[0].dispatchEvent(new CustomEvent('list-edit', {
+      bubbles: true, composed: true, detail: { list },
+    }));
     el.shadowRoot.querySelector('#dialog').dispatchEvent(
       new CustomEvent('list-delete', { bubbles: true, composed: true })
     );
@@ -207,12 +215,12 @@ describe('lists-page — accessibility', () => {
     );
   });
 
-  it('edit button aria-label includes the list name', async () => {
+  it('nav button aria-label includes the list name', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     setState('lists', [{ id: 'l1', name: 'Gift ideas', items: [] }]);
     await vi.waitFor(() => expect(getItems(el).length).toBe(1));
-    expect(getItemInner(getItems(el)[0], '#edit-btn').getAttribute('aria-label')).toContain('Gift ideas');
+    expect(getItemInner(getItems(el)[0], '#nav-btn').getAttribute('aria-label')).toContain('Gift ideas');
   });
 
   it('item count is displayed in each row', async () => {
@@ -224,5 +232,94 @@ describe('lists-page — accessibility', () => {
     ] }]);
     await vi.waitFor(() => expect(getItems(el).length).toBe(1));
     expect(getItemInner(getItems(el)[0], '.item-count').textContent).toBe('2');
+  });
+});
+
+// ── _placeList ────────────────────────────────────────────────────────────────
+
+describe('lists-page — _placeList', () => {
+  it('moves a list forward in the array', async () => {
+    const LA = { id: 'la', name: 'A', items: [] };
+    const LB = { id: 'lb', name: 'B', items: [] };
+    const LC = { id: 'lc', name: 'C', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [LA, LB, LC] } });
+    const el = mount();
+    el._placeList(0, 2);
+    expect(getState().lists.map(l => l.id)).toEqual(['lb', 'la', 'lc']);
+  });
+
+  it('moves a list backward in the array', async () => {
+    const LA = { id: 'la', name: 'A', items: [] };
+    const LB = { id: 'lb', name: 'B', items: [] };
+    const LC = { id: 'lc', name: 'C', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [LA, LB, LC] } });
+    const el = mount();
+    el._placeList(2, 0);
+    expect(getState().lists.map(l => l.id)).toEqual(['lc', 'la', 'lb']);
+  });
+
+  it('is a no-op when fromIndex === toIndex', async () => {
+    const LA = { id: 'la', name: 'A', items: [] };
+    const LB = { id: 'lb', name: 'B', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [LA, LB] } });
+    const el = mount();
+    el._placeList(0, 0);
+    expect(getState().lists.map(l => l.id)).toEqual(['la', 'lb']);
+  });
+
+  it('is a no-op when fromIndex === toIndex - 1 (drop on the same slot)', async () => {
+    const LA = { id: 'la', name: 'A', items: [] };
+    const LB = { id: 'lb', name: 'B', items: [] };
+    const LC = { id: 'lc', name: 'C', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [LA, LB, LC] } });
+    const el = mount();
+    el._placeList(1, 2);
+    expect(getState().lists.map(l => l.id)).toEqual(['la', 'lb', 'lc']);
+  });
+});
+
+// ── color cycling ─────────────────────────────────────────────────────────────
+
+describe('lists-page — color cycling', () => {
+  it('advances color to the next palette entry on list-color-cycle event', async () => {
+    const la = { id: 'la', name: 'A', items: [], color: COLOR_PALETTE[1] };
+    await boot({ dbName: freshName(), initialState: { lists: [la] } });
+    const el = mount();
+    el._container.dispatchEvent(new CustomEvent('list-color-cycle', {
+      bubbles: true, composed: true, detail: { list: la },
+    }));
+    expect(getState().lists[0].color).toBe(COLOR_PALETTE[2]);
+  });
+
+  it('wraps from last palette entry back to null', async () => {
+    const lastColor = COLOR_PALETTE[COLOR_PALETTE.length - 1];
+    const la = { id: 'la', name: 'A', items: [], color: lastColor };
+    await boot({ dbName: freshName(), initialState: { lists: [la] } });
+    const el = mount();
+    el._container.dispatchEvent(new CustomEvent('list-color-cycle', {
+      bubbles: true, composed: true, detail: { list: la },
+    }));
+    expect(getState().lists[0]).not.toHaveProperty('color');
+  });
+
+  it('advances from null (no color) to the first non-null color', async () => {
+    const la = { id: 'la', name: 'A', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [la] } });
+    const el = mount();
+    el._container.dispatchEvent(new CustomEvent('list-color-cycle', {
+      bubbles: true, composed: true, detail: { list: la },
+    }));
+    expect(getState().lists[0].color).toBe(COLOR_PALETTE[1]);
+  });
+
+  it('does not affect other lists when cycling one', async () => {
+    const la = { id: 'la', name: 'A', items: [], color: COLOR_PALETTE[1] };
+    const lb = { id: 'lb', name: 'B', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [la, lb] } });
+    const el = mount();
+    el._container.dispatchEvent(new CustomEvent('list-color-cycle', {
+      bubbles: true, composed: true, detail: { list: la },
+    }));
+    expect(getState().lists.find(l => l.id === 'lb')).not.toHaveProperty('color');
   });
 });

@@ -232,7 +232,6 @@ describe('list-dialog — draft', () => {
     localStorage.setItem(LIST_DRAFT_KEY, JSON.stringify({ name: '', color: '#3DAD6A' }));
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#color-toggle').click();
     expect(el.shadowRoot.querySelector('.swatch[data-color="#3DAD6A"]').getAttribute('aria-pressed')).toBe('true');
   });
 
@@ -255,7 +254,6 @@ describe('list-dialog — draft', () => {
   it('saves draft when a color swatch is selected', () => {
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#color-toggle').click();
     el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
     expect(JSON.parse(localStorage.getItem(LIST_DRAFT_KEY)).color).toBe('#4A94D4');
   });
@@ -303,34 +301,27 @@ describe('list-dialog — draft', () => {
 // ── color picker ──────────────────────────────────────────────────────────────
 
 describe('list-dialog — color picker', () => {
-  it('color swatches are hidden by default', () => {
+  it('color swatches are always visible without any interaction', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('.color-swatches').hidden).toBe(true);
-  });
-
-  it('clicking color-toggle reveals swatches', () => {
-    const el = mount();
-    el.open(null);
-    el.shadowRoot.querySelector('#color-toggle').click();
     expect(el.shadowRoot.querySelector('.color-swatches').hidden).toBe(false);
-  });
-
-  it('clicking a swatch collapses the swatches row', () => {
-    const el = mount();
-    el.open(null);
-    el.shadowRoot.querySelector('#color-toggle').click();
-    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
-    expect(el.shadowRoot.querySelector('.color-swatches').hidden).toBe(true);
   });
 
   it('selected swatch gets aria-pressed true', () => {
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#color-toggle').click();
     el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
-    el.shadowRoot.querySelector('#color-toggle').click();
     expect(el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('only one swatch has aria-pressed true at a time', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    el.shadowRoot.querySelector('.swatch[data-color="#E5534B"]').click();
+    const pressed = [...el.shadowRoot.querySelectorAll('.swatch[aria-pressed="true"]')];
+    expect(pressed).toHaveLength(1);
+    expect(pressed[0].dataset.color).toBe('#E5534B');
   });
 
   it('color is included in list-saved detail when a swatch is selected', () => {
@@ -338,7 +329,6 @@ describe('list-dialog — color picker', () => {
     el.open(null);
     const events = [];
     el.addEventListener('list-saved', e => events.push(e));
-    el.shadowRoot.querySelector('#color-toggle').click();
     el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
     const inp = el.shadowRoot.querySelector('#input');
     inp.value = 'Books';
@@ -362,14 +352,12 @@ describe('list-dialog — color picker', () => {
   it('pre-selects the list colour when opened with an existing list', () => {
     const el = mount();
     el.open(LIST_WITH_COLOR);
-    el.shadowRoot.querySelector('#color-toggle').click();
     expect(el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('pre-selects no color when list has no color', () => {
     const el = mount();
     el.open(LIST);
-    el.shadowRoot.querySelector('#color-toggle').click();
     expect(el.shadowRoot.querySelector('.swatch[data-color=""]').getAttribute('aria-pressed')).toBe('true');
   });
 
@@ -378,7 +366,6 @@ describe('list-dialog — color picker', () => {
     el.open(LIST_WITH_COLOR);
     const events = [];
     el.addEventListener('list-saved', e => events.push(e));
-    el.shadowRoot.querySelector('#color-toggle').click();
     el.shadowRoot.querySelector('.swatch[data-color=""]').click();
     el.shadowRoot.querySelector('#input').dispatchEvent(new Event('input'));
     el.shadowRoot.querySelector('#save').click();

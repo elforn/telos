@@ -224,6 +224,8 @@ class ListDetailPage extends AppElement {
     this._dialog      = this.shadowRoot.querySelector('#dialog');
     this._menuDialog  = this.shadowRoot.querySelector('#menu');
     this._editingItem = null;
+    this._drag        = null;
+    this._insertLine  = null;
 
     // Status preference — per list
     this._showStatus = localStorage.getItem(lsKey(this._listId)) !== 'false';
@@ -304,6 +306,91 @@ class ListDetailPage extends AppElement {
     };
     this._dialog.addEventListener('item-delete', this._onDialogDelete);
 
+    // ── Drag-to-reorder ───────────────────────────────────────────────────────
+
+    this._onItemDragStart = e => {
+      const { item, element: dragEl, startX, startY } = e.detail;
+      const items     = [...this._itemList.querySelectorAll('list-item')];
+      const fromIndex = items.indexOf(dragEl);
+      const rect      = dragEl.getBoundingClientRect();
+
+      dragEl.style.opacity = '0.4';
+
+      const clone = this._createDragClone(rect, item.title);
+      clone.style.left = `${rect.left}px`;
+      clone.style.top  = `${rect.top}px`;
+      document.body.appendChild(clone);
+
+      if (!this._insertLine) {
+        this._insertLine = document.createElement('div');
+        this._insertLine.style.cssText = 'height:2px;border-radius:1px;margin-block:calc(var(--space-2)/2);pointer-events:none;background:var(--color-accent)';
+      }
+
+      this._drag = { item, fromIndex, dragEl, clone,
+        offsetX: startX - rect.left, offsetY: startY - rect.top,
+        targetIndex: fromIndex, scrollSpeed: 0, scrollRaf: null };
+
+      const scrollLoop = () => {
+        if (!this._drag) return;
+        if (this._drag.scrollSpeed !== 0) window.scrollBy(0, this._drag.scrollSpeed);
+        this._drag.scrollRaf = requestAnimationFrame(scrollLoop);
+      };
+      this._drag.scrollRaf = requestAnimationFrame(scrollLoop);
+
+      dragEl.addEventListener('pointermove',   this._onDragMove);
+      dragEl.addEventListener('pointerup',     this._onDragEnd);
+      dragEl.addEventListener('pointercancel', this._onDragEnd);
+    };
+
+    this._onDragMove = e => {
+      if (!this._drag) return;
+      const { dragEl, clone, offsetX, offsetY } = this._drag;
+      clone.style.left = `${e.clientX - offsetX}px`;
+      clone.style.top  = `${e.clientY - offsetY}px`;
+
+      const SCROLL_ZONE = 100;
+      const MAX_SPEED   = 14;
+      const vh = window.innerHeight;
+      if (e.clientY < SCROLL_ZONE)
+        this._drag.scrollSpeed = -MAX_SPEED * (1 - e.clientY / SCROLL_ZONE);
+      else if (e.clientY > vh - SCROLL_ZONE)
+        this._drag.scrollSpeed =  MAX_SPEED * (1 - (vh - e.clientY) / SCROLL_ZONE);
+      else
+        this._drag.scrollSpeed = 0;
+
+      const idx = this._insertIndexAt(this._itemList, e.clientY, dragEl);
+      this._drag.targetIndex = idx;
+      this._updateInsertLine(this._itemList, idx, dragEl);
+    };
+
+    this._onDragEnd = () => {
+      if (!this._drag) return;
+      const { fromIndex, dragEl, clone, targetIndex } = this._drag;
+      dragEl.removeEventListener('pointermove',   this._onDragMove);
+      dragEl.removeEventListener('pointerup',     this._onDragEnd);
+      dragEl.removeEventListener('pointercancel', this._onDragEnd);
+      dragEl.style.opacity = '';
+      cancelAnimationFrame(this._drag.scrollRaf);
+      clone.remove();
+      this._insertLine?.remove();
+      this._drag = null;
+      this._placeItem(fromIndex, targetIndex);
+    };
+
+    this._onItemReorderKey = e => {
+      const { item, direction } = e.detail;
+      const items = [...this._itemList.querySelectorAll('list-item')];
+      const fromIndex = items.findIndex(el => el._item?.id === item.id);
+      if (fromIndex === -1) return;
+      const toIndex = direction === -1 ? Math.max(0, fromIndex - 1) : fromIndex + 2;
+      this._placeItem(fromIndex, toIndex);
+    };
+
+    this._itemList.addEventListener('item-drag-start',  this._onItemDragStart);
+    this._itemList.addEventListener('item-reorder-key', this._onItemReorderKey);
+
+    // ── Store ─────────────────────────────────────────────────────────────────
+
     this._onLists = lists => {
       const list = (lists ?? []).find(l => l.id === this._listId);
       if (!list) { navigate(`${BASE_PATH}lists`); return; }
@@ -324,8 +411,21 @@ class ListDetailPage extends AppElement {
     this._itemList?.removeEventListener('item-tap', this._onItemTap);
     this._itemList?.removeEventListener('item-delete', this._onItemDelete);
     this._itemList?.removeEventListener('item-done-toggle', this._onItemDoneToggle);
+    this._itemList?.removeEventListener('item-drag-start',  this._onItemDragStart);
+    this._itemList?.removeEventListener('item-reorder-key', this._onItemReorderKey);
     this.shadowRoot?.removeEventListener('item-saved', this._onItemSaved);
     this._dialog?.removeEventListener('item-delete', this._onDialogDelete);
+    if (this._drag) {
+      const { dragEl, clone } = this._drag;
+      dragEl.removeEventListener('pointermove',   this._onDragMove);
+      dragEl.removeEventListener('pointerup',     this._onDragEnd);
+      dragEl.removeEventListener('pointercancel', this._onDragEnd);
+      dragEl.style.opacity = '';
+      cancelAnimationFrame(this._drag.scrollRaf);
+      clone.remove();
+      this._insertLine?.remove();
+      this._drag = null;
+    }
     if (this._onLists) unsubscribe('lists', this._onLists);
   }
 
@@ -352,6 +452,61 @@ class ListDetailPage extends AppElement {
 
   _deleteItem(id) {
     this._mutateItems(items => items.filter(i => i.id !== id));
+  }
+
+  // ── Drag helpers ──────────────────────────────────────────────────────────
+
+  _insertIndexAt(list, y, ghostEl) {
+    const items = [...list.querySelectorAll('list-item')];
+    for (const item of items.filter(el => el !== ghostEl)) {
+      const r = item.getBoundingClientRect();
+      if (y < r.top + r.height / 2) return items.indexOf(item);
+    }
+    return items.length;
+  }
+
+  _updateInsertLine(list, targetIndex, ghostEl) {
+    const items = [...list.querySelectorAll('list-item')];
+    if (targetIndex >= items.length) list.appendChild(this._insertLine);
+    else list.insertBefore(this._insertLine, items[targetIndex]);
+  }
+
+  _createDragClone(rect, title) {
+    const clone = document.createElement('div');
+    clone.setAttribute('aria-hidden', 'true');
+    clone.style.cssText = [
+      'position:fixed',
+      `width:${rect.width}px`,
+      `height:${rect.height}px`,
+      'background:var(--color-surface)',
+      'border:0.5px solid var(--color-border)',
+      'border-radius:var(--radius-md)',
+      'box-shadow:0 8px 24px rgba(0,0,0,0.18)',
+      'display:flex',
+      'align-items:center',
+      'padding:0 var(--space-3)',
+      'pointer-events:none',
+      'z-index:9999',
+      'overflow:hidden',
+      'white-space:nowrap',
+      'text-overflow:ellipsis',
+      'font-family:var(--font-family)',
+      'font-size:var(--font-size-body)',
+      'font-weight:var(--font-weight-medium)',
+      'color:var(--color-text-primary)',
+    ].join(';');
+    clone.textContent = title;
+    return clone;
+  }
+
+  _placeItem(fromIndex, toIndex) {
+    if (fromIndex === toIndex || fromIndex === toIndex - 1) return;
+    this._mutateItems(items => {
+      const arr = [...items];
+      const [item] = arr.splice(fromIndex, 1);
+      arr.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, item);
+      return arr;
+    });
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
