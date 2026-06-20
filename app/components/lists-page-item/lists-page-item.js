@@ -3,8 +3,9 @@ import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 
 const REVEAL_WIDTH    = 80;
-const COMMIT_RATIO    = 1.2;
+const COMMIT_RATIO    = 2.0;
 const COMMIT_VELOCITY = 0.35;
+const SWIPE_DEAD_ZONE = 15;   // px of drag before row starts moving
 
 class ListsPageItem extends Gestures(AppElement) {
   set list(value) {
@@ -195,7 +196,8 @@ class ListsPageItem extends Gestures(AppElement) {
     if (this._revealedDir === 'left') {
       offset = Math.min(0, -REVEAL_WIDTH + e.dx);
     } else {
-      offset = Math.max(-REVEAL_WIDTH, Math.min(0, e.dx));
+      const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : Math.min(0, e.dx + SWIPE_DEAD_ZONE);
+      offset = Math.max(-REVEAL_WIDTH, Math.min(0, dx));
     }
     this._row.style.transform = `translateX(${offset}px)`;
   }
@@ -223,7 +225,7 @@ class ListsPageItem extends Gestures(AppElement) {
   // ── Private ───────────────────────────────────────────────────────────────
 
   _closeReveal() {
-    this._row.style.transition = 'transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1)';
+    this._row.style.transition = 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
     this._row.style.transform  = '';
     this._revealedDir = null;
     if (this._deleteConfirm) {

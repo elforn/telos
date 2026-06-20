@@ -4,8 +4,9 @@ import { t } from '../../../_lib/core/strings.js';
 
 const DONE_WIDTH      = 48;   // square-ish done button
 const DELETE_WIDTH    = 80;   // wider delete button (text label)
-const COMMIT_RATIO    = 1.2;  // fraction of reveal width needed to commit
+const COMMIT_RATIO    = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
+const SWIPE_DEAD_ZONE = 15;   // px of drag before row starts moving
 
 class ListItem extends Gestures(AppElement) {
   set item(value) {
@@ -264,7 +265,8 @@ class ListItem extends Gestures(AppElement) {
       // Done revealed — only allow closing (moving left toward 0, not past)
       offset = Math.max(0, DONE_WIDTH + e.dx);
     } else {
-      offset = Math.max(-DELETE_WIDTH, Math.min(DONE_WIDTH, e.dx));
+      const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : Math.min(0, e.dx + SWIPE_DEAD_ZONE);
+      offset = Math.max(-DELETE_WIDTH, Math.min(DONE_WIDTH, dx));
     }
     this._row.style.transform = `translateX(${offset}px)`;
   }
@@ -293,7 +295,7 @@ class ListItem extends Gestures(AppElement) {
   // ── Private ───────────────────────────────────────────────────────────────
 
   _closeReveal() {
-    this._row.style.transition = 'transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1)';
+    this._row.style.transition = 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
     this._row.style.transform  = '';
     this._revealedDir = null;
     if (this._deleteConfirm) {

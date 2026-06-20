@@ -247,6 +247,51 @@ describe('lists-page-item — accessibility', () => {
   });
 });
 
+describe('lists-page-item — swipe', () => {
+  it('row does not move for dx within dead zone (dx=-5)', () => {
+    const el = mount();
+    el.onSwipeMove({ dx: -5 });
+    expect(el.shadowRoot.querySelector('.row').style.transform).toBe('translateX(0px)');
+  });
+
+  it('row moves left by dx plus dead zone when swiping left past dead zone (dx=-20)', () => {
+    const el = mount();
+    el.onSwipeMove({ dx: -20 });
+    expect(el.shadowRoot.querySelector('.row').style.transform).toBe('translateX(-5px)');
+  });
+
+  it('right swipe does not move row (only left reveals delete)', () => {
+    const el = mount();
+    el.onSwipeMove({ dx: 20 });
+    expect(el.shadowRoot.querySelector('.row').style.transform).toBe('translateX(0px)');
+  });
+
+  it('left swipe at exactly 2× reveal width (160px) commits', () => {
+    const el = mount();
+    el.onSwipe({ direction: 'left', distance: 160, velocity: 0 });
+    expect(el._revealedDir).toBe('left');
+  });
+
+  it('left swipe at 159px does not commit', () => {
+    const el = mount();
+    el.onSwipe({ direction: 'left', distance: 159, velocity: 0 });
+    expect(el._revealedDir).toBeNull();
+  });
+
+  it('fast flick commits despite short distance', () => {
+    const el = mount();
+    el.onSwipe({ direction: 'left', distance: 10, velocity: 0.5 });
+    expect(el._revealedDir).toBe('left');
+  });
+
+  it('_closeReveal applies spring snap-back transition', () => {
+    const el = mount();
+    el._closeReveal();
+    expect(el.shadowRoot.querySelector('.row').style.transition)
+      .toBe('transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)');
+  });
+});
+
 describe('lists-page-item — color', () => {
   it('applies color to row via CSS custom property', () => {
     const el = mount({ ...LIST, color: '#ff0000' });

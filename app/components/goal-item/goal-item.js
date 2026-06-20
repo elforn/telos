@@ -3,8 +3,9 @@ import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 
 const REVEAL_WIDTH    = 80;
-const COMMIT_RATIO    = 1.2;  // fraction of reveal width needed to commit
+const COMMIT_RATIO    = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
+const SWIPE_DEAD_ZONE = 15;   // px of drag before bar starts moving
 
 class GoalItem extends Gestures(AppElement) {
   set goal(value) {
@@ -501,7 +502,8 @@ class GoalItem extends Gestures(AppElement) {
     } else if (this._revealedDir === 'right') {
       offset = Math.max(0, REVEAL_WIDTH + e.dx);
     } else {
-      offset = Math.max(-REVEAL_WIDTH, Math.min(REVEAL_WIDTH, e.dx));
+      const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : Math.min(0, e.dx + SWIPE_DEAD_ZONE);
+      offset = Math.max(-REVEAL_WIDTH, Math.min(REVEAL_WIDTH, dx));
     }
     this._bar.style.transform = `translateX(${offset}px)`;
   }
@@ -534,7 +536,7 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   _closeReveal() {
-    this._bar.style.transition = '';
+    this._bar.style.transition = 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
     this._bar.style.transform  = '';
     this._revealedDir = null;
     if (this._deleteConfirm) {
