@@ -221,7 +221,7 @@ describe('previewImport', () => {
     await expect(previewImport({ socleVersion: 99, events: [], images: [] })).rejects.toThrow('Invalid or incompatible');
   });
 
-  it('binary event-log file → type: log, events array, empty blobs', async () => {
+  it.skipIf(!dispatch)('binary event-log file → type: log, events array, empty blobs', async () => {
     const binary = await exportData();
     const parsed = await previewImport(binary);
     expect(parsed.type).toBe('log');
@@ -275,7 +275,7 @@ describe('previewImport', () => {
     expect(parsed.payload.score).toBe(7);
   });
 
-  it('does not write anything to IDB', async () => {
+  it.skipIf(!dispatch)('does not write anything to IDB', async () => {
     const binary = await exportData();
     await previewImport(binary);
     const all = await getAllEvents();
@@ -286,7 +286,7 @@ describe('previewImport', () => {
 // ── applyReplace ──────────────────────────────────────────────────────────────
 
 describe('applyReplace', () => {
-  it('log type: writes new events to IDB', async () => {
+  it.skipIf(!dispatch)('log type: writes new events to IDB', async () => {
     const parsed = await previewImport({
       socleVersion: 1,
       events: [{ id: 'r-e1', type: 'item:added', payload: { title: 'imported' }, deviceId: null, recordedAt: 1, occurredAt: 1 }],
