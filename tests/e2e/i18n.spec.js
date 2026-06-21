@@ -13,11 +13,11 @@ async function switchLocale(page, locale) {
   await waitForPage(page);
 }
 
-async function editBtnText(page) {
+async function sectionHeadingText(page) {
   return page.evaluate(() =>
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
-      .querySelector('#capstone-edit-btn')?.textContent?.trim()
+      .querySelector('#capstone-section h2')?.textContent?.trim()
   );
 }
 
@@ -44,24 +44,24 @@ test.describe('Language picker', () => {
 
   test('switching to French renders French strings', async ({ page }) => {
     await switchLocale(page, 'fr');
-    expect(await editBtnText(page)).toBe('Modifier');
+    expect(await sectionHeadingText(page)).toBe('Objectif phare');
   });
 
   test('switching to Catalan renders Catalan strings', async ({ page }) => {
     await switchLocale(page, 'ca');
-    expect(await editBtnText(page)).toBe('Edita');
+    expect(await sectionHeadingText(page)).toBe('Objectiu principal');
   });
 
   test('selected locale persists across reload', async ({ page }) => {
     await switchLocale(page, 'fr');
     await page.reload();
     await waitForPage(page);
-    expect(await editBtnText(page)).toBe('Modifier');
+    expect(await sectionHeadingText(page)).toBe('Objectif phare');
   });
 
   test('switching back to English restores English strings', async ({ page }) => {
     await switchLocale(page, 'fr');
     await switchLocale(page, 'en');
-    expect(await editBtnText(page)).toBe('Edit');
+    expect(await sectionHeadingText(page)).toBe('Capstone');
   });
 });

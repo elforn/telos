@@ -52,14 +52,6 @@ async function goalItemCount(page, listId) {
   }, listId);
 }
 
-async function enableEditMode(page, editBtnId) {
-  await page.evaluate(id => {
-    document.querySelector('app-router').shadowRoot
-      .querySelector('home-page').shadowRoot
-      .querySelector(id).click();
-  }, editBtnId);
-}
-
 // ── Goal creation ─────────────────────────────────────────────────────────────
 
 test.describe('Goal creation', () => {
@@ -69,8 +61,7 @@ test.describe('Goal creation', () => {
     await waitForPage(page);
   });
 
-  test('can create a capstone goal via edit mode + add button', async ({ page }) => {
-    await enableEditMode(page, '#capstone-edit-btn');
+  test('can create a capstone goal via add button', async ({ page }) => {
     await openDialog(page, '#add-capstone');
     await fillAndSaveDialog(page, 'Summit Everest');
 
@@ -84,7 +75,6 @@ test.describe('Goal creation', () => {
   });
 
   test('can create a 3-month milestone', async ({ page }) => {
-    await enableEditMode(page, '#milestone-edit-btn');
     await openDialog(page, '#add-milestone');
     await fillAndSaveDialog(page, 'Run 100km');
 
@@ -98,7 +88,6 @@ test.describe('Goal creation', () => {
   });
 
   test('can create a wow moment', async ({ page }) => {
-    await enableEditMode(page, '#wow-edit-btn');
     await openDialog(page, '#add-wow');
     await fillAndSaveDialog(page, 'First marathon');
 
@@ -112,7 +101,6 @@ test.describe('Goal creation', () => {
   });
 
   test('created goal persists across page reload', async ({ page }) => {
-    await enableEditMode(page, '#milestone-edit-btn');
     await openDialog(page, '#add-milestone');
     await fillAndSaveDialog(page, 'Persist me');
 
@@ -150,7 +138,6 @@ test.describe('Goal deletion', () => {
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
 
-    await enableEditMode(page, '#milestone-edit-btn');
     await openDialog(page, '#add-milestone');
     await fillAndSaveDialog(page, 'To be deleted');
     await page.waitForFunction(() => {
@@ -160,12 +147,14 @@ test.describe('Goal deletion', () => {
     });
   });
 
-  test('delete via delete button in edit mode removes the item', async ({ page }) => {
+  test('delete via delete button removes the item', async ({ page }) => {
     const deleted = await page.evaluate(() => {
       const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('#milestone-list goal-item');
       if (!item) return false;
+      // Two clicks: first arms the confirm state, second fires goal-delete
+      item.shadowRoot.querySelector('#delete-btn').click();
       item.shadowRoot.querySelector('#delete-btn').click();
       return true;
     });
@@ -185,6 +174,7 @@ test.describe('Goal deletion', () => {
       const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('#milestone-list goal-item');
+      item?.shadowRoot?.querySelector('#delete-btn').click();
       item?.shadowRoot?.querySelector('#delete-btn').click();
     });
 
@@ -221,6 +211,7 @@ test.describe('Goal deletion', () => {
         .querySelector('home-page').shadowRoot
         .querySelectorAll('#milestone-list goal-item');
       items[0]?.shadowRoot?.querySelector('#delete-btn').click();
+      items[0]?.shadowRoot?.querySelector('#delete-btn').click();
     });
 
     await page.waitForFunction(() => {
@@ -247,7 +238,6 @@ test.describe('Goal progress via hold-drag', () => {
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
 
-    await enableEditMode(page, '#capstone-edit-btn');
     await openDialog(page, '#add-capstone');
     await fillAndSaveDialog(page, 'Drag me');
     await page.waitForFunction(() => {
@@ -294,50 +284,24 @@ test.describe('Goal progress via hold-drag', () => {
   });
 });
 
-// ── Goal tap — edit mode gate ─────────────────────────────────────────────────
+// ── Goal tap — opens dialog ───────────────────────────────────────────────────
 
-test.describe('Goal tap — edit mode gate', () => {
+test.describe('Goal tap — opens dialog', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(`/${currentYear}`);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
 
-    await enableEditMode(page, '#capstone-edit-btn');
     await openDialog(page, '#add-capstone');
-    await fillAndSaveDialog(page, 'Tap gate test');
+    await fillAndSaveDialog(page, 'Tap test');
     await page.waitForFunction(() => {
       const list = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
       return list?.querySelectorAll('goal-item').length === 1;
     });
-    await enableEditMode(page, '#capstone-edit-btn'); // exit edit mode
   });
 
-  test('tapping a goal in view mode does not open the dialog', async ({ page }) => {
-    const barBounds = await page.evaluate(() => {
-      const bar = document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('#capstone-list goal-item').shadowRoot
-        .querySelector('.bar');
-      return bar.getBoundingClientRect().toJSON();
-    });
-
-    await page.mouse.click(barBounds.x + barBounds.width / 2, barBounds.y + barBounds.height / 2);
-    await page.waitForTimeout(200);
-
-    const dialogOpen = await page.evaluate(() => {
-      const d = document.querySelector('app-router')?.shadowRoot
-        ?.querySelector('home-page')?.shadowRoot
-        ?.querySelector('goal-dialog')?.shadowRoot
-        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
-      return d?.open ?? false;
-    });
-    expect(dialogOpen).toBe(false);
-  });
-
-  test('tapping a goal in edit mode opens the dialog', async ({ page }) => {
-    await enableEditMode(page, '#capstone-edit-btn'); // enter edit mode
-
+  test('tapping a goal opens the edit dialog', async ({ page }) => {
     const barBounds = await page.evaluate(() => {
       const bar = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
@@ -366,7 +330,6 @@ test.describe('Goal fail / restore', () => {
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
 
-    await enableEditMode(page, '#capstone-edit-btn');
     await openDialog(page, '#add-capstone');
     await fillAndSaveDialog(page, 'Fail me');
     await page.waitForFunction(() => {
@@ -374,8 +337,6 @@ test.describe('Goal fail / restore', () => {
         .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
       return list?.querySelectorAll('goal-item').length === 1;
     });
-      // Exit edit mode
-    await enableEditMode(page, '#capstone-edit-btn');
   });
 
   test('fail button marks goal as failed', async ({ page }) => {
@@ -447,7 +408,6 @@ test.describe('Failed goal — non-interactive', () => {
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
 
-    await enableEditMode(page, '#capstone-edit-btn');
     await openDialog(page, '#add-capstone');
     await fillAndSaveDialog(page, 'Fail test goal');
     await page.waitForFunction(() => {
@@ -455,7 +415,6 @@ test.describe('Failed goal — non-interactive', () => {
         .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
       return list?.querySelectorAll('goal-item').length === 1;
     });
-    await enableEditMode(page, '#capstone-edit-btn'); // exit edit mode
 
     // Fail the goal
     await page.evaluate(() => {
@@ -532,7 +491,6 @@ test.describe('Goal delete via dialog', () => {
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
 
-    await enableEditMode(page, '#capstone-edit-btn');
     await openDialog(page, '#add-capstone');
     await fillAndSaveDialog(page, 'Delete me via dialog');
     await page.waitForFunction(() => {
@@ -588,10 +546,13 @@ test.describe('Goal delete via dialog', () => {
     });
 
     await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
+      // Two clicks: first arms the confirm state, second fires goal-delete
+      const d = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('#delete').click();
+        .querySelector('#delete');
+      d.click();
+      d.click();
     });
 
     await page.waitForFunction(() => {
@@ -622,10 +583,13 @@ test.describe('Goal delete via dialog', () => {
     });
 
     await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
+      // Two clicks: first arms the confirm state, second fires goal-delete
+      const d = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('#delete').click();
+        .querySelector('#delete');
+      d.click();
+      d.click();
     });
 
     await page.waitForFunction(() => {

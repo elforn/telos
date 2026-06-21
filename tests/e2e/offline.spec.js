@@ -29,11 +29,6 @@ test.describe('Offline behaviour', () => {
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
-        .querySelector('#capstone-edit-btn').click();
-    });
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
         .querySelector('#add-capstone').click();
     });
     await page.waitForFunction(() => {

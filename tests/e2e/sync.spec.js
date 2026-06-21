@@ -70,11 +70,6 @@ async function createGoal(page, title) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
-      .querySelector('#capstone-edit-btn').click();
-  });
-  await page.evaluate(() => {
-    document.querySelector('app-router').shadowRoot
-      .querySelector('home-page').shadowRoot
       .querySelector('#add-capstone').click();
   });
   await page.waitForFunction(() => {
@@ -152,7 +147,7 @@ async function createList(page, name) {
   await page.waitForFunction(() =>
     (document.querySelector('app-router')?.shadowRoot
       ?.querySelector('lists-page')?.shadowRoot
-      ?.querySelector('#list-container')?.querySelectorAll('.list-row').length ?? 0) > 0
+      ?.querySelector('#list-container')?.querySelectorAll('lists-page-item').length ?? 0) > 0
   );
 }
 
@@ -160,7 +155,7 @@ async function listCount(page) {
   return page.evaluate(() =>
     document.querySelector('app-router')?.shadowRoot
       ?.querySelector('lists-page')?.shadowRoot
-      ?.querySelector('#list-container')?.querySelectorAll('.list-row').length ?? 0
+      ?.querySelector('#list-container')?.querySelectorAll('lists-page-item').length ?? 0
   );
 }
 
@@ -450,6 +445,7 @@ test.describe('Sync — round-trip', () => {
     const listName = await page.evaluate(() =>
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('lists-page-item')?.shadowRoot
         ?.querySelector('.list-name')?.textContent
     );
     expect(listName).toBe('Gift ideas');

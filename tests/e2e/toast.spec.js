@@ -4,12 +4,6 @@ import { waitForPage } from './helpers.js';
 const currentYear = new Date().getFullYear();
 
 async function openAndSaveGoal(page, title) {
-  // Edit mode must be active for the add button to be accessible
-  await page.evaluate(() => {
-    document.querySelector('app-router').shadowRoot
-      .querySelector('home-page').shadowRoot
-      .querySelector('#capstone-edit-btn').click();
-  });
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
