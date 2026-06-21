@@ -415,10 +415,12 @@ class ItemDialog extends AppElement {
                  aria-label="${t('item-dialog.title-placeholder')}"
                  placeholder="${t('item-dialog.title-placeholder')}"
                  autocomplete="off"
+                 enterkeyhint="go"
                  maxlength="120" />
           <textarea id="note-input"
                     aria-label="${t('item-dialog.note-placeholder')}"
-                    placeholder="${t('item-dialog.note-placeholder')}"></textarea>
+                    placeholder="${t('item-dialog.note-placeholder')}"
+                    enterkeyhint="newline"></textarea>
           <div class="status-field">
             <div class="pills-row">
               <div class="status-options" role="group" aria-label="${t('item-dialog.status-label')}">
