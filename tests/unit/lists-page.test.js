@@ -132,59 +132,6 @@ describe('lists-page — create list', () => {
   });
 });
 
-describe('lists-page — rename list', () => {
-  it('renames a list when list-saved fires after list-edit event', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [] } });
-    const el = mount();
-    const list = { id: 'l1', name: 'Old name', items: [] };
-    setState('lists', [list]);
-    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
-
-    // Fire list-edit to set _editingList on the page
-    getItems(el)[0].dispatchEvent(new CustomEvent('list-edit', {
-      bubbles: true, composed: true, detail: { list },
-    }));
-    el.shadowRoot.dispatchEvent(new CustomEvent('list-saved', {
-      bubbles: true, composed: true, detail: { name: 'New name' },
-    }));
-    await vi.waitFor(() =>
-      expect(getItemInner(getItems(el)[0], '.list-name')?.textContent).toBe('New name')
-    );
-  });
-});
-
-describe('lists-page — delete list', () => {
-  it('removes a list when list-delete fires on dialog', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [] } });
-    const el = mount();
-    const list = { id: 'l1', name: 'To delete', items: [] };
-    setState('lists', [list]);
-    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
-
-    // Fire list-edit to set _editingList on the page
-    getItems(el)[0].dispatchEvent(new CustomEvent('list-edit', {
-      bubbles: true, composed: true, detail: { list },
-    }));
-    el.shadowRoot.querySelector('#dialog').dispatchEvent(
-      new CustomEvent('list-delete', { bubbles: true, composed: true })
-    );
-    await vi.waitFor(() => expect(getItems(el).length).toBe(0));
-  });
-
-  it('removes a list when list-delete fires from swipe', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [] } });
-    const el = mount();
-    setState('lists', [{ id: 'l1', name: 'To delete', items: [] }]);
-    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
-
-    const item = getItems(el)[0];
-    // Simulate the swipe-delete event from the component
-    item.dispatchEvent(new CustomEvent('list-delete', {
-      bubbles: true, composed: true, detail: { list: { id: 'l1', name: 'To delete', items: [] } },
-    }));
-    await vi.waitFor(() => expect(getItems(el).length).toBe(0));
-  });
-});
 
 describe('lists-page — accessibility', () => {
   it('list rows have role="button"', async () => {
@@ -213,14 +160,6 @@ describe('lists-page — accessibility', () => {
     await vi.waitFor(() =>
       expect(getItemInner(getItems(el)[0], '.row').getAttribute('aria-label')).toBe('Renamed')
     );
-  });
-
-  it('nav button aria-label includes the list name', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [] } });
-    const el = mount();
-    setState('lists', [{ id: 'l1', name: 'Gift ideas', items: [] }]);
-    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
-    expect(getItemInner(getItems(el)[0], '#nav-btn').getAttribute('aria-label')).toContain('Gift ideas');
   });
 
   it('item count is displayed in each row', async () => {

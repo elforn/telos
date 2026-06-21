@@ -62,11 +62,13 @@ async function createList(page, name, expectedCount = 1) {
 
 async function enterFirstList(page) {
   await page.evaluate(() => {
-    document.querySelector('app-router').shadowRoot
+    const row = document.querySelector('app-router').shadowRoot
       .querySelector('lists-page').shadowRoot
       .querySelector('#list-container')
       .querySelector('lists-page-item').shadowRoot
-      .querySelector('#nav-btn').click();
+      .querySelector('.row');
+    row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+    row.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, composed: true, pointerId: 1, button: 0 }));
   });
   await waitForListDetailPage(page);
 }
@@ -307,7 +309,7 @@ test.describe('Lists — navigation', () => {
     expect(path).toMatch(/\/lists$/);
   });
 
-  test('keyboard Enter on list row opens edit dialog', async ({ page }) => {
+  test('keyboard Enter on list row navigates to list detail', async ({ page }) => {
     await createList(page, 'Keyboard nav test');
     await page.evaluate(() => {
       const row = document.querySelector('app-router').shadowRoot
@@ -317,13 +319,9 @@ test.describe('Lists — navigation', () => {
         .querySelector('.row');
       row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true }));
     });
-    await page.waitForFunction(() => {
-      const d = document.querySelector('app-router')?.shadowRoot
-        ?.querySelector('lists-page')?.shadowRoot
-        ?.querySelector('list-dialog')?.shadowRoot
-        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
-      return d?.open;
-    });
+    await waitForListDetailPage(page);
+    const path = await page.evaluate(() => window.location.pathname);
+    expect(path).toMatch(/\/lists\/.+/);
   });
 });
 
@@ -338,45 +336,42 @@ test.describe('Lists — list row navigation', () => {
     await createList(page, 'Nav test list');
   });
 
-  test('nav button (›) navigates to list detail page', async ({ page }) => {
+  test('tapping a list row navigates to list detail page', async ({ page }) => {
     await enterFirstList(page);
     const path = await page.evaluate(() => window.location.pathname);
     expect(path).toMatch(/\/lists\/.+/);
   });
 
-  test('nav button navigates to the correct list', async ({ page }) => {
+  test('row tap navigates to the correct list', async ({ page }) => {
     await createList(page, 'Second list', 2);
-    // Navigate to first list
+    // Navigate to first list by tapping its row
     await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
+      const row = document.querySelector('app-router').shadowRoot
         .querySelector('lists-page').shadowRoot
         .querySelector('#list-container')
         .querySelectorAll('lists-page-item')[0].shadowRoot
-        .querySelector('#nav-btn').click();
+        .querySelector('.row');
+      row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+      row.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, composed: true, pointerId: 1, button: 0 }));
     });
     await waitForListDetailPage(page);
-    const heading = await page.evaluate(() =>
-      document.querySelector('app-router').shadowRoot
-        .querySelector('list-detail-page').shadowRoot
-        .querySelector('h1')?.textContent
-    );
-    expect(heading).toBe('Nav test list');
-  });
-
-  test('tapping the row opens the edit dialog with the list name pre-filled', async ({ page }) => {
-    await tapListRow(page, 0);
-    await page.waitForFunction(() => {
-      const d = document.querySelector('app-router')?.shadowRoot
-        ?.querySelector('lists-page')?.shadowRoot
-        ?.querySelector('list-dialog')?.shadowRoot
-        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
-      return d?.open;
-    });
     const name = await page.evaluate(() =>
       document.querySelector('app-router').shadowRoot
-        .querySelector('lists-page').shadowRoot
-        .querySelector('list-dialog').shadowRoot
-        .querySelector('#input').value
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#list-name')?.textContent
+    );
+    expect(name).toBe('Nav test list');
+  });
+
+  test('tapping the row navigates to the list detail page with the correct name', async ({ page }) => {
+    await tapListRow(page, 0);
+    await waitForListDetailPage(page);
+    const path = await page.evaluate(() => window.location.pathname);
+    expect(path).toMatch(/\/lists\/.+/);
+    const name = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#list-name')?.textContent
     );
     expect(name).toBe('Nav test list');
   });
@@ -413,19 +408,25 @@ test.describe('Lists — list management', () => {
     expect(name).toBe('Persist me');
   });
 
-  test('renaming a list updates the row name', async ({ page }) => {
+  test('renaming a list via detail page updates the row name', async ({ page }) => {
     await createList(page, 'Old name');
-    await tapListRow(page, 0);
+    await enterFirstList(page);
+    // Open edit dialog from the detail page name button
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#name-edit-btn').click();
+    });
     await page.waitForFunction(() => {
       const d = document.querySelector('app-router')?.shadowRoot
-        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('list-dialog')?.shadowRoot
         ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
       return d?.open;
     });
     await page.evaluate(() => {
       const inp = document.querySelector('app-router').shadowRoot
-        .querySelector('lists-page').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
         .querySelector('list-dialog').shadowRoot
         .querySelector('#input');
       inp.value = 'New name';
@@ -433,10 +434,17 @@ test.describe('Lists — list management', () => {
     });
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
-        .querySelector('lists-page').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
         .querySelector('list-dialog').shadowRoot
         .querySelector('#save').click();
     });
+    // Go back and verify
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#back-btn').click();
+    });
+    await waitForListsPage(page);
     await page.waitForFunction(() => {
       const item = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('lists-page')?.shadowRoot
@@ -446,35 +454,33 @@ test.describe('Lists — list management', () => {
     });
   });
 
-  test('deleting a list removes it from the page', async ({ page }) => {
+  test('deleting a list via detail page menu removes it from the lists page', async ({ page }) => {
     await createList(page, 'Delete me');
-    await tapListRow(page, 0);
-    await page.waitForFunction(() => {
-      const d = document.querySelector('app-router')?.shadowRoot
-        ?.querySelector('lists-page')?.shadowRoot
-        ?.querySelector('list-dialog')?.shadowRoot
-        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
-      return d?.open;
-    });
+    await enterFirstList(page);
+    // Open the detail page menu
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
-        .querySelector('lists-page').shadowRoot
-        .querySelector('list-dialog').shadowRoot
-        .querySelector('#delete').click();
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#menu-btn').click();
     });
-    await page.waitForFunction(() => {
-      const d = document.querySelector('app-router')?.shadowRoot
-        ?.querySelector('lists-page')?.shadowRoot
-        ?.querySelector('list-dialog')?.shadowRoot
-        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
-      return d?.open;
-    });
+    await page.waitForFunction(() =>
+      document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('#menu')?.open
+    );
+    // First click — enter confirm state
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
-        .querySelector('lists-page').shadowRoot
-        .querySelector('list-dialog').shadowRoot
-        .querySelector('#delete').click();
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#list-delete-btn').click();
     });
+    // Second click — confirm delete
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#list-delete-btn').click();
+    });
+    await waitForListsPage(page);
     await page.waitForFunction(() =>
       (document.querySelector('app-router')?.shadowRoot
         ?.querySelector('lists-page')?.shadowRoot
@@ -750,6 +756,14 @@ test.describe('Lists — item management', () => {
         ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
       return d?.open;
     });
+    // First click — enter confirm state
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('item-dialog').shadowRoot
+        .querySelector('#delete').click();
+    });
+    // Second click — confirm deletion
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
@@ -850,6 +864,16 @@ test.describe('Lists — swipe gestures', () => {
 
   test('swipe left then click delete removes the item', async ({ page }) => {
     await swipeListItemLeft(page);
+    // First pointerup — enter confirm state
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('list-item').shadowRoot
+        .querySelector('#delete-btn').dispatchEvent(
+          new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 })
+        );
+    });
+    // Second pointerup — confirm deletion
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot

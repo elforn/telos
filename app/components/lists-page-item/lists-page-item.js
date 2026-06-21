@@ -2,7 +2,6 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 
-const REVEAL_WIDTH    = 80;
 const COLOR_WIDTH     = 56;
 const COMMIT_RATIO    = 2.0;
 const COMMIT_VELOCITY = 0.35;
@@ -38,25 +37,6 @@ class ListsPageItem extends Gestures(AppElement) {
           inset-inline-start: 0;
           inline-size: ${COLOR_WIDTH}px;
           background: var(--color-panel-bg, var(--color-surface-raised));
-        }
-
-        /* ── Right panel — revealed by swiping left ───────────────────────── */
-
-        .delete-btn {
-          position: absolute;
-          inset-block: 0;
-          inset-inline-end: 0;
-          inline-size: ${REVEAL_WIDTH}px;
-          background: var(--color-danger);
-          color: var(--color-text-inverse);
-          border: none;
-          cursor: pointer;
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-semibold);
-          font-family: var(--font-family);
-          display: flex;
-          align-items: center;
-          justify-content: center;
         }
 
         /* ── Row ──────────────────────────────────────────────────────────── */
@@ -137,46 +117,26 @@ class ListsPageItem extends Gestures(AppElement) {
           background-repeat: repeat;
         }
 
-        .nav-btn {
-          align-self: stretch;
+        .chevron {
           flex-shrink: 0;
-          min-inline-size: calc(var(--touch-target) + 45px);
-          background: var(--color-accent-subtle);
-          border: none;
-          border-inline-start: 1px solid color-mix(in srgb, var(--color-accent) 25%, transparent);
-          cursor: pointer;
-          color: var(--color-accent);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding-inline: var(--space-2) var(--space-3);
-          margin-inline-end: calc(-1 * var(--space-3));
-        }
-
-        .nav-btn::before {
-          content: '';
           display: block;
           inline-size: 7px;
           block-size: 7px;
-          border-inline-end: 2px solid currentColor;
-          border-block-start: 2px solid currentColor;
+          border-inline-end: 2px solid var(--color-text-muted);
+          border-block-start: 2px solid var(--color-text-muted);
           transform: rotate(45deg);
-          flex-shrink: 0;
-        }
-
-        .nav-btn:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
+          opacity: 0.45;
+          margin-inline-start: var(--space-1);
+          pointer-events: none;
         }
       </style>
 
       <div class="color-panel" id="color-panel" aria-hidden="true"></div>
-      <button class="delete-btn" id="delete-btn">${t('list-item.delete')}</button>
       <div class="row" tabindex="0" role="button" aria-label="">
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="list-name"></span>
         <span class="item-count"></span>
-        <button class="nav-btn" id="nav-btn" type="button" aria-label=""></button>
+        <span class="chevron" aria-hidden="true"></span>
       </div>
     `;
   }
@@ -186,48 +146,9 @@ class ListsPageItem extends Gestures(AppElement) {
     this._row        = this.shadowRoot.querySelector('.row');
     this._nameEl     = this.shadowRoot.querySelector('.list-name');
     this._countEl    = this.shadowRoot.querySelector('.item-count');
-    this._deleteEl   = this.shadowRoot.querySelector('#delete-btn');
     this._colorPanel = this.shadowRoot.querySelector('#color-panel');
-    this._navBtn     = this.shadowRoot.querySelector('#nav-btn');
-    this._revealedDir   = null;
-    this._deleteConfirm = false;
 
     this._update();
-
-    this._stopPointerDown = e => e.stopPropagation();
-
-    // ── Delete button (right side) ───────────────────────────────────────────
-    // useDelay: rAF lets the browser's synthesized click fire on the still-present button before DOM removal
-    this._onDeleteBtn = (useDelay = false) => {
-      if (!this._deleteConfirm) {
-        this._deleteConfirm = true;
-        this._deleteEl.textContent = t('list-item.delete-confirm');
-        return;
-      }
-      const fire = () => {
-        this.dispatchEvent(new CustomEvent('list-delete', {
-          bubbles: true, composed: true, detail: { list: this._list },
-        }));
-        this._closeReveal();
-      };
-      if (useDelay) requestAnimationFrame(fire);
-      else fire();
-    };
-    this._onDeletePointerUp = e => { e.stopPropagation(); e.preventDefault(); this._onDeleteBtn(true); };
-    this._onDeleteBtnKey = e => { e.stopPropagation(); if (e.detail === 0) this._onDeleteBtn(); };
-    this._deleteEl.addEventListener('pointerdown', this._stopPointerDown);
-    this._deleteEl.addEventListener('pointerup',   this._onDeletePointerUp);
-    this._deleteEl.addEventListener('click',       this._onDeleteBtnKey);
-
-    // ── Nav button ───────────────────────────────────────────────────────────
-    this._onNavClick = e => {
-      e.stopPropagation();
-      this.dispatchEvent(new CustomEvent('list-tap', {
-        bubbles: true, composed: true, detail: { list: this._list },
-      }));
-    };
-    this._navBtn.addEventListener('pointerdown', this._stopPointerDown);
-    this._navBtn.addEventListener('click',       this._onNavClick);
 
     // ── Keyboard ─────────────────────────────────────────────────────────────
     this._onKeyDown = e => {
@@ -259,24 +180,15 @@ class ListsPageItem extends Gestures(AppElement) {
   }
 
   unsubscribe() {
-    this._deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
-    this._deleteEl?.removeEventListener('pointerup',   this._onDeletePointerUp);
-    this._deleteEl?.removeEventListener('click',       this._onDeleteBtnKey);
-    this._navBtn?.removeEventListener('pointerdown',   this._stopPointerDown);
-    this._navBtn?.removeEventListener('click',         this._onNavClick);
-    this._row?.removeEventListener('keydown',          this._onKeyDown);
-    this._dragBtn?.removeEventListener('pointerdown',  this._onDragBtnDown);
-    this._dragBtn?.removeEventListener('keydown',      this._onDragBtnKey);
+    this._row?.removeEventListener('keydown',         this._onKeyDown);
+    this._dragBtn?.removeEventListener('pointerdown', this._onDragBtnDown);
+    this._dragBtn?.removeEventListener('keydown',     this._onDragBtnKey);
   }
 
   // ── Gestures ──────────────────────────────────────────────────────────────
 
   onTap() {
-    if (this._revealedDir) {
-      this._closeReveal();
-      return;
-    }
-    this.dispatchEvent(new CustomEvent('list-edit', {
+    this.dispatchEvent(new CustomEvent('list-tap', {
       bubbles: true, composed: true, detail: { list: this._list },
     }));
   }
@@ -288,22 +200,11 @@ class ListsPageItem extends Gestures(AppElement) {
 
   onSwipeMove(e) {
     this._row.style.transition = 'none';
-    let offset;
-    if (this._revealedDir === 'left') {
-      offset = Math.min(0, -REVEAL_WIDTH + e.dx);
-    } else {
-      const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : Math.min(0, e.dx + SWIPE_DEAD_ZONE);
-      offset = Math.max(-REVEAL_WIDTH, Math.min(COLOR_WIDTH, dx));
-    }
-    this._row.style.transform = `translateX(${offset}px)`;
+    const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : 0;
+    this._row.style.transform = `translateX(${Math.min(COLOR_WIDTH, dx)}px)`;
   }
 
   onSwipe(e) {
-    if (this._revealedDir) {
-      this._closeReveal();
-      return;
-    }
-
     if (e.direction === 'right') {
       const commit = e.distance >= COLOR_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
       if (commit) {
@@ -311,30 +212,16 @@ class ListsPageItem extends Gestures(AppElement) {
           bubbles: true, composed: true, detail: { list: this._list },
         }));
       }
-      this._closeReveal();
-      return;
     }
-
-    // direction === 'left' — reveal delete button
-    const commit = e.distance >= REVEAL_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
-    if (commit) {
-      this._row.style.transform = `translateX(-${REVEAL_WIDTH}px)`;
-      this._revealedDir = 'left';
-    } else {
-      this._closeReveal();
-    }
+    this._closeReveal();
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
 
   _closeReveal() {
-    this._row.style.transition = 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this._row.style.transition = reduced ? 'none' : 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
     this._row.style.transform  = '';
-    this._revealedDir = null;
-    if (this._deleteConfirm) {
-      this._deleteConfirm = false;
-      this._deleteEl.textContent = t('list-item.delete');
-    }
   }
 
   _update() {
@@ -347,7 +234,6 @@ class ListsPageItem extends Gestures(AppElement) {
     this._row.style.setProperty('--list-item-color', color ?? 'transparent');
     this.setAttribute('aria-label', name);
     this._row.setAttribute('aria-label', name);
-    this._navBtn.setAttribute('aria-label', `${t('lists-page.navigate')} ${name}`);
     if (color) {
       this._colorPanel.style.setProperty('--color-panel-bg', color);
     } else {

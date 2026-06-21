@@ -20,6 +20,9 @@ function mount(listId = 'l1') {
   // Stub item-dialog.open so native dialog methods don't throw in happy-dom
   const dialog = el.shadowRoot.querySelector('#dialog');
   if (dialog) dialog.open = vi.fn();
+  // Stub list-dialog.open so native dialog methods don't throw in happy-dom
+  const listDialog = el.shadowRoot.querySelector('#list-dialog');
+  if (listDialog) listDialog.open = vi.fn();
   // Stub bulk-picker's internal modal so show()/close() don't throw in happy-dom
   const bulkPicker = el.shadowRoot.querySelector('#bulk-picker');
   if (bulkPicker) {
@@ -982,9 +985,136 @@ describe('list-detail-page — bulk action bar', () => {
   });
 });
 
+// ── Name edit button ──────────────────────────────────────────────────────────
+
+describe('list-detail-page — name edit button', () => {
+  it('renders a name-edit-btn with an aria-label', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    const btn = el.shadowRoot.querySelector('#name-edit-btn');
+    expect(btn).not.toBeNull();
+    expect(btn.getAttribute('aria-label')).toBeTruthy();
+  });
+
+  it('clicking name-edit-btn calls list-dialog.open with the current list', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    const listDialog = el.shadowRoot.querySelector('#list-dialog');
+    el.shadowRoot.querySelector('#name-edit-btn').click();
+    expect(listDialog.open).toHaveBeenCalledOnce();
+    expect(listDialog.open).toHaveBeenCalledWith(expect.objectContaining({ id: 'l1', name: 'Gift ideas' }));
+  });
+});
+
+// ── Edit list via list-dialog ─────────────────────────────────────────────────
+
+describe('list-detail-page — edit list (list-saved)', () => {
+  it('updates list name in the store when list-saved fires from list-dialog', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-saved', {
+      bubbles: true, composed: true, detail: { name: 'Renamed list' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].name).toBe('Renamed list'));
+  });
+
+  it('updates list color in the store when list-saved fires with a color', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-saved', {
+      bubbles: true, composed: true, detail: { name: 'Gift ideas', color: '#ff0000' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].color).toBe('#ff0000'));
+  });
+
+  it('removes color from list in the store when list-saved fires without a color', async () => {
+    const listWithColor = { ...LIST, color: '#ff0000' };
+    await boot({ dbName: freshName(), initialState: { lists: [listWithColor] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-saved', {
+      bubbles: true, composed: true, detail: { name: 'Gift ideas' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0]).not.toHaveProperty('color'));
+  });
+
+  it('does not affect other lists when renaming', async () => {
+    const LIST2 = { id: 'l2', name: 'Books', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST2] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-saved', {
+      bubbles: true, composed: true, detail: { name: 'Renamed' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].name).toBe('Renamed'));
+    expect(getState().lists[1].name).toBe('Books');
+  });
+});
+
+// ── Delete list via menu ──────────────────────────────────────────────────────
+
+describe('list-detail-page — delete list (menu confirm)', () => {
+  it('renders a list-delete-btn in the menu', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#list-delete-btn')).not.toBeNull();
+  });
+
+  it('first click on list-delete-btn sets confirm text', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    const btn = el.shadowRoot.querySelector('#list-delete-btn');
+    const originalText = btn.textContent;
+    btn.click();
+    expect(btn.textContent).not.toBe(originalText);
+    expect(btn.textContent).toBeTruthy();
+  });
+
+  it('second click on list-delete-btn removes the list from the store', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    const btn = el.shadowRoot.querySelector('#list-delete-btn');
+    btn.click(); // confirm state
+    btn.click(); // confirm delete
+    await vi.waitFor(() => expect(getState().lists).toHaveLength(0));
+  });
+
+  it('second click does not affect other lists', async () => {
+    const LIST2 = { id: 'l2', name: 'Books', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST2] } });
+    const el = mount('l2');
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Books'));
+    const btn = el.shadowRoot.querySelector('#list-delete-btn');
+    btn.click();
+    btn.click();
+    await vi.waitFor(() => expect(getState().lists).toHaveLength(1));
+    expect(getState().lists[0].id).toBe('l1');
+  });
+});
+
+// ── Delete list via list-dialog ───────────────────────────────────────────────
+
+describe('list-detail-page — delete list (list-dialog list-delete)', () => {
+  it('removes the list from the store when list-delete fires from list-dialog', async () => {
+    const LIST2 = { id: 'l2', name: 'Books', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST2] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-delete', {
+      bubbles: true, composed: true,
+    }));
+    await vi.waitFor(() => expect(getState().lists).toHaveLength(1));
+    expect(getState().lists[0].id).toBe('l2');
+  });
+});
+
 // ── E2E deferred ─────────────────────────────────────────────────────────────
 // The following behaviours require a real browser and are covered by tests/e2e/lists.spec.js:
 // - Back button navigates to /lists
 // - Swipe gestures on list-item (Pointer Events not fully simulated in happy-dom)
 // - IDB persistence of toggle preference across page reload
 // - Menu dialog open/close (native <dialog> showModal() not available in happy-dom)
+// - list-delete-btn second click navigates back to /lists (navigation tested in E2E)

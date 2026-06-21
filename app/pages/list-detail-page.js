@@ -6,6 +6,7 @@ import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/list-item/list-item.js';
 import '../components/item-dialog/item-dialog.js';
+import '../components/list-dialog/list-dialog.js';
 import '../components/add-row/add-row.js';
 import '../components/list-picker-dialog/list-picker-dialog.js';
 
@@ -79,11 +80,61 @@ class ListDetailPage extends AppElement {
           font-weight: var(--font-weight-bold);
           color: var(--color-text-primary);
           line-height: 1;
-          white-space: nowrap;
+          margin: 0;
+        }
+
+        .name-edit-btn {
+          display: block;
+          inline-size: 100%;
+          min-block-size: var(--touch-target);
+          line-height: var(--touch-target);
           overflow: hidden;
+          white-space: nowrap;
           text-overflow: ellipsis;
           text-align: start;
-          margin: 0;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font: inherit;
+          color: inherit;
+          padding: 0;
+        }
+
+        .name-edit-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+          border-radius: var(--radius-sm);
+        }
+
+        .name-pencil {
+          color: var(--color-text-muted);
+          font-size: 0.75em;
+          opacity: 0.7;
+        }
+
+        .menu-delete-section {
+          padding: 0 var(--space-5) var(--space-2);
+        }
+
+        .menu-delete-btn {
+          inline-size: 100%;
+          min-block-size: var(--touch-target);
+          background: none;
+          border: none;
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          font-family: var(--font-family);
+          font-size: var(--font-size-body);
+          font-weight: var(--font-weight-medium);
+          color: var(--color-danger);
+          text-align: start;
+          padding-inline: var(--space-3);
+          touch-action: manipulation;
+        }
+
+        .menu-delete-btn:focus-visible {
+          outline: 2px solid var(--color-danger);
+          outline-offset: 2px;
         }
 
         /* ── Main content ────────────────────────────────────────────────── */
@@ -286,7 +337,7 @@ class ListDetailPage extends AppElement {
       <div class="page-header">
         <div class="top-row">
           <button class="back-btn" id="back-btn" aria-label="${t('list-detail.back')}">‹</button>
-          <h1 id="list-name"></h1>
+          <h1><button class="name-edit-btn" id="name-edit-btn" aria-label="${t('list-detail.edit-name')}"><span id="list-name"></span><span class="name-pencil" aria-hidden="true"> ✎</span></button></h1>
           <button class="menu-btn" id="menu-btn" aria-label="${t('list-detail.menu')}" aria-expanded="false">···</button>
         </div>
       </div>
@@ -305,9 +356,13 @@ class ListDetailPage extends AppElement {
             <button class="status-pill" id="status-hide-btn">${t('list-detail.status-hide')}</button>
           </div>
         </div>
+        <div class="menu-delete-section">
+          <button class="menu-delete-btn" id="list-delete-btn">${t('list-detail.delete-list')}</button>
+        </div>
       </dialog>
 
       <item-dialog id="dialog"></item-dialog>
+      <list-dialog id="list-dialog"></list-dialog>
 
       <div id="bulk-bar" hidden role="toolbar" aria-label="${t('list-detail.cancel-selection')}">
         <button type="button" id="bulk-close-btn" aria-label="${t('list-detail.cancel-selection')}">✕</button>
@@ -329,8 +384,10 @@ class ListDetailPage extends AppElement {
     this._itemList    = this.shadowRoot.querySelector('#item-list');
     this._nameEl      = this.shadowRoot.querySelector('#list-name');
     this._dialog      = this.shadowRoot.querySelector('#dialog');
+    this._listDialog  = this.shadowRoot.querySelector('#list-dialog');
     this._menuDialog  = this.shadowRoot.querySelector('#menu');
     this._editingItem = null;
+    this._listDeleteConfirm = false;
     this._drag        = null;
     this._insertLine  = null;
     this._selectionMode = false;
@@ -350,11 +407,57 @@ class ListDetailPage extends AppElement {
     };
     menuBtn.addEventListener('click', this._onMenuBtn);
 
-    this._onMenuClose = () => menuBtn.setAttribute('aria-expanded', 'false');
+    this._onMenuClose = () => {
+      menuBtn.setAttribute('aria-expanded', 'false');
+      if (this._listDeleteConfirm) {
+        this._listDeleteConfirm = false;
+        this.shadowRoot.querySelector('#list-delete-btn').textContent = t('list-detail.delete-list');
+      }
+    };
     this._menuDialog.addEventListener('close', this._onMenuClose);
 
     this._onBackdrop = e => { if (e.target === this._menuDialog) this._menuDialog.close(); };
     this._menuDialog.addEventListener('click', this._onBackdrop);
+
+    // ── Name edit button ──────────────────────────────────────────────────────
+    this._onNameEdit = () => {
+      const list = getState().lists?.find(l => l.id === this._listId);
+      if (list) this._listDialog.open(list);
+    };
+    this.shadowRoot.querySelector('#name-edit-btn').addEventListener('click', this._onNameEdit);
+
+    // ── List dialog (edit name / color) ───────────────────────────────────────
+    this._onListSaved = e => {
+      const { name, color } = e.detail;
+      setState('lists', (getState().lists ?? []).map(l => {
+        if (l.id !== this._listId) return l;
+        const { color: _, ...rest } = l;
+        return color ? { ...rest, name, color } : { ...rest, name };
+      }));
+      toast(t('lists.toast-list-saved'), 'success');
+    };
+    this._listDialog.addEventListener('list-saved', this._onListSaved);
+
+    this._onListDialogDelete = () => {
+      setState('lists', (getState().lists ?? []).filter(l => l.id !== this._listId));
+      toast(t('lists.toast-list-deleted'), 'info');
+      navigate(`${BASE_PATH}lists`);
+    };
+    this._listDialog.addEventListener('list-delete', this._onListDialogDelete);
+
+    // ── Delete list (menu) ────────────────────────────────────────────────────
+    this._onListDeleteBtn = () => {
+      if (!this._listDeleteConfirm) {
+        this._listDeleteConfirm = true;
+        this.shadowRoot.querySelector('#list-delete-btn').textContent = t('list-detail.delete-list-confirm');
+        return;
+      }
+      this._menuDialog.close();
+      setState('lists', (getState().lists ?? []).filter(l => l.id !== this._listId));
+      toast(t('lists.toast-list-deleted'), 'info');
+      navigate(`${BASE_PATH}lists`);
+    };
+    this.shadowRoot.querySelector('#list-delete-btn').addEventListener('click', this._onListDeleteBtn);
 
     this._onStatusShow = () => {
       if (this._showStatus) return;
@@ -658,6 +761,10 @@ class ListDetailPage extends AppElement {
     this.shadowRoot?.querySelector('#menu-btn')?.removeEventListener('click', this._onMenuBtn);
     this._menuDialog?.removeEventListener('close', this._onMenuClose);
     this._menuDialog?.removeEventListener('click', this._onBackdrop);
+    this.shadowRoot?.querySelector('#name-edit-btn')?.removeEventListener('click', this._onNameEdit);
+    this._listDialog?.removeEventListener('list-saved', this._onListSaved);
+    this._listDialog?.removeEventListener('list-delete', this._onListDialogDelete);
+    this.shadowRoot?.querySelector('#list-delete-btn')?.removeEventListener('click', this._onListDeleteBtn);
     this.shadowRoot?.querySelector('#status-show-btn')?.removeEventListener('click', this._onStatusShow);
     this.shadowRoot?.querySelector('#status-hide-btn')?.removeEventListener('click', this._onStatusHide);
     this.shadowRoot?.querySelector('#add-row')?.removeEventListener('click', this._onAddRow);

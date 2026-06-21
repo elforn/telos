@@ -77,15 +77,10 @@ class ListsPage extends AppElement {
   }
 
   subscribe() {
-    this._container   = this.shadowRoot.querySelector('#list-container');
-    this._dialog      = this.shadowRoot.querySelector('#dialog');
-    this._editingList = null;
+    this._container = this.shadowRoot.querySelector('#list-container');
+    this._dialog    = this.shadowRoot.querySelector('#dialog');
 
-
-    this._onAddRow = () => {
-      this._editingList = null;
-      this._dialog.open(null);
-    };
+    this._onAddRow = () => this._dialog.open(null);
     this.shadowRoot.querySelector('#add-row').addEventListener('click', this._onAddRow);
 
     this._onListTap = e => {
@@ -93,38 +88,12 @@ class ListsPage extends AppElement {
     };
     this._container.addEventListener('list-tap', this._onListTap);
 
-    this._onListEdit = e => {
-      this._editingList = e.detail.list;
-      this._dialog.open(this._editingList);
-    };
-    this._container.addEventListener('list-edit', this._onListEdit);
-
-    this._onSwipeDelete = e => {
-      const list = e.detail?.list;
-      if (!list) return;
-      this._delete(list.id);
-      toast(t('lists.toast-list-deleted'), 'info');
-    };
-    this._container.addEventListener('list-delete', this._onSwipeDelete);
-
     this._onListSaved = e => {
       const { name, color } = e.detail;
-      if (this._editingList) {
-        this._update(this._editingList.id, name, color);
-      } else {
-        this._create(name, color);
-      }
+      this._create(name, color);
       toast(t('lists.toast-list-saved'), 'success');
     };
     this.shadowRoot.addEventListener('list-saved', this._onListSaved);
-
-    this._onListDelete = () => {
-      if (this._editingList) {
-        this._delete(this._editingList.id);
-        toast(t('lists.toast-list-deleted'), 'info');
-      }
-    };
-    this._dialog.addEventListener('list-delete', this._onListDelete);
 
     this._onListColorCycle = e => {
       const list = e.detail?.list;
@@ -236,13 +205,10 @@ class ListsPage extends AppElement {
   unsubscribe() {
     this.shadowRoot.querySelector('#add-row')?.removeEventListener('click', this._onAddRow);
     this._container?.removeEventListener('list-tap', this._onListTap);
-    this._container?.removeEventListener('list-edit', this._onListEdit);
-    this._container?.removeEventListener('list-delete', this._onSwipeDelete);
     this._container?.removeEventListener('list-color-cycle', this._onListColorCycle);
     this._container?.removeEventListener('list-drag-start',  this._onListDragStart);
     this._container?.removeEventListener('list-reorder-key', this._onListReorderKey);
     this.shadowRoot?.removeEventListener('list-saved', this._onListSaved);
-    this._dialog?.removeEventListener('list-delete', this._onListDelete);
     if (this._drag) {
       const { dragEl, clone } = this._drag;
       dragEl.removeEventListener('pointermove',   this._onDragMove);
