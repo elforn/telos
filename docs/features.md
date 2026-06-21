@@ -1,5 +1,66 @@
 # Features
 
+## Goal actions — move/copy to year and create list item
+
+**When:** v1.6.x
+
+### What it does
+
+When you open an existing goal, the ··· button in the dialog footer reveals two extra actions:
+
+- **Move to year** — move or copy the goal to any year (current ± 2) and any section (Capstone, Milestones, Wow Moments, Forward Focus).
+- **Create list item** — send the goal's title and description into one or more lists as a new list item.
+
+Both flows match item-dialog's established patterns exactly, so the interaction model is consistent.
+
+### Move / copy to year
+
+Tap ··· → **Move to year**. The move view shows a year selector (5 options: current year ± 2) and section pills. The current year and section are pre-selected. Move and Copy are disabled until you change at least one of them.
+
+| Button | Effect |
+|---|---|
+| Move | Removes the goal from the source year+section and adds it to the target. Goal id is preserved. |
+| Copy | Keeps the original in place and adds a copy (new id) to the target. |
+
+The dialog closes immediately. A toast confirms the action ("Goal moved to Milestones").
+
+### Create list item
+
+Tap ··· → **Create list item**. The `list-picker-dialog` opens as a sub-modal. Select one or more existing lists, or type a name in **＋ New list** to create one on the fly.
+
+| Button | Effect |
+|---|---|
+| Copy | Creates a new list item from the goal's title + description; the goal stays in place. |
+| Move | Creates the list item and also deletes the goal. |
+
+The new list item has `status: 'open'`, inherits the goal's `title` and `description` (as `note`), and has an empty `inGoals` array — progress is not linked back.
+
+### Events
+
+`goal-dialog` fires these on the host element with `{ bubbles: true, composed: true }`:
+
+```js
+// Fired when Move or Copy is clicked in the move view
+'goal-move'  →  { goal, fromYear, fromSection, toYear, toSection, copy: boolean }
+
+// Fired when list-picker-dialog resolves
+'goal-create-item'  →  { goal, targetListIds, newListName, copy: boolean, fromYear, fromSection }
+```
+
+`home-page` handles both events: `goal-move` updates `getState().goals` directly; `goal-create-item` appends to `getState().lists` and, when `copy: false`, also removes the goal.
+
+### Context injection
+
+Before calling `goal-dialog.open()`, `home-page` sets two properties so the dialog has the data it needs:
+
+```js
+this._dialog.currentYear    = this._year;        // number — used to build the year range
+this._dialog.availableLists = getState().lists ?? [];
+this._dialog.open(goal, { year: String(this._year), section: 'milestones' });
+```
+
+---
+
 ## Lists page — tap to navigate, swipe right to colour-cycle
 
 **When:** v1.5.x

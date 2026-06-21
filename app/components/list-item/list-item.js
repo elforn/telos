@@ -205,7 +205,7 @@ class ListItem extends Gestures(AppElement) {
       <div class="row" tabindex="0" role="button" aria-label="">
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="title"></span>
-        <span class="note-icon" aria-hidden="true">✎</span>
+        <span class="note-icon" aria-hidden="true">ℹ</span>
         <span class="url-icon"  aria-hidden="true">🔗</span>
         <span class="badge" data-status="open"></span>
       </div>

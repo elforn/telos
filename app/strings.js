@@ -36,6 +36,23 @@ defineStrings({
 
   'home.toast-goal-saved':   'Goal saved',
   'home.toast-goal-deleted': 'Goal deleted',
+  'home.toast-goal-moved':         'Goal moved to {section}',
+  'home.toast-goal-copied':        'Goal copied to {section}',
+  'home.toast-item-created':       'Added to {name}',
+  'home.toast-item-created-many':  'Added to {n} lists',
+
+  'goal-dialog.more-actions':            'More actions',
+  'goal-dialog.move-to-year':            'Move to year',
+  'goal-dialog.create-list-item':        'Create list item',
+  'goal-dialog.move-year-label':         'Year',
+  'goal-dialog.move-section-label':      'Section',
+  'goal-dialog.move-section-capstone':   'Capstone',
+  'goal-dialog.move-section-milestones': 'Milestones',
+  'goal-dialog.move-section-wow':        'Wow Moments',
+  'goal-dialog.move-section-focus':      'Focus',
+  'goal-dialog.move-cta':               'Move',
+  'goal-dialog.copy-cta':               'Copy',
+  'goal-dialog.picker-back':            'Back',
 
   'year-header.menu':         'Menu',
   'year-header.year-section': 'This year',

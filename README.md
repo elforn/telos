@@ -6,7 +6,7 @@ A personal yearly goal planner for your phone.
 
 - Set one headline **capstone goal** for the year
 - Track three **3-month milestones** and six **8-week wow moments**
-- Hold-drag a progress bar to update any goal; swipe in Edit mode to mark failed or delete
+- Hold-drag a progress bar to update any goal; swipe to mark failed or delete; tap ··· to move or copy a goal to another year
 - Navigate between years to review past plans
 - Attach a **year photo** as a visual anchor for the year
 - Export and import data as a single `.telos` file — import merges with local data by default, or replaces it entirely

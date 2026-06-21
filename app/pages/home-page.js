@@ -351,7 +351,9 @@ class HomePage extends AppElement {
     this._onCapstoneGoalTap = e => {
       this._editingSection = 'capstone';
       this._editingGoal    = e.detail.goal;
-      this._dialog.open(e.detail.goal);
+      this._dialog.currentYear    = this._year;
+      this._dialog.availableLists = getState().lists ?? [];
+      this._dialog.open(e.detail.goal, { year: String(this._year), section: 'capstone' });
     };
     this._capstoneList.addEventListener('goal-tap', this._onCapstoneGoalTap);
 
@@ -377,7 +379,9 @@ class HomePage extends AppElement {
     this._onMilestoneGoalTap = e => {
       this._editingSection = 'milestones';
       this._editingGoal    = e.detail.goal;
-      this._dialog.open(e.detail.goal);
+      this._dialog.currentYear    = this._year;
+      this._dialog.availableLists = getState().lists ?? [];
+      this._dialog.open(e.detail.goal, { year: String(this._year), section: 'milestones' });
     };
     this._milestoneList.addEventListener('goal-tap', this._onMilestoneGoalTap);
 
@@ -403,7 +407,9 @@ class HomePage extends AppElement {
     this._onWowGoalTap = e => {
       this._editingSection = 'wow';
       this._editingGoal    = e.detail.goal;
-      this._dialog.open(e.detail.goal);
+      this._dialog.currentYear    = this._year;
+      this._dialog.availableLists = getState().lists ?? [];
+      this._dialog.open(e.detail.goal, { year: String(this._year), section: 'wow' });
     };
     this._wowList.addEventListener('goal-tap', this._onWowGoalTap);
 
@@ -429,7 +435,9 @@ class HomePage extends AppElement {
     this._onFocusGoalTap = e => {
       this._editingSection = 'focus';
       this._editingGoal    = e.detail.goal;
-      this._dialog.open(e.detail.goal);
+      this._dialog.currentYear    = this._year;
+      this._dialog.availableLists = getState().lists ?? [];
+      this._dialog.open(e.detail.goal, { year: String(this._year), section: 'focus' });
     };
     this._focusList.addEventListener('goal-tap', this._onFocusGoalTap);
 
@@ -470,6 +478,79 @@ class HomePage extends AppElement {
       }
     };
     this._dialog.addEventListener('goal-delete', this._onDialogDelete);
+
+    // ── Goal move / copy to year+section ──────────────────────────────────────
+
+    this._onGoalMove = e => {
+      const { goal, fromYear, fromSection, toYear, toSection, copy } = e.detail;
+      const goals  = getState().goals ?? {};
+      const fromYg = goals[fromYear] ?? {};
+      const toYg   = goals[toYear]   ?? {};
+      const source  = fromYg[fromSection] ?? [];
+      const newGoal = copy ? { ...goal, id: crypto.randomUUID() } : goal;
+      const newFrom = copy ? source : source.filter(g => g.id !== goal.id);
+      const newTo   = [...(toYg[toSection] ?? []), newGoal];
+      const sameYear = fromYear === toYear;
+      const updated = { ...goals };
+      if (sameYear) {
+        updated[fromYear] = { ...fromYg, [fromSection]: newFrom, [toSection]: newTo };
+      } else {
+        updated[fromYear] = { ...fromYg, [fromSection]: newFrom };
+        updated[toYear]   = { ...toYg,   [toSection]:  newTo  };
+      }
+      setState('goals', updated);
+      const label = t(`goal-dialog.move-section-${toSection}`);
+      toast(t(copy ? 'home.toast-goal-copied' : 'home.toast-goal-moved', { section: label }), 'success');
+    };
+    this._dialog.addEventListener('goal-move', this._onGoalMove);
+
+    // ── Goal create list item ─────────────────────────────────────────────────
+
+    this._onGoalCreateItem = e => {
+      const { goal, targetListIds, newListName, copy, fromYear, fromSection } = e.detail;
+      const baseItem = {
+        title: goal.title,
+        note: goal.description || undefined,
+        status: 'open',
+        tags: [],
+        inGoals: [],
+      };
+
+      let lists = getState().lists ?? [];
+      let extraId = null;
+      if (newListName) {
+        extraId = crypto.randomUUID();
+        lists = [...lists, { id: extraId, name: newListName, items: [] }];
+      }
+      const allTargetIds = extraId ? [...targetListIds, extraId] : targetListIds;
+
+      const targetNames = allTargetIds.map(id => lists.find(l => l.id === id)?.name ?? '').filter(Boolean);
+
+      lists = lists.map(l =>
+        allTargetIds.includes(l.id)
+          ? { ...l, items: [...l.items, { ...baseItem, id: crypto.randomUUID() }] }
+          : l
+      );
+      setState('lists', lists);
+
+      if (!copy) {
+        const goals = getState().goals ?? {};
+        const yg = goals[fromYear] ?? {};
+        setState('goals', {
+          ...goals,
+          [fromYear]: { ...yg, [fromSection]: (yg[fromSection] ?? []).filter(g => g.id !== goal.id) },
+        });
+      }
+
+      const n = targetNames.length;
+      toast(
+        n === 1
+          ? t('home.toast-item-created', { name: targetNames[0] })
+          : t('home.toast-item-created-many', { n }),
+        'success'
+      );
+    };
+    this._dialog.addEventListener('goal-create-item', this._onGoalCreateItem);
   }
 
   unsubscribe() {
@@ -510,7 +591,9 @@ class HomePage extends AppElement {
     this.shadowRoot.removeEventListener('goal-saved',       this._onGoalSaved);
     this.shadowRoot.removeEventListener('goal-drag-start',  this._onGoalDragStart);
     this.shadowRoot.removeEventListener('goal-reorder-key', this._onGoalReorderKey);
-    this._dialog?.removeEventListener('goal-delete', this._onDialogDelete);
+    this._dialog?.removeEventListener('goal-delete',       this._onDialogDelete);
+    this._dialog?.removeEventListener('goal-move',         this._onGoalMove);
+    this._dialog?.removeEventListener('goal-create-item',  this._onGoalCreateItem);
 
     if (this._drag) {
       const { dragEl, clone } = this._drag;

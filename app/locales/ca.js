@@ -37,6 +37,23 @@ defineStrings({
 
   'home.toast-goal-saved':       'Objectiu desat',
   'home.toast-goal-deleted':     'Objectiu eliminat',
+  'home.toast-goal-moved':       'Objectiu mogut a {section}',
+  'home.toast-goal-copied':      'Objectiu copiat a {section}',
+  'home.toast-item-created':     'Afegit a {name}',
+  'home.toast-item-created-many': 'Afegit a {n} llistes',
+
+  'goal-dialog.more-actions':             'Més accions',
+  'goal-dialog.move-to-year':             'Mou a un altre any',
+  'goal-dialog.create-list-item':         'Crea un element de llista',
+  'goal-dialog.move-year-label':          'Any',
+  'goal-dialog.move-section-label':       'Secció',
+  'goal-dialog.move-section-capstone':    'Objectiu principal',
+  'goal-dialog.move-section-milestones':  'Fites',
+  'goal-dialog.move-section-wow':         'Moments wow',
+  'goal-dialog.move-section-focus':       'Focus',
+  'goal-dialog.move-cta':                 'Mou',
+  'goal-dialog.copy-cta':                 'Copia',
+  'goal-dialog.picker-back':              'Enrere',
 
   'year-header.menu':            'Menú',
   'year-header.year-section':    'Aquest any',

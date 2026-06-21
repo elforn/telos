@@ -15,10 +15,27 @@ function stubModal(el) {
   return modal;
 }
 
+function stubActionSheet(el) {
+  const sheet = el.shadowRoot.querySelector('#action-sheet');
+  sheet.showModal = vi.fn(() => sheet.setAttribute('open', ''));
+  sheet.close     = vi.fn(() => sheet.removeAttribute('open'));
+  return sheet;
+}
+
+function stubListPicker(el) {
+  const picker = el.shadowRoot.querySelector('#list-picker');
+  const modal  = picker.shadowRoot?.querySelector('#modal');
+  if (modal) { modal.show = vi.fn(); modal.close = vi.fn(); }
+  picker.show = vi.fn();
+  return picker;
+}
+
 function mount() {
   const el = document.createElement('goal-dialog');
   document.body.appendChild(el);
   stubModal(el);
+  stubActionSheet(el);
+  stubListPicker(el);
   return el;
 }
 
@@ -304,6 +321,193 @@ describe('goal-dialog — description', () => {
     const el = mount();
     el.open(null);
     expect(el.shadowRoot.querySelector('#desc-input').value).toBe('Saved desc');
+  });
+});
+
+describe('goal-dialog — more actions (⋯ menu)', () => {
+  it('menu button is hidden when opened with no goal', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(true);
+  });
+
+  it('menu button is visible when opened with an existing goal', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'My goal' });
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
+  });
+
+  it('clicking menu button calls showModal on the action sheet', () => {
+    const el = mount();
+    const sheet = el.shadowRoot.querySelector('#action-sheet');
+    el.open({ id: '1', title: 'My goal' });
+    el.shadowRoot.querySelector('#menu-btn').click();
+    expect(sheet.showModal).toHaveBeenCalledOnce();
+  });
+});
+
+describe('goal-dialog — move view', () => {
+  const goal = { id: '1', title: 'Run a 5k', description: 'My desc' };
+
+  it('clicking action-move-btn switches to move view', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    expect(el.shadowRoot.querySelector('#view-move').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(true);
+  });
+
+  it('move view pre-selects the current year', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    expect(el.shadowRoot.querySelector('#move-year-select').value).toBe('2026');
+  });
+
+  it('move view pre-selects the current section', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'wow' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    const checked = el.shadowRoot.querySelector('#move-section-group input:checked');
+    expect(checked?.value).toBe('wow');
+  });
+
+  it('Move and Copy buttons are disabled when same year+section selected', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    expect(el.shadowRoot.querySelector('#move-btn').disabled).toBe(true);
+    expect(el.shadowRoot.querySelector('#copy-btn').disabled).toBe(true);
+  });
+
+  it('Move and Copy buttons enable when a different year is selected', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    const sel = el.shadowRoot.querySelector('#move-year-select');
+    sel.value = '2027';
+    sel.dispatchEvent(new Event('change'));
+    expect(el.shadowRoot.querySelector('#move-btn').disabled).toBe(false);
+    expect(el.shadowRoot.querySelector('#copy-btn').disabled).toBe(false);
+  });
+
+  it('Move and Copy buttons enable when a different section is selected', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    // happy-dom doesn't auto-uncheck siblings — uncheck current explicitly
+    el.shadowRoot.querySelector('#move-section-group input[value="milestones"]').checked = false;
+    const radio = el.shadowRoot.querySelector('#move-section-group input[value="focus"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(el.shadowRoot.querySelector('#move-btn').disabled).toBe(false);
+  });
+
+  it('dispatches goal-move with copy:false when Move is clicked', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    const sel = el.shadowRoot.querySelector('#move-year-select');
+    sel.value = '2027';
+    sel.dispatchEvent(new Event('change'));
+    const events = [];
+    el.addEventListener('goal-move', e => events.push(e));
+    el.shadowRoot.querySelector('#move-btn').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail).toMatchObject({
+      fromYear: '2026', fromSection: 'milestones',
+      toYear:   '2027', toSection:   'milestones',
+      copy: false,
+    });
+    expect(events[0].detail.goal).toBe(goal);
+  });
+
+  it('dispatches goal-move with copy:true when Copy is clicked', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    const sel = el.shadowRoot.querySelector('#move-year-select');
+    sel.value = '2025';
+    sel.dispatchEvent(new Event('change'));
+    const events = [];
+    el.addEventListener('goal-move', e => events.push(e));
+    el.shadowRoot.querySelector('#copy-btn').click();
+    expect(events[0].detail.copy).toBe(true);
+  });
+
+  it('move-back button returns to main view', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    el.shadowRoot.querySelector('#move-back').click();
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#view-move').hidden).toBe(true);
+  });
+});
+
+describe('goal-dialog — create list item', () => {
+  const goal = { id: '1', title: 'Run a 5k', description: 'Start with 1k' };
+
+  it('clicking action-create-btn calls show() on list-picker-dialog', () => {
+    const el = mount();
+    el.open(goal, { year: '2026', section: 'milestones' });
+    const picker = el.shadowRoot.querySelector('#list-picker');
+    el.shadowRoot.querySelector('#action-create-btn').click();
+    expect(picker.show).toHaveBeenCalledOnce();
+  });
+
+  it('passes availableLists to list-picker-dialog before showing', () => {
+    const el = mount();
+    const lists = [{ id: 'l1', name: 'Ideas', items: [] }];
+    el.availableLists = lists;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-create-btn').click();
+    expect(el.shadowRoot.querySelector('#list-picker').lists).toBe(lists);
+  });
+
+  it('dispatches goal-create-item when list-pick fires from picker', () => {
+    const el = mount();
+    el.open(goal, { year: '2026', section: 'milestones' });
+    const events = [];
+    el.addEventListener('goal-create-item', e => events.push(e));
+    const picker = el.shadowRoot.querySelector('#list-picker');
+    picker.dispatchEvent(new CustomEvent('list-pick', {
+      bubbles: true, composed: true,
+      detail: { targetListIds: ['l1'], newListName: null, copy: true },
+    }));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail).toMatchObject({
+      targetListIds: ['l1'],
+      newListName: null,
+      copy: true,
+      fromYear: '2026',
+      fromSection: 'milestones',
+    });
+    expect(events[0].detail.goal).toBe(goal);
+  });
+
+  it('goal-create-item with copy:false carries fromYear+fromSection for deletion', () => {
+    const el = mount();
+    el.open(goal, { year: '2025', section: 'focus' });
+    const events = [];
+    el.addEventListener('goal-create-item', e => events.push(e));
+    const picker = el.shadowRoot.querySelector('#list-picker');
+    picker.dispatchEvent(new CustomEvent('list-pick', {
+      bubbles: true, composed: true,
+      detail: { targetListIds: [], newListName: 'New list', copy: false },
+    }));
+    expect(events[0].detail.fromYear).toBe('2025');
+    expect(events[0].detail.fromSection).toBe('focus');
+    expect(events[0].detail.copy).toBe(false);
   });
 });
 
