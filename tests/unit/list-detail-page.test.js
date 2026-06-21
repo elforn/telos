@@ -20,6 +20,12 @@ function mount(listId = 'l1') {
   // Stub item-dialog.open so native dialog methods don't throw in happy-dom
   const dialog = el.shadowRoot.querySelector('#dialog');
   if (dialog) dialog.open = vi.fn();
+  // Stub bulk-picker's internal modal so show()/close() don't throw in happy-dom
+  const bulkPicker = el.shadowRoot.querySelector('#bulk-picker');
+  if (bulkPicker) {
+    const pickerModal = bulkPicker.shadowRoot.querySelector('#modal');
+    if (pickerModal) { pickerModal.show = vi.fn(); pickerModal.close = vi.fn(); }
+  }
   return el;
 }
 
@@ -421,6 +427,558 @@ describe('list-detail-page — item-reorder-key', () => {
     }));
     const ids = getState().lists[0].items.map(i => i.id);
     expect(ids).toEqual(['a', 'b']);
+  });
+});
+
+// ── item-move ─────────────────────────────────────────────────────────────────
+
+const LIST2 = { id: 'l2', name: 'Wishlist', items: [] };
+
+describe('list-detail-page — item-move (move)', () => {
+  it('removes item from current list on move', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, LIST2] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-move', {
+      bubbles: true, composed: true,
+      detail: { title: ITEM.title, status: ITEM.status, note: undefined, url: undefined, targetListIds: ['l2'], copy: false },
+    }));
+
+    await vi.waitFor(() => expect(getState().lists.find(l => l.id === 'l1').items).toHaveLength(0));
+  });
+
+  it('adds a clone to each target list on move', async () => {
+    const LIST3 = { id: 'l3', name: 'Later', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, LIST2, LIST3] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-move', {
+      bubbles: true, composed: true,
+      detail: { title: ITEM.title, status: ITEM.status, note: undefined, url: undefined, targetListIds: ['l2', 'l3'], copy: false },
+    }));
+
+    await vi.waitFor(() => {
+      expect(getState().lists.find(l => l.id === 'l2').items).toHaveLength(1);
+      expect(getState().lists.find(l => l.id === 'l3').items).toHaveLength(1);
+    });
+  });
+
+  it('clones in target lists have new UUIDs', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, LIST2] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-move', {
+      bubbles: true, composed: true,
+      detail: { title: ITEM.title, status: ITEM.status, note: undefined, url: undefined, targetListIds: ['l2'], copy: false },
+    }));
+
+    await vi.waitFor(() => expect(getState().lists.find(l => l.id === 'l2').items).toHaveLength(1));
+    expect(getState().lists.find(l => l.id === 'l2').items[0].id).not.toBe(ITEM.id);
+  });
+});
+
+describe('list-detail-page — item-move (copy)', () => {
+  it('keeps item in current list on copy', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, LIST2] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-move', {
+      bubbles: true, composed: true,
+      detail: { title: ITEM.title, status: ITEM.status, note: undefined, url: undefined, targetListIds: ['l2'], copy: true },
+    }));
+
+    await vi.waitFor(() => expect(getState().lists.find(l => l.id === 'l2').items).toHaveLength(1));
+    expect(getState().lists.find(l => l.id === 'l1').items).toHaveLength(1);
+  });
+
+  it('adds clones to all target lists on copy', async () => {
+    const LIST3 = { id: 'l3', name: 'Later', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, LIST2, LIST3] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-move', {
+      bubbles: true, composed: true,
+      detail: { title: ITEM.title, status: ITEM.status, note: undefined, url: undefined, targetListIds: ['l2', 'l3'], copy: true },
+    }));
+
+    await vi.waitFor(() => {
+      expect(getState().lists.find(l => l.id === 'l1').items).toHaveLength(1);
+      expect(getState().lists.find(l => l.id === 'l2').items).toHaveLength(1);
+      expect(getState().lists.find(l => l.id === 'l3').items).toHaveLength(1);
+    });
+  });
+});
+
+// ── item-promote ──────────────────────────────────────────────────────────────
+
+describe('list-detail-page — item-promote', () => {
+  it('creates a new goal in the correct year and section', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }], goals: {} } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-promote', {
+      bubbles: true, composed: true,
+      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, year: '2026', section: 'milestones' },
+    }));
+
+    await vi.waitFor(() => {
+      const goals = getState().goals?.['2026']?.milestones ?? [];
+      expect(goals).toHaveLength(1);
+      expect(goals[0].title).toBe('Flowers');
+    });
+  });
+
+  it('new goal has percentage tracking with value 0', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }], goals: {} } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-promote', {
+      bubbles: true, composed: true,
+      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, year: '2026', section: 'capstone' },
+    }));
+
+    await vi.waitFor(() => {
+      const goal = getState().goals?.['2026']?.capstone?.[0];
+      expect(goal?.tracking).toEqual({ type: 'percentage', value: 0 });
+    });
+  });
+
+  it('appends entry to item inGoals with correct year, section, and goalId', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }], goals: {} } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-promote', {
+      bubbles: true, composed: true,
+      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, year: '2026', section: 'wow' },
+    }));
+
+    await vi.waitFor(() => {
+      const item = getState().lists[0].items[0];
+      expect(item.inGoals).toHaveLength(1);
+      expect(item.inGoals[0].year).toBe('2026');
+      expect(item.inGoals[0].section).toBe('wow');
+    });
+    const goalId = getState().goals?.['2026']?.wow?.[0]?.id;
+    expect(getState().lists[0].items[0].inGoals[0].goalId).toBe(goalId);
+  });
+
+  it('does not overwrite existing goals in the same year+section', async () => {
+    const existingGoal = { id: 'eg1', title: 'Existing', description: '', tags: [], tracking: { type: 'percentage', value: 50 } };
+    await boot({
+      dbName: freshName(),
+      initialState: { lists: [{ ...LIST, items: [ITEM] }], goals: { '2026': { capstone: [], milestones: [existingGoal], wow: [], focus: [] } } },
+    });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-promote', {
+      bubbles: true, composed: true,
+      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, year: '2026', section: 'milestones' },
+    }));
+
+    await vi.waitFor(() => {
+      const goals = getState().goals?.['2026']?.milestones ?? [];
+      expect(goals).toHaveLength(2);
+      expect(goals[0].id).toBe('eg1');
+    });
+  });
+});
+
+// ── stale inGoals reconciliation ──────────────────────────────────────────────
+
+describe('list-detail-page — stale inGoals reconciliation', () => {
+  it('prunes inGoals entries for goals that no longer exist when item dialog is opened', async () => {
+    const staleItem = { id: 'i1', title: 'Flowers', status: 'open', tags: [],
+      inGoals: [{ year: '2026', section: 'milestones', goalId: 'g-gone' }] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [staleItem] }], goals: {} } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: staleItem },
+    }));
+
+    await vi.waitFor(() => {
+      expect(getState().lists[0].items[0].inGoals).toHaveLength(0);
+    });
+  });
+
+  it('keeps valid inGoals entries intact', async () => {
+    const goal = { id: 'g1', title: 'Flowers', description: '', tags: [], tracking: { type: 'percentage', value: 0 } };
+    const linkedItem = { id: 'i1', title: 'Flowers', status: 'open', tags: [],
+      inGoals: [{ year: '2026', section: 'milestones', goalId: 'g1' }] };
+    await boot({
+      dbName: freshName(),
+      initialState: { lists: [{ ...LIST, items: [linkedItem] }], goals: { '2026': { capstone: [], milestones: [goal], wow: [], focus: [] } } },
+    });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: linkedItem },
+    }));
+
+    await new Promise(r => setTimeout(r, 50));
+    expect(getState().lists[0].items[0].inGoals).toHaveLength(1);
+  });
+});
+
+// ── Selection mode ────────────────────────────────────────────────────────────
+
+describe('list-detail-page — selection mode', () => {
+  it('long-press enters selection mode: menu-btn hidden, bulk-bar visible', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-long-press', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(false);
+  });
+
+  it('long-press auto-selects the pressed item', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-long-press', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+
+    const listItem = el.shadowRoot.querySelector('list-item');
+    expect(listItem.selected).toBe(true);
+    expect(listItem.selectionMode).toBe(true);
+  });
+
+  it('✕ close button exits selection mode: menu-btn restored, bulk-bar hidden', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-long-press', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#bulk-close-btn').click();
+
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(true);
+  });
+
+  it('✕ close button clears selection state on all items', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-long-press', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#bulk-close-btn').click();
+
+    const listItem = el.shadowRoot.querySelector('list-item');
+    expect(listItem.selected).toBe(false);
+    expect(listItem.selectionMode).toBe(false);
+  });
+
+  it('deselecting the last selected item auto-exits selection mode', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-long-press', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-select-toggle', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('list-item').selectionMode).toBe(false);
+  });
+
+  it('item-select-toggle toggles item into selected state', async () => {
+    const ITEM2 = { id: 'i2', title: 'Book', status: 'open', tags: [], inGoals: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM, ITEM2] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+
+    // Enter selection mode with item1 selected
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-long-press', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+
+    // Toggle item2 in
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-select-toggle', {
+      bubbles: true, composed: true, detail: { item: ITEM2 },
+    }));
+
+    const items = [...el.shadowRoot.querySelectorAll('list-item')];
+    expect(items[0].selected).toBe(true);
+    expect(items[1].selected).toBe(true);
+  });
+
+  it('item-select-toggle deselects an already-selected item (with multiple items)', async () => {
+    const ITEM2 = { id: 'i2', title: 'Book', status: 'open', tags: [], inGoals: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM, ITEM2] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-long-press', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+
+    // Also select item2 so deselecting item1 doesn't empty the set
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-select-toggle', {
+      bubbles: true, composed: true, detail: { item: ITEM2 },
+    }));
+
+    // Now deselect item1
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-select-toggle', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+
+    const items = [...el.shadowRoot.querySelectorAll('list-item')];
+    expect(items[0].selected).toBe(false);
+    expect(items[1].selected).toBe(true);
+  });
+
+  it('item-tap is ignored while in selection mode', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-long-press', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+
+    const dialog = el.shadowRoot.querySelector('#dialog');
+    dialog.open = vi.fn();
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    expect(dialog.open).not.toHaveBeenCalled();
+  });
+});
+
+// ── Bulk action bar ───────────────────────────────────────────────────────────
+
+function enterSelectionMode(el, item = ITEM) {
+  el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-long-press', {
+    bubbles: true, composed: true, detail: { item },
+  }));
+}
+
+describe('list-detail-page — bulk action bar', () => {
+  it('bulk bar is hidden initially', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(true);
+  });
+
+  it('bulk bar becomes visible on long-press', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(false);
+  });
+
+  it('bulk count shows number of selected items', async () => {
+    const ITEM2 = { id: 'i2', title: 'Book', status: 'open', tags: [], inGoals: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM, ITEM2] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+    enterSelectionMode(el);
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-select-toggle', {
+      bubbles: true, composed: true, detail: { item: ITEM2 },
+    }));
+    expect(el.shadowRoot.querySelector('#bulk-count').textContent).toContain('2');
+  });
+
+  it('bulk bar hides after ✕ close button', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+    el.shadowRoot.querySelector('#bulk-close-btn').click();
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(true);
+  });
+
+  it('bulk delete removes selected items from the store', async () => {
+    const ITEM2 = { id: 'i2', title: 'Book', status: 'open', tags: [], inGoals: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM, ITEM2] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+
+    enterSelectionMode(el);
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-select-toggle', {
+      bubbles: true, composed: true, detail: { item: ITEM2 },
+    }));
+    el.shadowRoot.querySelector('#bulk-delete-btn').click();
+
+    await vi.waitFor(() => {
+      const items = getState().lists[0].items;
+      expect(items).toHaveLength(0);
+    });
+  });
+
+  it('bulk delete exits selection mode', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+    el.shadowRoot.querySelector('#bulk-delete-btn').click();
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
+  });
+
+  it('bulk Move opens list-picker-dialog with mode=move', async () => {
+    const OTHER_LIST = { id: 'l2', name: 'Other', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, OTHER_LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+
+    const picker = el.shadowRoot.querySelector('#bulk-picker');
+    const pickerModal = picker.shadowRoot.querySelector('#modal');
+    el.shadowRoot.querySelector('#bulk-move-btn').click();
+
+    expect(pickerModal.show).toHaveBeenCalledOnce();
+    expect(picker.mode).toBe('move');
+  });
+
+  it('bulk Copy opens list-picker-dialog with mode=copy', async () => {
+    const OTHER_LIST = { id: 'l2', name: 'Other', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, OTHER_LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+
+    const picker = el.shadowRoot.querySelector('#bulk-picker');
+    const pickerModal = picker.shadowRoot.querySelector('#modal');
+    el.shadowRoot.querySelector('#bulk-copy-btn').click();
+
+    expect(pickerModal.show).toHaveBeenCalledOnce();
+    expect(picker.mode).toBe('copy');
+  });
+
+  it('list-pick(copy=false) moves selected items to target lists', async () => {
+    const OTHER_LIST = { id: 'l2', name: 'Other', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, OTHER_LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+
+    el.shadowRoot.querySelector('#bulk-picker').dispatchEvent(new CustomEvent('list-pick', {
+      bubbles: true, composed: true,
+      detail: { targetListIds: ['l2'], copy: false },
+    }));
+
+    await vi.waitFor(() => {
+      const lists = getState().lists;
+      expect(lists.find(l => l.id === 'l1').items).toHaveLength(0);
+      expect(lists.find(l => l.id === 'l2').items).toHaveLength(1);
+      expect(lists.find(l => l.id === 'l2').items[0].title).toBe('Flowers');
+    });
+  });
+
+  it('list-pick(copy=true) copies selected items, keeps originals', async () => {
+    const OTHER_LIST = { id: 'l2', name: 'Other', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, OTHER_LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+
+    el.shadowRoot.querySelector('#bulk-picker').dispatchEvent(new CustomEvent('list-pick', {
+      bubbles: true, composed: true,
+      detail: { targetListIds: ['l2'], copy: true },
+    }));
+
+    await vi.waitFor(() => {
+      const lists = getState().lists;
+      expect(lists.find(l => l.id === 'l1').items).toHaveLength(1);
+      expect(lists.find(l => l.id === 'l2').items).toHaveLength(1);
+      expect(lists.find(l => l.id === 'l2').items[0].id).not.toBe(ITEM.id);
+    });
+  });
+
+  it('list-pick with newListName creates the new list and moves items to it', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+
+    el.shadowRoot.querySelector('#bulk-picker').dispatchEvent(new CustomEvent('list-pick', {
+      bubbles: true, composed: true,
+      detail: { targetListIds: [], newListName: 'New List', copy: false },
+    }));
+
+    await vi.waitFor(() => {
+      const lists = getState().lists;
+      expect(lists.find(l => l.id === 'l1').items).toHaveLength(0);
+      const newList = lists.find(l => l.name === 'New List');
+      expect(newList).toBeTruthy();
+      expect(newList.items).toHaveLength(1);
+      expect(newList.items[0].title).toBe('Flowers');
+    });
+  });
+
+  it('list-pick exits selection mode', async () => {
+    const OTHER_LIST = { id: 'l2', name: 'Other', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, OTHER_LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+
+    el.shadowRoot.querySelector('#bulk-picker').dispatchEvent(new CustomEvent('list-pick', {
+      bubbles: true, composed: true,
+      detail: { targetListIds: ['l2'], copy: true },
+    }));
+
+    await vi.waitFor(() => {
+      expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(true);
+      expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
+    });
   });
 });
 

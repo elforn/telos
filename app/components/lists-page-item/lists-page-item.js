@@ -99,7 +99,6 @@ class ListsPageItem extends Gestures(AppElement) {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          transform: translateY(1px);
         }
 
         .item-count {
@@ -141,7 +140,7 @@ class ListsPageItem extends Gestures(AppElement) {
         .nav-btn {
           align-self: stretch;
           flex-shrink: 0;
-          min-inline-size: calc(var(--touch-target) + 35px);
+          min-inline-size: calc(var(--touch-target) + 45px);
           background: var(--color-accent-subtle);
           border: none;
           border-inline-start: 1px solid color-mix(in srgb, var(--color-accent) 25%, transparent);

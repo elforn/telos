@@ -14,6 +14,21 @@ class ListItem extends Gestures(AppElement) {
     if (this.shadowRoot) this._update();
   }
 
+  set selectionMode(val) {
+    this._selectionMode = !!val;
+    if (!val && this._revealedDir === null) {
+      this._row?.style.removeProperty('pointer-events');
+    }
+  }
+  get selectionMode() { return this._selectionMode ?? false; }
+
+  set selected(val) {
+    this._selected = !!val;
+    this.classList.toggle('selected', this._selected);
+    this.setAttribute('aria-selected', String(this._selected));
+  }
+  get selected() { return this._selected ?? false; }
+
   template() {
     return `
       <style>
@@ -149,6 +164,13 @@ class ListItem extends Gestures(AppElement) {
           color: var(--color-success);
         }
 
+        /* ── Selection mode ─────────────────────────────────────────────── */
+
+        :host(.selected) .row {
+          box-shadow: inset 0 0 0 2px var(--color-accent);
+          background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+        }
+
         /* ── Done celebration ───────────────────────────────────────────── */
 
         @keyframes done-ring {
@@ -251,6 +273,7 @@ class ListItem extends Gestures(AppElement) {
     this._dragBtn.setAttribute('aria-label', t('list-item.drag'));
     this._dragBtn.textContent = '⠿';
     this._onDragBtnDown = e => {
+      if (this._selectionMode) return;
       e.stopPropagation();
       this._dragBtn.setPointerCapture(e.pointerId);
       this.dispatchEvent(new CustomEvent('item-drag-start', {
@@ -285,11 +308,20 @@ class ListItem extends Gestures(AppElement) {
   // ── Gestures ──────────────────────────────────────────────────────────────
 
   onTap() {
-    if (this._revealedDir) {
-      this._closeReveal();
+    if (this._revealedDir) { this._closeReveal(); return; }
+    if (this._selectionMode) {
+      this.dispatchEvent(new CustomEvent('item-select-toggle', {
+        bubbles: true, composed: true, detail: { item: this._item },
+      }));
       return;
     }
     this.dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: this._item },
+    }));
+  }
+
+  onLongPress() {
+    this.dispatchEvent(new CustomEvent('item-long-press', {
       bubbles: true, composed: true, detail: { item: this._item },
     }));
   }
@@ -300,6 +332,7 @@ class ListItem extends Gestures(AppElement) {
   }
 
   onSwipeMove(e) {
+    if (this._selectionMode) return;
     this._row.style.transition = 'none';
     let offset;
     if (this._revealedDir === 'left') {
@@ -316,11 +349,8 @@ class ListItem extends Gestures(AppElement) {
   }
 
   onSwipe(e) {
-    // If a side is already open, any swipe closes it — never opens the other side.
-    if (this._revealedDir) {
-      this._closeReveal();
-      return;
-    }
+    if (this._revealedDir) { this._closeReveal(); return; }
+    if (this._selectionMode) return;
 
     const revealWidth = e.direction === 'right' ? DONE_WIDTH : DELETE_WIDTH;
     const commit = e.distance >= revealWidth * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;

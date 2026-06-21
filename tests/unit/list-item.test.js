@@ -391,3 +391,71 @@ describe('list-item — pointerup fires actions', () => {
     await vi.waitFor(() => expect(events).toHaveLength(1));
   });
 });
+
+// ── Selection mode ────────────────────────────────────────────────────────────
+
+describe('list-item — selection mode', () => {
+  it('selected property adds .selected class to host', () => {
+    const el = mount();
+    el.selected = true;
+    expect(el.classList.contains('selected')).toBe(true);
+  });
+
+  it('selected = false removes .selected class', () => {
+    const el = mount();
+    el.selected = true;
+    el.selected = false;
+    expect(el.classList.contains('selected')).toBe(false);
+  });
+
+  it('selected property sets aria-selected attribute', () => {
+    const el = mount();
+    el.selected = true;
+    expect(el.getAttribute('aria-selected')).toBe('true');
+    el.selected = false;
+    expect(el.getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('tap in selection mode emits item-select-toggle instead of item-tap', () => {
+    const el = mount();
+    el.selectionMode = true;
+    const taps   = [];
+    const toggles = [];
+    el.addEventListener('item-tap',           e => taps.push(e));
+    el.addEventListener('item-select-toggle', e => toggles.push(e));
+    tap(el);
+    expect(taps).toHaveLength(0);
+    expect(toggles).toHaveLength(1);
+    expect(toggles[0].detail.item).toEqual(ITEM);
+  });
+
+  it('tap outside selection mode still emits item-tap', () => {
+    const el = mount();
+    el.selectionMode = false;
+    const taps = [];
+    el.addEventListener('item-tap', e => taps.push(e));
+    tap(el);
+    expect(taps).toHaveLength(1);
+  });
+
+  it('item-select-toggle is bubbles and composed', () => {
+    const el = mount();
+    el.selectionMode = true;
+    const events = [];
+    el.addEventListener('item-select-toggle', e => events.push(e));
+    tap(el);
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
+  });
+
+  it('onLongPress dispatches item-long-press with item detail', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('item-long-press', e => events.push(e));
+    el.onLongPress();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.item).toEqual(ITEM);
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
+  });
+});

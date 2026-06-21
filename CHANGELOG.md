@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Long-press a list item to enter selection mode — tap more items to grow the selection
+- Bulk delete all selected items in one tap from the bulk action bar
+- Bulk move selected items to one or more other lists — items are removed from the current list
+- Bulk copy selected items to one or more other lists — originals stay in the current list
+- During bulk move or copy, create a brand-new destination list on the spot without leaving the flow
+- Move or copy a single item to other lists directly from the item edit dialog
+- Promote a list item to a goal from the item edit dialog — choose a year and section; a new goal is created and the item records where it was promoted
+- Tapping "Add to goal" for a year/section the item is already linked to disables the CTA ("Already added")
+
+### Changed
+- Deselecting the last selected item exits selection mode automatically — no cancel button needed
+- Bulk action bar appears above the bottom navigation bar during selection mode
+
+### Fixed
+- Selected list items now show an opaque accent tint — previously the semi-transparent overlay let the done and delete action buttons bleed through visually
+
 ---
 
 ## [1.5.1] — 2026-06-20

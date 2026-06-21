@@ -3,7 +3,8 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/item-dialog/item-dialog.js';
 
-const ITEM = { id: 'i1', title: 'Buy flowers', status: 'paused', note: 'From the corner shop', url: 'https://example.com' };
+const ITEM = { id: 'i1', title: 'Buy flowers', status: 'paused', note: 'From the corner shop', url: 'https://example.com', tags: [], inGoals: [] };
+const ITEM_IN_GOALS = { ...ITEM, inGoals: [{ year: '2026', section: 'milestones', goalId: 'g1' }] };
 
 function stubModal(el) {
   const modal = el.shadowRoot.querySelector('#modal');
@@ -14,11 +15,40 @@ function stubModal(el) {
   return modal;
 }
 
+function stubSheet(el) {
+  const sheet = el.shadowRoot.querySelector('#action-sheet');
+  sheet.showModal = vi.fn(() => sheet.setAttribute('open', ''));
+  sheet.close     = vi.fn(() => sheet.removeAttribute('open'));
+}
+
+function stubPickerModal(el) {
+  const picker = el.shadowRoot.querySelector('#list-picker');
+  const modal  = picker.shadowRoot.querySelector('#modal');
+  modal.show  = vi.fn();
+  modal.close = vi.fn();
+}
+
+function pickerShadow(el) {
+  return el.shadowRoot.querySelector('#list-picker').shadowRoot;
+}
+
 function mount() {
   const el = document.createElement('item-dialog');
   document.body.appendChild(el);
   stubModal(el);
+  stubSheet(el);
+  stubPickerModal(el);
   return el;
+}
+
+function openListPicker(el) {
+  el.shadowRoot.querySelector('#menu-btn').click();
+  el.shadowRoot.querySelector('#action-move-btn').click();
+}
+
+function openGoalPromoter(el) {
+  el.shadowRoot.querySelector('#menu-btn').click();
+  el.shadowRoot.querySelector('#action-promote-btn').click();
 }
 
 afterEach(() => { document.body.innerHTML = ''; localStorage.clear(); vi.restoreAllMocks(); });
@@ -440,6 +470,7 @@ describe('item-dialog — draft', () => {
   });
 
   it('preserves draft on backdrop close', () => {
+
     const el = mount();
     const modal = el.shadowRoot.querySelector('#modal');
     el.open(null);
@@ -448,5 +479,304 @@ describe('item-dialog — draft', () => {
     inp.dispatchEvent(new Event('input'));
     modal.dispatchEvent(new CustomEvent('modal-close', { bubbles: true, composed: true }));
     expect(JSON.parse(localStorage.getItem(DRAFT_KEY)).title).toBe('In progress');
+  });
+});
+
+// ── Move to list ──────────────────────────────────────────────────────────────
+
+const LIST_A = { id: 'la', name: 'Shopping', color: null };
+const LIST_B = { id: 'lb', name: 'Ideas',    color: '#FF0000' };
+
+describe('item-dialog — move to list', () => {
+  it('menu-btn is hidden when opened with no item (new item)', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(true);
+  });
+
+  it('menu-btn is visible when opened with an existing item', () => {
+    const el = mount();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
+  });
+
+  it('clicking Move to list (via action sheet) opens list-picker-dialog', () => {
+    const el = mount();
+    el.open(ITEM);
+    const pickerModal = pickerShadow(el).querySelector('#modal');
+    openListPicker(el);
+    expect(pickerModal.show).toHaveBeenCalledOnce();
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
+  });
+
+  it('Back button in list-picker closes the picker modal', () => {
+    const el = mount();
+    el.open(ITEM);
+    const pickerModal = pickerShadow(el).querySelector('#modal');
+    openListPicker(el);
+    pickerShadow(el).querySelector('#back-btn').click();
+    expect(pickerModal.close).toHaveBeenCalledOnce();
+  });
+
+  it('Move and Copy CTAs are disabled before any list is selected', () => {
+    const el = mount();
+    el.availableLists = [LIST_A, LIST_B];
+    el.open(ITEM);
+    openListPicker(el);
+    expect(pickerShadow(el).querySelector('#move-btn').disabled).toBe(true);
+    expect(pickerShadow(el).querySelector('#copy-btn').disabled).toBe(true);
+  });
+
+  it('Move and Copy CTAs are enabled after selecting a list', () => {
+    const el = mount();
+    el.availableLists = [LIST_A, LIST_B];
+    el.open(ITEM);
+    openListPicker(el);
+    pickerShadow(el).querySelector('[data-list-id="la"]').click();
+    expect(pickerShadow(el).querySelector('#move-btn').disabled).toBe(false);
+    expect(pickerShadow(el).querySelector('#copy-btn').disabled).toBe(false);
+  });
+
+  it('deselecting all lists disables the CTAs again', () => {
+    const el = mount();
+    el.availableLists = [LIST_A];
+    el.open(ITEM);
+    openListPicker(el);
+    pickerShadow(el).querySelector('[data-list-id="la"]').click();
+    pickerShadow(el).querySelector('[data-list-id="la"]').click(); // deselect
+    expect(pickerShadow(el).querySelector('#move-btn').disabled).toBe(true);
+    expect(pickerShadow(el).querySelector('#copy-btn').disabled).toBe(true);
+  });
+
+  it('list rows are rendered from availableLists', () => {
+    const el = mount();
+    el.availableLists = [LIST_A, LIST_B];
+    el.open(ITEM);
+    openListPicker(el);
+    const rows = pickerShadow(el).querySelectorAll('[data-list-id]');
+    expect(rows.length).toBe(2);
+  });
+
+  it('no-lists message is shown when availableLists is empty', () => {
+    const el = mount();
+    el.availableLists = [];
+    el.open(ITEM);
+    openListPicker(el);
+    expect(pickerShadow(el).querySelector('#no-lists-msg').hidden).toBe(false);
+  });
+
+  it('selection count row is hidden before any selection', () => {
+    const el = mount();
+    el.availableLists = [LIST_A, LIST_B];
+    el.open(ITEM);
+    openListPicker(el);
+    expect(pickerShadow(el).querySelector('#count-row').hidden).toBe(true);
+  });
+
+  it('selection count row shows count after selecting lists', () => {
+    const el = mount();
+    el.availableLists = [LIST_A, LIST_B];
+    el.open(ITEM);
+    openListPicker(el);
+    pickerShadow(el).querySelector('[data-list-id="la"]').click();
+    pickerShadow(el).querySelector('[data-list-id="lb"]').click();
+    expect(pickerShadow(el).querySelector('#count-row').hidden).toBe(false);
+    expect(pickerShadow(el).querySelector('#count').textContent).toContain('2');
+  });
+
+  it('clear button deselects all and hides count row', () => {
+    const el = mount();
+    el.availableLists = [LIST_A, LIST_B];
+    el.open(ITEM);
+    openListPicker(el);
+    pickerShadow(el).querySelector('[data-list-id="la"]').click();
+    pickerShadow(el).querySelector('[data-list-id="lb"]').click();
+    pickerShadow(el).querySelector('#clear-btn').click();
+    expect(pickerShadow(el).querySelector('#count-row').hidden).toBe(true);
+    expect(pickerShadow(el).querySelector('#move-btn').disabled).toBe(true);
+    expect(pickerShadow(el).querySelector('#copy-btn').disabled).toBe(true);
+  });
+
+  it('emits item-move with copy=false and correct targetListIds on Move', () => {
+    const el = mount();
+    el.availableLists = [LIST_A, LIST_B];
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-move', e => events.push(e));
+    openListPicker(el);
+    pickerShadow(el).querySelector('[data-list-id="la"]').click();
+    pickerShadow(el).querySelector('#move-btn').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.copy).toBe(false);
+    expect(events[0].detail.targetListIds).toEqual(['la']);
+  });
+
+  it('emits item-move with copy=true on Copy', () => {
+    const el = mount();
+    el.availableLists = [LIST_A];
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-move', e => events.push(e));
+    openListPicker(el);
+    pickerShadow(el).querySelector('[data-list-id="la"]').click();
+    pickerShadow(el).querySelector('#copy-btn').click();
+    expect(events[0].detail.copy).toBe(true);
+  });
+
+  it('item-move includes current form values', () => {
+    const el = mount();
+    el.availableLists = [LIST_A];
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-move', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Updated title';
+    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('input'));
+    openListPicker(el);
+    pickerShadow(el).querySelector('[data-list-id="la"]').click();
+    pickerShadow(el).querySelector('#move-btn').click();
+    expect(events[0].detail.title).toBe('Updated title');
+  });
+
+  it('emits item-move with multiple selected lists', () => {
+    const el = mount();
+    el.availableLists = [LIST_A, LIST_B];
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-move', e => events.push(e));
+    openListPicker(el);
+    pickerShadow(el).querySelector('[data-list-id="la"]').click();
+    pickerShadow(el).querySelector('[data-list-id="lb"]').click();
+    pickerShadow(el).querySelector('#move-btn').click();
+    expect(events[0].detail.targetListIds.sort()).toEqual(['la', 'lb'].sort());
+  });
+
+  it('item-move is bubbles and composed', () => {
+    const el = mount();
+    el.availableLists = [LIST_A];
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-move', e => events.push(e));
+    openListPicker(el);
+    pickerShadow(el).querySelector('[data-list-id="la"]').click();
+    pickerShadow(el).querySelector('#move-btn').click();
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
+  });
+});
+
+// ── Add to goal ───────────────────────────────────────────────────────────────
+
+describe('item-dialog — add to goal', () => {
+  it('clicking Add to goal (via action sheet) switches to goal-promoter view', () => {
+    const el = mount();
+    el.open(ITEM);
+    openGoalPromoter(el);
+    expect(el.shadowRoot.querySelector('#view-goal-promoter').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(true);
+  });
+
+  it('Back button in goal-promoter returns to main view', () => {
+    const el = mount();
+    el.open(ITEM);
+    openGoalPromoter(el);
+    el.shadowRoot.querySelector('#promote-back').click();
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#view-goal-promoter').hidden).toBe(true);
+  });
+
+  it('year select is populated with 5 years around currentYear', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(ITEM);
+    openGoalPromoter(el);
+    const options = [...el.shadowRoot.querySelectorAll('#year-select option')];
+    expect(options.map(o => o.value)).toEqual(['2024', '2025', '2026', '2027', '2028']);
+  });
+
+  it('currentYear option is selected by default', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(ITEM);
+    openGoalPromoter(el);
+    expect(el.shadowRoot.querySelector('#year-select').value).toBe('2026');
+  });
+
+  it('Add to goal CTA is enabled when item has no existing inGoals entries', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(ITEM);
+    openGoalPromoter(el);
+    expect(el.shadowRoot.querySelector('#add-to-goal-cta').disabled).toBe(false);
+  });
+
+  it('Add to goal CTA is disabled when chosen year+section already in inGoals', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(ITEM_IN_GOALS);
+    openGoalPromoter(el);
+    // Default: year=2026, section=capstone — not in inGoals → enabled
+    expect(el.shadowRoot.querySelector('#add-to-goal-cta').disabled).toBe(false);
+    // Switch to milestones (which IS in inGoals)
+    const milestonesRadio = el.shadowRoot.querySelector('input[name="goal-section"][value="milestones"]');
+    milestonesRadio.checked = true;
+    milestonesRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(el.shadowRoot.querySelector('#add-to-goal-cta').disabled).toBe(true);
+  });
+
+  it('in-goals section is hidden when item has no inGoals', () => {
+    const el = mount();
+    el.open(ITEM);
+    openGoalPromoter(el);
+    expect(el.shadowRoot.querySelector('#in-goals-section').hidden).toBe(true);
+  });
+
+  it('in-goals section is visible and shows pills when item has inGoals entries', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(ITEM_IN_GOALS);
+    openGoalPromoter(el);
+    expect(el.shadowRoot.querySelector('#in-goals-section').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('.in-goals-pill')).not.toBeNull();
+  });
+
+  it('emits item-promote with correct year and section', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-promote', e => events.push(e));
+    openGoalPromoter(el);
+    const wowRadio = el.shadowRoot.querySelector('input[name="goal-section"][value="wow"]');
+    wowRadio.checked = true;
+    wowRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    el.shadowRoot.querySelector('#add-to-goal-cta').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.year).toBe('2026');
+    expect(events[0].detail.section).toBe('wow');
+  });
+
+  it('item-promote includes current form values', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-promote', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Renamed item';
+    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('input'));
+    openGoalPromoter(el);
+    el.shadowRoot.querySelector('#add-to-goal-cta').click();
+    expect(events[0].detail.title).toBe('Renamed item');
+  });
+
+  it('item-promote is bubbles and composed', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-promote', e => events.push(e));
+    openGoalPromoter(el);
+    el.shadowRoot.querySelector('#add-to-goal-cta').click();
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
   });
 });
