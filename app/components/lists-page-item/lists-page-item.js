@@ -1,8 +1,9 @@
 import { AppElement } from '../../../_lib/core/app-element.js';
 import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
+import { icons } from '../../icons.js';
 
-const COLOR_WIDTH     = 56;
+const COLOR_WIDTH     = 48;
 const COMMIT_RATIO    = 2.0;
 const COMMIT_VELOCITY = 0.35;
 const SWIPE_DEAD_ZONE = 15;
@@ -107,27 +108,21 @@ class ListsPageItem extends Gestures(AppElement) {
           touch-action: none;
         }
 
-        .drag-btn::before {
-          content: '';
-          display: block;
-          inline-size: 10px;
-          block-size: 15px;
-          background-image: radial-gradient(circle 1.5px at center, currentColor 100%, transparent 100%);
-          background-size: 5px 5px;
-          background-repeat: repeat;
-        }
+        .drag-btn svg { pointer-events: none; }
 
         .chevron {
           flex-shrink: 0;
-          display: block;
-          inline-size: 7px;
-          block-size: 7px;
-          border-inline-end: 2px solid var(--color-text-muted);
-          border-block-start: 2px solid var(--color-text-muted);
-          transform: rotate(45deg);
+          color: var(--color-text-muted);
           opacity: 0.45;
           margin-inline-start: var(--space-1);
           pointer-events: none;
+          display: flex;
+          align-items: center;
+        }
+
+        .chevron svg {
+          inline-size: var(--icon-size-sm);
+          block-size: var(--icon-size-sm);
         }
       </style>
 
@@ -136,7 +131,7 @@ class ListsPageItem extends Gestures(AppElement) {
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="list-name"></span>
         <span class="item-count"></span>
-        <span class="chevron" aria-hidden="true"></span>
+        <span class="chevron" aria-hidden="true">${icons.chevronRight}</span>
       </div>
     `;
   }
@@ -159,6 +154,7 @@ class ListsPageItem extends Gestures(AppElement) {
     // ── Drag handle ──────────────────────────────────────────────────────────
     this._dragBtn = this.shadowRoot.querySelector('#drag-btn');
     this._dragBtn.setAttribute('aria-label', t('lists-page.drag'));
+    this._dragBtn.innerHTML = icons.grip;
     this._onDragBtnDown = e => {
       e.stopPropagation();
       this._dragBtn.setPointerCapture(e.pointerId);

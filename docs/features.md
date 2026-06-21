@@ -1,5 +1,69 @@
 # Features
 
+## SVG icon system
+
+**When:** v1.6.x — `app/icons.js`
+
+### What it does
+
+All character/emoji icons (trash bins, checkmarks, undo arrows, drag handles, chevrons, info/link indicators, pencil, ×) are replaced with inline SVG paths sourced from the Feather/Lucide icon set.
+
+### Where to find icons
+
+All icons live in `app/icons.js` and are exported as a plain object:
+
+```js
+import { icons } from '../../icons.js';
+
+// Inject anywhere you need a visual icon
+button.innerHTML = icons.trash;          // ← aria-hidden svg, inherits currentColor
+someSpan.innerHTML = icons.grip;
+```
+
+Every SVG is 20 × 20 rendered (24 × 24 viewBox), `stroke="currentColor"`, and carries `aria-hidden="true"`. Buttons that use icon-only content must still carry an `aria-label`.
+
+### Adding a new icon
+
+Append a new key to the `icons` object in `app/icons.js`. Use the `i()` helper at the top of the file — it wraps any SVG path markup with the standard attributes automatically.
+
+### Constraints
+
+- Never put user-supplied content into `icons.js` — the strings are injected via `innerHTML`. All paths in the file are static developer-authored markup.
+- `pointer-events: none` on `.action-btn svg` and drag/chevron SVGs prevents the SVG from capturing pointer events that should reach the parent button.
+
+---
+
+## Bulk action bar — Status, Move, and overflow
+
+**When:** v1.6.x — `app/pages/list-detail-page.js`
+
+### What it does
+
+Long-pressing a list item enters selection mode. The bulk action bar at the bottom provides:
+
+| Button | Appearance | Action |
+|---|---|---|
+| ✕ | Icon-only | Exit selection mode |
+| *N items* | Count label | Shows how many are selected |
+| ⋮ | Icon-only | Opens overflow bottom-sheet (placeholder) |
+| 🗑 | Icon-only, danger colour | Delete all selected items (direct, no confirm) |
+| Status | Text | Opens status bottom-sheet — set all to Open / Paused / Done |
+| Move | Text | Opens list-picker-dialog — move or copy to other lists |
+
+### Status bottom-sheet
+
+Tapping **Status** opens a `<dialog id="bulk-status-sheet">` with three pills (Open, Paused, Done). Selecting one applies the new status to all selected items immediately, shows a toast, and exits selection mode.
+
+### Move bottom-sheet
+
+Tapping **Move** opens `list-picker-dialog` with `mode: null` (both Move and Copy buttons visible). Completing the pick moves or copies all selected items.
+
+### Overflow bottom-sheet
+
+Tapping ⋮ opens `<dialog id="bulk-more-sheet">`. Currently a placeholder — future actions go here without touching the bar layout.
+
+---
+
 ## Goal actions — move/copy to year and create list item
 
 **When:** v1.6.x

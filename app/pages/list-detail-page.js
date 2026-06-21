@@ -9,6 +9,7 @@ import '../components/item-dialog/item-dialog.js';
 import '../components/list-dialog/list-dialog.js';
 import '../components/add-row/add-row.js';
 import '../components/list-picker-dialog/list-picker-dialog.js';
+import { icons } from '../icons.js';
 
 const lsKey = id => `lists.showStatus.${id}`;
 const DRAG_CLONE_SHADOW = '0 8px 24px rgba(0,0,0,0.18)';
@@ -53,14 +54,19 @@ class ListDetailPage extends AppElement {
           background: none;
           border: none;
           cursor: pointer;
-          font-family: var(--font-family);
-          font-size: var(--font-size-heading);
           color: var(--color-text-secondary);
           border-radius: var(--radius-full);
           display: flex;
           align-items: center;
           justify-content: center;
           touch-action: manipulation;
+        }
+
+        .back-btn svg,
+        .menu-btn svg {
+          inline-size: 22px;
+          block-size: 22px;
+          pointer-events: none;
         }
 
         .back-btn {
@@ -84,20 +90,19 @@ class ListDetailPage extends AppElement {
         }
 
         .name-edit-btn {
-          display: block;
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
           inline-size: 100%;
           min-block-size: var(--touch-target);
-          line-height: var(--touch-target);
           overflow: hidden;
-          white-space: nowrap;
-          text-overflow: ellipsis;
-          text-align: start;
           background: none;
           border: none;
           cursor: pointer;
           font: inherit;
           color: inherit;
           padding: 0;
+          text-align: start;
         }
 
         .name-edit-btn:focus-visible {
@@ -107,9 +112,17 @@ class ListDetailPage extends AppElement {
         }
 
         .name-pencil {
+          flex-shrink: 0;
           color: var(--color-text-muted);
-          font-size: 0.75em;
-          opacity: 0.7;
+          opacity: 0.6;
+          display: flex;
+          align-items: center;
+        }
+
+        .name-pencil svg {
+          inline-size: var(--icon-size-sm);
+          block-size: var(--icon-size-sm);
+          pointer-events: none;
         }
 
         .menu-delete-section {
@@ -245,7 +258,7 @@ class ListDetailPage extends AppElement {
           position: fixed;
           inset-inline: 0;
           inset-block-end: 0;
-          z-index: 300;
+          z-index: 300; /* above bottom-nav (200) and page-header (100) */
           background: var(--color-surface);
           border-block-start: 1px solid var(--color-border);
           display: flex;
@@ -287,6 +300,12 @@ class ListDetailPage extends AppElement {
           border-radius: var(--radius-full);
         }
 
+        #bulk-close-btn svg,
+        #bulk-more-btn svg,
+        #bulk-delete-btn svg {
+          pointer-events: none;
+        }
+
         #bulk-count {
           flex: 1;
           font-size: var(--font-size-caption);
@@ -298,10 +317,35 @@ class ListDetailPage extends AppElement {
           text-overflow: ellipsis;
         }
 
-        .bulk-btn {
+        #bulk-delete-btn {
           flex-shrink: 0;
           min-block-size: var(--touch-target);
-          padding-inline: var(--space-4);
+          min-inline-size: var(--touch-target);
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-size: var(--font-size-body);
+          color: var(--color-danger);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          touch-action: manipulation;
+        }
+
+        #bulk-delete-btn:focus-visible {
+          outline: 2px solid var(--color-danger);
+          outline-offset: 2px;
+          border-radius: var(--radius-full);
+        }
+
+        .bulk-btn {
+          flex-shrink: 1;
+          min-inline-size: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          min-block-size: var(--touch-target);
+          padding-inline: var(--space-3);
           border-radius: var(--radius-sm);
           border: none;
           cursor: pointer;
@@ -311,21 +355,38 @@ class ListDetailPage extends AppElement {
           touch-action: manipulation;
         }
 
-        #bulk-delete-btn {
+        #bulk-more-btn {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
           background: none;
-          color: var(--color-danger);
-          border: 1px solid var(--color-danger);
+          border: none;
+          cursor: pointer;
+          font-family: var(--font-family);
+          font-size: var(--font-size-body);
+          color: var(--color-text-secondary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          touch-action: manipulation;
         }
 
-        #bulk-move-btn {
+        #bulk-more-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+          border-radius: var(--radius-full);
+        }
+
+        #bulk-status-btn {
           background: var(--color-surface-raised);
           color: var(--color-text-primary);
           border: 1px solid var(--color-border);
         }
 
-        #bulk-copy-btn {
-          background: var(--color-accent);
-          color: var(--color-text-inverse);
+        #bulk-move-btn {
+          background: var(--color-surface-raised);
+          color: var(--color-text-primary);
+          border: 1.5px solid var(--color-border);
         }
 
         .bulk-btn:focus-visible {
@@ -336,9 +397,9 @@ class ListDetailPage extends AppElement {
 
       <div class="page-header">
         <div class="top-row">
-          <button class="back-btn" id="back-btn" aria-label="${t('list-detail.back')}">‹</button>
-          <h1><button class="name-edit-btn" id="name-edit-btn" aria-label="${t('list-detail.edit-name')}"><span id="list-name"></span><span class="name-pencil" aria-hidden="true"> ✎</span></button></h1>
-          <button class="menu-btn" id="menu-btn" aria-label="${t('list-detail.menu')}" aria-expanded="false">···</button>
+          <button class="back-btn" id="back-btn" aria-label="${t('list-detail.back')}">${icons.chevronLeft}</button>
+          <h1><button class="name-edit-btn" id="name-edit-btn" aria-label="${t('list-detail.edit-name')}"><span id="list-name"></span><span class="name-pencil" aria-hidden="true">${icons.pencil}</span></button></h1>
+          <button class="menu-btn" id="menu-btn" aria-label="${t('list-detail.menu')}" aria-expanded="false">${icons.dotsVertical}</button>
         </div>
       </div>
 
@@ -365,12 +426,32 @@ class ListDetailPage extends AppElement {
       <list-dialog id="list-dialog"></list-dialog>
 
       <div id="bulk-bar" hidden role="toolbar" aria-label="${t('list-detail.cancel-selection')}">
-        <button type="button" id="bulk-close-btn" aria-label="${t('list-detail.cancel-selection')}">✕</button>
+        <button type="button" id="bulk-close-btn" aria-label="${t('list-detail.cancel-selection')}">${icons.xMark}</button>
         <span id="bulk-count"></span>
-        <button type="button" class="bulk-btn" id="bulk-delete-btn">${t('list-detail.bulk-delete')}</button>
+        <button type="button" id="bulk-more-btn" aria-label="${t('list-detail.bulk-more')}">${icons.dotsVertical}</button>
+        <button type="button" id="bulk-delete-btn" aria-label="${t('list-detail.bulk-delete')}">${icons.trash}</button>
+        <button type="button" class="bulk-btn" id="bulk-status-btn">${t('list-detail.bulk-status')}</button>
         <button type="button" class="bulk-btn" id="bulk-move-btn">${t('list-detail.bulk-move')}</button>
-        <button type="button" class="bulk-btn" id="bulk-copy-btn">${t('list-detail.bulk-copy')}</button>
       </div>
+
+      <dialog id="bulk-status-sheet">
+        <div class="menu-handle"></div>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('list-detail.bulk-status-label')}</p>
+          <div class="status-pill-group" role="group" aria-label="${t('list-detail.bulk-status-label')}">
+            <button class="status-pill" id="bulk-status-open">${t('item-dialog.status-open')}</button>
+            <button class="status-pill" id="bulk-status-paused">${t('item-dialog.status-paused')}</button>
+            <button class="status-pill" id="bulk-status-done">${t('item-dialog.status-done')}</button>
+          </div>
+        </div>
+      </dialog>
+
+      <dialog id="bulk-more-sheet">
+        <div class="menu-handle"></div>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('list-detail.bulk-more-label')}</p>
+        </div>
+      </dialog>
 
       <list-picker-dialog id="bulk-picker"></list-picker-dialog>
     `;
@@ -669,8 +750,10 @@ class ListDetailPage extends AppElement {
     this._onBulkClose = () => this._exitSelectionMode();
     this.shadowRoot.querySelector('#bulk-close-btn').addEventListener('click', this._onBulkClose);
 
-    this._bulkCountEl    = this.shadowRoot.querySelector('#bulk-count');
+    this._bulkCountEl      = this.shadowRoot.querySelector('#bulk-count');
     this._bulkPickerDialog = this.shadowRoot.querySelector('#bulk-picker');
+    this._bulkStatusSheet  = this.shadowRoot.querySelector('#bulk-status-sheet');
+    this._bulkMoreSheet    = this.shadowRoot.querySelector('#bulk-more-sheet');
 
     this._onBulkDelete = () => {
       const ids = [...this._selectedIds];
@@ -680,15 +763,26 @@ class ListDetailPage extends AppElement {
     };
     this.shadowRoot.querySelector('#bulk-delete-btn').addEventListener('click', this._onBulkDelete);
 
-    const openBulkPicker = mode => {
-      this._bulkPickerDialog.lists = (getState().lists ?? []).filter(l => l.id !== this._listId);
-      this._bulkPickerDialog.mode  = mode;
-      this._bulkPickerDialog.show();
-    };
-    this._onBulkMove = () => openBulkPicker('move');
-    this._onBulkCopy = () => openBulkPicker('copy');
+    this._onBulkStatus = () => this._bulkStatusSheet.showModal();
+    this.shadowRoot.querySelector('#bulk-status-btn').addEventListener('click', this._onBulkStatus);
+
+    this._onBulkStatusBackdrop = e => { if (e.target === this._bulkStatusSheet) this._bulkStatusSheet.close(); };
+    this._bulkStatusSheet.addEventListener('click', this._onBulkStatusBackdrop);
+
+    this._onBulkStatusOpen   = () => this._applyBulkStatus('open');
+    this._onBulkStatusPaused = () => this._applyBulkStatus('paused');
+    this._onBulkStatusDone   = () => this._applyBulkStatus('done');
+    this.shadowRoot.querySelector('#bulk-status-open').addEventListener('click', this._onBulkStatusOpen);
+    this.shadowRoot.querySelector('#bulk-status-paused').addEventListener('click', this._onBulkStatusPaused);
+    this.shadowRoot.querySelector('#bulk-status-done').addEventListener('click', this._onBulkStatusDone);
+
+    this._onBulkMore = () => this._bulkMoreSheet.showModal();
+    this._onBulkMoreBackdrop = e => { if (e.target === this._bulkMoreSheet) this._bulkMoreSheet.close(); };
+    this.shadowRoot.querySelector('#bulk-more-btn').addEventListener('click', this._onBulkMore);
+    this._bulkMoreSheet.addEventListener('click', this._onBulkMoreBackdrop);
+
+    this._onBulkMove = () => this._openBulkPicker();
     this.shadowRoot.querySelector('#bulk-move-btn').addEventListener('click', this._onBulkMove);
-    this.shadowRoot.querySelector('#bulk-copy-btn').addEventListener('click', this._onBulkCopy);
 
     this._onBulkListPick = e => {
       const { targetListIds, newListName, copy } = e.detail;
@@ -773,8 +867,14 @@ class ListDetailPage extends AppElement {
     this._itemList?.removeEventListener('item-done-toggle', this._onItemDoneToggle);
     this.shadowRoot?.querySelector('#bulk-close-btn')?.removeEventListener('click', this._onBulkClose);
     this.shadowRoot?.querySelector('#bulk-delete-btn')?.removeEventListener('click', this._onBulkDelete);
+    this.shadowRoot?.querySelector('#bulk-status-btn')?.removeEventListener('click', this._onBulkStatus);
+    this._bulkStatusSheet?.removeEventListener('click', this._onBulkStatusBackdrop);
+    this.shadowRoot?.querySelector('#bulk-status-open')?.removeEventListener('click', this._onBulkStatusOpen);
+    this.shadowRoot?.querySelector('#bulk-status-paused')?.removeEventListener('click', this._onBulkStatusPaused);
+    this.shadowRoot?.querySelector('#bulk-status-done')?.removeEventListener('click', this._onBulkStatusDone);
+    this.shadowRoot?.querySelector('#bulk-more-btn')?.removeEventListener('click', this._onBulkMore);
+    this._bulkMoreSheet?.removeEventListener('click', this._onBulkMoreBackdrop);
     this.shadowRoot?.querySelector('#bulk-move-btn')?.removeEventListener('click', this._onBulkMove);
-    this.shadowRoot?.querySelector('#bulk-copy-btn')?.removeEventListener('click', this._onBulkCopy);
     this._bulkPickerDialog?.removeEventListener('list-pick', this._onBulkListPick);
     this._itemList?.removeEventListener('item-long-press',     this._onItemLongPress);
     this._itemList?.removeEventListener('item-select-toggle',  this._onItemSelectToggle);
@@ -950,6 +1050,22 @@ class ListDetailPage extends AppElement {
     const hideBtn = this.shadowRoot?.querySelector('#status-hide-btn');
     if (showBtn) showBtn.classList.toggle('active', this._showStatus);
     if (hideBtn) hideBtn.classList.toggle('active', !this._showStatus);
+  }
+
+  // ── Bulk helpers ──────────────────────────────────────────────────────────
+
+  _applyBulkStatus(status) {
+    const ids = [...this._selectedIds];
+    this._mutateItems(items => items.map(i => ids.includes(i.id) ? { ...i, status } : i));
+    this._bulkStatusSheet.close();
+    toast(t('list-detail.bulk-status-toast', { n: ids.length }), 'success');
+    this._exitSelectionMode();
+  }
+
+  _openBulkPicker() {
+    this._bulkPickerDialog.lists = (getState().lists ?? []).filter(l => l.id !== this._listId);
+    this._bulkPickerDialog.mode  = null;
+    this._bulkPickerDialog.show();
   }
 
   // ── Rendering ─────────────────────────────────────────────────────────────

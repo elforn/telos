@@ -875,7 +875,7 @@ describe('list-detail-page — bulk action bar', () => {
     expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
   });
 
-  it('bulk Move opens list-picker-dialog with mode=move', async () => {
+  it('bulk Move opens list-picker-dialog with mode=null (shows both Move and Copy)', async () => {
     const OTHER_LIST = { id: 'l2', name: 'Other', items: [] };
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, OTHER_LIST] } });
     const el = mount();
@@ -887,22 +887,7 @@ describe('list-detail-page — bulk action bar', () => {
     el.shadowRoot.querySelector('#bulk-move-btn').click();
 
     expect(pickerModal.show).toHaveBeenCalledOnce();
-    expect(picker.mode).toBe('move');
-  });
-
-  it('bulk Copy opens list-picker-dialog with mode=copy', async () => {
-    const OTHER_LIST = { id: 'l2', name: 'Other', items: [] };
-    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, OTHER_LIST] } });
-    const el = mount();
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
-    enterSelectionMode(el);
-
-    const picker = el.shadowRoot.querySelector('#bulk-picker');
-    const pickerModal = picker.shadowRoot.querySelector('#modal');
-    el.shadowRoot.querySelector('#bulk-copy-btn').click();
-
-    expect(pickerModal.show).toHaveBeenCalledOnce();
-    expect(picker.mode).toBe('copy');
+    expect(picker.mode).toBeNull();
   });
 
   it('list-pick(copy=false) moves selected items to target lists', async () => {

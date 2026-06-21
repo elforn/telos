@@ -1,8 +1,9 @@
 import { AppElement } from '../../../_lib/core/app-element.js';
 import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
+import { icons } from '../../icons.js';
 
-const REVEAL_WIDTH    = 80;
+const REVEAL_WIDTH    = 60;
 const COMMIT_RATIO    = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
 const SWIPE_DEAD_ZONE = 15;   // px of drag before bar starts moving
@@ -39,19 +40,12 @@ class GoalItem extends Gestures(AppElement) {
           justify-content: center;
         }
 
-        /* delete — right side, revealed by swiping bar left */
+        .action-btn svg { pointer-events: none; }
+
         .delete-btn {
           inset-inline-end: 0;
           background: var(--color-danger);
         }
-
-        /* fail / restore — left side, revealed by swiping bar right */
-        .fail-btn {
-          inset-inline-start: 0;
-          background: var(--color-warning);
-        }
-
-        :host(.failed) .fail-btn { background: var(--color-success); }
 
         .bar {
           position: relative;
@@ -79,15 +73,6 @@ class GoalItem extends Gestures(AppElement) {
           pointer-events: none;
         }
 
-        :host(.failed) .bar {
-          background: var(--color-surface-raised);
-          border-color: transparent;
-        }
-
-        :host(.failed) .fill {
-          display: none;
-        }
-
         .title {
           position: relative;
           z-index: 1;
@@ -99,11 +84,6 @@ class GoalItem extends Gestures(AppElement) {
           text-overflow: ellipsis;
           flex: 1;
           min-inline-size: 0;
-        }
-
-        :host(.failed) .title {
-          text-decoration: line-through;
-          color: var(--color-text-muted);
         }
 
         .desc-icon {
@@ -285,10 +265,8 @@ class GoalItem extends Gestures(AppElement) {
 
         @keyframes peek-hint {
           0%   { transform: translateX(0); }
-          20%  { transform: translateX(-14px); }
-          40%  { transform: translateX(0); }
-          60%  { transform: translateX(14px); }
-          80%  { transform: translateX(0); }
+          30%  { transform: translateX(-18px); }
+          70%  { transform: translateX(0); }
           100% { transform: translateX(0); }
         }
 
@@ -315,20 +293,9 @@ class GoalItem extends Gestures(AppElement) {
           :host(.peek-hint) .bar { animation: none; }
           :host(.pop-confirm) { animation: none; }
         }
-
-        .sr-only {
-          position: absolute;
-          inline-size: 1px;
-          block-size: 1px;
-          overflow: hidden;
-          clip: rect(0 0 0 0);
-          white-space: nowrap;
-        }
       </style>
 
-      <span role="status" class="sr-only" id="announce"></span>
-      <button class="action-btn fail-btn" id="fail-btn">${t('goal-item.fail')}</button>
-      <button class="action-btn delete-btn" id="delete-btn">${t('goal-item.delete')}</button>
+      <button class="action-btn delete-btn" id="delete-btn" aria-label="${t('goal-item.delete')}">${icons.trash}</button>
       <div class="bar"
            tabindex="0"
            role="slider"
@@ -339,7 +306,7 @@ class GoalItem extends Gestures(AppElement) {
         <div class="fill" style="width:0%"></div>
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="title"></span>
-        <span class="desc-icon" aria-hidden="true">ℹ</span>
+        <span class="desc-icon" aria-hidden="true">${icons.info}</span>
         <span class="pct-label" hidden></span>
       </div>
     `;
@@ -351,9 +318,7 @@ class GoalItem extends Gestures(AppElement) {
     this._fill     = this.shadowRoot.querySelector('.fill');
     this._title    = this.shadowRoot.querySelector('.title');
     this._pctLabel = this.shadowRoot.querySelector('.pct-label');
-    this._announce = this.shadowRoot.querySelector('#announce');
     this._revealedDir   = null;
-    this._failed        = false;
     this._deleteConfirm = false;
 
     this._update();
@@ -384,26 +349,6 @@ class GoalItem extends Gestures(AppElement) {
     this._deleteEl.addEventListener('pointerup', this._onDeletePointerUp);
     this._deleteEl.addEventListener('click', this._onDeleteBtnKey);
 
-    this._failEl = this.shadowRoot.querySelector('#fail-btn');
-    this._onFailBtn = () => {
-      const wasFailed = this._failed;
-      this.dispatchEvent(new CustomEvent('goal-progress', {
-        bubbles: true, composed: true,
-        detail: { percentage: wasFailed ? 0 : -1, goal: this._goal },
-      }));
-      if (this._announce) {
-        this._announce.textContent = wasFailed
-          ? t('goal-item.status-restored')
-          : t('goal-item.status-failed');
-      }
-      this._closeReveal();
-    };
-    this._onFailPointerUp = e => { e.stopPropagation(); e.preventDefault(); this._onFailBtn(); };
-    this._onFailBtnKey = e => { e.stopPropagation(); if (e.detail === 0) this._onFailBtn(); };
-    this._failEl.addEventListener('pointerdown', this._stopPointerDown);
-    this._failEl.addEventListener('pointerup', this._onFailPointerUp);
-    this._failEl.addEventListener('click', this._onFailBtnKey);
-
     this._onKeyDown = e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._tap(); }
       if (e.key === 'ArrowRight') this.onHoldDragKey('right');
@@ -413,7 +358,7 @@ class GoalItem extends Gestures(AppElement) {
 
     this._dragBtn = this.shadowRoot.querySelector('#drag-btn');
     this._dragBtn.setAttribute('aria-label', t('goal-item.drag'));
-    this._dragBtn.textContent = '⠿';
+    this._dragBtn.innerHTML = icons.grip;
     this._onDragBtnDown = e => {
       e.stopPropagation();
       this._dragBtn.setPointerCapture(e.pointerId);
@@ -438,9 +383,6 @@ class GoalItem extends Gestures(AppElement) {
     this._deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
     this._deleteEl?.removeEventListener('pointerup', this._onDeletePointerUp);
     this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
-    this._failEl?.removeEventListener('pointerdown', this._stopPointerDown);
-    this._failEl?.removeEventListener('pointerup', this._onFailPointerUp);
-    this._failEl?.removeEventListener('click', this._onFailBtnKey);
     this._bar?.removeEventListener('keydown', this._onKeyDown);
     this._dragBtn?.removeEventListener('pointerdown', this._onDragBtnDown);
     this._dragBtn?.removeEventListener('keydown',     this._onDragBtnKey);
@@ -453,12 +395,10 @@ class GoalItem extends Gestures(AppElement) {
       this._closeReveal();
       return;
     }
-    if (this._failed) return;
     this._tap();
   }
 
   onHoldDragStart() {
-    if (this._failed) return;
     this._closeReveal();
     this.classList.add('hold-active');
     this._bar.style.transition = 'none';
@@ -466,14 +406,12 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   onHoldDragKey(dir) {
-    if (this._failed) return;
     this._setPct(dir === 'right' ? Math.min(100, this._pct + 5) : Math.max(0, this._pct - 5));
     if (this._pct === 100) this._celebrate();
     this._emitProgress();
   }
 
   onHoldDrag(e) {
-    if (this._failed) return;
     const rect = this._bar.getBoundingClientRect();
     if (!rect.width) return;
     const pct = Math.round(Math.max(0, Math.min(100, (e.endX - rect.left) / rect.width * 100)));
@@ -481,7 +419,6 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   onHoldDragEnd() {
-    if (this._failed) return;
     this.classList.remove('hold-active');
     this._bar.style.transition = '';
     this._setDragMode(false);
@@ -499,11 +436,9 @@ class GoalItem extends Gestures(AppElement) {
     let offset;
     if (this._revealedDir === 'left') {
       offset = Math.min(0, -REVEAL_WIDTH + e.dx);
-    } else if (this._revealedDir === 'right') {
-      offset = Math.max(0, REVEAL_WIDTH + e.dx);
     } else {
-      const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : Math.min(0, e.dx + SWIPE_DEAD_ZONE);
-      offset = Math.max(-REVEAL_WIDTH, Math.min(REVEAL_WIDTH, dx));
+      const dx = e.dx < 0 ? Math.min(0, e.dx + SWIPE_DEAD_ZONE) : 0;
+      offset = Math.max(-REVEAL_WIDTH, dx);
     }
     this._bar.style.transform = `translateX(${offset}px)`;
   }
@@ -519,9 +454,6 @@ class GoalItem extends Gestures(AppElement) {
     if (commit && e.direction === 'left') {
       this._bar.style.transform = `translateX(-${REVEAL_WIDTH}px)`;
       this._revealedDir = 'left';
-    } else if (commit && e.direction === 'right') {
-      this._bar.style.transform = `translateX(${REVEAL_WIDTH}px)`;
-      this._revealedDir = 'right';
     } else {
       this._closeReveal(); // _closeReveal sets its own spring transition
     }
@@ -541,7 +473,7 @@ class GoalItem extends Gestures(AppElement) {
     this._revealedDir = null;
     if (this._deleteConfirm) {
       this._deleteConfirm = false;
-      this._deleteEl.textContent = t('goal-item.delete');
+      this._deleteEl.innerHTML = icons.trash;
     }
   }
 
@@ -561,11 +493,6 @@ class GoalItem extends Gestures(AppElement) {
     this.dispatchEvent(new CustomEvent('goal-progress', {
       bubbles: true, composed: true, detail: { percentage: this._pct, goal: this._goal },
     }));
-  }
-
-  _updateActionBtn() {
-    const failBtn = this.shadowRoot?.querySelector('#fail-btn');
-    if (failBtn) failBtn.textContent = this._failed ? t('goal-item.restore') : t('goal-item.fail');
   }
 
   _celebrate() {
@@ -589,15 +516,12 @@ class GoalItem extends Gestures(AppElement) {
   _update() {
     if (!this._bar) return;
     const pct    = this._goal?.percentage ?? 0;
-    this._failed = pct < 0;
     const prevPct = this._pct;
     this._pct    = Math.max(0, pct);
-    this.classList.toggle('failed', this._failed);
     this._title.textContent = this._goal?.title ?? '';
     this._bar.setAttribute('aria-label', this._goal?.title ?? '');
     this._bar.dataset.hasDesc = String(!!this._goal?.description);
     this._setPct(this._pct);
-    this._updateActionBtn();
     if (this._pct === 100 && prevPct !== undefined && prevPct < 100) this._celebrate();
   }
 }

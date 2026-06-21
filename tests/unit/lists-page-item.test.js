@@ -210,11 +210,11 @@ describe('lists-page-item — swipe', () => {
     expect(events).toHaveLength(0);
   });
 
-  it('right swipe at 2× color-panel width (112px) dispatches list-color-cycle', () => {
+  it('right swipe at 2× color-panel width (96px) dispatches list-color-cycle', () => {
     const el = mount();
     const events = [];
     el.addEventListener('list-color-cycle', e => events.push(e));
-    el.onSwipe({ direction: 'right', distance: 112, velocity: 0 });
+    el.onSwipe({ direction: 'right', distance: 96, velocity: 0 });
     expect(events).toHaveLength(1);
     expect(events[0].detail.list.id).toBe('l1');
   });
@@ -223,7 +223,7 @@ describe('lists-page-item — swipe', () => {
     const el = mount();
     const events = [];
     el.addEventListener('list-color-cycle', e => events.push(e));
-    el.onSwipe({ direction: 'right', distance: 111, velocity: 0 });
+    el.onSwipe({ direction: 'right', distance: 95, velocity: 0 });
     expect(events).toHaveLength(0);
   });
 
@@ -238,8 +238,8 @@ describe('lists-page-item — swipe', () => {
   it('right swipe always snaps back (row transform cleared)', () => {
     const el = mount();
     window.matchMedia = () => ({ matches: true });
-    el.shadowRoot.querySelector('.row').style.transform = 'translateX(56px)';
-    el.onSwipe({ direction: 'right', distance: 112, velocity: 0 });
+    el.shadowRoot.querySelector('.row').style.transform = 'translateX(48px)';
+    el.onSwipe({ direction: 'right', distance: 96, velocity: 0 });
     expect(el.shadowRoot.querySelector('.row').style.transform).toBe('');
   });
 

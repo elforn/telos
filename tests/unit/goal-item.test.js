@@ -39,50 +39,14 @@ describe('goal-item — structure', () => {
     expect(el.shadowRoot.querySelector('.fill').style.width).toBe('50%');
   });
 
-  it('renders a fail button', () => {
-    const el = mount();
-    expect(el.shadowRoot.querySelector('#fail-btn')).not.toBeNull();
-  });
-
   it('renders a delete button', () => {
     const el = mount();
     expect(el.shadowRoot.querySelector('#delete-btn')).not.toBeNull();
   });
 
-  it('fail button says Fail by default', () => {
+  it('delete button contains an svg icon', () => {
     const el = mount();
-    expect(el.shadowRoot.querySelector('#fail-btn').textContent).toBe('Fail');
-  });
-
-  it('delete button says Delete', () => {
-    const el = mount();
-    expect(el.shadowRoot.querySelector('#delete-btn').textContent).toBe('Delete');
-  });
-});
-
-describe('goal-item — failed state', () => {
-  it('applies failed class for negative percentage', () => {
-    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
-    expect(el.classList.contains('failed')).toBe(true);
-  });
-
-  it('shows 0% fill for failed goal', () => {
-    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
-    expect(el.shadowRoot.querySelector('.fill').style.width).toBe('0%');
-  });
-
-  it('fail button says Restore for failed goal', () => {
-    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
-    expect(el.shadowRoot.querySelector('#fail-btn').textContent).toBe('Restore');
-  });
-
-  it('dispatches goal-progress with 0 when Restore clicked', () => {
-    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
-    const events = [];
-    el.addEventListener('goal-progress', e => events.push(e));
-    el.shadowRoot.querySelector('#fail-btn').click();
-    expect(events).toHaveLength(1);
-    expect(events[0].detail.percentage).toBe(0);
+    expect(el.shadowRoot.querySelector('#delete-btn svg')).not.toBeNull();
   });
 });
 
@@ -125,15 +89,6 @@ describe('goal-item — buttons', () => {
     el.shadowRoot.querySelector('#delete-btn').click();
     expect(events).toHaveLength(1);
     expect(events[0].detail.goal.id).toBe('g1');
-  });
-
-  it('dispatches goal-progress with -1 when fail button is clicked', () => {
-    const el = mount({ id: 'g1', title: 'Run', percentage: 30 });
-    const events = [];
-    el.addEventListener('goal-progress', e => events.push(e));
-    el.shadowRoot.querySelector('#fail-btn').click();
-    expect(events).toHaveLength(1);
-    expect(events[0].detail.percentage).toBe(-1);
   });
 });
 
@@ -201,10 +156,10 @@ describe('goal-item — swipe', () => {
     expect(el.shadowRoot.querySelector('.bar').style.transform).toBe('translateX(0px)');
   });
 
-  it('bar moves by dx minus dead zone when dx exceeds dead zone (dx=20)', () => {
+  it('right swipe (dx=20) does not move the bar', () => {
     const el = mount();
     el.onSwipeMove({ dx: 20 });
-    expect(el.shadowRoot.querySelector('.bar').style.transform).toBe('translateX(5px)');
+    expect(el.shadowRoot.querySelector('.bar').style.transform).toBe('translateX(0px)');
   });
 
   it('bar moves negatively by dx plus dead zone when swiping left past dead zone (dx=-20)', () => {
@@ -213,22 +168,22 @@ describe('goal-item — swipe', () => {
     expect(el.shadowRoot.querySelector('.bar').style.transform).toBe('translateX(-5px)');
   });
 
-  it('short left swipe does not commit (distance 159, below 2× reveal width)', () => {
+  it('short left swipe does not commit (distance 119, below 2× reveal width)', () => {
     const el = mount();
-    el.onSwipe({ direction: 'left', distance: 159, velocity: 0 });
+    el.onSwipe({ direction: 'left', distance: 119, velocity: 0 });
     expect(el._revealedDir).toBeNull();
   });
 
-  it('left swipe at exactly 2× reveal width (160px) commits', () => {
+  it('left swipe at exactly 2× reveal width (120px) commits', () => {
     const el = mount();
-    el.onSwipe({ direction: 'left', distance: 160, velocity: 0 });
+    el.onSwipe({ direction: 'left', distance: 120, velocity: 0 });
     expect(el._revealedDir).toBe('left');
   });
 
-  it('right swipe at exactly 2× reveal width (160px) commits', () => {
+  it('right swipe does not commit', () => {
     const el = mount();
     el.onSwipe({ direction: 'right', distance: 160, velocity: 0 });
-    expect(el._revealedDir).toBe('right');
+    expect(el._revealedDir).toBeNull();
   });
 
   it('fast flick commits despite short distance', () => {
@@ -242,57 +197,5 @@ describe('goal-item — swipe', () => {
     el._closeReveal();
     expect(el.shadowRoot.querySelector('.bar').style.transition)
       .toBe('transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)');
-  });
-});
-
-describe('goal-item — failed goal is non-interactive', () => {
-  it('does not dispatch goal-tap when tapped while failed (failed guard)', () => {
-    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
-    const events = [];
-    el.addEventListener('goal-tap', e => events.push(e));
-    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
-    el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
-    expect(events).toHaveLength(0);
-  });
-
-  it('does not dispatch goal-progress on ArrowRight when failed', () => {
-    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
-    const events = [];
-    el.addEventListener('goal-progress', e => events.push(e));
-    el.shadowRoot.querySelector('.bar').dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
-    );
-    expect(events).toHaveLength(0);
-  });
-
-  it('does not dispatch goal-progress on ArrowLeft when failed', () => {
-    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
-    const events = [];
-    el.addEventListener('goal-progress', e => events.push(e));
-    el.shadowRoot.querySelector('.bar').dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })
-    );
-    expect(events).toHaveLength(0);
-  });
-
-  it('does not add hold-active class when onHoldDragStart called while failed', () => {
-    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
-    el.onHoldDragStart();
-    expect(el.classList.contains('hold-active')).toBe(false);
-  });
-
-  it('does not change fill on onHoldDrag when failed', () => {
-    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
-    el.shadowRoot.querySelector('.bar').getBoundingClientRect = () => ({ left: 0, width: 200, top: 0, height: 40 });
-    el.onHoldDrag({ endX: 100 });
-    expect(el.shadowRoot.querySelector('.fill').style.width).toBe('0%');
-  });
-
-  it('does not dispatch goal-progress on onHoldDragEnd when failed', () => {
-    const el = mount({ id: 'g1', title: 'Run', percentage: -1 });
-    const events = [];
-    el.addEventListener('goal-progress', e => events.push(e));
-    el.onHoldDragEnd();
-    expect(events).toHaveLength(0);
   });
 });

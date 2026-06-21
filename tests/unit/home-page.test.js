@@ -187,23 +187,6 @@ describe('home-page — goal mutations', () => {
     );
   });
 
-  it('marks goal failed when goal-progress fires with percentage -1', async () => {
-    await boot({ dbName: freshName(), initialState: { goals: {
-      '2026': { capstone: [{ id: 'c1', title: 'Goal', percentage: 0 }], milestones: [], wow: [] },
-    }, images: {} } });
-    const el = mount(2026);
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
-    );
-    el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-progress', {
-      bubbles: true, composed: true,
-      detail: { goal: { id: 'c1' }, percentage: -1 },
-    }));
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#capstone-list goal-item')._goal.percentage).toBe(-1)
-    );
-  });
-
   it('removes goal when goal-delete fires from goal-item swipe', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
       '2026': { capstone: [{ id: 'c1', title: 'Goal', percentage: 0 }], milestones: [], wow: [] },

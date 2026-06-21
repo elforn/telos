@@ -1,9 +1,10 @@
 import { AppElement } from '../../../_lib/core/app-element.js';
 import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
+import { icons } from '../../icons.js';
 
 const DONE_WIDTH      = 48;   // square-ish done button
-const DELETE_WIDTH    = 80;   // wider delete button (text label)
+const DELETE_WIDTH    = 60;   // icon-only delete button
 const COMMIT_RATIO    = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
 const SWIPE_DEAD_ZONE = 15;   // px of drag before row starts moving
@@ -59,12 +60,10 @@ class ListItem extends Gestures(AppElement) {
           inset-inline-start: 0;
           inline-size: ${DONE_WIDTH}px;
           background: var(--color-success);
-          font-size: var(--font-size-body);
         }
 
         .done-btn.is-restore {
           background: var(--color-app-accent);
-          font-size: var(--font-size-heading);
         }
 
         /* delete — right side, revealed by swiping row left */
@@ -72,6 +71,12 @@ class ListItem extends Gestures(AppElement) {
           inset-inline-end: 0;
           inline-size: ${DELETE_WIDTH}px;
           background: var(--color-danger);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+        }
+
+        .action-btn svg {
+          pointer-events: none;
         }
 
         .row {
@@ -123,6 +128,10 @@ class ListItem extends Gestures(AppElement) {
           background: color-mix(in srgb, var(--color-app-accent) 15%, var(--color-surface));
         }
 
+        .row[data-status="done"] .title {
+          color: var(--color-text-muted);
+        }
+
         .row[data-status="done"] .badge {
           background: var(--color-success);
           color: var(--color-text-inverse);
@@ -131,10 +140,16 @@ class ListItem extends Gestures(AppElement) {
         .note-icon,
         .url-icon {
           flex-shrink: 0;
-          font-size: var(--font-size-caption);
           color: var(--color-text-muted);
           display: none;
           line-height: 1;
+        }
+
+        .note-icon svg,
+        .url-icon svg {
+          display: block;
+          inline-size: var(--icon-size-sm);
+          block-size: var(--icon-size-sm);
         }
 
         .row[data-has-note="true"]  .note-icon { display: block; }
@@ -174,19 +189,20 @@ class ListItem extends Gestures(AppElement) {
         /* ── Done celebration ───────────────────────────────────────────── */
 
         @keyframes done-ring {
-          0%   { box-shadow: var(--shadow-card); }
-          25%  { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-success) 45%, transparent); }
-          100% { box-shadow: var(--shadow-card); }
+          0%   { outline-color: transparent; }
+          30%  { outline-color: color-mix(in srgb, var(--color-app-accent) 60%, transparent); }
+          100% { outline-color: transparent; }
         }
 
         @keyframes done-wash {
           0%   { background: var(--color-surface); }
-          25%  { background: var(--color-success-light); }
-          100% { background: var(--color-surface); }
+          25%  { background: color-mix(in srgb, var(--color-app-accent) 30%, var(--color-surface)); }
+          100% { background: color-mix(in srgb, var(--color-app-accent) 15%, var(--color-surface)); }
         }
 
         :host(.done-celebrate) {
-          overflow: visible;
+          outline: 3px solid transparent;
+          outline-offset: 1px;
           animation: done-ring 500ms ease-out forwards;
         }
 
@@ -195,18 +211,18 @@ class ListItem extends Gestures(AppElement) {
         }
 
         @media (prefers-reduced-motion: reduce) {
-          :host(.done-celebrate),
+          :host(.done-celebrate) { animation: none; outline: none; }
           :host(.done-celebrate) .row { animation: none; }
         }
       </style>
 
-      <button class="action-btn done-btn" id="done-btn">✓</button>
-      <button class="action-btn delete-btn" id="delete-btn">${t('list-item.delete')}</button>
+      <button class="action-btn done-btn" id="done-btn" aria-label=""></button>
+      <button class="action-btn delete-btn" id="delete-btn" aria-label="${t('list-item.delete')}">${icons.trash}</button>
       <div class="row" tabindex="0" role="button" aria-label="">
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="title"></span>
-        <span class="note-icon" aria-hidden="true">ℹ</span>
-        <span class="url-icon"  aria-hidden="true">🔗</span>
+        <span class="note-icon" aria-hidden="true">${icons.info}</span>
+        <span class="url-icon"  aria-hidden="true">${icons.link}</span>
         <span class="badge" data-status="open"></span>
       </div>
     `;
@@ -227,6 +243,24 @@ class ListItem extends Gestures(AppElement) {
     this._update();
 
     this._stopPointerDown = e => e.stopPropagation();
+
+    this._onDoneBtn = (useDelay = false) => {
+      const willBeDone = this._item?.status !== 'done';
+      const fire = () => {
+        this.dispatchEvent(new CustomEvent('item-done-toggle', {
+          bubbles: true, composed: true, detail: { item: this._item },
+        }));
+        this._closeReveal();
+        if (willBeDone) this._celebrate();
+      };
+      if (useDelay) requestAnimationFrame(fire);
+      else fire();
+    };
+    this._onDonePointerUp = e => { e.stopPropagation(); e.preventDefault(); this._onDoneBtn(true); };
+    this._onDoneBtnKey = e => { e.stopPropagation(); if (e.detail === 0) this._onDoneBtn(); };
+    this._doneEl.addEventListener('pointerdown', this._stopPointerDown);
+    this._doneEl.addEventListener('pointerup', this._onDonePointerUp);
+    this._doneEl.addEventListener('click', this._onDoneBtnKey);
 
     // useDelay: rAF lets the browser's synthesized click fire on the still-present button before DOM removal
     this._onDeleteBtn = (useDelay = false) => {
@@ -250,20 +284,6 @@ class ListItem extends Gestures(AppElement) {
     this._deleteEl.addEventListener('pointerup', this._onDeletePointerUp);
     this._deleteEl.addEventListener('click', this._onDeleteBtnKey);
 
-    this._onDoneBtn = () => {
-      const willBeDone = this._item?.status !== 'done';
-      this.dispatchEvent(new CustomEvent('item-done-toggle', {
-        bubbles: true, composed: true, detail: { item: this._item },
-      }));
-      this._closeReveal();
-      if (willBeDone) this._celebrate();
-    };
-    this._onDonePointerUp = e => { e.stopPropagation(); e.preventDefault(); this._onDoneBtn(); };
-    this._onDoneBtnKey = e => { e.stopPropagation(); if (e.detail === 0) this._onDoneBtn(); };
-    this._doneEl.addEventListener('pointerdown', this._stopPointerDown);
-    this._doneEl.addEventListener('pointerup', this._onDonePointerUp);
-    this._doneEl.addEventListener('click', this._onDoneBtnKey);
-
     this._onKeyDown = e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onTap(); }
     };
@@ -271,7 +291,7 @@ class ListItem extends Gestures(AppElement) {
 
     this._dragBtn = this.shadowRoot.querySelector('#drag-btn');
     this._dragBtn.setAttribute('aria-label', t('list-item.drag'));
-    this._dragBtn.textContent = '⠿';
+    this._dragBtn.innerHTML = icons.grip;
     this._onDragBtnDown = e => {
       if (this._selectionMode) return;
       e.stopPropagation();
@@ -294,12 +314,12 @@ class ListItem extends Gestures(AppElement) {
   }
 
   unsubscribe() {
-    this._deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
-    this._deleteEl?.removeEventListener('pointerup', this._onDeletePointerUp);
-    this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
     this._doneEl?.removeEventListener('pointerdown', this._stopPointerDown);
     this._doneEl?.removeEventListener('pointerup', this._onDonePointerUp);
     this._doneEl?.removeEventListener('click', this._onDoneBtnKey);
+    this._deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
+    this._deleteEl?.removeEventListener('pointerup', this._onDeletePointerUp);
+    this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
     this._row?.removeEventListener('keydown', this._onKeyDown);
     this._dragBtn?.removeEventListener('pointerdown', this._onDragBtnDown);
     this._dragBtn?.removeEventListener('keydown',     this._onDragBtnKey);
@@ -336,11 +356,7 @@ class ListItem extends Gestures(AppElement) {
     this._row.style.transition = 'none';
     let offset;
     if (this._revealedDir === 'left') {
-      // Delete revealed — only allow closing (moving right toward 0, not past)
       offset = Math.min(0, -DELETE_WIDTH + e.dx);
-    } else if (this._revealedDir === 'right') {
-      // Done revealed — only allow closing (moving left toward 0, not past)
-      offset = Math.max(0, DONE_WIDTH + e.dx);
     } else {
       const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : Math.min(0, e.dx + SWIPE_DEAD_ZONE);
       offset = Math.max(-DELETE_WIDTH, Math.min(DONE_WIDTH, dx));
@@ -352,29 +368,37 @@ class ListItem extends Gestures(AppElement) {
     if (this._revealedDir) { this._closeReveal(); return; }
     if (this._selectionMode) return;
 
-    const revealWidth = e.direction === 'right' ? DONE_WIDTH : DELETE_WIDTH;
-    const commit = e.distance >= revealWidth * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
+    if (e.direction === 'right') {
+      const commit = e.distance >= DONE_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
+      if (commit) {
+        const willBeDone = this._item?.status !== 'done';
+        this.dispatchEvent(new CustomEvent('item-done-toggle', {
+          bubbles: true, composed: true, detail: { item: this._item },
+        }));
+        if (willBeDone) this._celebrate();
+      }
+      this._closeReveal();
+      return;
+    }
 
-    if (commit && e.direction === 'left') {
+    const commit = e.distance >= DELETE_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
+    if (commit) {
       this._row.style.transform = `translateX(-${DELETE_WIDTH}px)`;
       this._revealedDir = 'left';
-    } else if (commit && e.direction === 'right') {
-      this._row.style.transform = `translateX(${DONE_WIDTH}px)`;
-      this._revealedDir = 'right';
     } else {
-      this._closeReveal(); // _closeReveal sets its own spring transition
+      this._closeReveal();
     }
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
 
   _closeReveal() {
-    this._row.style.transition = 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    this._row.style.transition = 'transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)';
     this._row.style.transform  = '';
     this._revealedDir = null;
     if (this._deleteConfirm) {
       this._deleteConfirm = false;
-      this._deleteEl.textContent = t('list-item.delete');
+      this._deleteEl.innerHTML = icons.trash;
     }
   }
 
@@ -397,7 +421,7 @@ class ListItem extends Gestures(AppElement) {
     this._row.dataset.hasUrl   = String(!!this._item?.url);
     this._badge.textContent    = t(`item-dialog.status-${status}`);
     this._badge.dataset.status = status;
-    this._doneEl.textContent   = isDone ? '↺' : '✓';
+    this._doneEl.innerHTML = isDone ? icons.undo : icons.check;
     this._doneEl.setAttribute('aria-label', isDone ? t('list-item.restore') : t('list-item.mark-done'));
     this._doneEl.classList.toggle('is-restore', isDone);
   }

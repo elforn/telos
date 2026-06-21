@@ -55,9 +55,9 @@ describe('list-item — structure', () => {
     expect(el.shadowRoot.querySelector('#delete-btn')).not.toBeNull();
   });
 
-  it('delete button text is Delete', () => {
+  it('delete button contains an svg icon', () => {
     const el = mount();
-    expect(el.shadowRoot.querySelector('#delete-btn').textContent).toBe('Delete');
+    expect(el.shadowRoot.querySelector('#delete-btn svg')).not.toBeNull();
   });
 
   it('has role=listitem on host', () => {
@@ -184,11 +184,11 @@ describe('list-item — item-delete event', () => {
 });
 
 describe('list-item — item-done-toggle event', () => {
-  it('dispatches item-done-toggle when done button is clicked', () => {
+  it('dispatches item-done-toggle on right swipe past commit threshold (96px)', () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-done-toggle', e => events.push(e));
-    el.shadowRoot.querySelector('#done-btn').click();
+    el.onSwipe({ direction: 'right', distance: 96, velocity: 0 });
     expect(events).toHaveLength(1);
   });
 
@@ -196,7 +196,7 @@ describe('list-item — item-done-toggle event', () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-done-toggle', e => events.push(e));
-    el.shadowRoot.querySelector('#done-btn').click();
+    el.onSwipe({ direction: 'right', distance: 96, velocity: 0 });
     expect(events[0].detail.item.id).toBe('i1');
   });
 
@@ -204,21 +204,53 @@ describe('list-item — item-done-toggle event', () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-done-toggle', e => events.push(e));
-    el.shadowRoot.querySelector('#done-btn').click();
+    el.onSwipe({ direction: 'right', distance: 96, velocity: 0 });
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
+  });
+
+  it('short right swipe (95px) does not dispatch item-done-toggle', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('item-done-toggle', e => events.push(e));
+    el.onSwipe({ direction: 'right', distance: 95, velocity: 0 });
+    expect(events).toHaveLength(0);
+  });
+
+  it('fast right flick dispatches item-done-toggle despite short distance', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('item-done-toggle', e => events.push(e));
+    el.onSwipe({ direction: 'right', distance: 10, velocity: 0.5 });
+    expect(events).toHaveLength(1);
+  });
+
+  it('dispatches item-done-toggle when done button is clicked directly', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('item-done-toggle', e => events.push(e));
+    el.shadowRoot.querySelector('#done-btn').click();
+    expect(events).toHaveLength(1);
+  });
+
+  it('done button click on a done item also dispatches item-done-toggle', () => {
+    const el = mount({ ...ITEM, status: 'done' });
+    const events = [];
+    el.addEventListener('item-done-toggle', e => events.push(e));
+    el.shadowRoot.querySelector('#done-btn').click();
+    expect(events).toHaveLength(1);
   });
 });
 
 describe('list-item — done button icon', () => {
-  it('done button shows ✓ for open items', () => {
+  it('done button contains an svg icon for open items', () => {
     const el = mount({ ...ITEM, status: 'open' });
-    expect(el.shadowRoot.querySelector('#done-btn').textContent).toBe('✓');
+    expect(el.shadowRoot.querySelector('#done-btn svg')).not.toBeNull();
   });
 
-  it('done button shows ↺ for done items', () => {
+  it('done button contains an svg icon for done items', () => {
     const el = mount({ ...ITEM, status: 'done' });
-    expect(el.shadowRoot.querySelector('#done-btn').textContent).toBe('↺');
+    expect(el.shadowRoot.querySelector('#done-btn svg')).not.toBeNull();
   });
 
   it('done button has is-restore class for done items', () => {
@@ -231,17 +263,18 @@ describe('list-item — done button icon', () => {
     expect(el.shadowRoot.querySelector('#done-btn').classList.contains('is-restore')).toBe(false);
   });
 
-  it('done button icon updates when item status changes to done', () => {
+  it('done button aria-label updates when item status changes to done', () => {
     const el = mount({ ...ITEM, status: 'open' });
-    expect(el.shadowRoot.querySelector('#done-btn').textContent).toBe('✓');
+    expect(el.shadowRoot.querySelector('#done-btn').getAttribute('aria-label')).toBeTruthy();
     el.item = { ...ITEM, status: 'done' };
-    expect(el.shadowRoot.querySelector('#done-btn').textContent).toBe('↺');
+    expect(el.shadowRoot.querySelector('#done-btn svg')).not.toBeNull();
+    expect(el.shadowRoot.querySelector('#done-btn').classList.contains('is-restore')).toBe(true);
   });
 
-  it('done button icon updates when item status changes back to open', () => {
+  it('done button aria-label updates when item status changes back to open', () => {
     const el = mount({ ...ITEM, status: 'done' });
     el.item = { ...ITEM, status: 'open' };
-    expect(el.shadowRoot.querySelector('#done-btn').textContent).toBe('✓');
+    expect(el.shadowRoot.querySelector('#done-btn svg')).not.toBeNull();
     expect(el.shadowRoot.querySelector('#done-btn').classList.contains('is-restore')).toBe(false);
   });
 });
@@ -306,27 +339,21 @@ describe('list-item — swipe', () => {
     expect(el.shadowRoot.querySelector('.row').style.transform).toBe('translateX(-5px)');
   });
 
-  it('left swipe at exactly 2× delete width (160px) commits reveal', () => {
+  it('left swipe at exactly 2× delete width (120px) commits reveal', () => {
     const el = mount();
-    el.onSwipe({ direction: 'left', distance: 160, velocity: 0 });
+    el.onSwipe({ direction: 'left', distance: 120, velocity: 0 });
     expect(el._revealedDir).toBe('left');
   });
 
-  it('left swipe at 159px does not commit', () => {
+  it('left swipe at 119px does not commit', () => {
     const el = mount();
-    el.onSwipe({ direction: 'left', distance: 159, velocity: 0 });
+    el.onSwipe({ direction: 'left', distance: 119, velocity: 0 });
     expect(el._revealedDir).toBeNull();
   });
 
-  it('right swipe at exactly 2× done width (96px) commits reveal', () => {
+  it('right swipe always snaps back (never reveals)', () => {
     const el = mount();
     el.onSwipe({ direction: 'right', distance: 96, velocity: 0 });
-    expect(el._revealedDir).toBe('right');
-  });
-
-  it('right swipe at 95px does not commit', () => {
-    const el = mount();
-    el.onSwipe({ direction: 'right', distance: 95, velocity: 0 });
     expect(el._revealedDir).toBeNull();
   });
 
@@ -340,7 +367,7 @@ describe('list-item — swipe', () => {
     const el = mount();
     el._closeReveal();
     expect(el.shadowRoot.querySelector('.row').style.transition)
-      .toBe('transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)');
+      .toBe('transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)');
   });
 });
 
@@ -353,17 +380,6 @@ describe('list-item — pointerup fires actions', () => {
     btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 }));
     btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 }));
     await vi.waitFor(() => expect(events).toHaveLength(1));
-    expect(events[0].detail.item.id).toBe('i1');
-  });
-
-  it('dispatches item-done-toggle when done button fires pointerup', () => {
-    const el = mount();
-    const events = [];
-    el.addEventListener('item-done-toggle', e => events.push(e));
-    el.shadowRoot.querySelector('#done-btn').dispatchEvent(
-      new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 })
-    );
-    expect(events).toHaveLength(1);
     expect(events[0].detail.item.id).toBe('i1');
   });
 
