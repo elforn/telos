@@ -6,18 +6,18 @@ Do not start any work. Report only.
 ## What to do
 
 ### Core health
-- [ ] `_lib/` present and `_lib/lib-version.json` readable — run `npx socle update` if stale
-- [ ] `index.html` present, `manifest.json` configured (name, icons, theme_color filled in)
-- [ ] `--color-accent` overridden for this app in `_lib/core/styles/tokens.css`
-- [ ] `app/strings.js` is the first import in `app/main.js` (if i18n strings are in use)
+- [X] `_lib/` present and `_lib/lib-version.json` readable — run `npx socle update` if stale
+- [X] `index.html` present, `manifest.json` configured (name, icons, theme_color filled in)
+- [X] `--color-accent` overridden for this app in `_lib/core/styles/tokens.css`
+- [X] `app/strings.js` is the first import in `app/main.js` (if i18n strings are in use)
 
 ### Routing
-- [ ] `<app-router>` registered in `index.html`
-- [ ] At least one page component in `app/pages/`
-- [ ] 404 / fallback route handled by a not-found page
+- [X] `<app-router>` registered in `index.html`
+- [X] At least one page component in `app/pages/`
+- [X] 404 / fallback route handled by a not-found page
 
 ### Data layer
-- [ ] Schema version and migrations reviewed — run `/migration` if schema changed
+- [X] Schema version and migrations reviewed — run `/migration` if schema changed
 
 ### Components
 List every file in `app/components/` and `app/pages/`. For each:
@@ -41,12 +41,13 @@ List every file in `app/components/` and `app/pages/`. For each:
 ### Planned features
 For each roadmap item: ✅ done / ⬜ not started.
 
-- [ ] Dark theme: `[data-theme="dark"]` token overrides present in CSS
-- [ ] Dark theme: `theme` store key; year-header menu has light/dark/system toggle
-- [ ] Year accent colour: `accentColors` store key; year change writes to `--color-accent` on `:root`
-- [ ] Lists: `app/pages/lists-page.js` exists and is routed
-- [ ] Lists: `app/components/list-item/` component exists
-- [ ] Lists: item status uses `open | paused | done` (not `active | completed`)
+- [X] Dark theme: `[data-theme="dark"]` token overrides present in CSS
+- [X] Dark theme: `theme` store key; year-header menu has light/dark/system toggle
+- [X] Year accent colour: `accentColors` store key; year change writes to `--color-accent` on `:root`
+- [X] Goal ordering: drag-reorder in `home-page.js`
+- [X] Lists: `app/pages/lists-page.js` exists and is routed
+- [X] Lists: `app/components/list-item/` component exists
+- [X] Lists: item status uses `open | paused | done` (not `active | completed`)
 - [ ] Lists: items filterable by status and tag in the UI
 - [ ] Goals: tag field present in schema and editable in goal dialog
 - [ ] Goals: tags filterable in the year view
@@ -54,7 +55,6 @@ For each roadmap item: ✅ done / ⬜ not started.
 - [ ] Frequency goals: log-completion UI allows picking a past date
 - [ ] Frequency goals: max one entry per calendar day enforced
 - [ ] Year selector overlay: tap year title → bottom-sheet picker with content dots
-- [ ] Goal ordering: drag-reorder in edit mode in `home-page.js`
 
 ---
 
