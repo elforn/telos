@@ -34,8 +34,9 @@ export const icons = {
   grip:
     i('<circle cx="8.5" cy="5" r="1.75" fill="currentColor" stroke="none"/><circle cx="8.5" cy="12" r="1.75" fill="currentColor" stroke="none"/><circle cx="8.5" cy="19" r="1.75" fill="currentColor" stroke="none"/><circle cx="15.5" cy="5" r="1.75" fill="currentColor" stroke="none"/><circle cx="15.5" cy="12" r="1.75" fill="currentColor" stroke="none"/><circle cx="15.5" cy="19" r="1.75" fill="currentColor" stroke="none"/>'),
 
+  // Bare i glyph — dot + stem, no enclosing circle
   info:
-    i('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>'),
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><rect x="10" y="9" width="4" height="12" rx="1.5"/></svg>`,
 
   link:
     i('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),

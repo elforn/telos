@@ -48,13 +48,14 @@ For each roadmap item: ✅ done / ⬜ not started.
 - [X] Lists: `app/pages/lists-page.js` exists and is routed
 - [X] Lists: `app/components/list-item/` component exists
 - [X] Lists: item status uses `open | paused | done` (not `active | completed`)
-- [ ] Lists: items filterable by status and tag in the UI
+- [ ] Lists: add tags
+- [ ] Lists: filterable by status and tag in the UI
+- [ ] Year selector overlay: tap year title → bottom-sheet picker with content dots
 - [ ] Goals: tag field present in schema and editable in goal dialog
 - [ ] Goals: tags filterable in the year view
 - [ ] Frequency goals: `tracking.type = 'weekly'` and `'monthly'` handled in goal-item and home-page
 - [ ] Frequency goals: log-completion UI allows picking a past date
 - [ ] Frequency goals: max one entry per calendar day enforced
-- [ ] Year selector overlay: tap year title → bottom-sheet picker with content dots
 
 ---
 

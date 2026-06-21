@@ -90,11 +90,16 @@ class GoalItem extends Gestures(AppElement) {
           position: relative;
           z-index: 1;
           flex-shrink: 0;
-          font-size: var(--font-size-caption);
           color: var(--color-text-muted);
           display: none;
           line-height: 1;
           margin-inline-start: var(--space-1);
+        }
+
+        .desc-icon svg {
+          display: block;
+          inline-size: var(--icon-size-sm);
+          block-size: var(--icon-size-sm);
         }
 
         .bar[data-has-desc="true"] .desc-icon { display: block; }
