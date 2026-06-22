@@ -26,13 +26,8 @@ class GoalDialog extends AppElement {
     const draft = this._isNew ? this._loadDraft() : null;
     this._input.value = goal?.title ?? draft?.title ?? '';
     this._saveBtn.disabled = !this._input.value.trim();
-    if (this._deleteBtn) {
-      this._deleteBtn.hidden = !goal;
-      this._deleteBtn.classList.remove('is-confirm');
-      this._deleteBtn.textContent = t('goal-dialog.delete');
-    }
+    if (this._deleteBtn) this._deleteBtn.hidden = !goal;
     if (this._menuBtn) this._menuBtn.hidden = !goal;
-    this._deleteConfirm = false;
     this._descInput.value = goal?.description ?? draft?.description ?? '';
     this._saved = false;
     this._showView('main');
@@ -47,14 +42,6 @@ class GoalDialog extends AppElement {
   template() {
     return `
       <style>
-        h2 {
-          font-size: var(--font-size-heading);
-          font-weight: var(--font-weight-semibold);
-          color: var(--color-text-primary);
-          margin-block-end: var(--space-4);
-          line-height: var(--line-height-tight);
-        }
-
         /* Halve the modal's default 24px top/bottom padding */
         #modal { --space-6: var(--space-3); }
 
@@ -299,7 +286,6 @@ class GoalDialog extends AppElement {
 
         #menu-btn { background: none; color: var(--color-text-secondary); padding-inline: var(--space-3); letter-spacing: 0.05em; }
         #delete { background: none; color: var(--color-danger); }
-        #delete.is-confirm { background: var(--color-danger); color: var(--color-text-inverse); }
         #cancel, #move-back { background: none; color: var(--color-text-secondary); }
 
         #save, #copy-btn {
@@ -327,7 +313,6 @@ class GoalDialog extends AppElement {
       <modal-dialog id="modal">
         <!-- ── View: main edit ───────────────────────────────────────────── -->
         <div id="view-main">
-          <h2>${t('goal-dialog.heading')}</h2>
           <input id="input"
                  type="text"
                  aria-label="${t('goal-dialog.placeholder')}"
@@ -409,9 +394,8 @@ class GoalDialog extends AppElement {
     this._actionSheet       = this.shadowRoot.querySelector('#action-sheet');
     this._listPickerDialog  = this.shadowRoot.querySelector('#list-picker');
 
-    this._saved         = false;
-    this._deleteConfirm = false;
-    this._isNew         = false;
+    this._saved  = false;
+    this._isNew  = false;
 
     // ── Main view ─────────────────────────────────────────────────────────────
 
@@ -457,12 +441,6 @@ class GoalDialog extends AppElement {
     };
 
     this._onDelete = () => {
-      if (!this._deleteConfirm) {
-        this._deleteConfirm = true;
-        this._deleteBtn.classList.add('is-confirm');
-        this._deleteBtn.textContent = t('goal-dialog.delete-confirm');
-        return;
-      }
       this.dispatchEvent(new CustomEvent('goal-delete', { bubbles: true, composed: true }));
       this._modal.close();
     };

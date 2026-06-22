@@ -134,19 +134,10 @@ describe('list-item — item-tap event', () => {
 });
 
 describe('list-item — item-delete event', () => {
-  it('first click on delete enters confirm state — does not dispatch event', () => {
+  it('dispatches item-delete on first click of delete button', () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete-btn').click();
-    expect(events).toHaveLength(0);
-  });
-
-  it('dispatches item-delete on second click of delete button', () => {
-    const el = mount();
-    const events = [];
-    el.addEventListener('item-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete-btn').click();
     el.shadowRoot.querySelector('#delete-btn').click();
     expect(events).toHaveLength(1);
   });
@@ -155,7 +146,6 @@ describe('list-item — item-delete event', () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete-btn').click();
     el.shadowRoot.querySelector('#delete-btn').click();
     expect(events[0].detail.item.id).toBe('i1');
   });
@@ -372,36 +362,30 @@ describe('list-item — swipe', () => {
 });
 
 describe('list-item — pointerup fires actions', () => {
-  it('dispatches item-delete when delete button fires pointerup twice', async () => {
+  it('dispatches item-delete on single pointerup', async () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
     const btn = el.shadowRoot.querySelector('#delete-btn');
-    btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 }));
     btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 }));
     await vi.waitFor(() => expect(events).toHaveLength(1));
     expect(events[0].detail.item.id).toBe('i1');
   });
 
-  it('keyboard click (detail=0) on delete button requires two presses to dispatch item-delete', () => {
+  it('keyboard click (detail=0) dispatches item-delete on first press', () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
     const btn = el.shadowRoot.querySelector('#delete-btn');
-    btn.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, detail: 0 }));
     btn.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, detail: 0 }));
     expect(events).toHaveLength(1);
   });
 
-  it('pointer click (detail=1) after pointerup does not double-fire on confirm', async () => {
+  it('pointerup followed by synthesized click (detail=1) fires exactly once', async () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
     const btn = el.shadowRoot.querySelector('#delete-btn');
-    // First touch: enter confirm state
-    btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 }));
-    btn.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, detail: 1 }));
-    // Second touch: fire delete (rAF-delayed)
     btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 }));
     btn.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, detail: 1 }));
     await vi.waitFor(() => expect(events).toHaveLength(1));

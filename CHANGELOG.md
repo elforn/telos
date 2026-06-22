@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.7.0] — 2026-06-23
+
+### Added
+- Undo for delete actions — deleting a goal, list item, or entire list now shows an Undo button in the toast; tap within 5 seconds to restore
+- Undo for edit saves — saving changes to a goal title/description, list name, or item title/note/URL also offers Undo; tap to revert to the previous values
+- When a whole list is deleted from the list detail page, the Undo toast appears on the Lists page after navigation so you can recover without losing context
+- Bulk delete also shows an Undo toast that restores all removed items at once
+- Status radio buttons in the item edit dialog commit immediately on tap — no Save button needed for status changes
+- Colour swatches in the list edit dialog commit immediately on tap — no Save button needed for colour changes
+
+### Changed
+- Delete buttons on goals, list items, and lists now act on a single tap — the two-tap "Sure?" confirmation flow has been removed; the Undo toast is the safety net
+- Headings removed from goal and list edit dialogs — context is clear from the form fields and the Save button still guards against accidental edits
+
+### Fixed
+- Item dialog action sheet animation now respects `prefers-reduced-motion`
+
+---
+
 ## [1.6.2] — 2026-06-22
 
 ### Added

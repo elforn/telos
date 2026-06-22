@@ -13,19 +13,16 @@ defineStrings({
   'home-page.next-year':         'Année suivante',
   'home-page.year-progress':     'Progression annuelle',
 
-  'goal-dialog.heading':         'Définissez votre objectif',
   'goal-dialog.placeholder':            'Que ferez-vous cette année ?',
   'goal-dialog.description-placeholder': 'Description',
   'goal-dialog.copy-description': 'Copier la description',
   'goal-dialog.save':            'Enregistrer',
   'goal-dialog.cancel':          'Annuler',
   'goal-dialog.delete':          'Supprimer',
-  'goal-dialog.delete-confirm':  'Sûr ?',
 
   'home-page.done':              'Terminé',
 
   'goal-item.delete':            'Supprimer',
-  'goal-item.delete-confirm':    'Sûr ?',
   'goal-item.add-capstone':      'Ajouter un objectif phare',
   'goal-item.add-milestone':     'Ajouter un jalon',
   'goal-item.add-wow':           'Ajouter un moment wow',
@@ -89,7 +86,6 @@ defineStrings({
   'sync.import-error':           'Fichier d\'export invalide ou incompatible.',
 
   'lists-page.heading':   'Listes',
-  'lists-page.empty':     'Aucune liste',
   'lists-page.add':       'Nouvelle liste',
   'lists-page.drag':     'Glisser pour réordonner',
 
@@ -99,7 +95,6 @@ defineStrings({
   'list-detail.menu':        'Options',
   'list-detail.edit-name':   'Modifier le nom de la liste',
   'list-detail.delete-list':         'Supprimer la liste',
-  'list-detail.delete-list-confirm': 'Sûr ?',
   'list-detail.show-status':  'Afficher le statut',
   'list-detail.hide-status':  'Masquer le statut',
   'list-detail.status-label': 'Statut',
@@ -116,17 +111,11 @@ defineStrings({
   'list-detail.bulk-delete-toast':  '{n} éléments supprimés',
   'list-detail.bulk-status-toast':  '{n} éléments mis à jour',
 
-  'list-dialog.heading-create':   'Nouvelle liste',
-  'list-dialog.heading-edit':     'Modifier la liste',
   'list-dialog.name-placeholder': 'Nom de la liste',
-  'list-dialog.color-label':       'Couleur',
   'list-dialog.save':             'Enregistrer',
   'list-dialog.cancel':           'Annuler',
   'list-dialog.delete':           'Supprimer',
-  'list-dialog.delete-confirm':   'Sûr ?',
 
-  'item-dialog.heading-create':   'Nouvel élément',
-  'item-dialog.heading-edit':     'Modifier l\'élément',
   'item-dialog.title-placeholder':'Titre',
   'item-dialog.status-label':     'Statut',
   'item-dialog.status-open':      'Ouvert',
@@ -140,7 +129,6 @@ defineStrings({
   'item-dialog.save':             'Enregistrer',
   'item-dialog.cancel':           'Annuler',
   'item-dialog.delete':           'Supprimer',
-  'item-dialog.delete-confirm':   'Sûr ?',
 
   'item-dialog.move-to-list':           'Déplacer vers une liste',
   'item-dialog.add-to-goal':            'Ajouter à un objectif',
@@ -169,7 +157,6 @@ defineStrings({
   'item-dialog.picker-clear':           'Effacer la sélection',
 
   'list-item.delete':          'Supprimer',
-  'list-item.delete-confirm':  'Sûr ?',
   'list-item.mark-done': 'Marquer comme terminé',
   'list-item.restore':   'Restaurer',
   'list-item.drag':      'Glisser pour réordonner',
@@ -179,12 +166,13 @@ defineStrings({
   'lists.toast-item-saved':   'Élément enregistré',
   'lists.toast-item-deleted': 'Élément supprimé',
 
-  'year-header.lists': 'Listes',
-
   'bottom-nav.years':    'Années',
   'bottom-nav.lists':    'Listes',
   'bottom-nav.settings': 'Réglages',
 
   'settings.repair':       'Réparer l\'installation',
   'sync.backup-downloaded': 'Vos données ont été sauvegardées avant la mise à jour.',
+
+  'undo.button':  'Annuler',
+  'toast.close':  'Fermer',
 }, 'fr');

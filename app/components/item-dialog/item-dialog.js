@@ -28,9 +28,7 @@ class ItemDialog extends AppElement {
     this._titleInput.value = item?.title ?? draft?.title ?? '';
     this._saveBtn.disabled = !this._titleInput.value.trim();
     this._deleteBtn.hidden = !item;
-    this._deleteBtn.classList.remove('is-confirm');
     this._deleteBtn.textContent = t('item-dialog.delete');
-    this._deleteConfirm = false;
 
     const status = item?.status ?? 'open';
     const radio = this.shadowRoot.querySelector(`input[name="status"][value="${status}"]`);
@@ -269,6 +267,11 @@ class ItemDialog extends AppElement {
           animation: fade-in 0.2s ease-out;
         }
 
+        @media (prefers-reduced-motion: reduce) {
+          #action-sheet[open] { animation: none; }
+          #action-sheet::backdrop { animation: none; }
+        }
+
         .sheet-handle {
           inline-size: 36px;
           block-size: 4px;
@@ -406,7 +409,6 @@ class ItemDialog extends AppElement {
 
         #menu-btn { background: none; color: var(--color-text-secondary); padding-inline: var(--space-3); letter-spacing: 0.05em; }
         #delete { background: none; color: var(--color-danger); }
-        #delete.is-confirm { background: var(--color-danger); color: var(--color-text-inverse); }
         #cancel { background: none; color: var(--color-text-secondary); }
 
         #save, #add-to-goal-cta {
@@ -553,9 +555,8 @@ class ItemDialog extends AppElement {
     this._inGoalsList       = this.shadowRoot.querySelector('#in-goals-list');
     this._addToGoalCta      = this.shadowRoot.querySelector('#add-to-goal-cta');
 
-    this._saved         = false;
-    this._deleteConfirm = false;
-    this._view = 'main';
+    this._saved = false;
+    this._view  = 'main';
 
     // ── Main view ─────────────────────────────────────────────────────────────
 
@@ -613,12 +614,6 @@ class ItemDialog extends AppElement {
     };
 
     this._onDelete = () => {
-      if (!this._deleteConfirm) {
-        this._deleteConfirm = true;
-        this._deleteBtn.classList.add('is-confirm');
-        this._deleteBtn.textContent = t('item-dialog.delete-confirm');
-        return;
-      }
       this.dispatchEvent(new CustomEvent('item-delete', { bubbles: true, composed: true }));
       this._modal.close();
     };
@@ -631,6 +626,14 @@ class ItemDialog extends AppElement {
     };
 
     this._onKeyDown = e => { if (e.key === 'Enter') this._onSave(); };
+
+    this._onStatusChange = e => {
+      if (this._isNew) return;
+      this.dispatchEvent(new CustomEvent('item-status-changed', {
+        bubbles: true, composed: true,
+        detail: { status: e.target.value },
+      }));
+    };
 
     this._onResize = () => this._syncNoteHeight();
 
@@ -647,6 +650,7 @@ class ItemDialog extends AppElement {
     this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
     this._modal.addEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).addEventListener('resize', this._onResize);
+    this.shadowRoot.querySelector('.status-options').addEventListener('change', this._onStatusChange);
 
     // ── More actions (··· menu) ───────────────────────────────────────────────
 
@@ -708,6 +712,7 @@ class ItemDialog extends AppElement {
     this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).removeEventListener('resize', this._onResize);
+    this.shadowRoot.querySelector('.status-options')?.removeEventListener('change', this._onStatusChange);
 
     this._menuBtn?.removeEventListener('click', this._onMenuBtn);
     this._actionSheet?.removeEventListener('click', this._onSheetBackdrop);

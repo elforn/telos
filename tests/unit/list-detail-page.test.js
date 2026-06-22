@@ -1041,39 +1041,27 @@ describe('list-detail-page — edit list (list-saved)', () => {
 
 // ── Delete list via menu ──────────────────────────────────────────────────────
 
-describe('list-detail-page — delete list (menu confirm)', () => {
+describe('list-detail-page — delete list (menu)', () => {
   it('renders a list-delete-btn in the menu', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     expect(el.shadowRoot.querySelector('#list-delete-btn')).not.toBeNull();
   });
 
-  it('first click on list-delete-btn sets confirm text', async () => {
+  it('first click on list-delete-btn removes the list from the store', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     const btn = el.shadowRoot.querySelector('#list-delete-btn');
-    const originalText = btn.textContent;
     btn.click();
-    expect(btn.textContent).not.toBe(originalText);
-    expect(btn.textContent).toBeTruthy();
-  });
-
-  it('second click on list-delete-btn removes the list from the store', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
-    const el = mount();
-    const btn = el.shadowRoot.querySelector('#list-delete-btn');
-    btn.click(); // confirm state
-    btn.click(); // confirm delete
     await vi.waitFor(() => expect(getState().lists).toHaveLength(0));
   });
 
-  it('second click does not affect other lists', async () => {
+  it('first click does not affect other lists', async () => {
     const LIST2 = { id: 'l2', name: 'Books', items: [] };
     await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST2] } });
     const el = mount('l2');
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Books'));
     const btn = el.shadowRoot.querySelector('#list-delete-btn');
-    btn.click();
     btn.click();
     await vi.waitFor(() => expect(getState().lists).toHaveLength(1));
     expect(getState().lists[0].id).toBe('l1');
@@ -1093,6 +1081,80 @@ describe('list-detail-page — delete list (list-dialog list-delete)', () => {
     }));
     await vi.waitFor(() => expect(getState().lists).toHaveLength(1));
     expect(getState().lists[0].id).toBe('l2');
+  });
+});
+
+// ── Immediate status commit ───────────────────────────────────────────────────
+
+describe('list-detail-page — item-status-changed (immediate commit)', () => {
+  it('updates only the item status when item-status-changed fires from the dialog', async () => {
+    const item = { ...ITEM, note: 'Keep this note', url: 'https://example.com' };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [item] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-status-changed', {
+      bubbles: true, composed: true, detail: { status: 'done' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].items[0].status).toBe('done'));
+    expect(getState().lists[0].items[0].note).toBe('Keep this note');
+    expect(getState().lists[0].items[0].url).toBe('https://example.com');
+  });
+
+  it('does not mutate other items when item-status-changed fires', async () => {
+    const ITEM2 = { id: 'i2', title: 'Other', status: 'open', tags: [], inGoals: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM, ITEM2] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-status-changed', {
+      bubbles: true, composed: true, detail: { status: 'paused' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].items[0].status).toBe('paused'));
+    expect(getState().lists[0].items[1].status).toBe('open');
+  });
+
+  it('is a no-op when item-status-changed fires with no editing context', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-status-changed', {
+      bubbles: true, composed: true, detail: { status: 'done' },
+    }));
+    await new Promise(r => setTimeout(r, 20));
+    expect(getState().lists[0].items[0].status).toBe('open');
+  });
+});
+
+// ── Immediate colour commit ───────────────────────────────────────────────────
+
+describe('list-detail-page — list-color-changed (immediate commit)', () => {
+  it('updates the list colour when list-color-changed fires from the list-dialog', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-color-changed', {
+      bubbles: true, composed: true, detail: { color: '#E5534B' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].color).toBe('#E5534B'));
+    expect(getState().lists[0].name).toBe('Gift ideas');
+  });
+
+  it('removes the list colour when list-color-changed fires with null', async () => {
+    const coloredList = { ...LIST, color: '#4A94D4' };
+    await boot({ dbName: freshName(), initialState: { lists: [coloredList] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-color-changed', {
+      bubbles: true, composed: true, detail: { color: null },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].color).toBeUndefined());
   });
 });
 

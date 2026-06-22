@@ -13,19 +13,16 @@ defineStrings({
   'home-page.next-year':         'Any següent',
   'home-page.year-progress':     'Progrés anual',
 
-  'goal-dialog.heading':         'Defineix el teu objectiu',
   'goal-dialog.placeholder':            'Què aconseguiràs aquest any?',
   'goal-dialog.description-placeholder': 'Descripció',
   'goal-dialog.copy-description': 'Copia la descripció',
   'goal-dialog.save':            'Desa',
   'goal-dialog.cancel':          'Cancel·la',
   'goal-dialog.delete':          'Elimina',
-  'goal-dialog.delete-confirm':  'Segur?',
 
   'home-page.done':              'Fet',
 
   'goal-item.delete':            'Elimina',
-  'goal-item.delete-confirm':    'Segur?',
   'goal-item.add-capstone':      'Afegeix objectiu principal',
   'goal-item.add-milestone':     'Afegeix una fita',
   'goal-item.add-wow':           'Afegeix un moment guau',
@@ -89,7 +86,6 @@ defineStrings({
   'sync.import-error':           'Fitxer d\'exportació invàlid o incompatible.',
 
   'lists-page.heading':   'Llistes',
-  'lists-page.empty':     'Cap llista',
   'lists-page.add':       'Nova llista',
   'lists-page.drag':     'Arrossega per reordenar',
 
@@ -99,7 +95,6 @@ defineStrings({
   'list-detail.menu':        'Opcions',
   'list-detail.edit-name':   'Edita el nom de la llista',
   'list-detail.delete-list':         'Elimina la llista',
-  'list-detail.delete-list-confirm': 'Segur?',
   'list-detail.show-status':  'Mostra l\'estat',
   'list-detail.hide-status':  'Amaga l\'estat',
   'list-detail.status-label': 'Estat',
@@ -116,17 +111,11 @@ defineStrings({
   'list-detail.bulk-delete-toast':  '{n} elements eliminats',
   'list-detail.bulk-status-toast':  '{n} elements actualitzats',
 
-  'list-dialog.heading-create':   'Nova llista',
-  'list-dialog.heading-edit':     'Edita la llista',
   'list-dialog.name-placeholder': 'Nom de la llista',
-  'list-dialog.color-label':       'Color',
   'list-dialog.save':             'Desa',
   'list-dialog.cancel':           'Cancel·la',
   'list-dialog.delete':           'Elimina',
-  'list-dialog.delete-confirm':   'Segur?',
 
-  'item-dialog.heading-create':   'Nou item',
-  'item-dialog.heading-edit':     'Edita l\'item',
   'item-dialog.title-placeholder':'Títol',
   'item-dialog.status-label':     'Estat',
   'item-dialog.status-open':      'Obert',
@@ -140,7 +129,6 @@ defineStrings({
   'item-dialog.save':             'Desa',
   'item-dialog.cancel':           'Cancel·la',
   'item-dialog.delete':           'Elimina',
-  'item-dialog.delete-confirm':   'Segur?',
 
   'item-dialog.move-to-list':           'Mou a una llista',
   'item-dialog.add-to-goal':            'Afegeix a un objectiu',
@@ -169,7 +157,6 @@ defineStrings({
   'item-dialog.picker-clear':           'Esborra la selecció',
 
   'list-item.delete':          'Elimina',
-  'list-item.delete-confirm':  'Segur?',
   'list-item.mark-done': 'Marca com a fet',
   'list-item.restore':   'Restaura',
   'list-item.drag':      'Arrossega per reordenar',
@@ -179,12 +166,13 @@ defineStrings({
   'lists.toast-item-saved':   'Item desat',
   'lists.toast-item-deleted': 'Item eliminat',
 
-  'year-header.lists': 'Llistes',
-
   'bottom-nav.years':    'Anys',
   'bottom-nav.lists':    'Llistes',
   'bottom-nav.settings': 'Ajustos',
 
   'settings.repair':       'Reparar la instal·lació',
   'sync.backup-downloaded': 'Les teves dades s\'han guardat abans de l\'actualització.',
+
+  'undo.button':  'Desfés',
+  'toast.close':  'Tanca',
 }, 'ca');

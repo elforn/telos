@@ -153,41 +153,21 @@ describe('goal-dialog — delete', () => {
     expect(el.shadowRoot.querySelector('#delete').hidden).toBe(false);
   });
 
-  it('first click enters confirm state — does not dispatch event', () => {
+  it('dispatches goal-delete on first click', () => {
     const el = mount();
     el.open({ id: '1', title: 'My goal' });
     const events = [];
     el.addEventListener('goal-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete').click();
-    expect(events).toHaveLength(0);
-    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(true);
-  });
-
-  it('dispatches goal-delete on second click', () => {
-    const el = mount();
-    el.open({ id: '1', title: 'My goal' });
-    const events = [];
-    el.addEventListener('goal-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete').click();
     el.shadowRoot.querySelector('#delete').click();
     expect(events).toHaveLength(1);
   });
 
-  it('closes the dialog after second click', () => {
+  it('closes the dialog on first click', () => {
     const el = mount();
     const modal = el.shadowRoot.querySelector('#modal');
     el.open({ id: '1', title: 'My goal' });
     el.shadowRoot.querySelector('#delete').click();
-    el.shadowRoot.querySelector('#delete').click();
     expect(modal.close).toHaveBeenCalledOnce();
-  });
-
-  it('re-opening the dialog resets the confirm state', () => {
-    const el = mount();
-    el.open({ id: '1', title: 'My goal' });
-    el.shadowRoot.querySelector('#delete').click();
-    el.open({ id: '1', title: 'My goal' });
-    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(false);
   });
 });
 

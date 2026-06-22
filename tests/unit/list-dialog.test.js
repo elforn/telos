@@ -155,22 +155,11 @@ describe('list-dialog — save', () => {
 // ── delete ────────────────────────────────────────────────────────────────────
 
 describe('list-dialog — delete', () => {
-  it('first click enters confirm state — does not dispatch event', () => {
+  it('dispatches list-delete on first click', () => {
     const el = mount();
     el.open(LIST);
     const events = [];
     el.addEventListener('list-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete').click();
-    expect(events).toHaveLength(0);
-    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(true);
-  });
-
-  it('dispatches list-delete on second click', () => {
-    const el = mount();
-    el.open(LIST);
-    const events = [];
-    el.addEventListener('list-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete').click();
     el.shadowRoot.querySelector('#delete').click();
     expect(events).toHaveLength(1);
   });
@@ -181,26 +170,16 @@ describe('list-dialog — delete', () => {
     const events = [];
     el.addEventListener('list-delete', e => events.push(e));
     el.shadowRoot.querySelector('#delete').click();
-    el.shadowRoot.querySelector('#delete').click();
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
   });
 
-  it('closes the dialog after second click', () => {
+  it('closes the dialog on first click', () => {
     const el = mount();
     const modal = el.shadowRoot.querySelector('#modal');
     el.open(LIST);
     el.shadowRoot.querySelector('#delete').click();
-    el.shadowRoot.querySelector('#delete').click();
     expect(modal.close).toHaveBeenCalledOnce();
-  });
-
-  it('re-opening the dialog resets the confirm state', () => {
-    const el = mount();
-    el.open(LIST);
-    el.shadowRoot.querySelector('#delete').click();
-    el.open(LIST);
-    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(false);
   });
 });
 
@@ -370,5 +349,48 @@ describe('list-dialog — color picker', () => {
     el.shadowRoot.querySelector('#input').dispatchEvent(new Event('input'));
     el.shadowRoot.querySelector('#save').click();
     expect(events[0].detail.color).toBeNull();
+  });
+});
+
+// ── immediate color commit ────────────────────────────────────────────────────
+
+describe('list-dialog — immediate color commit', () => {
+  it('dispatches list-color-changed when a swatch is clicked in edit mode', () => {
+    const el = mount();
+    el.open(LIST);
+    const events = [];
+    el.addEventListener('list-color-changed', e => events.push(e));
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.color).toBe('#4A94D4');
+  });
+
+  it('dispatches list-color-changed with null when the none swatch is clicked in edit mode', () => {
+    const el = mount();
+    el.open(LIST_WITH_COLOR);
+    const events = [];
+    el.addEventListener('list-color-changed', e => events.push(e));
+    el.shadowRoot.querySelector('.swatch[data-color=""]').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.color).toBeNull();
+  });
+
+  it('does not dispatch list-color-changed in create mode', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('list-color-changed', e => events.push(e));
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    expect(events).toHaveLength(0);
+  });
+
+  it('list-color-changed is bubbles and composed', () => {
+    const el = mount();
+    el.open(LIST);
+    const events = [];
+    el.addEventListener('list-color-changed', e => events.push(e));
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
   });
 });

@@ -13,15 +13,9 @@ class ListDialog extends AppElement {
   open(list = null) {
     this._isNew = !list;
     const draft = this._isNew ? this._loadDraft() : null;
-    this._heading.textContent = list
-      ? t('list-dialog.heading-edit')
-      : t('list-dialog.heading-create');
     this._input.value = list?.name ?? draft?.name ?? '';
     this._saveBtn.disabled = !this._input.value.trim();
     this._deleteBtn.hidden = !list;
-    this._deleteBtn.classList.remove('is-confirm');
-    this._deleteBtn.textContent = t('list-dialog.delete');
-    this._deleteConfirm = false;
     this._selectColor(list?.color ?? draft?.color ?? null);
     this._saved = false;
     this._modal.show(this._input);
@@ -30,14 +24,6 @@ class ListDialog extends AppElement {
   template() {
     return `
       <style>
-        h2 {
-          font-size: var(--font-size-heading);
-          font-weight: var(--font-weight-semibold);
-          color: var(--color-text-primary);
-          margin-block-end: var(--space-4);
-          line-height: var(--line-height-tight);
-        }
-
         /* Halve the modal's default 24px top/bottom padding */
         #modal { --space-6: var(--space-3); }
 
@@ -133,7 +119,6 @@ class ListDialog extends AppElement {
         }
 
         #delete { background: none; color: var(--color-danger); }
-        #delete.is-confirm { background: var(--color-danger); color: var(--color-text-inverse); }
         #cancel { background: none; color: var(--color-text-secondary); }
 
         #save {
@@ -145,7 +130,6 @@ class ListDialog extends AppElement {
       </style>
 
       <modal-dialog id="modal">
-        <h2 id="heading">${t('list-dialog.heading-create')}</h2>
         <div class="color-swatches">
           ${SWATCHES.map(({ color, label }) => `
             <button type="button"
@@ -175,15 +159,13 @@ class ListDialog extends AppElement {
   }
 
   subscribe() {
-    this._modal         = this.shadowRoot.querySelector('#modal');
-    this._heading       = this.shadowRoot.querySelector('#heading');
-    this._input         = this.shadowRoot.querySelector('#input');
+    this._modal  = this.shadowRoot.querySelector('#modal');
+    this._input  = this.shadowRoot.querySelector('#input');
     this._colorSwatches = this.shadowRoot.querySelector('.color-swatches');
     this._saveBtn       = this.shadowRoot.querySelector('#save');
     this._deleteBtn     = this.shadowRoot.querySelector('#delete');
     this._selectedColor  = null;
     this._saved          = false;
-    this._deleteConfirm  = false;
     this._isNew          = false;
 
     this._onInput = () => {
@@ -209,12 +191,6 @@ class ListDialog extends AppElement {
     };
 
     this._onDelete = () => {
-      if (!this._deleteConfirm) {
-        this._deleteConfirm = true;
-        this._deleteBtn.classList.add('is-confirm');
-        this._deleteBtn.textContent = t('list-dialog.delete-confirm');
-        return;
-      }
       this.dispatchEvent(new CustomEvent('list-delete', { bubbles: true, composed: true }));
       this._modal.close();
     };
@@ -231,6 +207,12 @@ class ListDialog extends AppElement {
       if (!swatch) return;
       this._selectColor(swatch.dataset.color || null);
       this._saveDraft();
+      if (!this._isNew) {
+        this.dispatchEvent(new CustomEvent('list-color-changed', {
+          bubbles: true, composed: true,
+          detail: { color: this._selectedColor },
+        }));
+      }
     };
 
     this._input.addEventListener('input',   this._onInput);

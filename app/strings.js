@@ -14,17 +14,14 @@ defineStrings({
   'home-page.year-progress':     'Year progress',
   'home-page.done':              'Done',
 
-  'goal-dialog.heading':     'Set your goal',
   'goal-dialog.placeholder': 'What will you achieve this year?',
   'goal-dialog.description-placeholder': 'Description',
   'goal-dialog.copy-description': 'Copy description',
   'goal-dialog.save':        'Save',
   'goal-dialog.cancel':      'Cancel',
   'goal-dialog.delete':         'Delete',
-  'goal-dialog.delete-confirm': 'Sure?',
 
   'goal-item.delete':          'Delete',
-  'goal-item.delete-confirm':  'Sure?',
   'goal-item.add-capstone':    'Add capstone goal',
   'goal-item.add-milestone':   'Add milestone',
   'goal-item.add-wow':         'Add wow moment',
@@ -88,7 +85,6 @@ defineStrings({
   'sync.import-error':           'Invalid or incompatible export file.',
 
   'lists-page.heading':   'Lists',
-  'lists-page.empty':     'No lists yet',
   'lists-page.add':       'New list',
   'lists-page.drag':     'Drag to reorder',
 
@@ -98,7 +94,6 @@ defineStrings({
   'list-detail.menu':        'Options',
   'list-detail.edit-name':   'Edit list name',
   'list-detail.delete-list':         'Delete list',
-  'list-detail.delete-list-confirm': 'Sure?',
   'list-detail.show-status':  'Show status',
   'list-detail.hide-status':  'Hide status',
   'list-detail.status-label': 'Status',
@@ -115,17 +110,11 @@ defineStrings({
   'list-detail.bulk-delete-toast':  'Deleted {n} items',
   'list-detail.bulk-status-toast':  'Updated {n} items',
 
-  'list-dialog.heading-create':   'New list',
-  'list-dialog.heading-edit':     'Edit list',
   'list-dialog.name-placeholder': 'List name',
-  'list-dialog.color-label':       'Colour',
   'list-dialog.save':             'Save',
   'list-dialog.cancel':           'Cancel',
   'list-dialog.delete':           'Delete',
-  'list-dialog.delete-confirm':   'Sure?',
 
-  'item-dialog.heading-create':   'New item',
-  'item-dialog.heading-edit':     'Edit item',
   'item-dialog.title-placeholder':'Title',
   'item-dialog.status-label':     'Status',
   'item-dialog.status-open':      'Open',
@@ -139,7 +128,6 @@ defineStrings({
   'item-dialog.save':             'Save',
   'item-dialog.cancel':           'Cancel',
   'item-dialog.delete':           'Delete',
-  'item-dialog.delete-confirm':   'Sure?',
 
   'item-dialog.move-to-list':           'Move to list',
   'item-dialog.add-to-goal':            'Add to goal',
@@ -168,7 +156,6 @@ defineStrings({
   'item-dialog.picker-clear':           'Clear selection',
 
   'list-item.delete':          'Delete',
-  'list-item.delete-confirm':  'Sure?',
   'list-item.mark-done': 'Mark done',
   'list-item.restore':   'Restore',
   'list-item.drag':      'Drag to reorder',
@@ -178,12 +165,13 @@ defineStrings({
   'lists.toast-item-saved':   'Item saved',
   'lists.toast-item-deleted': 'Item deleted',
 
-  'year-header.lists': 'Lists',
-
   'bottom-nav.years':    'Years',
   'bottom-nav.lists':    'Lists',
   'bottom-nav.settings': 'Settings',
 
   'settings.repair':       'Repair installation',
   'sync.backup-downloaded': 'Your data has been backed up before the update.',
+
+  'undo.button':  'Undo',
+  'toast.close':  'Close',
 });

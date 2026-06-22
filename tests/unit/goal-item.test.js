@@ -73,19 +73,10 @@ describe('goal-item — tap', () => {
 });
 
 describe('goal-item — buttons', () => {
-  it('first click on delete enters confirm state — does not dispatch event', () => {
+  it('dispatches goal-delete on first click of delete button', () => {
     const el = mount();
     const events = [];
     el.addEventListener('goal-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete-btn').click();
-    expect(events).toHaveLength(0);
-  });
-
-  it('dispatches goal-delete on second click of delete button', () => {
-    const el = mount();
-    const events = [];
-    el.addEventListener('goal-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete-btn').click();
     el.shadowRoot.querySelector('#delete-btn').click();
     expect(events).toHaveLength(1);
     expect(events[0].detail.goal.id).toBe('g1');

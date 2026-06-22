@@ -50,8 +50,6 @@ forms. Candidate improvements to evaluate together:
 Consider once goal dialog is multi-field and the full editing surface is stable.
 - **Year selector overlay** — tap year title in header → bottom-sheet picker;
   years with any content shown with a filled dot.
-- **Goal ordering in edit mode** — drag handles in edit mode to reorder goals
-  within a section.
 - Share Target API — register as a system share target; incoming shares go into
   a chosen list.
 
@@ -62,8 +60,6 @@ Consider once goal dialog is multi-field and the full editing surface is stable.
   update-banner.
 
 ## Later — depth
-- **Year / quarterly reflection** — 1–5 star rating + short note, storable
-  annually or per quarter (Q1–Q4). Modal UI, TBD.
 - **Year summary card** — shareable image of the full year plan (Web Share API).
 - **Check-in badge reminder** — app icon badge (Badging API) showing count of
   frequency goals behind target. Updated on app open and via Periodic Background

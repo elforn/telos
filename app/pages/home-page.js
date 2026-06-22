@@ -362,9 +362,7 @@ class HomePage extends AppElement {
     };
     this._capstoneList.addEventListener('goal-progress', this._onCapstoneProgress);
 
-    this._onCapstoneDelete = e => {
-      this._deleteGoal('capstone', e.detail.goal.id);
-    };
+    this._onCapstoneDelete = e => this._deleteGoalWithUndo('capstone', e.detail.goal.id);
     this._capstoneList.addEventListener('goal-delete', this._onCapstoneDelete);
 
     this._onAddCapstone = () => {
@@ -390,9 +388,7 @@ class HomePage extends AppElement {
     };
     this._milestoneList.addEventListener('goal-progress', this._onMilestoneProgress);
 
-    this._onMilestoneDelete = e => {
-      this._deleteGoal('milestones', e.detail.goal.id);
-    };
+    this._onMilestoneDelete = e => this._deleteGoalWithUndo('milestones', e.detail.goal.id);
     this._milestoneList.addEventListener('goal-delete', this._onMilestoneDelete);
 
     this._onAddMilestone = () => {
@@ -418,9 +414,7 @@ class HomePage extends AppElement {
     };
     this._wowList.addEventListener('goal-progress', this._onWowProgress);
 
-    this._onWowDelete = e => {
-      this._deleteGoal('wow', e.detail.goal.id);
-    };
+    this._onWowDelete = e => this._deleteGoalWithUndo('wow', e.detail.goal.id);
     this._wowList.addEventListener('goal-delete', this._onWowDelete);
 
     this._onAddWow = () => {
@@ -446,9 +440,7 @@ class HomePage extends AppElement {
     };
     this._focusList.addEventListener('goal-progress', this._onFocusProgress);
 
-    this._onFocusDelete = e => {
-      this._deleteGoal('focus', e.detail.goal.id);
-    };
+    this._onFocusDelete = e => this._deleteGoalWithUndo('focus', e.detail.goal.id);
     this._focusList.addEventListener('goal-delete', this._onFocusDelete);
 
     this._onAddFocus = () => {
@@ -463,18 +455,21 @@ class HomePage extends AppElement {
     this._onGoalSaved = e => {
       const { title, description } = e.detail;
       if (this._editingGoal) {
+        const snapshot = getState().goals;
         this._editGoal(this._editingSection, this._editingGoal.id, title, description);
+        toast(t('home.toast-goal-saved'), 'success', { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
       } else {
         this._addGoal(this._editingSection, title, description);
+        toast(t('home.toast-goal-saved'), 'success');
       }
-      toast(t('home.toast-goal-saved'), 'success');
     };
     this.shadowRoot.addEventListener('goal-saved', this._onGoalSaved);
 
     this._onDialogDelete = () => {
       if (this._editingGoal) {
+        const snapshot = getState().goals;
         this._deleteGoal(this._editingSection, this._editingGoal.id);
-        toast(t('home.toast-goal-deleted'), 'info');
+        toast(t('home.toast-goal-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
       }
     };
     this._dialog.addEventListener('goal-delete', this._onDialogDelete);
@@ -656,6 +651,12 @@ class HomePage extends AppElement {
 
   _deleteGoal(section, id) {
     this._mutateSection(section, list => list.filter(g => g.id !== id));
+  }
+
+  _deleteGoalWithUndo(section, id) {
+    const snapshot = getState().goals;
+    this._deleteGoal(section, id);
+    toast(t('home.toast-goal-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────

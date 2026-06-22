@@ -237,8 +237,7 @@ class ListItem extends Gestures(AppElement) {
     this._badge    = this.shadowRoot.querySelector('.badge');
     this._deleteEl = this.shadowRoot.querySelector('#delete-btn');
     this._doneEl   = this.shadowRoot.querySelector('#done-btn');
-    this._revealedDir  = null;
-    this._deleteConfirm = false;
+    this._revealedDir = null;
 
     this._update();
 
@@ -264,11 +263,6 @@ class ListItem extends Gestures(AppElement) {
 
     // useDelay: rAF lets the browser's synthesized click fire on the still-present button before DOM removal
     this._onDeleteBtn = (useDelay = false) => {
-      if (!this._deleteConfirm) {
-        this._deleteConfirm = true;
-        this._deleteEl.textContent = t('list-item.delete-confirm');
-        return;
-      }
       const fire = () => {
         this.dispatchEvent(new CustomEvent('item-delete', {
           bubbles: true, composed: true, detail: { item: this._item },
@@ -396,10 +390,6 @@ class ListItem extends Gestures(AppElement) {
     this._row.style.transition = 'transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)';
     this._row.style.transform  = '';
     this._revealedDir = null;
-    if (this._deleteConfirm) {
-      this._deleteConfirm = false;
-      this._deleteEl.innerHTML = icons.trash;
-    }
   }
 
   _celebrate() {

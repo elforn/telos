@@ -1,7 +1,7 @@
 import { AppElement } from '../../_lib/core/app-element.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { BASE_PATH } from '../base-path.js';
-import { setState, getState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
+import { setState, getState, setRuntimeState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/list-item/list-item.js';
@@ -199,8 +199,8 @@ class ListDetailPage extends AppElement {
         }
 
         .menu-handle {
-          inline-size: 36px;
-          block-size: 4px;
+          inline-size: var(--sheet-handle-width);
+          block-size: var(--sheet-handle-height);
           border-radius: var(--radius-full);
           background: var(--color-border);
           margin: var(--space-3) auto var(--space-1);
@@ -215,7 +215,7 @@ class ListDetailPage extends AppElement {
           font-weight: var(--font-weight-semibold);
           color: var(--color-text-muted);
           text-transform: uppercase;
-          letter-spacing: 0.08em;
+          letter-spacing: var(--letter-spacing-caps);
           margin: 0;
           margin-block-end: var(--space-2);
         }
@@ -469,7 +469,6 @@ class ListDetailPage extends AppElement {
     this._listDialog  = this.shadowRoot.querySelector('#list-dialog');
     this._menuDialog  = this.shadowRoot.querySelector('#menu');
     this._editingItem = null;
-    this._listDeleteConfirm = false;
     this._drag        = null;
     this._insertLine  = null;
     this._selectionMode = false;
@@ -491,10 +490,6 @@ class ListDetailPage extends AppElement {
 
     this._onMenuClose = () => {
       menuBtn.setAttribute('aria-expanded', 'false');
-      if (this._listDeleteConfirm) {
-        this._listDeleteConfirm = false;
-        this.shadowRoot.querySelector('#list-delete-btn').textContent = t('list-detail.delete-list');
-      }
     };
     this._menuDialog.addEventListener('close', this._onMenuClose);
 
@@ -520,25 +515,20 @@ class ListDetailPage extends AppElement {
     };
     this._listDialog.addEventListener('list-saved', this._onListSaved);
 
-    this._onListDialogDelete = () => {
-      setState('lists', (getState().lists ?? []).filter(l => l.id !== this._listId));
-      toast(t('lists.toast-list-deleted'), 'info');
-      navigate(`${BASE_PATH}lists`);
+    this._onListColorChanged = e => {
+      setState('lists', (getState().lists ?? []).map(l => {
+        if (l.id !== this._listId) return l;
+        const { color: _, ...rest } = l;
+        return e.detail.color ? { ...rest, color: e.detail.color } : rest;
+      }));
     };
+    this._listDialog.addEventListener('list-color-changed', this._onListColorChanged);
+
+    this._onListDialogDelete = () => this._deleteCurrentList();
     this._listDialog.addEventListener('list-delete', this._onListDialogDelete);
 
     // ── Delete list (menu) ────────────────────────────────────────────────────
-    this._onListDeleteBtn = () => {
-      if (!this._listDeleteConfirm) {
-        this._listDeleteConfirm = true;
-        this.shadowRoot.querySelector('#list-delete-btn').textContent = t('list-detail.delete-list-confirm');
-        return;
-      }
-      this._menuDialog.close();
-      setState('lists', (getState().lists ?? []).filter(l => l.id !== this._listId));
-      toast(t('lists.toast-list-deleted'), 'info');
-      navigate(`${BASE_PATH}lists`);
-    };
+    this._onListDeleteBtn = () => { this._menuDialog.close(); this._deleteCurrentList(); };
     this.shadowRoot.querySelector('#list-delete-btn').addEventListener('click', this._onListDeleteBtn);
 
     this._onStatusShow = () => {
@@ -572,8 +562,9 @@ class ListDetailPage extends AppElement {
     this._itemList.addEventListener('item-tap', this._onItemTap);
 
     this._onItemDelete = e => {
+      const snapshot = getState().lists;
       this._deleteItem(e.detail.item.id);
-      toast(t('lists.toast-item-deleted'), 'info');
+      toast(t('lists.toast-item-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
     };
     this._itemList.addEventListener('item-delete', this._onItemDelete);
 
@@ -587,21 +578,32 @@ class ListDetailPage extends AppElement {
     this._onItemSaved = e => {
       const { title, status, note, url } = e.detail;
       if (this._editingItem) {
+        const snapshot = getState().lists;
         this._editItem(this._editingItem.id, { title, status, note, url });
+        toast(t('lists.toast-item-saved'), 'success', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
       } else {
         this._addItem({ title, status, note, url });
+        toast(t('lists.toast-item-saved'), 'success');
       }
-      toast(t('lists.toast-item-saved'), 'success');
     };
     this.shadowRoot.addEventListener('item-saved', this._onItemSaved);
 
     this._onDialogDelete = () => {
       if (this._editingItem) {
+        const snapshot = getState().lists;
         this._deleteItem(this._editingItem.id);
-        toast(t('lists.toast-item-deleted'), 'info');
+        toast(t('lists.toast-item-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
       }
     };
     this._dialog.addEventListener('item-delete', this._onDialogDelete);
+
+    this._onItemStatusChanged = e => {
+      if (!this._editingItem) return;
+      this._mutateItems(items => items.map(i =>
+        i.id === this._editingItem.id ? { ...i, status: e.detail.status } : i
+      ));
+    };
+    this._dialog.addEventListener('item-status-changed', this._onItemStatusChanged);
 
     this._onItemMove = e => {
       if (!this._editingItem) return;
@@ -758,9 +760,10 @@ class ListDetailPage extends AppElement {
 
     this._onBulkDelete = () => {
       const ids = [...this._selectedIds];
+      const snapshot = getState().lists;
       this._mutateItems(items => items.filter(i => !ids.includes(i.id)));
-      toast(t('list-detail.bulk-delete-toast', { n: ids.length }), 'info');
       this._exitSelectionMode();
+      toast(t('list-detail.bulk-delete-toast', { n: ids.length }), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
     };
     this.shadowRoot.querySelector('#bulk-delete-btn').addEventListener('click', this._onBulkDelete);
 
@@ -858,6 +861,7 @@ class ListDetailPage extends AppElement {
     this._menuDialog?.removeEventListener('click', this._onBackdrop);
     this.shadowRoot?.querySelector('#name-edit-btn')?.removeEventListener('click', this._onNameEdit);
     this._listDialog?.removeEventListener('list-saved', this._onListSaved);
+    this._listDialog?.removeEventListener('list-color-changed', this._onListColorChanged);
     this._listDialog?.removeEventListener('list-delete', this._onListDialogDelete);
     this.shadowRoot?.querySelector('#list-delete-btn')?.removeEventListener('click', this._onListDeleteBtn);
     this.shadowRoot?.querySelector('#status-show-btn')?.removeEventListener('click', this._onStatusShow);
@@ -883,6 +887,7 @@ class ListDetailPage extends AppElement {
     this._itemList?.removeEventListener('item-reorder-key', this._onItemReorderKey);
     this.shadowRoot?.removeEventListener('item-saved', this._onItemSaved);
     this._dialog?.removeEventListener('item-delete', this._onDialogDelete);
+    this._dialog?.removeEventListener('item-status-changed', this._onItemStatusChanged);
     this._dialog?.removeEventListener('item-move',   this._onItemMove);
     this._dialog?.removeEventListener('item-promote', this._onItemPromote);
     if (this._drag) {
@@ -980,6 +985,14 @@ class ListDetailPage extends AppElement {
 
   _deleteItem(id) {
     this._mutateItems(items => items.filter(i => i.id !== id));
+  }
+
+  _deleteCurrentList() {
+    const snapshot = getState().lists ?? [];
+    const listName = snapshot.find(l => l.id === this._listId)?.name ?? '';
+    setState('lists', snapshot.filter(l => l.id !== this._listId));
+    setRuntimeState('pendingListUndo', { snapshot, listName });
+    navigate(`${BASE_PATH}lists`);
   }
 
   // ── Drag helpers ──────────────────────────────────────────────────────────

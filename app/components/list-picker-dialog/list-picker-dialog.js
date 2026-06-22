@@ -41,7 +41,7 @@ class ListPickerDialog extends AppElement {
           font-weight: var(--font-weight-semibold);
           color: var(--color-text-muted);
           text-transform: uppercase;
-          letter-spacing: 0.08em;
+          letter-spacing: var(--letter-spacing-caps);
           margin: 0 0 var(--space-3);
         }
 

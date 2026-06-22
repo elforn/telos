@@ -236,8 +236,8 @@ class YearHeader extends Gestures(AppElement) {
         }
 
         .menu-handle {
-          inline-size: 36px;
-          block-size: 4px;
+          inline-size: var(--sheet-handle-width);
+          block-size: var(--sheet-handle-height);
           border-radius: var(--radius-full);
           background: var(--color-border);
           margin: var(--space-3) auto var(--space-1);
@@ -270,7 +270,7 @@ class YearHeader extends Gestures(AppElement) {
           font-weight: var(--font-weight-semibold);
           color: var(--color-text-muted);
           text-transform: uppercase;
-          letter-spacing: 0.08em;
+          letter-spacing: var(--letter-spacing-caps);
           padding-inline: var(--space-5);
           padding-block-start: var(--space-3);
           padding-block-end: var(--space-1);

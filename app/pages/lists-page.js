@@ -1,7 +1,7 @@
 import { AppElement } from '../../_lib/core/app-element.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { BASE_PATH } from '../base-path.js';
-import { setState, getState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
+import { setState, getState, setRuntimeState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/list-dialog/list-dialog.js';
@@ -114,6 +114,14 @@ class ListsPage extends AppElement {
 
     this._onLists = lists => this._renderLists(lists ?? []);
     subscribe('lists', this._onLists);
+
+    this._onPendingListUndo = value => {
+      if (!value) return;
+      const { snapshot, listName } = value;
+      setRuntimeState('pendingListUndo', null);
+      toast(t('lists.toast-list-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
+    };
+    subscribe('pendingListUndo', this._onPendingListUndo);
   }
 
   _initDrag() {
@@ -221,6 +229,7 @@ class ListsPage extends AppElement {
       this._drag = null;
     }
     unsubscribe('lists', this._onLists);
+    unsubscribe('pendingListUndo', this._onPendingListUndo);
   }
 
   // ── Store mutations ───────────────────────────────────────────────────────

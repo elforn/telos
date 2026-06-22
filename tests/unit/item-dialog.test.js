@@ -319,22 +319,11 @@ describe('item-dialog — save', () => {
 // ── delete ────────────────────────────────────────────────────────────────────
 
 describe('item-dialog — delete', () => {
-  it('first click enters confirm state — does not dispatch event', () => {
+  it('dispatches item-delete on first click', () => {
     const el = mount();
     el.open(ITEM);
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete').click();
-    expect(events).toHaveLength(0);
-    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(true);
-  });
-
-  it('dispatches item-delete on second click', () => {
-    const el = mount();
-    el.open(ITEM);
-    const events = [];
-    el.addEventListener('item-delete', e => events.push(e));
-    el.shadowRoot.querySelector('#delete').click();
     el.shadowRoot.querySelector('#delete').click();
     expect(events).toHaveLength(1);
   });
@@ -345,26 +334,16 @@ describe('item-dialog — delete', () => {
     const events = [];
     el.addEventListener('item-delete', e => events.push(e));
     el.shadowRoot.querySelector('#delete').click();
-    el.shadowRoot.querySelector('#delete').click();
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
   });
 
-  it('closes the dialog after second click', () => {
+  it('closes the dialog on first click', () => {
     const el = mount();
     const modal = el.shadowRoot.querySelector('#modal');
     el.open(ITEM);
     el.shadowRoot.querySelector('#delete').click();
-    el.shadowRoot.querySelector('#delete').click();
     expect(modal.close).toHaveBeenCalledOnce();
-  });
-
-  it('re-opening the dialog resets the confirm state', () => {
-    const el = mount();
-    el.open(ITEM);
-    el.shadowRoot.querySelector('#delete').click();
-    el.open(ITEM);
-    expect(el.shadowRoot.querySelector('#delete').classList.contains('is-confirm')).toBe(false);
   });
 });
 
@@ -719,6 +698,42 @@ describe('item-dialog — copy note', () => {
     await vi.waitFor(() =>
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('From the corner shop')
     );
+  });
+});
+
+// ── Immediate status commit ───────────────────────────────────────────────────
+
+describe('item-dialog — immediate status commit', () => {
+  it('dispatches item-status-changed when a radio changes in edit mode', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-status-changed', e => events.push(e));
+    const radio = el.shadowRoot.querySelector('input[name="status"][value="done"]');
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.status).toBe('done');
+  });
+
+  it('does not dispatch item-status-changed in create mode', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-status-changed', e => events.push(e));
+    const radio = el.shadowRoot.querySelector('input[name="status"][value="done"]');
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(events).toHaveLength(0);
+  });
+
+  it('item-status-changed is bubbles and composed', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-status-changed', e => events.push(e));
+    const radio = el.shadowRoot.querySelector('input[name="status"][value="paused"]');
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
   });
 });
 

@@ -323,8 +323,7 @@ class GoalItem extends Gestures(AppElement) {
     this._fill     = this.shadowRoot.querySelector('.fill');
     this._title    = this.shadowRoot.querySelector('.title');
     this._pctLabel = this.shadowRoot.querySelector('.pct-label');
-    this._revealedDir   = null;
-    this._deleteConfirm = false;
+    this._revealedDir = null;
 
     this._update();
 
@@ -334,11 +333,6 @@ class GoalItem extends Gestures(AppElement) {
 
     // useDelay: rAF lets the browser's synthesized click fire on the still-present button before DOM removal
     this._onDeleteBtn = (useDelay = false) => {
-      if (!this._deleteConfirm) {
-        this._deleteConfirm = true;
-        this._deleteEl.textContent = t('goal-item.delete-confirm');
-        return;
-      }
       const fire = () => {
         this.dispatchEvent(new CustomEvent('goal-delete', {
           bubbles: true, composed: true, detail: { goal: this._goal },
@@ -476,10 +470,6 @@ class GoalItem extends Gestures(AppElement) {
     this._bar.style.transition = 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
     this._bar.style.transform  = '';
     this._revealedDir = null;
-    if (this._deleteConfirm) {
-      this._deleteConfirm = false;
-      this._deleteEl.innerHTML = icons.trash;
-    }
   }
 
   _setPct(pct) {
