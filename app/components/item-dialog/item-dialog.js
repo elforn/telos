@@ -2,6 +2,7 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
+import { icons } from '../../icons.js';
 
 const STATUSES = ['open', 'paused', 'done'];
 const SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
@@ -87,11 +88,44 @@ class ItemDialog extends AppElement {
           resize: none;
           min-block-size: 3.5rem;
           overflow-y: auto;
-          margin-block-end: var(--space-4);
+          margin-block-end: 0;
         }
 
         textarea:focus { border-color: var(--color-accent); }
         textarea::placeholder { color: var(--color-text-muted); }
+
+        /* ── Textarea wrapper + copy button ──────────────────────────────── */
+
+        .textarea-wrap {
+          position: relative;
+          margin-block-end: var(--space-4);
+        }
+
+        .copy-btn {
+          position: absolute;
+          inset-block-start: var(--space-1);
+          inset-inline-end: var(--space-1);
+          block-size: var(--touch-target-small);
+          inline-size: var(--touch-target-small);
+          min-block-size: 0;
+          padding: 0;
+          border: none;
+          border-radius: var(--radius-sm);
+          background: var(--color-surface);
+          color: var(--color-text-secondary);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: color 0.2s;
+        }
+
+        .copy-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .copy-btn.is-copied { color: var(--color-accent); }
 
         /* ── Status pills ────────────────────────────────────────────────── */
         .status-field { margin-block-end: var(--space-4); }
@@ -417,10 +451,13 @@ class ItemDialog extends AppElement {
                  autocomplete="off"
                  enterkeyhint="go"
                  maxlength="120" />
-          <textarea id="note-input"
-                    aria-label="${t('item-dialog.note-placeholder')}"
-                    placeholder="${t('item-dialog.note-placeholder')}"
-                    enterkeyhint="newline"></textarea>
+          <div class="textarea-wrap">
+            <textarea id="note-input"
+                      aria-label="${t('item-dialog.note-placeholder')}"
+                      placeholder="${t('item-dialog.note-placeholder')}"
+                      enterkeyhint="newline"></textarea>
+            <button type="button" class="copy-btn" id="note-copy-btn" aria-label="${t('item-dialog.copy-note')}" title="${t('item-dialog.copy-note')}">${icons.copy}</button>
+          </div>
           <div class="status-field">
             <div class="pills-row">
               <div class="status-options" role="group" aria-label="${t('item-dialog.status-label')}">
@@ -497,6 +534,7 @@ class ItemDialog extends AppElement {
     this._modal      = this.shadowRoot.querySelector('#modal');
     this._titleInput = this.shadowRoot.querySelector('#title-input');
     this._noteInput  = this.shadowRoot.querySelector('#note-input');
+    this._noteCopyBtn = this.shadowRoot.querySelector('#note-copy-btn');
     this._urlInput   = this.shadowRoot.querySelector('#url-input');
     this._urlOpen    = this.shadowRoot.querySelector('#url-open');
     this._urlToggle  = this.shadowRoot.querySelector('#url-toggle');
@@ -527,6 +565,20 @@ class ItemDialog extends AppElement {
     };
 
     this._onNoteInput = () => { this._syncNoteHeight(); this._saveDraft(); };
+
+    this._onNoteCopy = async () => {
+      const text = this._noteInput.value.trim();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        this._noteCopyBtn.innerHTML = icons.check;
+        this._noteCopyBtn.classList.add('is-copied');
+        this._copyResetTimer = setTimeout(() => {
+          this._noteCopyBtn.innerHTML = icons.copy;
+          this._noteCopyBtn.classList.remove('is-copied');
+        }, 1500);
+      } catch {} // clipboard unavailable — fail silently
+    };
 
     this._onUrlInput = () => { this._syncUrlOpen(); this._saveDraft(); };
 
@@ -574,6 +626,7 @@ class ItemDialog extends AppElement {
     this._onModalClose = e => {
       e.stopPropagation();
       this._saved = false;
+      clearTimeout(this._copyResetTimer);
       if (this._actionSheet?.open) this._actionSheet.close();
     };
 
@@ -584,6 +637,8 @@ class ItemDialog extends AppElement {
     this._titleInput.addEventListener('input',   this._onTitleInput);
     this._titleInput.addEventListener('keydown', this._onKeyDown);
     this._noteInput.addEventListener('input',    this._onNoteInput);
+    this._noteCopyBtn.addEventListener('pointerdown', e => e.preventDefault());
+    this._noteCopyBtn.addEventListener('click',  this._onNoteCopy);
     this._urlInput.addEventListener('input',     this._onUrlInput);
     this._urlToggle.addEventListener('click',    this._onUrlToggle);
     this._urlOpen.addEventListener('click',      this._onUrlOpen);
@@ -644,6 +699,7 @@ class ItemDialog extends AppElement {
     this._titleInput?.removeEventListener('input',   this._onTitleInput);
     this._titleInput?.removeEventListener('keydown', this._onKeyDown);
     this._noteInput?.removeEventListener('input',    this._onNoteInput);
+    this._noteCopyBtn?.removeEventListener('click',  this._onNoteCopy);
     this._urlInput?.removeEventListener('input',     this._onUrlInput);
     this._urlToggle?.removeEventListener('click',    this._onUrlToggle);
     this._urlOpen?.removeEventListener('click',      this._onUrlOpen);

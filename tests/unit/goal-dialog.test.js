@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/goal-dialog/goal-dialog.js';
 
@@ -508,6 +508,60 @@ describe('goal-dialog — create list item', () => {
     expect(events[0].detail.fromYear).toBe('2025');
     expect(events[0].detail.fromSection).toBe('focus');
     expect(events[0].detail.copy).toBe(false);
+  });
+});
+
+describe('goal-dialog — copy description', () => {
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    });
+  });
+
+  it('copy button is present in the shadow DOM', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#desc-copy-btn')).not.toBeNull();
+  });
+
+  it('does not call clipboard.writeText when description is empty', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#desc-copy-btn').click();
+    await Promise.resolve();
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+  });
+
+  it('calls clipboard.writeText with the description text', async () => {
+    const el = mount();
+    el.open(null);
+    const desc = el.shadowRoot.querySelector('#desc-input');
+    desc.value = 'My goal notes';
+    desc.dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#desc-copy-btn').click();
+    await vi.waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith('My goal notes'));
+  });
+
+  it('adds is-copied class after a successful copy', async () => {
+    const el = mount();
+    el.open(null);
+    const desc = el.shadowRoot.querySelector('#desc-input');
+    desc.value = 'Some notes';
+    desc.dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#desc-copy-btn').click();
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#desc-copy-btn').classList.contains('is-copied')).toBe(true)
+    );
+  });
+
+  it('also copies when the dialog is opened with an existing goal', async () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Run a 5k', description: 'Start with 1k daily' });
+    el.shadowRoot.querySelector('#desc-copy-btn').click();
+    await vi.waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Start with 1k daily')
+    );
   });
 });
 

@@ -2,6 +2,7 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
+import { icons } from '../../icons.js';
 
 const DRAFT_KEY = 'telos.draft.new-goal';
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
@@ -92,11 +93,44 @@ class GoalDialog extends AppElement {
           resize: none;
           min-block-size: 3.5rem;
           overflow-y: auto;
-          margin-block-end: var(--space-4);
+          margin-block-end: 0;
         }
 
         textarea:focus { border-color: var(--color-accent); }
         textarea::placeholder { color: var(--color-text-muted); }
+
+        /* ── Textarea wrapper + copy button ──────────────────────────────── */
+
+        .textarea-wrap {
+          position: relative;
+          margin-block-end: var(--space-4);
+        }
+
+        .copy-btn {
+          position: absolute;
+          inset-block-start: var(--space-1);
+          inset-inline-end: var(--space-1);
+          block-size: var(--touch-target-small);
+          inline-size: var(--touch-target-small);
+          min-block-size: 0;
+          padding: 0;
+          border: none;
+          border-radius: var(--radius-sm);
+          background: var(--color-surface);
+          color: var(--color-text-secondary);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: color 0.2s;
+        }
+
+        .copy-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .copy-btn.is-copied { color: var(--color-accent); }
 
         /* ── Buttons ─────────────────────────────────────────────────────── */
 
@@ -301,9 +335,12 @@ class GoalDialog extends AppElement {
                  autocomplete="off"
                  enterkeyhint="go"
                  maxlength="80" />
-          <textarea id="desc-input"
-                    aria-label="${t('goal-dialog.description-placeholder')}"
-                    placeholder="${t('goal-dialog.description-placeholder')}"></textarea>
+          <div class="textarea-wrap">
+            <textarea id="desc-input"
+                      aria-label="${t('goal-dialog.description-placeholder')}"
+                      placeholder="${t('goal-dialog.description-placeholder')}"></textarea>
+            <button type="button" class="copy-btn" id="desc-copy-btn" aria-label="${t('goal-dialog.copy-description')}" title="${t('goal-dialog.copy-description')}">${icons.copy}</button>
+          </div>
         </div>
 
         <!-- ── View: move to year+section ───────────────────────────────── -->
@@ -357,6 +394,7 @@ class GoalDialog extends AppElement {
     this._modal         = this.shadowRoot.querySelector('#modal');
     this._input         = this.shadowRoot.querySelector('#input');
     this._descInput     = this.shadowRoot.querySelector('#desc-input');
+    this._descCopyBtn   = this.shadowRoot.querySelector('#desc-copy-btn');
     this._saveBtn       = this.shadowRoot.querySelector('#save');
     this._deleteBtn     = this.shadowRoot.querySelector('#delete');
     this._menuBtn       = this.shadowRoot.querySelector('#menu-btn');
@@ -385,6 +423,20 @@ class GoalDialog extends AppElement {
     this._onDescInput = () => {
       this._syncDescHeight();
       this._saveDraft();
+    };
+
+    this._onDescCopy = async () => {
+      const text = this._descInput.value.trim();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        this._descCopyBtn.innerHTML = icons.check;
+        this._descCopyBtn.classList.add('is-copied');
+        this._copyResetTimer = setTimeout(() => {
+          this._descCopyBtn.innerHTML = icons.copy;
+          this._descCopyBtn.classList.remove('is-copied');
+        }, 1500);
+      } catch {} // clipboard unavailable — fail silently
     };
 
     this._onSave = () => {
@@ -422,6 +474,7 @@ class GoalDialog extends AppElement {
       }
       this._saved = false;
       if (this._actionSheet?.open) this._actionSheet.close();
+      clearTimeout(this._copyResetTimer);
     };
 
     this._onKeyDown = e => { if (e.key === 'Enter') this._onSave(); };
@@ -430,6 +483,8 @@ class GoalDialog extends AppElement {
     this._input.addEventListener('input',   this._onInput);
     this._input.addEventListener('keydown', this._onKeyDown);
     this._descInput.addEventListener('input', this._onDescInput);
+    this._descCopyBtn.addEventListener('pointerdown', e => e.preventDefault());
+    this._descCopyBtn.addEventListener('click', this._onDescCopy);
     this._saveBtn.addEventListener('click', this._onSave);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
@@ -491,6 +546,7 @@ class GoalDialog extends AppElement {
     this._input?.removeEventListener('input',   this._onInput);
     this._input?.removeEventListener('keydown', this._onKeyDown);
     this._descInput?.removeEventListener('input', this._onDescInput);
+    this._descCopyBtn?.removeEventListener('click', this._onDescCopy);
     this._saveBtn?.removeEventListener('click', this._onSave);
     this._deleteBtn?.removeEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);

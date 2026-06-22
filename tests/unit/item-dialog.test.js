@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/item-dialog/item-dialog.js';
 
@@ -661,6 +661,64 @@ describe('item-dialog — move to list', () => {
     pickerShadow(el).querySelector('#move-btn').click();
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
+  });
+});
+
+// ── Copy note ─────────────────────────────────────────────────────────────────
+
+describe('item-dialog — copy note', () => {
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    });
+  });
+
+  it('copy button is present in the shadow DOM', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#note-copy-btn')).not.toBeNull();
+  });
+
+  it('does not call clipboard.writeText when note is empty', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#note-copy-btn').click();
+    await Promise.resolve();
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+  });
+
+  it('calls clipboard.writeText with the note text', async () => {
+    const el = mount();
+    el.open(null);
+    const note = el.shadowRoot.querySelector('#note-input');
+    note.value = 'Pick up from the corner shop';
+    note.dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#note-copy-btn').click();
+    await vi.waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Pick up from the corner shop')
+    );
+  });
+
+  it('adds is-copied class after a successful copy', async () => {
+    const el = mount();
+    el.open(null);
+    const note = el.shadowRoot.querySelector('#note-input');
+    note.value = 'A note';
+    note.dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#note-copy-btn').click();
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#note-copy-btn').classList.contains('is-copied')).toBe(true)
+    );
+  });
+
+  it('also copies when the dialog is opened with an existing item', async () => {
+    const el = mount();
+    el.open(ITEM);
+    el.shadowRoot.querySelector('#note-copy-btn').click();
+    await vi.waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('From the corner shop')
+    );
   });
 });
 

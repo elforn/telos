@@ -19,6 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Bulk **Status** button — set all selected items to Open, Paused, or Done in one tap via a bottom-sheet
 - Bulk **⋮** overflow button — placeholder bottom-sheet for future bulk actions without cluttering the bar layout
 - All action icons (trash, drag handle, done/undo, chevrons, pencil, ×, ⋮, ℹ, link) are now crisp SVG paths from the Feather/Lucide icon set — no more emoji or Unicode characters
+- Copy button on the description field (goal dialog) and note field (item dialog) — tap the clipboard icon to copy the text; a checkmark confirms for 1.5 seconds
 
 ### Changed
 - Deselecting the last selected item exits selection mode automatically — no cancel button needed
@@ -26,6 +27,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Bulk action bar redesigned: Copy button removed; Delete is now icon-only (trash); Status and Move are the primary text actions
 - Delete buttons on list items and goal items are now icon-only (trash icon) — labels removed to save space, especially in French
 - Swipe-reveal delete zone is narrower (60 px instead of 80 px) to match the icon-only button
+- Delete list button in the options sheet now spans the full width with an outlined danger border and a separator above it — more visually contained and clearly separated from the status filter
+- Tapping the copy button or colour swatches while the keyboard is open no longer dismisses the keyboard on mobile
 
 ### Fixed
 - Selected list items now show an opaque accent tint — previously the semi-transparent overlay let the done and delete action buttons bleed through visually

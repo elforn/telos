@@ -126,21 +126,22 @@ class ListDetailPage extends AppElement {
         }
 
         .menu-delete-section {
-          padding: 0 var(--space-5) var(--space-2);
+          padding: var(--space-3) var(--space-5) var(--space-3);
+          border-block-start: 1px solid var(--color-border);
         }
 
         .menu-delete-btn {
           inline-size: 100%;
           min-block-size: var(--touch-target);
           background: none;
-          border: none;
+          border: 1px solid var(--color-danger);
           border-radius: var(--radius-sm);
           cursor: pointer;
           font-family: var(--font-family);
           font-size: var(--font-size-body);
           font-weight: var(--font-weight-medium);
           color: var(--color-danger);
-          text-align: start;
+          text-align: center;
           padding-inline: var(--space-3);
           touch-action: manipulation;
         }

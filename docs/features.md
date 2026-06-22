@@ -1,5 +1,27 @@
 # Features
 
+## Copy button on description and note fields
+
+**When:** v1.6.x — `app/components/goal-dialog/goal-dialog.js`, `app/components/item-dialog/item-dialog.js`
+
+### What it does
+
+A small clipboard icon button appears in the top-right corner of the description textarea (goal dialog) and the note textarea (item dialog). Tapping it copies the field's text to the device clipboard. The icon swaps to a checkmark for 1.5 seconds as confirmation, then restores.
+
+If the field is empty, tapping the button does nothing.
+
+### Keyboard behaviour
+
+The button uses `pointerdown.preventDefault()` so tapping it on mobile does not dismiss the on-screen keyboard. You can copy text and keep typing without the keyboard collapsing. The same prevention is applied to the colour swatches in the list dialog.
+
+### Constraints
+
+- Uses `navigator.clipboard.writeText()` — available in all modern browsers over HTTPS or `localhost`. Silently no-ops if the clipboard API is unavailable (e.g. a very old WebView).
+- The button is 28 × 28 px (`--touch-target-small`), accepted as an explicit small-target exception alongside the colour swatches. See `index.html` for the token definition.
+- The icon swap (copy → check → copy) writes to `innerHTML` directly. This is safe because both `icons.copy` and `icons.check` are static developer-authored strings from `app/icons.js`, never user input.
+
+---
+
 ## SVG icon system
 
 **When:** v1.6.x — `app/icons.js`

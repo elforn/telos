@@ -238,6 +238,8 @@ class ListDialog extends AppElement {
     this._saveBtn.addEventListener('click',   this._onSave);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
+    this._onSwatchPointerDown = e => e.preventDefault();
+    this._colorSwatches.addEventListener('pointerdown', this._onSwatchPointerDown);
     this._colorSwatches.addEventListener('click', this._onSwatchClick);
     this._modal.addEventListener('modal-close', this._onModalClose);
   }
@@ -248,6 +250,7 @@ class ListDialog extends AppElement {
     this._saveBtn?.removeEventListener('click',   this._onSave);
     this._deleteBtn?.removeEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
+    this._colorSwatches?.removeEventListener('pointerdown', this._onSwatchPointerDown);
     this._colorSwatches?.removeEventListener('click', this._onSwatchClick);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
   }
