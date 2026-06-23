@@ -1,4 +1,5 @@
 import { AppElement } from '../../../_lib/core/app-element.js';
+import { attachMarkdownHighlight } from '../../utils/markdown-highlight.js';
 import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
@@ -35,6 +36,7 @@ class ItemDialog extends AppElement {
     if (radio) radio.checked = true;
 
     this._noteInput.value = item?.note ?? draft?.note ?? '';
+    this._noteHighlight?.sync();
     this._urlInput.value  = item?.url  ?? draft?.url  ?? '';
     this._syncUrlOpen();
     this._showUrlField(!!(item?.url ?? draft?.url));
@@ -71,33 +73,62 @@ class ItemDialog extends AppElement {
         input[type="text"]:focus { border-color: var(--color-accent); }
         input[type="text"]::placeholder { color: var(--color-text-muted); }
 
-        textarea {
-          display: block;
-          inline-size: 100%;
-          background: var(--color-surface-raised);
-          border: 0.5px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          padding: var(--space-3);
-          font-size: var(--font-size-body);
-          font-family: var(--font-family);
-          color: var(--color-text-primary);
-          outline: none;
-          box-sizing: border-box;
-          resize: none;
-          min-block-size: 3.5rem;
-          overflow-y: auto;
-          margin-block-end: 0;
-        }
-
-        textarea:focus { border-color: var(--color-accent); }
-        textarea::placeholder { color: var(--color-text-muted); }
-
-        /* ── Textarea wrapper + copy button ──────────────────────────────── */
+        /* ── Textarea wrapper + highlight overlay ────────────────────────── */
 
         .textarea-wrap {
           position: relative;
           margin-block-end: var(--space-4);
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          overflow-y: auto;
         }
+
+        .textarea-wrap:focus-within { border-color: var(--color-accent); }
+
+        .md-highlight {
+          position: absolute;
+          inset-block-start: 0;
+          inset-inline: 0;
+          padding: var(--space-3);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          line-height: 1.5;
+          white-space: pre-wrap;
+          overflow-wrap: break-word;
+          word-break: break-word;
+          pointer-events: none;
+          box-sizing: border-box;
+        }
+
+        .md-highlight .md-h { color: var(--color-warning); }
+        .md-highlight .md-b { color: var(--color-warning); }
+        .md-highlight .md-i { color: var(--color-accent); }
+
+        textarea {
+          display: block;
+          inline-size: 100%;
+          position: relative;
+          background: transparent;
+          border: none;
+          border-radius: var(--radius-sm);
+          padding: var(--space-3);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: transparent;
+          caret-color: var(--color-text-primary);
+          outline: none;
+          box-sizing: border-box;
+          resize: none;
+          min-block-size: 3.5rem;
+          overflow: hidden;
+          margin-block-end: 0;
+          line-height: 1.5;
+        }
+
+        textarea::placeholder { color: var(--color-text-muted); }
+        textarea::selection   { color: var(--color-text-primary); }
 
         .copy-btn {
           position: absolute;
@@ -454,6 +485,7 @@ class ItemDialog extends AppElement {
                  enterkeyhint="go"
                  maxlength="120" />
           <div class="textarea-wrap">
+            <div class="md-highlight" aria-hidden="true"></div>
             <textarea id="note-input"
                       aria-label="${t('item-dialog.note-placeholder')}"
                       placeholder="${t('item-dialog.note-placeholder')}"
@@ -536,6 +568,10 @@ class ItemDialog extends AppElement {
     this._modal      = this.shadowRoot.querySelector('#modal');
     this._titleInput = this.shadowRoot.querySelector('#title-input');
     this._noteInput  = this.shadowRoot.querySelector('#note-input');
+    this._noteHighlight = attachMarkdownHighlight(
+      this._noteInput,
+      this.shadowRoot.querySelector('.md-highlight'),
+    );
     this._noteCopyBtn = this.shadowRoot.querySelector('#note-copy-btn');
     this._urlInput   = this.shadowRoot.querySelector('#url-input');
     this._urlOpen    = this.shadowRoot.querySelector('#url-open');
@@ -610,6 +646,9 @@ class ItemDialog extends AppElement {
 
     this._onCancel = () => {
       if (this._isNew) localStorage.removeItem(DRAFT_KEY);
+      if (!this._isNew) {
+        this.dispatchEvent(new CustomEvent('item-cancelled', { bubbles: true, composed: true }));
+      }
       this._modal.close();
     };
 
@@ -650,6 +689,17 @@ class ItemDialog extends AppElement {
     this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
     this._modal.addEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).addEventListener('resize', this._onResize);
+    this._onStatusClick = e => {
+      const label = e.target.closest('.status-option');
+      if (!label) return;
+      e.preventDefault();
+      const input = label.querySelector('input[type="radio"]');
+      if (input && !input.checked) {
+        input.checked = true;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    };
+    this.shadowRoot.querySelector('.status-options').addEventListener('click', this._onStatusClick);
     this.shadowRoot.querySelector('.status-options').addEventListener('change', this._onStatusChange);
 
     // ── More actions (··· menu) ───────────────────────────────────────────────
@@ -700,6 +750,7 @@ class ItemDialog extends AppElement {
   }
 
   unsubscribe() {
+    this._noteHighlight?.detach();
     this._titleInput?.removeEventListener('input',   this._onTitleInput);
     this._titleInput?.removeEventListener('keydown', this._onKeyDown);
     this._noteInput?.removeEventListener('input',    this._onNoteInput);
@@ -712,6 +763,7 @@ class ItemDialog extends AppElement {
     this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).removeEventListener('resize', this._onResize);
+    this.shadowRoot.querySelector('.status-options')?.removeEventListener('click', this._onStatusClick);
     this.shadowRoot.querySelector('.status-options')?.removeEventListener('change', this._onStatusChange);
 
     this._menuBtn?.removeEventListener('click', this._onMenuBtn);
@@ -818,7 +870,9 @@ class ItemDialog extends AppElement {
     const urlRowH = this._urlRow?.hidden ? 0 : (this._urlRow?.offsetHeight ?? 0);
     const minH = 56;
     const maxH = Math.max(vh - 280 - urlRowH, 120);
-    ta.style.blockSize = `${Math.max(Math.min(ta.scrollHeight, maxH), minH)}px`;
+    ta.style.blockSize = `${Math.max(ta.scrollHeight, minH)}px`;
+    const wrap = ta.closest('.textarea-wrap');
+    if (wrap) wrap.style.maxBlockSize = `${maxH}px`;
   }
 
   _loadDraft() {

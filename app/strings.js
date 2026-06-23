@@ -165,6 +165,15 @@ defineStrings({
   'lists.toast-item-saved':   'Item saved',
   'lists.toast-item-deleted': 'Item deleted',
 
+  'list-detail.import-btn':          'Import from text',
+  'list-detail.import-heading':      'Import items',
+  'list-detail.import-placeholder':  'One item per line. Indent a line to make it a note.',
+  'list-detail.import-count':        '{n} items',
+  'list-detail.import-count-extras': '{n} items · {m} with notes or links',
+  'list-detail.import-cancel':       'Cancel',
+  'list-detail.import-cta':          'Import',
+  'list-detail.import-toast':        'Imported {n} items',
+
   'bottom-nav.years':    'Years',
   'bottom-nav.lists':    'Lists',
   'bottom-nav.settings': 'Settings',

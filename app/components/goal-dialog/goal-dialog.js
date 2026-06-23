@@ -1,4 +1,5 @@
 import { AppElement } from '../../../_lib/core/app-element.js';
+import { attachMarkdownHighlight } from '../../utils/markdown-highlight.js';
 import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
@@ -29,6 +30,7 @@ class GoalDialog extends AppElement {
     if (this._deleteBtn) this._deleteBtn.hidden = !goal;
     if (this._menuBtn) this._menuBtn.hidden = !goal;
     this._descInput.value = goal?.description ?? draft?.description ?? '';
+    this._descHighlight?.sync();
     this._saved = false;
     this._showView('main');
     this._modal.show(this._input);
@@ -63,35 +65,62 @@ class GoalDialog extends AppElement {
         input[type="text"]:focus { border-color: var(--color-accent); }
         input[type="text"]::placeholder { color: var(--color-text-muted); }
 
-        /* ── Description textarea ────────────────────────────────────────── */
-
-        textarea {
-          display: block;
-          inline-size: 100%;
-          background: var(--color-surface-raised);
-          border: 0.5px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          padding: var(--space-3);
-          font-size: var(--font-size-body);
-          font-family: var(--font-family);
-          color: var(--color-text-primary);
-          outline: none;
-          box-sizing: border-box;
-          resize: none;
-          min-block-size: 3.5rem;
-          overflow-y: auto;
-          margin-block-end: 0;
-        }
-
-        textarea:focus { border-color: var(--color-accent); }
-        textarea::placeholder { color: var(--color-text-muted); }
-
-        /* ── Textarea wrapper + copy button ──────────────────────────────── */
+        /* ── Description textarea + highlight overlay ───────────────────── */
 
         .textarea-wrap {
           position: relative;
           margin-block-end: var(--space-4);
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          overflow-y: auto;
         }
+
+        .textarea-wrap:focus-within { border-color: var(--color-accent); }
+
+        .md-highlight {
+          position: absolute;
+          inset-block-start: 0;
+          inset-inline: 0;
+          padding: var(--space-3);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          line-height: 1.5;
+          white-space: pre-wrap;
+          overflow-wrap: break-word;
+          word-break: break-word;
+          pointer-events: none;
+          box-sizing: border-box;
+        }
+
+        .md-highlight .md-h { color: var(--color-warning); }
+        .md-highlight .md-b { color: var(--color-warning); }
+        .md-highlight .md-i { color: var(--color-accent); }
+
+        textarea {
+          display: block;
+          inline-size: 100%;
+          position: relative;
+          background: transparent;
+          border: none;
+          border-radius: var(--radius-sm);
+          padding: var(--space-3);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: transparent;
+          caret-color: var(--color-text-primary);
+          outline: none;
+          box-sizing: border-box;
+          resize: none;
+          min-block-size: 3.5rem;
+          overflow: hidden;
+          margin-block-end: 0;
+          line-height: 1.5;
+        }
+
+        textarea::placeholder { color: var(--color-text-muted); }
+        textarea::selection   { color: var(--color-text-primary); }
 
         .copy-btn {
           position: absolute;
@@ -321,6 +350,7 @@ class GoalDialog extends AppElement {
                  enterkeyhint="go"
                  maxlength="80" />
           <div class="textarea-wrap">
+            <div class="md-highlight" aria-hidden="true"></div>
             <textarea id="desc-input"
                       aria-label="${t('goal-dialog.description-placeholder')}"
                       placeholder="${t('goal-dialog.description-placeholder')}"></textarea>
@@ -379,6 +409,10 @@ class GoalDialog extends AppElement {
     this._modal         = this.shadowRoot.querySelector('#modal');
     this._input         = this.shadowRoot.querySelector('#input');
     this._descInput     = this.shadowRoot.querySelector('#desc-input');
+    this._descHighlight = attachMarkdownHighlight(
+      this._descInput,
+      this.shadowRoot.querySelector('.md-highlight'),
+    );
     this._descCopyBtn   = this.shadowRoot.querySelector('#desc-copy-btn');
     this._saveBtn       = this.shadowRoot.querySelector('#save');
     this._deleteBtn     = this.shadowRoot.querySelector('#delete');
@@ -521,6 +555,7 @@ class GoalDialog extends AppElement {
   }
 
   unsubscribe() {
+    this._descHighlight?.detach();
     this._input?.removeEventListener('input',   this._onInput);
     this._input?.removeEventListener('keydown', this._onKeyDown);
     this._descInput?.removeEventListener('input', this._onDescInput);
@@ -600,7 +635,9 @@ class GoalDialog extends AppElement {
     const vh = window.visualViewport?.height ?? window.innerHeight;
     const minH = 56;
     const maxH = Math.max(vh - 260, 100);
-    ta.style.blockSize = `${Math.max(Math.min(ta.scrollHeight, maxH), minH)}px`;
+    ta.style.blockSize = `${Math.max(ta.scrollHeight, minH)}px`;
+    const wrap = ta.closest('.textarea-wrap');
+    if (wrap) wrap.style.maxBlockSize = `${maxH}px`;
   }
 
   _loadDraft() {

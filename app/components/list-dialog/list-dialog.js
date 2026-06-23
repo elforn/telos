@@ -187,6 +187,9 @@ class ListDialog extends AppElement {
 
     this._onCancel = () => {
       if (this._isNew) localStorage.removeItem(DRAFT_KEY);
+      if (!this._isNew) {
+        this.dispatchEvent(new CustomEvent('list-cancelled', { bubbles: true, composed: true }));
+      }
       this._modal.close();
     };
 

@@ -162,6 +162,15 @@ class ListItem extends Gestures(AppElement) {
           font-weight: var(--font-weight-semibold);
           border-radius: var(--radius-full);
           padding: 2px var(--space-2);
+          cursor: pointer;
+          border: none;
+          font-family: var(--font-family);
+          touch-action: manipulation;
+        }
+
+        .badge:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
         }
 
         .badge[data-status="open"] {
@@ -223,7 +232,7 @@ class ListItem extends Gestures(AppElement) {
         <span class="title"></span>
         <span class="note-icon" aria-hidden="true">${icons.info}</span>
         <span class="url-icon"  aria-hidden="true">${icons.link}</span>
-        <span class="badge" data-status="open"></span>
+        <button type="button" class="badge" id="badge-btn" data-status="open"></button>
       </div>
     `;
   }
@@ -283,6 +292,21 @@ class ListItem extends Gestures(AppElement) {
     };
     this._row.addEventListener('keydown', this._onKeyDown);
 
+    const STATUS_CYCLE = { open: 'done', done: 'paused', paused: 'open' };
+    this._onBadgePointerUp = e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const next = STATUS_CYCLE[this._item?.status ?? 'open'];
+      this.dispatchEvent(new CustomEvent('item-status-cycle', {
+        bubbles: true, composed: true, detail: { item: this._item, next },
+      }));
+      if (next === 'done') this._celebrate();
+    };
+    this._onBadgeKey = e => { e.stopPropagation(); if (e.detail === 0) this._onBadgePointerUp(e); };
+    this._badge.addEventListener('pointerdown', this._stopPointerDown);
+    this._badge.addEventListener('pointerup',   this._onBadgePointerUp);
+    this._badge.addEventListener('click',        this._onBadgeKey);
+
     this._dragBtn = this.shadowRoot.querySelector('#drag-btn');
     this._dragBtn.setAttribute('aria-label', t('list-item.drag'));
     this._dragBtn.innerHTML = icons.grip;
@@ -315,6 +339,9 @@ class ListItem extends Gestures(AppElement) {
     this._deleteEl?.removeEventListener('pointerup', this._onDeletePointerUp);
     this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
     this._row?.removeEventListener('keydown', this._onKeyDown);
+    this._badge?.removeEventListener('pointerdown', this._stopPointerDown);
+    this._badge?.removeEventListener('pointerup',   this._onBadgePointerUp);
+    this._badge?.removeEventListener('click',        this._onBadgeKey);
     this._dragBtn?.removeEventListener('pointerdown', this._onDragBtnDown);
     this._dragBtn?.removeEventListener('keydown',     this._onDragBtnKey);
   }

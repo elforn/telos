@@ -151,6 +151,115 @@ class ListDetailPage extends AppElement {
           outline-offset: 2px;
         }
 
+        /* ── Import text button (in menu) ────────────────────────────────── */
+
+        .menu-import-section {
+          padding: 0 var(--space-5) var(--space-3);
+          border-block-end: 1px solid var(--color-border);
+        }
+
+        .menu-import-btn {
+          inline-size: 100%;
+          min-block-size: var(--touch-target);
+          background: none;
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          font-family: var(--font-family);
+          font-size: var(--font-size-body);
+          font-weight: var(--font-weight-medium);
+          color: var(--color-text-primary);
+          text-align: center;
+          padding-inline: var(--space-3);
+          touch-action: manipulation;
+        }
+
+        .menu-import-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        /* ── Import dialog ───────────────────────────────────────────────── */
+
+        #import-dialog textarea {
+          display: block;
+          inline-size: 100%;
+          min-block-size: 9rem;
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding: var(--space-3);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          outline: none;
+          box-sizing: border-box;
+          resize: vertical;
+          margin-block-end: 0;
+        }
+
+        #import-dialog textarea:focus {
+          border-color: var(--color-accent);
+        }
+
+        #import-dialog textarea::placeholder {
+          color: var(--color-text-muted);
+        }
+
+        .import-footer {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          padding: var(--space-3) var(--space-5);
+          border-block-start: 1px solid var(--color-border);
+        }
+
+        .import-footer-end {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          margin-inline-start: auto;
+        }
+
+        #import-count {
+          font-size: var(--font-size-caption);
+          color: var(--color-text-muted);
+          white-space: nowrap;
+        }
+
+        .import-footer button {
+          min-block-size: var(--touch-target);
+          padding-inline: var(--space-4);
+          border-radius: var(--radius-sm);
+          border: none;
+          cursor: pointer;
+          font-family: var(--font-family);
+          font-size: var(--font-size-body);
+          font-weight: var(--font-weight-medium);
+          touch-action: manipulation;
+        }
+
+        .import-footer button:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        #import-cancel-btn {
+          background: none;
+          color: var(--color-text-secondary);
+        }
+
+        #import-cta-btn {
+          background: var(--color-accent);
+          color: var(--color-text-inverse);
+          flex-shrink: 0;
+        }
+
+        #import-cta-btn:disabled {
+          opacity: 0.4;
+          cursor: default;
+        }
+
         /* ── Main content ────────────────────────────────────────────────── */
 
         main {
@@ -418,6 +527,9 @@ class ListDetailPage extends AppElement {
             <button class="status-pill" id="status-hide-btn">${t('list-detail.status-hide')}</button>
           </div>
         </div>
+        <div class="menu-import-section">
+          <button class="menu-import-btn" id="import-menu-btn">${t('list-detail.import-btn')}</button>
+        </div>
         <div class="menu-delete-section">
           <button class="menu-delete-btn" id="list-delete-btn">${t('list-detail.delete-list')}</button>
         </div>
@@ -455,6 +567,24 @@ class ListDetailPage extends AppElement {
       </dialog>
 
       <list-picker-dialog id="bulk-picker"></list-picker-dialog>
+
+      <dialog id="import-dialog" aria-label="${t('list-detail.import-heading')}">
+        <div class="menu-handle"></div>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('list-detail.import-heading')}</p>
+          <textarea id="import-textarea"
+                    placeholder="${t('list-detail.import-placeholder')}"
+                    rows="6"
+                    enterkeyhint="enter"></textarea>
+        </div>
+        <div class="import-footer">
+          <button type="button" id="import-cancel-btn">${t('list-detail.import-cancel')}</button>
+          <div class="import-footer-end">
+            <span id="import-count" hidden></span>
+            <button type="button" id="import-cta-btn" disabled>${t('list-detail.import-cta')}</button>
+          </div>
+        </div>
+      </dialog>
     `;
   }
 
@@ -499,7 +629,10 @@ class ListDetailPage extends AppElement {
     // ── Name edit button ──────────────────────────────────────────────────────
     this._onNameEdit = () => {
       const list = getState().lists?.find(l => l.id === this._listId);
-      if (list) this._listDialog.open(list);
+      if (list) {
+        this._originalListColor = list.color ?? null;
+        this._listDialog.open(list);
+      }
     };
     this.shadowRoot.querySelector('#name-edit-btn').addEventListener('click', this._onNameEdit);
 
@@ -523,6 +656,16 @@ class ListDetailPage extends AppElement {
       }));
     };
     this._listDialog.addEventListener('list-color-changed', this._onListColorChanged);
+
+    this._onListCancelled = () => {
+      const orig = this._originalListColor;
+      setState('lists', (getState().lists ?? []).map(l => {
+        if (l.id !== this._listId) return l;
+        const { color: _, ...rest } = l;
+        return orig ? { ...rest, color: orig } : rest;
+      }));
+    };
+    this._listDialog.addEventListener('list-cancelled', this._onListCancelled);
 
     this._onListDialogDelete = () => this._deleteCurrentList();
     this._listDialog.addEventListener('list-delete', this._onListDialogDelete);
@@ -575,6 +718,12 @@ class ListDetailPage extends AppElement {
     };
     this._itemList.addEventListener('item-done-toggle', this._onItemDoneToggle);
 
+    this._onItemStatusCycle = e => {
+      const { item, next } = e.detail;
+      this._editItem(item.id, { title: item.title, status: next });
+    };
+    this._itemList.addEventListener('item-status-cycle', this._onItemStatusCycle);
+
     this._onItemSaved = e => {
       const { title, status, note, url } = e.detail;
       if (this._editingItem) {
@@ -596,6 +745,14 @@ class ListDetailPage extends AppElement {
       }
     };
     this._dialog.addEventListener('item-delete', this._onDialogDelete);
+
+    this._onItemCancelled = () => {
+      if (!this._editingItem) return;
+      this._mutateItems(items => items.map(i =>
+        i.id === this._editingItem.id ? { ...i, status: this._editingItem.status } : i
+      ));
+    };
+    this._dialog.addEventListener('item-cancelled', this._onItemCancelled);
 
     this._onItemStatusChanged = e => {
       if (!this._editingItem) return;
@@ -843,6 +1000,48 @@ class ListDetailPage extends AppElement {
     this._itemList.addEventListener('item-drag-start',  this._onItemDragStart);
     this._itemList.addEventListener('item-reorder-key', this._onItemReorderKey);
 
+    // ── Import from text ──────────────────────────────────────────────────────
+
+    this._importDialog   = this.shadowRoot.querySelector('#import-dialog');
+    this._importTextarea = this.shadowRoot.querySelector('#import-textarea');
+    this._importCountEl  = this.shadowRoot.querySelector('#import-count');
+    this._importCtaBtn   = this.shadowRoot.querySelector('#import-cta-btn');
+    this._importParsed   = [];
+
+    this._onImportMenuBtn = () => {
+      this._menuDialog.close();
+      this._importTextarea.value = '';
+      this._importParsed = [];
+      this._updateImportUI();
+      this._importDialog.showModal();
+      requestAnimationFrame(() => this._importTextarea.focus());
+    };
+    this.shadowRoot.querySelector('#import-menu-btn').addEventListener('click', this._onImportMenuBtn);
+
+    this._onImportTextarea = () => {
+      this._importParsed = this._parseImportText(this._importTextarea.value);
+      this._updateImportUI();
+    };
+    this._importTextarea.addEventListener('input', this._onImportTextarea);
+
+    this._onImportCancel = () => this._importDialog.close();
+    this.shadowRoot.querySelector('#import-cancel-btn').addEventListener('click', this._onImportCancel);
+
+    this._onImportBackdrop = e => { if (e.target === this._importDialog) this._importDialog.close(); };
+    this._importDialog.addEventListener('click', this._onImportBackdrop);
+
+    this._onImportCta = () => {
+      if (!this._importParsed.length) return;
+      const snapshot = getState().lists;
+      const n = this._importParsed.length;
+      this._addItems(this._importParsed);
+      this._importDialog.close();
+      toast(t('list-detail.import-toast', { n }), 'success', {
+        action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) },
+      });
+    };
+    this._importCtaBtn.addEventListener('click', this._onImportCta);
+
     // ── Store ─────────────────────────────────────────────────────────────────
 
     this._onLists = lists => {
@@ -862,6 +1061,7 @@ class ListDetailPage extends AppElement {
     this.shadowRoot?.querySelector('#name-edit-btn')?.removeEventListener('click', this._onNameEdit);
     this._listDialog?.removeEventListener('list-saved', this._onListSaved);
     this._listDialog?.removeEventListener('list-color-changed', this._onListColorChanged);
+    this._listDialog?.removeEventListener('list-cancelled', this._onListCancelled);
     this._listDialog?.removeEventListener('list-delete', this._onListDialogDelete);
     this.shadowRoot?.querySelector('#list-delete-btn')?.removeEventListener('click', this._onListDeleteBtn);
     this.shadowRoot?.querySelector('#status-show-btn')?.removeEventListener('click', this._onStatusShow);
@@ -870,6 +1070,7 @@ class ListDetailPage extends AppElement {
     this._itemList?.removeEventListener('item-tap', this._onItemTap);
     this._itemList?.removeEventListener('item-delete', this._onItemDelete);
     this._itemList?.removeEventListener('item-done-toggle', this._onItemDoneToggle);
+    this._itemList?.removeEventListener('item-status-cycle', this._onItemStatusCycle);
     this.shadowRoot?.querySelector('#bulk-close-btn')?.removeEventListener('click', this._onBulkClose);
     this.shadowRoot?.querySelector('#bulk-delete-btn')?.removeEventListener('click', this._onBulkDelete);
     this.shadowRoot?.querySelector('#bulk-status-btn')?.removeEventListener('click', this._onBulkStatus);
@@ -887,6 +1088,7 @@ class ListDetailPage extends AppElement {
     this._itemList?.removeEventListener('item-reorder-key', this._onItemReorderKey);
     this.shadowRoot?.removeEventListener('item-saved', this._onItemSaved);
     this._dialog?.removeEventListener('item-delete', this._onDialogDelete);
+    this._dialog?.removeEventListener('item-cancelled', this._onItemCancelled);
     this._dialog?.removeEventListener('item-status-changed', this._onItemStatusChanged);
     this._dialog?.removeEventListener('item-move',   this._onItemMove);
     this._dialog?.removeEventListener('item-promote', this._onItemPromote);
@@ -902,6 +1104,11 @@ class ListDetailPage extends AppElement {
       this._drag = null;
     }
     if (this._onLists) unsubscribe('lists', this._onLists);
+    this.shadowRoot?.querySelector('#import-menu-btn')?.removeEventListener('click', this._onImportMenuBtn);
+    this._importTextarea?.removeEventListener('input', this._onImportTextarea);
+    this.shadowRoot?.querySelector('#import-cancel-btn')?.removeEventListener('click', this._onImportCancel);
+    this._importDialog?.removeEventListener('click', this._onImportBackdrop);
+    this._importCtaBtn?.removeEventListener('click', this._onImportCta);
   }
 
   // ── Selection mode ────────────────────────────────────────────────────────
@@ -1080,6 +1287,79 @@ class ListDetailPage extends AppElement {
     this._bulkPickerDialog.lists = (getState().lists ?? []).filter(l => l.id !== this._listId);
     this._bulkPickerDialog.mode  = null;
     this._bulkPickerDialog.show();
+  }
+
+  // ── Import ────────────────────────────────────────────────────────────────
+
+  _parseImportText(text) {
+    const TITLE_MAX = 120;
+    const BULLET_RE = /^[\-\*\•]\s+/;
+    const URL_RE    = /https?:\/\/\S+/g;
+
+    const rawItems = [];
+    let current = null;
+
+    for (const line of text.split('\n')) {
+      const isIndented = /^[ \t]/.test(line) && line.trim() !== '';
+      if (isIndented) {
+        if (current) {
+          current.continuationLines.push(line.trim().replace(BULLET_RE, ''));
+        }
+      } else {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        if (current) rawItems.push(current);
+        current = { titleRaw: trimmed.replace(BULLET_RE, '').trim(), continuationLines: [] };
+      }
+    }
+    if (current) rawItems.push(current);
+
+    return rawItems.map(({ titleRaw, continuationLines }) => {
+      const tooLong = titleRaw.length > TITLE_MAX;
+      let title = titleRaw;
+      if (tooLong) {
+        const candidate = titleRaw.slice(0, TITLE_MAX);
+        const lastSpace = candidate.lastIndexOf(' ');
+        title = lastSpace > TITLE_MAX / 2 ? candidate.slice(0, lastSpace) : candidate;
+      }
+
+      const noteParts = [];
+      if (tooLong) noteParts.push(titleRaw);
+      noteParts.push(...continuationLines);
+      const note = noteParts.length ? noteParts.join('\n') : undefined;
+
+      const allText = [titleRaw, ...continuationLines].join('\n');
+      const urls = allText.match(URL_RE) ?? [];
+      const url  = urls.length ? urls[urls.length - 1].replace(/[.,;:!?)"']+$/, '') : undefined;
+
+      return { title, note, url };
+    });
+  }
+
+  _updateImportUI() {
+    const n = this._importParsed.length;
+    const m = this._importParsed.filter(i => i.note || i.url).length;
+
+    if (n === 0) {
+      this._importCountEl.hidden = true;
+      this._importCountEl.textContent = '';
+    } else {
+      this._importCountEl.hidden = false;
+      this._importCountEl.textContent = m > 0
+        ? t('list-detail.import-count-extras', { n, m })
+        : t('list-detail.import-count', { n });
+    }
+    this._importCtaBtn.disabled = n === 0;
+  }
+
+  _addItems(newItems) {
+    this._mutateItems(items => [
+      ...items,
+      ...newItems.map(({ title, note, url }) => ({
+        id: crypto.randomUUID(), title, status: 'open',
+        note, url, dueDate: undefined, tags: [], inGoals: [],
+      })),
+    ]);
   }
 
   // ── Rendering ─────────────────────────────────────────────────────────────
