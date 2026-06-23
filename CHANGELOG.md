@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- Markdown highlighting in note and description fields — `*italic*`, `**bold**`, and `# headings` are tinted in colour as you type; the textarea stays plain text so cursor position is always accurate
+- Import list items from text — paste or type one item per line in the list detail menu; indent a line to make it a note on the item above
+- Swipe left on a toast to dismiss it before it auto-dismisses (Socle 0.9.20)
+- Export reminder badge on the gear button and on the Export row in settings — appears when you haven't exported in more than 30 days
+- Show / Hide pill group in settings to enable or disable the export reminder badge
+- Automatic backup download before any import (merge or replace) — your data is saved to a `.telos` file before changes are applied; a toast confirms the backup
+
+### Changed
+- Tapping a status badge on a list item cycles through Open → Paused → Done → Open without opening the edit dialog
+- Cancelling the goal or item edit dialog now reverts any unsaved changes — previously typing in a form and then cancelling would leave those values in the field on next open
+
+---
+
 ## [1.7.0] — 2026-06-23
 
 ### Added

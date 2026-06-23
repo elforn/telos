@@ -34,13 +34,16 @@ function _buildPreviewMsg(parsed) {
 
   const parts = [];
   if (totalGoals > 0) {
-    parts.push(`${totalGoals} goal${totalGoals !== 1 ? 's' : ''} (${years.join(', ')})`);
+    parts.push(t(totalGoals === 1 ? 'sync.preview-goals-one' : 'sync.preview-goals-many',
+      { n: totalGoals, years: years.join(', ') }));
   }
   if (lists.length > 0) {
-    parts.push(`${lists.length} list${lists.length !== 1 ? 's' : ''} with ${totalItems} item${totalItems !== 1 ? 's' : ''}`);
+    const itemsStr = t(totalItems === 1 ? 'sync.preview-items-one' : 'sync.preview-items-many', { n: totalItems });
+    parts.push(t(lists.length === 1 ? 'sync.preview-lists-one' : 'sync.preview-lists-many',
+      { n: lists.length, items: itemsStr }));
   }
   if (parts.length === 0) return t('sync.import-preview-empty');
-  return t('sync.import-preview', { description: parts.join(' and ') });
+  return t('sync.import-preview', { description: parts.join(t('sync.preview-and')) });
 }
 
 function _themeName(theme) {
@@ -51,6 +54,11 @@ function _localeName(locale) { return LOCALE_LABELS[locale] ?? locale; }
 
 const SW_LOOP_WINDOW_MS       = 15_000;
 const SERVER_CHECK_TIMEOUT_MS =  5_000;
+
+const LAST_EXPORT_KEY     = 'telos:lastExportedAt';
+const EXPORT_REMINDER_KEY = 'telos:exportReminderEnabled';
+const REMINDER_DAYS       = 30;
+const REMINDER_MS         = REMINDER_DAYS * 24 * 60 * 60 * 1000;
 
 class BottomNav extends AppElement {
   template() {
@@ -125,6 +133,18 @@ class BottomNav extends AppElement {
           align-items: center;
           justify-content: center;
           touch-action: manipulation;
+          position: relative;
+        }
+
+        .gear-badge {
+          position: absolute;
+          inset-block-start: 6px;
+          inset-inline-end: 6px;
+          inline-size: 8px;
+          block-size: 8px;
+          border-radius: var(--radius-full);
+          background: var(--color-accent);
+          pointer-events: none;
         }
 
         .gear-btn:focus-visible {
@@ -220,6 +240,20 @@ class BottomNav extends AppElement {
           color: var(--color-text-muted);
         }
 
+        .export-row-end {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+        }
+
+        .export-badge {
+          inline-size: 8px;
+          block-size: 8px;
+          border-radius: var(--radius-full);
+          background: var(--color-accent);
+          flex-shrink: 0;
+        }
+
         .version-row {
           display: flex;
           align-items: center;
@@ -271,7 +305,7 @@ class BottomNav extends AppElement {
           <button class="pill" id="pill-years">${t('bottom-nav.years')}</button>
           <button class="pill" id="pill-lists">${t('bottom-nav.lists')}</button>
         </div>
-        <button class="gear-btn" id="gear-btn" aria-label="${t('bottom-nav.settings')}">⚙</button>
+        <button class="gear-btn" id="gear-btn" aria-label="${t('bottom-nav.settings')}">⚙<span class="gear-badge" id="gear-badge" hidden aria-hidden="true"></span></button>
       </div>
 
       <modal-dialog id="settings-modal" aria-label="${t('bottom-nav.settings')}">
@@ -300,7 +334,10 @@ class BottomNav extends AppElement {
           <div class="actions-group">
             <button class="action-row" id="export-all-btn">
               <span>${t('sync.export-all')}</span>
-              <span class="action-icon">↓</span>
+              <span class="export-row-end">
+                <span class="export-badge" id="export-badge" hidden aria-hidden="true"></span>
+                <span class="action-icon">↓</span>
+              </span>
             </button>
             <button class="action-row" id="import-btn">
               <span>${t('sync.import')}</span>
@@ -310,6 +347,14 @@ class BottomNav extends AppElement {
               <span>${t('settings.repair')}</span>
               <span class="action-icon">↺</span>
             </button>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3 class="section-label">${t('settings.export-reminder')}</h3>
+          <div class="pill-group" id="reminder-group" role="group" aria-label="${t('settings.export-reminder')}">
+            <button class="option-pill" data-reminder="on">${t('settings.reminder-on')}</button>
+            <button class="option-pill" data-reminder="off">${t('settings.reminder-off')}</button>
           </div>
         </div>
 
@@ -347,6 +392,9 @@ class BottomNav extends AppElement {
 
     this._replaceConfirm  = false;
     this._scrollPositions = {};
+    this._gearBadge       = this.shadowRoot.querySelector('#gear-badge');
+    this._exportBadge     = this.shadowRoot.querySelector('#export-badge');
+    this._gearBtn         = this.shadowRoot.querySelector('#gear-btn');
     this._updateActive();
     this._subscribeNav();
     this._subscribeSettings();
@@ -354,6 +402,16 @@ class BottomNav extends AppElement {
     this._subscribeVersion();
     this._subscribeHeight();
     this._subscribeUpdateSafety();
+    this._updateGearBadge();
+
+    this._onReminderGroup = e => {
+      const btn = e.target.closest('[data-reminder]');
+      if (!btn) return;
+      localStorage.setItem(EXPORT_REMINDER_KEY, String(btn.dataset.reminder === 'on'));
+      this._updateSettingsPills();
+      this._updateGearBadge();
+    };
+    this.shadowRoot.querySelector('#reminder-group').addEventListener('click', this._onReminderGroup);
   }
 
   _subscribeNav() {
@@ -471,6 +529,8 @@ class BottomNav extends AppElement {
       const data = await exportData();
       const ts = new Date().toISOString().replace(/\D/g, '').slice(0, 12);
       downloadExport(data, `${ts}_telos-all.telos`);
+      this._markExported();
+      this._updateGearBadge();
     };
     this.shadowRoot.querySelector('#export-all-btn').addEventListener('click', this._onExportAll);
 
@@ -502,6 +562,7 @@ class BottomNav extends AppElement {
     this._onImportMerge = async () => {
       if (!this._parsed) return;
       this._resetReplace();
+      await this._backupBeforeImport();
       try {
         const goalsBefore = _countGoals(getState().goals);
         const itemsBefore = _countItems(getState().lists);
@@ -524,6 +585,7 @@ class BottomNav extends AppElement {
         return;
       }
       this._resetReplace();
+      await this._backupBeforeImport();
       try {
         await applyReplace(this._parsed);
         this._showDone(t('sync.import-replace-confirm'));
@@ -607,6 +669,40 @@ class BottomNav extends AppElement {
     this.shadowRoot.querySelector('#repair-btn').addEventListener('click', this._onRepairBtn);
   }
 
+  _markExported() {
+    localStorage.setItem(LAST_EXPORT_KEY, String(Date.now()));
+  }
+
+  _shouldShowExportReminder() {
+    if (localStorage.getItem(EXPORT_REMINDER_KEY) === 'false') return false;
+    const last = parseInt(localStorage.getItem(LAST_EXPORT_KEY) || '0', 10);
+    return Date.now() - last > REMINDER_MS;
+  }
+
+  _updateGearBadge() {
+    const show = this._shouldShowExportReminder();
+    if (this._gearBadge)   this._gearBadge.hidden   = !show;
+    if (this._exportBadge) this._exportBadge.hidden = !show;
+    if (this._gearBtn) {
+      if (show) this._gearBtn.setAttribute('aria-description', t('settings.export-reminder'));
+      else      this._gearBtn.removeAttribute('aria-description');
+    }
+  }
+
+  async _backupBeforeImport() {
+    try {
+      const data = await exportData();
+      const ts = new Date().toISOString().replace(/\D/g, '').slice(0, 12);
+      downloadExport(data, `telos-backup-before-import-${ts}.telos`);
+      toast(t('sync.backup-before-import'), 'info');
+      this._markExported();
+      this._updateGearBadge();
+    } catch (err) {
+      // Backup failure is non-fatal — import proceeds without it rather than blocking the user.
+      console.error('Backup before import failed:', err);
+    }
+  }
+
   async _repairInstallation(checkServer = true) {
     // Verify the server is reachable before clearing caches.
     // Without both a cache and a network, the app becomes completely inaccessible.
@@ -627,6 +723,8 @@ class BottomNav extends AppElement {
       const ts = new Date().toISOString().replace(/\D/g, '').slice(0, 12);
       downloadExport(data, `telos-backup-before-update-${ts}.telos`);
       toast(t('sync.backup-downloaded'), 'info');
+      this._markExported();
+      this._updateGearBadge();
     } catch (err) { console.error('Backup before repair failed:', err); }
     caches.keys()
       .then(keys => Promise.all(keys.map(k => caches.delete(k))))
@@ -678,6 +776,7 @@ class BottomNav extends AppElement {
     this._importModal?.removeEventListener('modal-close', this._onImportModalClose);
     unsubscribe('updateAvailable', this._onUpdateAvailable);
     this.shadowRoot?.querySelector('#repair-btn')?.removeEventListener('click', this._onRepairBtn);
+    this.shadowRoot?.querySelector('#reminder-group')?.removeEventListener('click', this._onReminderGroup);
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--bottom-nav-height');
   }
@@ -704,6 +803,10 @@ class BottomNav extends AppElement {
     const locale = getLocale();
     this.shadowRoot.querySelectorAll('[data-locale]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.locale === locale);
+    });
+    const reminderEnabled = localStorage.getItem(EXPORT_REMINDER_KEY) !== 'false';
+    this.shadowRoot.querySelectorAll('[data-reminder]').forEach(btn => {
+      btn.classList.toggle('active', (btn.dataset.reminder === 'on') === reminderEnabled);
     });
   }
 }

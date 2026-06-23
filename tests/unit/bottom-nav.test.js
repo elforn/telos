@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
 
 vi.mock('../../_lib/core/router/router.js', () => ({ navigate: vi.fn() }));
@@ -206,5 +206,147 @@ describe('bottom-nav — scroll position helpers', () => {
     const el = mount();
     el._restoreScroll('/unknown-path');
     expect(scrollTo).toHaveBeenCalledWith(0, 0);
+  });
+});
+
+// ── Export reminder ───────────────────────────────────────────────────────────
+
+const LAST_EXPORT_KEY     = 'telos:lastExportedAt';
+const EXPORT_REMINDER_KEY = 'telos:exportReminderEnabled';
+
+describe('bottom-nav — export reminder: _shouldShowExportReminder', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() =>  localStorage.clear());
+
+  it('returns true when no export has ever been made', () => {
+    const el = mount();
+    expect(el._shouldShowExportReminder()).toBe(true);
+  });
+
+  it('returns false when the reminder is explicitly disabled', () => {
+    localStorage.setItem(EXPORT_REMINDER_KEY, 'false');
+    const el = mount();
+    expect(el._shouldShowExportReminder()).toBe(false);
+  });
+
+  it('returns false when the last export was less than 30 days ago', () => {
+    localStorage.setItem(LAST_EXPORT_KEY, String(Date.now() - 5 * 24 * 60 * 60 * 1000));
+    const el = mount();
+    expect(el._shouldShowExportReminder()).toBe(false);
+  });
+
+  it('returns true when the last export was more than 30 days ago', () => {
+    localStorage.setItem(LAST_EXPORT_KEY, String(Date.now() - 31 * 24 * 60 * 60 * 1000));
+    const el = mount();
+    expect(el._shouldShowExportReminder()).toBe(true);
+  });
+});
+
+describe('bottom-nav — export reminder: _markExported', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() =>  localStorage.clear());
+
+  it('writes the current timestamp to localStorage', () => {
+    const before = Date.now();
+    const el = mount();
+    el._markExported();
+    const stored = parseInt(localStorage.getItem(LAST_EXPORT_KEY), 10);
+    expect(stored).toBeGreaterThanOrEqual(before);
+    expect(stored).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('_shouldShowExportReminder returns false immediately after _markExported', () => {
+    const el = mount();
+    el._markExported();
+    expect(el._shouldShowExportReminder()).toBe(false);
+  });
+});
+
+describe('bottom-nav — export reminder: badge visibility', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() =>  localStorage.clear());
+
+  it('gear badge is visible on mount when no export has ever been made', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#gear-badge').hidden).toBe(false);
+  });
+
+  it('export badge is visible on mount when no export has ever been made', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#export-badge').hidden).toBe(false);
+  });
+
+  it('gear badge is hidden when the last export was recent', () => {
+    localStorage.setItem(LAST_EXPORT_KEY, String(Date.now()));
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#gear-badge').hidden).toBe(true);
+  });
+
+  it('export badge is hidden when the last export was recent', () => {
+    localStorage.setItem(LAST_EXPORT_KEY, String(Date.now()));
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#export-badge').hidden).toBe(true);
+  });
+
+  it('badges are hidden when the reminder is disabled even with no prior export', () => {
+    localStorage.setItem(EXPORT_REMINDER_KEY, 'false');
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#gear-badge').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#export-badge').hidden).toBe(true);
+  });
+
+  it('gear button has aria-description when the badge is visible', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#gear-btn').hasAttribute('aria-description')).toBe(true);
+  });
+
+  it('gear button has no aria-description when the badge is hidden', () => {
+    localStorage.setItem(LAST_EXPORT_KEY, String(Date.now()));
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#gear-btn').hasAttribute('aria-description')).toBe(false);
+  });
+});
+
+describe('bottom-nav — export reminder: pill group', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() =>  localStorage.clear());
+
+  it('Show pill is active by default when no value is stored', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const onPill  = el.shadowRoot.querySelector('[data-reminder="on"]');
+    const offPill = el.shadowRoot.querySelector('[data-reminder="off"]');
+    expect(onPill.classList.contains('active')).toBe(true);
+    expect(offPill.classList.contains('active')).toBe(false);
+  });
+
+  it('clicking the Hide pill saves false to localStorage', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('[data-reminder="off"]').click();
+    expect(localStorage.getItem(EXPORT_REMINDER_KEY)).toBe('false');
+  });
+
+  it('clicking the Hide pill hides both badges', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('[data-reminder="off"]').click();
+    expect(el.shadowRoot.querySelector('#gear-badge').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#export-badge').hidden).toBe(true);
+  });
+
+  it('clicking the Show pill saves true to localStorage', () => {
+    localStorage.setItem(EXPORT_REMINDER_KEY, 'false');
+    const el = mount();
+    el.shadowRoot.querySelector('[data-reminder="on"]').click();
+    expect(localStorage.getItem(EXPORT_REMINDER_KEY)).toBe('true');
+  });
+
+  it('Hide pill is active when false is stored and settings are opened', () => {
+    localStorage.setItem(EXPORT_REMINDER_KEY, 'false');
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const onPill  = el.shadowRoot.querySelector('[data-reminder="on"]');
+    const offPill = el.shadowRoot.querySelector('[data-reminder="off"]');
+    expect(onPill.classList.contains('active')).toBe(false);
+    expect(offPill.classList.contains('active')).toBe(true);
   });
 });
