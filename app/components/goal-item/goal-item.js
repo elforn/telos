@@ -515,7 +515,7 @@ class GoalItem extends Gestures(AppElement) {
     this._pct    = Math.max(0, pct);
     this._title.textContent = this._goal?.title ?? '';
     this._bar.setAttribute('aria-label', this._goal?.title ?? '');
-    this._bar.dataset.hasDesc = String(!!this._goal?.description);
+    this._bar.dataset.hasDesc = String(!!this._goal?.notes);
     this._setPct(this._pct);
     if (this._pct === 100 && prevPct !== undefined && prevPct < 100) this._celebrate();
   }

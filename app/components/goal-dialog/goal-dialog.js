@@ -29,7 +29,7 @@ class GoalDialog extends AppElement {
     this._saveBtn.disabled = !this._input.value.trim();
     if (this._deleteBtn) this._deleteBtn.hidden = !goal;
     if (this._menuBtn) this._menuBtn.hidden = !goal;
-    this._descInput.value = goal?.description ?? draft?.description ?? '';
+    this._descInput.value = goal?.notes ?? draft?.notes ?? '';
     this._descHighlight?.sync();
     this._saved = false;
     this._showView('main');
@@ -352,9 +352,9 @@ class GoalDialog extends AppElement {
           <div class="textarea-wrap">
             <div class="md-highlight" aria-hidden="true"></div>
             <textarea id="desc-input"
-                      aria-label="${t('goal-dialog.description-placeholder')}"
-                      placeholder="${t('goal-dialog.description-placeholder')}"></textarea>
-            <button type="button" class="copy-btn" id="desc-copy-btn" aria-label="${t('goal-dialog.copy-description')}" title="${t('goal-dialog.copy-description')}">${icons.copy}</button>
+                      aria-label="${t('goal-dialog.notes-placeholder')}"
+                      placeholder="${t('goal-dialog.notes-placeholder')}"></textarea>
+            <button type="button" class="copy-btn" id="desc-copy-btn" aria-label="${t('goal-dialog.copy-notes')}" title="${t('goal-dialog.copy-notes')}">${icons.copy}</button>
           </div>
         </div>
 
@@ -462,9 +462,9 @@ class GoalDialog extends AppElement {
       if (!title) return;
       this._saved = true;
       if (this._isNew) localStorage.removeItem(DRAFT_KEY);
-      const description = this._descInput.value.trim() || undefined;
+      const notes = this._descInput.value.trim() || undefined;
       this.dispatchEvent(new CustomEvent('goal-saved', {
-        bubbles: true, composed: true, detail: { title, description },
+        bubbles: true, composed: true, detail: { title, notes },
       }));
       this._modal.close();
     };
@@ -647,8 +647,8 @@ class GoalDialog extends AppElement {
   _saveDraft() {
     if (!this._isNew) return;
     localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      title:       this._input.value,
-      description: this._descInput.value,
+      title: this._input.value,
+      notes: this._descInput.value,
     }));
   }
 }

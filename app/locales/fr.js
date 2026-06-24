@@ -14,8 +14,8 @@ defineStrings({
   'home-page.year-progress':     'Progression annuelle',
 
   'goal-dialog.placeholder':            'Que ferez-vous cette année ?',
-  'goal-dialog.description-placeholder': 'Description',
-  'goal-dialog.copy-description': 'Copier la description',
+  'goal-dialog.notes-placeholder': 'Notes',
+  'goal-dialog.copy-notes': 'Copier les notes',
   'goal-dialog.save':            'Enregistrer',
   'goal-dialog.cancel':          'Annuler',
   'goal-dialog.delete':          'Supprimer',

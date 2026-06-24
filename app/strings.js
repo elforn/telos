@@ -15,8 +15,8 @@ defineStrings({
   'home-page.done':              'Done',
 
   'goal-dialog.placeholder': 'What will you achieve this year?',
-  'goal-dialog.description-placeholder': 'Description',
-  'goal-dialog.copy-description': 'Copy description',
+  'goal-dialog.notes-placeholder': 'Notes',
+  'goal-dialog.copy-notes': 'Copy notes',
   'goal-dialog.save':        'Save',
   'goal-dialog.cancel':      'Cancel',
   'goal-dialog.delete':         'Delete',

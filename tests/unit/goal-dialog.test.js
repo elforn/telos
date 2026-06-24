@@ -239,27 +239,27 @@ describe('goal-dialog — draft', () => {
   });
 });
 
-describe('goal-dialog — description', () => {
-  it('description textarea is always visible', () => {
+describe('goal-dialog — notes', () => {
+  it('notes textarea is always visible', () => {
     const el = mount();
     el.open(null);
     expect(el.shadowRoot.querySelector('#desc-input').hidden).toBe(false);
   });
 
-  it('populates description when opening an existing goal', () => {
+  it('populates notes when opening an existing goal', () => {
     const el = mount();
-    el.open({ id: '1', title: 'Goal', description: 'My notes' });
+    el.open({ id: '1', title: 'Goal', notes: 'My notes' });
     expect(el.shadowRoot.querySelector('#desc-input').value).toBe('My notes');
   });
 
-  it('clears description when opening a goal without one', () => {
+  it('clears notes when opening a goal without one', () => {
     const el = mount();
-    el.open({ id: '1', title: 'Goal', description: 'Has desc' });
+    el.open({ id: '1', title: 'Goal', notes: 'Has notes' });
     el.open({ id: '2', title: 'Other' });
     expect(el.shadowRoot.querySelector('#desc-input').value).toBe('');
   });
 
-  it('includes description in goal-saved event', () => {
+  it('includes notes in goal-saved event', () => {
     const el = mount();
     el.open(null);
     const events = [];
@@ -271,10 +271,10 @@ describe('goal-dialog — description', () => {
     desc.value = 'Some details';
     desc.dispatchEvent(new Event('input'));
     el.shadowRoot.querySelector('#save').click();
-    expect(events[0].detail.description).toBe('Some details');
+    expect(events[0].detail.notes).toBe('Some details');
   });
 
-  it('emits undefined description when textarea is empty', () => {
+  it('emits undefined notes when textarea is empty', () => {
     const el = mount();
     el.open(null);
     const events = [];
@@ -283,21 +283,21 @@ describe('goal-dialog — description', () => {
     input.value = 'My goal';
     input.dispatchEvent(new Event('input'));
     el.shadowRoot.querySelector('#save').click();
-    expect(events[0].detail.description).toBeUndefined();
+    expect(events[0].detail.notes).toBeUndefined();
   });
 
-  it('saves description in draft', () => {
+  it('saves notes in draft', () => {
     const el = mount();
     el.open(null);
     const desc = el.shadowRoot.querySelector('#desc-input');
     desc.value = 'Draft desc';
     desc.dispatchEvent(new Event('input'));
     const draft = JSON.parse(localStorage.getItem('telos.draft.new-goal'));
-    expect(draft.description).toBe('Draft desc');
+    expect(draft.notes).toBe('Draft desc');
   });
 
-  it('restores description from draft when opening new goal', () => {
-    localStorage.setItem('telos.draft.new-goal', JSON.stringify({ title: 'T', description: 'Saved desc' }));
+  it('restores notes from draft when opening new goal', () => {
+    localStorage.setItem('telos.draft.new-goal', JSON.stringify({ title: 'T', notes: 'Saved desc' }));
     const el = mount();
     el.open(null);
     expect(el.shadowRoot.querySelector('#desc-input').value).toBe('Saved desc');
@@ -327,7 +327,7 @@ describe('goal-dialog — more actions (⋯ menu)', () => {
 });
 
 describe('goal-dialog — move view', () => {
-  const goal = { id: '1', title: 'Run a 5k', description: 'My desc' };
+  const goal = { id: '1', title: 'Run a 5k', notes: 'My desc' };
 
   it('clicking action-move-btn switches to move view', () => {
     const el = mount();
@@ -435,7 +435,7 @@ describe('goal-dialog — move view', () => {
 });
 
 describe('goal-dialog — create list item', () => {
-  const goal = { id: '1', title: 'Run a 5k', description: 'Start with 1k' };
+  const goal = { id: '1', title: 'Run a 5k', notes: 'Start with 1k' };
 
   it('clicking action-create-btn calls show() on list-picker-dialog', () => {
     const el = mount();
@@ -491,7 +491,7 @@ describe('goal-dialog — create list item', () => {
   });
 });
 
-describe('goal-dialog — copy description', () => {
+describe('goal-dialog — copy notes', () => {
   beforeEach(() => {
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -505,7 +505,7 @@ describe('goal-dialog — copy description', () => {
     expect(el.shadowRoot.querySelector('#desc-copy-btn')).not.toBeNull();
   });
 
-  it('does not call clipboard.writeText when description is empty', async () => {
+  it('does not call clipboard.writeText when notes is empty', async () => {
     const el = mount();
     el.open(null);
     el.shadowRoot.querySelector('#desc-copy-btn').click();
@@ -513,7 +513,7 @@ describe('goal-dialog — copy description', () => {
     expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
   });
 
-  it('calls clipboard.writeText with the description text', async () => {
+  it('calls clipboard.writeText with the notes text', async () => {
     const el = mount();
     el.open(null);
     const desc = el.shadowRoot.querySelector('#desc-input');
@@ -537,7 +537,7 @@ describe('goal-dialog — copy description', () => {
 
   it('also copies when the dialog is opened with an existing goal', async () => {
     const el = mount();
-    el.open({ id: '1', title: 'Run a 5k', description: 'Start with 1k daily' });
+    el.open({ id: '1', title: 'Run a 5k', notes: 'Start with 1k daily' });
     el.shadowRoot.querySelector('#desc-copy-btn').click();
     await vi.waitFor(() =>
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Start with 1k daily')

@@ -598,7 +598,7 @@ describe('list-detail-page — item-promote', () => {
   });
 
   it('does not overwrite existing goals in the same year+section', async () => {
-    const existingGoal = { id: 'eg1', title: 'Existing', description: '', tags: [], tracking: { type: 'percentage', value: 50 } };
+    const existingGoal = { id: 'eg1', title: 'Existing', tags: [], tracking: { type: 'percentage', value: 50 } };
     await boot({
       dbName: freshName(),
       initialState: { lists: [{ ...LIST, items: [ITEM] }], goals: { '2026': { capstone: [], milestones: [existingGoal], wow: [], focus: [] } } },
@@ -642,7 +642,7 @@ describe('list-detail-page — stale inGoals reconciliation', () => {
   });
 
   it('keeps valid inGoals entries intact', async () => {
-    const goal = { id: 'g1', title: 'Flowers', description: '', tags: [], tracking: { type: 'percentage', value: 0 } };
+    const goal = { id: 'g1', title: 'Flowers', tags: [], tracking: { type: 'percentage', value: 0 } };
     const linkedItem = { id: 'i1', title: 'Flowers', status: 'open', tags: [],
       inGoals: [{ year: '2026', section: 'milestones', goalId: 'g1' }] };
     await boot({

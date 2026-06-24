@@ -1,6 +1,5 @@
 function goalsDiffer(a, b) {
-  return a.title !== b.title;
-  // description field: add comparison here when it lands on goals
+  return a.title !== b.title || a.notes !== b.notes;
 }
 
 function listItemsDiffer(a, b) {

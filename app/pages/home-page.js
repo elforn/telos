@@ -453,13 +453,13 @@ class HomePage extends AppElement {
     // ── Dialog save ───────────────────────────────────────────────────────────
 
     this._onGoalSaved = e => {
-      const { title, description } = e.detail;
+      const { title, notes } = e.detail;
       if (this._editingGoal) {
         const snapshot = getState().goals;
-        this._editGoal(this._editingSection, this._editingGoal.id, title, description);
+        this._editGoal(this._editingSection, this._editingGoal.id, title, notes);
         toast(t('home.toast-goal-saved'), 'success', { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
       } else {
-        this._addGoal(this._editingSection, title, description);
+        this._addGoal(this._editingSection, title, notes);
         toast(t('home.toast-goal-saved'), 'success');
       }
     };
@@ -505,7 +505,7 @@ class HomePage extends AppElement {
       const { goal, targetListIds, newListName, copy, fromYear, fromSection } = e.detail;
       const baseItem = {
         title: goal.title,
-        note: goal.description || undefined,
+        note: goal.notes || undefined,
         status: 'open',
         tags: [],
         inGoals: [],
@@ -636,13 +636,13 @@ class HomePage extends AppElement {
     setState('goals', { ...getState().goals, [year]: { ...yg, [section]: fn(yg[section] ?? []) } });
   }
 
-  _addGoal(section, title, description) {
-    const goal = { id: crypto.randomUUID(), title, description, percentage: 0 };
+  _addGoal(section, title, notes) {
+    const goal = { id: crypto.randomUUID(), title, notes, percentage: 0 };
     this._mutateSection(section, list => [...list, goal]);
   }
 
-  _editGoal(section, id, title, description) {
-    this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, title, description } : g));
+  _editGoal(section, id, title, notes) {
+    this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, title, notes } : g));
   }
 
   _setProgress(section, id, percentage) {
