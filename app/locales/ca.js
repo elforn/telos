@@ -64,6 +64,7 @@ defineStrings({
   'year-header.theme-light':     'Clar',
   'year-header.theme-dark':      'Fosc',
   'year-header.theme-system':    'Sistema',
+  'year-header.extract-markdown': 'Extreu Markdown',
 
   'not-found.heading':           'Res aquí',
   'not-found.body':              'Aquesta pàgina no existeix — però els teus objectius t\'esperen.',
@@ -115,9 +116,11 @@ defineStrings({
   'list-detail.bulk-more':          'Més',
   'list-detail.bulk-status-label':  'Canvia l\'estat',
   'list-detail.bulk-more-label':    'Accions',
+  'list-detail.extract-markdown':      'Extreu Markdown',
+  'list-detail.bulk-extract-markdown': 'Extreu Markdown',
   'list-detail.bulk-delete-toast':  '{n} elements eliminats',
   'list-detail.bulk-status-toast':  '{n} elements actualitzats',
-  'list-detail.import-btn':          'Importar des de text',
+  'list-detail.add-from-text':       'Afegir des de text',
   'list-detail.import-heading':      'Importar elements',
   'list-detail.import-placeholder':  'Un element per línia. Sagna una línia per convertir-la en nota.',
   'list-detail.import-count':        '{n} elements',
@@ -147,6 +150,7 @@ defineStrings({
 
   'item-dialog.move-to-list':           'Mou a una llista',
   'item-dialog.add-to-goal':            'Afegeix a un objectiu',
+  'item-dialog.extract-markdown':       'Extreu Markdown',
   'item-dialog.picker-back':            'Enrere',
   'item-dialog.move-cta':               'Mou',
   'item-dialog.copy-cta':               'Copia',
@@ -191,6 +195,11 @@ defineStrings({
   'settings.reminder-off':     'Amaga',
   'sync.backup-downloaded':    'Les teves dades s\'han guardat abans de l\'actualització.',
   'sync.backup-before-import': 'Les teves dades s\'han guardat.',
+
+  'export-sheet.metadata': 'Metadades',
+  'export-sheet.notes':    'Notes',
+  'export-sheet.extract':  'Extreu Markdown',
+  'export.copied':         'Copiat al porta-retalls',
 
   'undo.button':  'Desfés',
   'toast.close':  'Tanca',

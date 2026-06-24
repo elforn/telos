@@ -8,6 +8,7 @@ import '../components/year-header/year-header.js';
 import '../components/goal-item/goal-item.js';
 import '../components/goal-dialog/goal-dialog.js';
 import '../components/add-row/add-row.js';
+import { exportGoalsMarkdown } from '../utils/export-markdown.js';
 
 class HomePage extends AppElement {
   template() {
@@ -450,6 +451,16 @@ class HomePage extends AppElement {
     };
     this.shadowRoot.querySelector('#add-focus').addEventListener('click', this._onAddFocus);
 
+    // ── Year export ───────────────────────────────────────────────────────────
+
+    this._onYearExportConfirm = e => {
+      const { metadata, notes } = e.detail;
+      const md = exportGoalsMarkdown(this._yearGoals(), this._year, { metadata, notes });
+      navigator.clipboard.writeText(md).catch(() => {});
+      toast(t('export.copied'), 'success');
+    };
+    this.shadowRoot.addEventListener('year-export-confirm', this._onYearExportConfirm);
+
     // ── Dialog save ───────────────────────────────────────────────────────────
 
     this._onGoalSaved = e => {
@@ -583,6 +594,7 @@ class HomePage extends AppElement {
     this.shadowRoot.querySelector('#fold-wow')?.removeEventListener('click',           this._onFoldWow);
     this.shadowRoot.querySelector('#fold-focus')?.removeEventListener('click',         this._onFoldFocus);
 
+    this.shadowRoot.removeEventListener('year-export-confirm', this._onYearExportConfirm);
     this.shadowRoot.removeEventListener('goal-saved',       this._onGoalSaved);
     this.shadowRoot.removeEventListener('goal-drag-start',  this._onGoalDragStart);
     this.shadowRoot.removeEventListener('goal-reorder-key', this._onGoalReorderKey);

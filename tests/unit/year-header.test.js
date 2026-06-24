@@ -70,6 +70,11 @@ describe('year-header — menu', () => {
     el.shadowRoot.querySelector('#menu').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(btn.getAttribute('aria-expanded')).toBe('false');
   });
+
+  it('renders an Extract Markdown button in the menu', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#year-export-btn')).not.toBeNull();
+  });
 });
 
 describe('year-header — year navigation', () => {

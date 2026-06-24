@@ -3,6 +3,7 @@ import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import * as Store from '../../../_lib/core/store/store.js';
 import { compressImage } from '../../../_lib/modules/images/images.js';
+import '../export-sheet/export-sheet.js';
 
 const PALETTE = [
   { hex: '#5BADE0', label: 'Sky blue' },
@@ -351,7 +352,13 @@ class YearHeader extends Gestures(AppElement) {
           <span>${t('year-header.color')}</span>
           <span class="menu-item-value"><span class="color-dot"></span> ›</span>
         </button>
+        <button class="menu-item" id="year-export-btn">
+          <span>${t('year-header.extract-markdown')}</span>
+          <span class="menu-item-value">›</span>
+        </button>
       </dialog>
+
+      <export-sheet id="export-sheet"></export-sheet>
 
       <dialog id="color-sheet">
         <div class="menu-handle"></div>
@@ -424,10 +431,11 @@ class YearHeader extends Gestures(AppElement) {
     this._setupMenu();
     this._setupPhoto();
     this._setupColor();
+    this._setupExport();
   }
 
   onTap() {
-    if (this._menuDialog?.open || this._colorSheet?.open || this._photoSheet?.open) return;
+    if (this._menuDialog?.open || this._colorSheet?.open || this._photoSheet?.open || this._exportSheet?._dialog?.open) return;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -452,6 +460,8 @@ class YearHeader extends Gestures(AppElement) {
     this.shadowRoot.querySelector('#photo-change')?.removeEventListener('click', this._onPhotoChange);
     this.shadowRoot.querySelector('#photo-remove')?.removeEventListener('click', this._onPhotoRemove);
     this.shadowRoot.querySelector('#photo-input')?.removeEventListener('change', this._onPhotoInput);
+    this.shadowRoot.querySelector('#year-export-btn')?.removeEventListener('click', this._onYearExportBtn);
+    this.shadowRoot.querySelector('#export-sheet')?.removeEventListener('extract-confirm', this._onExportConfirm);
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--year-header-height');
     window.removeEventListener('scroll', this._onScroll);
@@ -602,6 +612,23 @@ class YearHeader extends Gestures(AppElement) {
       btn.classList.toggle('active', active);
       btn.setAttribute('aria-pressed', String(active));
     });
+  }
+
+  _setupExport() {
+    this._exportSheet = this.shadowRoot.querySelector('#export-sheet');
+
+    this._onYearExportBtn = () => {
+      this._menuDialog.close();
+      this._exportSheet.show();
+    };
+    this.shadowRoot.querySelector('#year-export-btn').addEventListener('click', this._onYearExportBtn);
+
+    this._onExportConfirm = e => {
+      this.dispatchEvent(new CustomEvent('year-export-confirm', {
+        bubbles: true, composed: true, detail: e.detail,
+      }));
+    };
+    this._exportSheet.addEventListener('extract-confirm', this._onExportConfirm);
   }
 
   _updateYear() {

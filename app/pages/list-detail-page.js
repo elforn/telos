@@ -10,9 +10,15 @@ import '../components/list-dialog/list-dialog.js';
 import '../components/add-row/add-row.js';
 import '../components/list-picker-dialog/list-picker-dialog.js';
 import { icons } from '../icons.js';
+import '../components/export-sheet/export-sheet.js';
+import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdown.js';
 
 const lsKey = id => `lists.showStatus.${id}`;
 const DRAG_CLONE_SHADOW = '0 8px 24px rgba(0,0,0,0.18)';
+
+const EXPORT_MODE_LIST      = 'list';
+const EXPORT_MODE_SELECTION = 'selection';
+const EXPORT_MODE_ITEM      = 'item';
 
 class ListDetailPage extends AppElement {
   template() {
@@ -151,32 +157,34 @@ class ListDetailPage extends AppElement {
           outline-offset: 2px;
         }
 
-        /* ── Import text button (in menu) ────────────────────────────────── */
+        /* ── Menu nav items ──────────────────────────────────────────────── */
 
-        .menu-import-section {
-          padding: 0 var(--space-5) var(--space-3);
-          border-block-end: 1px solid var(--color-border);
-        }
-
-        .menu-import-btn {
+        .menu-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
           inline-size: 100%;
-          min-block-size: var(--touch-target);
+          min-block-size: var(--touch-target-lg);
+          padding-inline: var(--space-5);
           background: none;
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-sm);
+          border: none;
+          border-block-start: 0.5px solid var(--color-border);
           cursor: pointer;
           font-family: var(--font-family);
           font-size: var(--font-size-body);
           font-weight: var(--font-weight-medium);
           color: var(--color-text-primary);
-          text-align: center;
-          padding-inline: var(--space-3);
-          touch-action: manipulation;
+          text-align: start;
         }
 
-        .menu-import-btn:focus-visible {
+        .menu-item:focus-visible {
           outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
+          outline-offset: -2px;
+        }
+
+        .menu-item-value {
+          font-size: var(--font-size-body);
+          color: var(--color-text-muted);
         }
 
         /* ── Import dialog ───────────────────────────────────────────────── */
@@ -527,9 +535,14 @@ class ListDetailPage extends AppElement {
             <button class="status-pill" id="status-hide-btn">${t('list-detail.status-hide')}</button>
           </div>
         </div>
-        <div class="menu-import-section">
-          <button class="menu-import-btn" id="import-menu-btn">${t('list-detail.import-btn')}</button>
-        </div>
+        <button class="menu-item" id="import-menu-btn">
+          <span>${t('list-detail.add-from-text')}</span>
+          <span class="menu-item-value">›</span>
+        </button>
+        <button class="menu-item" id="export-menu-btn">
+          <span>${t('list-detail.extract-markdown')}</span>
+          <span class="menu-item-value">›</span>
+        </button>
         <div class="menu-delete-section">
           <button class="menu-delete-btn" id="list-delete-btn">${t('list-detail.delete-list')}</button>
         </div>
@@ -561,10 +574,13 @@ class ListDetailPage extends AppElement {
 
       <dialog id="bulk-more-sheet">
         <div class="menu-handle"></div>
-        <div class="menu-section">
-          <p class="menu-section-label">${t('list-detail.bulk-more-label')}</p>
-        </div>
+        <button class="menu-item" id="bulk-export-btn">
+          <span>${t('list-detail.bulk-extract-markdown')}</span>
+          <span class="menu-item-value">›</span>
+        </button>
       </dialog>
+
+      <export-sheet id="export-sheet"></export-sheet>
 
       <list-picker-dialog id="bulk-picker"></list-picker-dialog>
 
@@ -942,6 +958,50 @@ class ListDetailPage extends AppElement {
     this.shadowRoot.querySelector('#bulk-more-btn').addEventListener('click', this._onBulkMore);
     this._bulkMoreSheet.addEventListener('click', this._onBulkMoreBackdrop);
 
+    this._exportSheet = this.shadowRoot.querySelector('#export-sheet');
+    this._exportMode  = EXPORT_MODE_LIST;
+
+    this._onExportMenuBtn = () => {
+      this._menuDialog.close();
+      this._exportMode = EXPORT_MODE_LIST;
+      this._exportSheet.show();
+    };
+    this.shadowRoot.querySelector('#export-menu-btn').addEventListener('click', this._onExportMenuBtn);
+
+    this._onBulkExportBtn = () => {
+      this._bulkMoreSheet.close();
+      this._exportMode = EXPORT_MODE_SELECTION;
+      this._exportSheet.show();
+    };
+    this.shadowRoot.querySelector('#bulk-export-btn').addEventListener('click', this._onBulkExportBtn);
+
+    this._onExportConfirm = e => {
+      const { metadata, notes } = e.detail;
+      const lists = getState().lists ?? [];
+      const list  = lists.find(l => l.id === this._listId);
+      if (!list) return;
+      let md;
+      if (this._exportMode === EXPORT_MODE_SELECTION) {
+        const ids   = [...this._selectedIds];
+        const items = (list.items ?? []).filter(i => ids.includes(i.id));
+        md = exportItemsMarkdown(items, list.name, { metadata, notes });
+      } else if (this._exportMode === EXPORT_MODE_ITEM) {
+        md = exportItemsMarkdown([this._exportItem], list.name, { metadata, notes });
+      } else {
+        md = exportListMarkdown(list, { metadata, notes });
+      }
+      navigator.clipboard.writeText(md).catch(() => {});
+      toast(t('export.copied'), 'success');
+    };
+    this._exportSheet.addEventListener('extract-confirm', this._onExportConfirm);
+
+    this._onItemExportRequest = e => {
+      this._exportItem = e.detail.item;
+      this._exportMode = EXPORT_MODE_ITEM;
+      this._exportSheet.show();
+    };
+    this.shadowRoot.addEventListener('item-export-request', this._onItemExportRequest);
+
     this._onBulkMove = () => this._openBulkPicker();
     this.shadowRoot.querySelector('#bulk-move-btn').addEventListener('click', this._onBulkMove);
 
@@ -979,7 +1039,7 @@ class ListDetailPage extends AppElement {
         ? (n === 1 ? t('item-dialog.copy-toast', { name: targetNames[0] }) : t('item-dialog.copy-toast-many', { n }))
         : (n === 1 ? t('item-dialog.move-toast', { name: targetNames[0] }) : t('item-dialog.move-toast-many', { n }));
       toast(msg, 'success');
-      this._exitSelectionMode();
+      if (!copy) this._exitSelectionMode();
     };
     this._bulkPickerDialog.addEventListener('list-pick', this._onBulkListPick);
 
@@ -1104,6 +1164,10 @@ class ListDetailPage extends AppElement {
       this._drag = null;
     }
     if (this._onLists) unsubscribe('lists', this._onLists);
+    this.shadowRoot?.querySelector('#export-menu-btn')?.removeEventListener('click', this._onExportMenuBtn);
+    this.shadowRoot?.querySelector('#bulk-export-btn')?.removeEventListener('click', this._onBulkExportBtn);
+    this._exportSheet?.removeEventListener('extract-confirm', this._onExportConfirm);
+    this.shadowRoot?.removeEventListener('item-export-request', this._onItemExportRequest);
     this.shadowRoot?.querySelector('#import-menu-btn')?.removeEventListener('click', this._onImportMenuBtn);
     this._importTextarea?.removeEventListener('input', this._onImportTextarea);
     this.shadowRoot?.querySelector('#import-cancel-btn')?.removeEventListener('click', this._onImportCancel);

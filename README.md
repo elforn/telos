@@ -11,6 +11,7 @@ A personal yearly goal planner for your phone.
 - Attach a **year photo** as a visual anchor for the year
 - Export and import data as a single `.telos` file — import merges with local data by default, or replaces it entirely
 - Maintain **trans-year lists** (ideas, gifts, identity anchors, etc.) and link items into goal sections
+- **Extract Markdown** from any year's goals or any list — copy formatted content to the clipboard to paste into notes, journals, or social posts
 
 Everything is stored locally on the device. No cloud sync, no sign-in.
 

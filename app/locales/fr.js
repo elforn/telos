@@ -64,6 +64,7 @@ defineStrings({
   'year-header.theme-light':     'Clair',
   'year-header.theme-dark':      'Sombre',
   'year-header.theme-system':    'Système',
+  'year-header.extract-markdown': 'Extraire en Markdown',
 
   'not-found.heading':           'Rien ici',
   'not-found.body':              'Cette page n\'existe pas — mais vos objectifs vous attendent.',
@@ -115,9 +116,11 @@ defineStrings({
   'list-detail.bulk-more':          'Plus',
   'list-detail.bulk-status-label':  'Changer le statut',
   'list-detail.bulk-more-label':    'Actions',
+  'list-detail.extract-markdown':      'Extraire en Markdown',
+  'list-detail.bulk-extract-markdown': 'Extraire en Markdown',
   'list-detail.bulk-delete-toast':  '{n} éléments supprimés',
   'list-detail.bulk-status-toast':  '{n} éléments mis à jour',
-  'list-detail.import-btn':          'Importer depuis du texte',
+  'list-detail.add-from-text':       'Ajouter depuis du texte',
   'list-detail.import-heading':      'Importer des éléments',
   'list-detail.import-placeholder':  'Un élément par ligne. Indentez une ligne pour en faire une note.',
   'list-detail.import-count':        '{n} éléments',
@@ -147,6 +150,7 @@ defineStrings({
 
   'item-dialog.move-to-list':           'Déplacer vers une liste',
   'item-dialog.add-to-goal':            'Ajouter à un objectif',
+  'item-dialog.extract-markdown':       'Extraire en Markdown',
   'item-dialog.picker-back':            'Retour',
   'item-dialog.move-cta':               'Déplacer',
   'item-dialog.copy-cta':               'Copier',
@@ -191,6 +195,11 @@ defineStrings({
   'settings.reminder-off':     'Masquer',
   'sync.backup-downloaded':    'Vos données ont été sauvegardées avant la mise à jour.',
   'sync.backup-before-import': 'Vos données ont été sauvegardées.',
+
+  'export-sheet.metadata': 'Métadonnées',
+  'export-sheet.notes':    'Notes',
+  'export-sheet.extract':  'Extraire en Markdown',
+  'export.copied':         'Copié dans le presse-papiers',
 
   'undo.button':  'Annuler',
   'toast.close':  'Fermer',

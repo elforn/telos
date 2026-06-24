@@ -558,6 +558,7 @@ class ItemDialog extends AppElement {
         <div class="sheet-handle" aria-hidden="true"></div>
         <button type="button" id="action-move-btn" class="sheet-item">${t('item-dialog.move-to-list')}</button>
         <button type="button" id="action-promote-btn" class="sheet-item">${t('item-dialog.add-to-goal')}</button>
+        <button type="button" id="action-export-btn" class="sheet-item">${t('item-dialog.extract-markdown')}</button>
       </dialog>
 
       <list-picker-dialog id="list-picker"></list-picker-dialog>
@@ -720,6 +721,15 @@ class ItemDialog extends AppElement {
     this._onActionPromote = () => { this._actionSheet.close(); this._showView('goal-promoter'); };
     this.shadowRoot.querySelector('#action-promote-btn').addEventListener('click', this._onActionPromote);
 
+    this._onActionExport = () => {
+      this._actionSheet.close();
+      this._modal.close();
+      this.dispatchEvent(new CustomEvent('item-export-request', {
+        bubbles: true, composed: true, detail: { item: this._item },
+      }));
+    };
+    this.shadowRoot.querySelector('#action-export-btn').addEventListener('click', this._onActionExport);
+
     // ── Move to list ──────────────────────────────────────────────────────────
 
     this._onListPick = e => {
@@ -770,6 +780,7 @@ class ItemDialog extends AppElement {
     this._actionSheet?.removeEventListener('click', this._onSheetBackdrop);
     this.shadowRoot.querySelector('#action-move-btn')?.removeEventListener('click', this._onActionMove);
     this.shadowRoot.querySelector('#action-promote-btn')?.removeEventListener('click', this._onActionPromote);
+    this.shadowRoot.querySelector('#action-export-btn')?.removeEventListener('click', this._onActionExport);
     this._listPickerDialog?.removeEventListener('list-pick', this._onListPick);
 
     this.shadowRoot.querySelector('#promote-back')?.removeEventListener('click', this._onPromoteBack);

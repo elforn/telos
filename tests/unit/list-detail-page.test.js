@@ -29,6 +29,12 @@ function mount(listId = 'l1') {
     const pickerModal = bulkPicker.shadowRoot.querySelector('#modal');
     if (pickerModal) { pickerModal.show = vi.fn(); pickerModal.close = vi.fn(); }
   }
+  // Stub export-sheet internal dialog so showModal()/close() don't throw in happy-dom
+  const exportSheet = el.shadowRoot.querySelector('#export-sheet');
+  if (exportSheet) {
+    const exportDialog = exportSheet.shadowRoot?.querySelector('#sheet');
+    if (exportDialog) { exportDialog.showModal = vi.fn(); exportDialog.close = vi.fn(); }
+  }
   return el;
 }
 
@@ -951,7 +957,25 @@ describe('list-detail-page — bulk action bar', () => {
     });
   });
 
-  it('list-pick exits selection mode', async () => {
+  it('list-pick(copy=false) exits selection mode', async () => {
+    const OTHER_LIST = { id: 'l2', name: 'Other', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, OTHER_LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+
+    el.shadowRoot.querySelector('#bulk-picker').dispatchEvent(new CustomEvent('list-pick', {
+      bubbles: true, composed: true,
+      detail: { targetListIds: ['l2'], copy: false },
+    }));
+
+    await vi.waitFor(() => {
+      expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(true);
+      expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
+    });
+  });
+
+  it('list-pick(copy=true) keeps selection mode active', async () => {
     const OTHER_LIST = { id: 'l2', name: 'Other', items: [] };
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, OTHER_LIST] } });
     const el = mount();
@@ -963,10 +987,9 @@ describe('list-detail-page — bulk action bar', () => {
       detail: { targetListIds: ['l2'], copy: true },
     }));
 
-    await vi.waitFor(() => {
-      expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(true);
-      expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
-    });
+    await vi.waitFor(() => expect(getState().lists[1].items).toHaveLength(1));
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(true);
   });
 });
 
@@ -1155,6 +1178,42 @@ describe('list-detail-page — list-color-changed (immediate commit)', () => {
       bubbles: true, composed: true, detail: { color: null },
     }));
     await vi.waitFor(() => expect(getState().lists[0].color).toBeUndefined());
+  });
+});
+
+// ── Export (extract-confirm) ───────────────────────────────────────────────────
+
+describe('list-detail-page — extract-confirm', () => {
+  let writeText;
+  beforeEach(() => {
+    writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  });
+
+  it('extract-confirm writes markdown containing the list name to clipboard', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+
+    el.shadowRoot.querySelector('#export-sheet').dispatchEvent(new CustomEvent('extract-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false },
+    }));
+
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText.mock.calls[0][0]).toContain('Gift ideas');
+  });
+
+  it('extract-confirm does not exit selection mode', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+
+    el.shadowRoot.querySelector('#export-sheet').dispatchEvent(new CustomEvent('extract-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false },
+    }));
+
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(true);
   });
 });
 

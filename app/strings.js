@@ -63,6 +63,7 @@ defineStrings({
   'year-header.theme-light':  'Light',
   'year-header.theme-dark':   'Dark',
   'year-header.theme-system': 'System',
+  'year-header.extract-markdown': 'Extract Markdown',
 
   'not-found.heading': 'Nothing here',
   'not-found.body':    "This page doesn't exist — but your goals are waiting.",
@@ -114,6 +115,8 @@ defineStrings({
   'list-detail.bulk-more':          'More',
   'list-detail.bulk-status-label':  'Set Status',
   'list-detail.bulk-more-label':    'Actions',
+  'list-detail.extract-markdown':      'Extract Markdown',
+  'list-detail.bulk-extract-markdown': 'Extract Markdown',
   'list-detail.bulk-delete-toast':  'Deleted {n} items',
   'list-detail.bulk-status-toast':  'Updated {n} items',
 
@@ -138,6 +141,7 @@ defineStrings({
 
   'item-dialog.move-to-list':           'Move to list',
   'item-dialog.add-to-goal':            'Add to goal',
+  'item-dialog.extract-markdown':       'Extract Markdown',
   'item-dialog.picker-back':            'Back',
   'item-dialog.move-cta':               'Move',
   'item-dialog.copy-cta':               'Copy',
@@ -172,7 +176,7 @@ defineStrings({
   'lists.toast-item-saved':   'Item saved',
   'lists.toast-item-deleted': 'Item deleted',
 
-  'list-detail.import-btn':          'Import from text',
+  'list-detail.add-from-text':       'Add from text',
   'list-detail.import-heading':      'Import items',
   'list-detail.import-placeholder':  'One item per line. Indent a line to make it a note.',
   'list-detail.import-count':        '{n} items',
@@ -191,6 +195,11 @@ defineStrings({
   'settings.reminder-off':      'Hide',
   'sync.backup-downloaded':     'Your data has been backed up before the update.',
   'sync.backup-before-import':  'Your data has been backed up.',
+
+  'export-sheet.metadata': 'Metadata',
+  'export-sheet.notes':    'Notes',
+  'export-sheet.extract':  'Extract Markdown',
+  'export.copied':         'Copied to clipboard',
 
   'undo.button':  'Undo',
   'toast.close':  'Close',
