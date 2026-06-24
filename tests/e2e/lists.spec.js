@@ -468,13 +468,7 @@ test.describe('Lists — list management', () => {
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('#menu')?.open
     );
-    // First click — enter confirm state
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('list-detail-page').shadowRoot
-        .querySelector('#list-delete-btn').click();
-    });
-    // Second click — confirm delete
+    // Single click — immediately deletes and navigates back to /lists
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
@@ -779,6 +773,148 @@ test.describe('Lists — item management', () => {
   });
 });
 
+// ── Undo ──────────────────────────────────────────────────────────────────────
+
+async function deleteListViaMenu(page) {
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('list-detail-page').shadowRoot
+      .querySelector('#menu-btn').click();
+  });
+  await page.waitForFunction(() =>
+    document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('list-detail-page')?.shadowRoot
+      ?.querySelector('#menu')?.open
+  );
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('list-detail-page').shadowRoot
+      .querySelector('#list-delete-btn').click();
+  });
+  await waitForListsPage(page);
+}
+
+test.describe('Lists — undo', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    await navToLists(page);
+  });
+
+  test('undo after list deletion restores the list on the lists page', async ({ page }) => {
+    await createList(page, 'Undo me');
+    await enterFirstList(page);
+    await deleteListViaMenu(page);
+    // List is immediately removed
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('#list-container')?.querySelectorAll('lists-page-item').length ?? 0) === 0
+    );
+    // Undo toast should be visible with the undo button
+    await expect(page.locator('.socle-toast-info')).toContainText('List deleted');
+    await page.locator('.socle-toast-btn').click();
+    // List is restored
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('#list-container')?.querySelectorAll('lists-page-item').length ?? 0) === 1
+    );
+    const name = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelector('lists-page-item').shadowRoot
+        .querySelector('.list-name')?.textContent
+    );
+    expect(name).toBe('Undo me');
+  });
+
+  test('undo after item deletion via dialog restores the item', async ({ page }) => {
+    await createList(page, 'Undo items');
+    await enterFirstList(page);
+    await createItem(page, 'Undo item');
+    // Open the item
+    await page.evaluate(() => {
+      const row = document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('list-item').shadowRoot.querySelector('.row');
+      row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+      row.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+    });
+    await page.waitForFunction(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('item-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open;
+    });
+    // Delete — single click, immediate
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('item-dialog').shadowRoot
+        .querySelector('#delete').click();
+    });
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('#item-list')?.querySelectorAll('list-item').length ?? 0) === 0
+    );
+    // Undo
+    await expect(page.locator('.socle-toast-info')).toContainText('Item deleted');
+    await page.locator('.socle-toast-btn').click();
+    // Item is restored
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('#item-list')?.querySelectorAll('list-item').length ?? 0) === 1
+    );
+    const title = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('list-item')?.shadowRoot?.querySelector('.title')?.textContent
+    );
+    expect(title).toBe('Undo item');
+  });
+
+  test('undo after item deletion via swipe restores the item', async ({ page }) => {
+    await createList(page, 'Undo swipe');
+    await enterFirstList(page);
+    await createItem(page, 'Swipe undo item');
+    await swipeListItemLeft(page);
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('list-item').shadowRoot
+        .querySelector('#delete-btn').dispatchEvent(
+          new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 })
+        );
+    });
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('#item-list')?.querySelectorAll('list-item').length ?? 0) === 0
+    );
+    // Undo
+    await expect(page.locator('.socle-toast-info')).toContainText('Item deleted');
+    await page.locator('.socle-toast-btn').click();
+    // Item is restored
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('#item-list')?.querySelectorAll('list-item').length ?? 0) === 1
+    );
+    const title = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('list-item')?.shadowRoot?.querySelector('.title')?.textContent
+    );
+    expect(title).toBe('Swipe undo item');
+  });
+});
+
 // ── Status toggle ─────────────────────────────────────────────────────────────
 
 test.describe('Lists — status toggle', () => {
@@ -864,16 +1000,7 @@ test.describe('Lists — swipe gestures', () => {
 
   test('swipe left then click delete removes the item', async ({ page }) => {
     await swipeListItemLeft(page);
-    // First pointerup — enter confirm state
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('list-detail-page').shadowRoot
-        .querySelector('list-item').shadowRoot
-        .querySelector('#delete-btn').dispatchEvent(
-          new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 })
-        );
-    });
-    // Second pointerup — confirm deletion
+    // Single pointerup — immediately deletes (no confirm flow; shows undo toast instead)
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot

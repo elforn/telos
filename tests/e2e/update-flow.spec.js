@@ -21,13 +21,22 @@ import { waitForPage, waitForIDBFlush } from './helpers.js';
  */
 
 // Intercept version.json to report a future version, triggering Layer 2 detection.
-// Must be called BEFORE page.goto() — the fetch fires before the SW is active on
-// first load, so Playwright can intercept it directly. After goto the SW is active
-// and handles fetches itself, bypassing page.route().
+// Uses context.route() (not page.route()) so the interception also covers fetches
+// made by the service worker itself — once the SW is active it calls fetch() in its
+// own context, which page.route() cannot see.
 async function routeFutureVersion(page) {
-  await page.route(/\/version\.json/, route =>
+  await page.context().route(/\/version\.json/, route =>
     route.fulfill({ json: { version: '999.0.0', buildTime: new Date().toISOString() } })
   );
+}
+
+// After page.goto, the SW may activate and call clients.claim(), which fires
+// controllerchange. If prevController was non-null, sw-manager calls location.reload().
+// This helper waits for the SW controller to exist AND for any resulting reload to
+// settle, so subsequent test actions run in a stable state.
+async function waitForSWStable(page) {
+  await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+  await waitForApp(page); // re-verify app is rendered after any reload
 }
 
 async function waitForApp(page) {
@@ -46,8 +55,11 @@ test.describe('Update flow — data persistence', () => {
 
     await page.goto('/');
     await waitForPage(page);
+    // Ensure the SW has activated and any controllerchange-triggered reload has settled
+    // before we try to seed IDB — avoids "execution context was destroyed" errors.
+    await waitForSWStable(page);
 
-    // Banner appears on this first load (version mismatch detected before SW activated).
+    // Banner appears because version.json (intercepted at context level) reports 999.0.0.
     await expect(page.locator('update-banner')).not.toHaveAttribute('hidden');
 
     // Seed a known goal directly into IDB while the banner is up.
@@ -74,7 +86,7 @@ test.describe('Update flow — data persistence', () => {
     await waitForIDBFlush(page);
 
     // Unroute so the real version.json is served after reload (banner must not reappear).
-    await page.unrouteAll();
+    await page.context().unrouteAll();
 
     // Reload via update banner (no waiting SW → falls back to location.reload())
     await page.locator('update-banner #reload').click();
@@ -113,7 +125,10 @@ test.describe('Update flow — banner behaviour', () => {
   test('dismiss button hides the banner without reloading', async ({ page }) => {
     await routeFutureVersion(page);
     await page.goto('/');
-    await waitForApp(page);
+    // Wait for SW to stabilise before attaching the load-event listener — otherwise a
+    // controllerchange-triggered reload (prevController non-null from a prior context)
+    // could fire after the listener is set, giving a false positive.
+    await waitForSWStable(page);
     await expect(page.locator('update-banner')).not.toHaveAttribute('hidden');
 
     let reloaded = false;
@@ -133,7 +148,7 @@ test.describe('Update flow — banner behaviour', () => {
 
     // Unroute before reload — without this the route persists, sw-manager detects
     // the mismatch again on the reloaded page and the banner immediately reappears.
-    await page.unrouteAll();
+    await page.context().unrouteAll();
     await page.locator('update-banner #reload').click();
     await page.waitForLoadState('domcontentloaded');
 
