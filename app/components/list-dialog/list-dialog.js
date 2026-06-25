@@ -3,7 +3,7 @@ import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import { COLOR_PALETTE } from '../lists-page-item/lists-page-item.js';
 
-const DRAFT_KEY = 'telos.draft.new-list';
+const DRAFT_KEY = 'telos:draft.new-list';
 
 // Labels parallel COLOR_PALETTE — update both together when adding/removing colours.
 const SWATCH_LABELS = ['No colour', 'Red', 'Orange', 'Yellow', 'Green', 'Teal', 'Blue', 'Purple'];
@@ -45,7 +45,7 @@ class ListDialog extends AppElement {
           cursor: pointer;
           padding: 0;
           flex-shrink: 0;
-          box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12);
+          box-shadow: inset 0 0 0 1px var(--color-border);
           transition: box-shadow 0.1s;
           min-block-size: auto;
         }

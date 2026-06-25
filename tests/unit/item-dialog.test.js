@@ -361,7 +361,7 @@ describe('item-dialog — cancel', () => {
 
 // ── draft ─────────────────────────────────────────────────────────────────────
 
-const DRAFT_KEY = 'telos.draft.new-item';
+const DRAFT_KEY = 'telos:draft.new-item';
 
 describe('item-dialog — draft', () => {
   it('loads draft title when opening a new item', () => {

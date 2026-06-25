@@ -173,7 +173,7 @@ describe('goal-dialog — delete', () => {
 
 // ── draft ─────────────────────────────────────────────────────────────────────
 
-const GOAL_DRAFT_KEY = 'telos.draft.new-goal';
+const GOAL_DRAFT_KEY = 'telos:draft.new-goal';
 
 describe('goal-dialog — draft', () => {
   it('loads draft title when opening a new goal', () => {
@@ -292,12 +292,12 @@ describe('goal-dialog — notes', () => {
     const desc = el.shadowRoot.querySelector('#desc-input');
     desc.value = 'Draft desc';
     desc.dispatchEvent(new Event('input'));
-    const draft = JSON.parse(localStorage.getItem('telos.draft.new-goal'));
+    const draft = JSON.parse(localStorage.getItem(GOAL_DRAFT_KEY));
     expect(draft.notes).toBe('Draft desc');
   });
 
   it('restores notes from draft when opening new goal', () => {
-    localStorage.setItem('telos.draft.new-goal', JSON.stringify({ title: 'T', notes: 'Saved desc' }));
+    localStorage.setItem(GOAL_DRAFT_KEY, JSON.stringify({ title: 'T', notes: 'Saved desc' }));
     const el = mount();
     el.open(null);
     expect(el.shadowRoot.querySelector('#desc-input').value).toBe('Saved desc');

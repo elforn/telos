@@ -7,7 +7,7 @@ import { icons } from '../../icons.js';
 
 const STATUSES = ['open', 'paused', 'done'];
 const SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
-const DRAFT_KEY = 'telos.draft.new-item';
+const DRAFT_KEY = 'telos:draft.new-item';
 
 class ItemDialog extends AppElement {
   // ── Public properties ────────────────────────────────────────────────────────
@@ -263,8 +263,6 @@ class ItemDialog extends AppElement {
           outline-offset: 2px;
         }
 
-        /* ── Tags slot (future) ──────────────────────────────────────────── */
-        .tags-row { display: none; }
 
         /* ── Action sheet ────────────────────────────────────────────────── */
         #action-sheet {
@@ -338,7 +336,7 @@ class ItemDialog extends AppElement {
           font-weight: var(--font-weight-semibold);
           color: var(--color-text-muted);
           text-transform: uppercase;
-          letter-spacing: 0.08em;
+          letter-spacing: var(--letter-spacing-caps);
           margin: 0 0 var(--space-3);
         }
 
@@ -514,7 +512,6 @@ class ItemDialog extends AppElement {
               <button type="button" id="url-open" hidden>${t('item-dialog.url-open')}</button>
             </div>
           </div>
-          <div class="tags-row" hidden></div>
         </div>
 
         <!-- ── View 2: Goal promoter ──────────────────────────────────────── -->
@@ -632,11 +629,8 @@ class ItemDialog extends AppElement {
     };
 
     this._onSave = () => {
-      const title = this._titleInput.value.trim();
+      const { title, status, note, url } = this._getFormValues();
       if (!title) return;
-      const status = this.shadowRoot.querySelector('input[name="status"]:checked')?.value ?? 'open';
-      const note   = this._noteInput.value.trim() || undefined;
-      const url    = this._urlInput.value.trim()  || undefined;
       this._saved = true;
       if (this._isNew) localStorage.removeItem(DRAFT_KEY);
       this.dispatchEvent(new CustomEvent('item-saved', {
@@ -690,6 +684,8 @@ class ItemDialog extends AppElement {
     this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
     this._modal.addEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).addEventListener('resize', this._onResize);
+    // preventDefault stops the browser's default label→radio handling so we
+    // control exactly when checked is set and fire 'change' in one step.
     this._onStatusClick = e => {
       const label = e.target.closest('.status-option');
       if (!label) return;
@@ -878,10 +874,12 @@ class ItemDialog extends AppElement {
     if (!ta) return;
     ta.style.blockSize = 'auto';
     const vh = window.visualViewport?.height ?? window.innerHeight;
-    const urlRowH = this._urlRow?.hidden ? 0 : (this._urlRow?.offsetHeight ?? 0);
-    const minH = 56;
-    const maxH = Math.max(vh - 280 - urlRowH, 120);
-    ta.style.blockSize = `${Math.max(ta.scrollHeight, minH)}px`;
+    const urlRowH    = this._urlRow?.hidden ? 0 : (this._urlRow?.offsetHeight ?? 0);
+    const MIN_H      = 56;
+    const CHROME_H   = 280; // approx header + footer + title + status chrome
+    const MIN_WRAP_H = 120;
+    const maxH = Math.max(vh - CHROME_H - urlRowH, MIN_WRAP_H);
+    ta.style.blockSize = `${Math.max(ta.scrollHeight, MIN_H)}px`;
     const wrap = ta.closest('.textarea-wrap');
     if (wrap) wrap.style.maxBlockSize = `${maxH}px`;
   }

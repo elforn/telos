@@ -59,6 +59,9 @@
         line-height: var(--line-height-normal);
         min-block-size: 100dvh;
       }
+      #toast-container {
+        inset-block-end: calc(var(--bottom-nav-height, 80px) + var(--space-2, 8px)) !important;
+      }
       body::before {
         content: '';
         position: fixed;

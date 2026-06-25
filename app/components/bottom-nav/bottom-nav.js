@@ -76,6 +76,8 @@ class BottomNav extends AppElement {
           padding-block-start: var(--space-2);
           padding-block-end: calc(var(--space-3) + var(--safe-area-bottom, 0px));
           padding-inline: var(--space-4);
+          --badge-size: 8px;
+          --badge-inset: 6px;
         }
 
         .nav-row {
@@ -138,10 +140,10 @@ class BottomNav extends AppElement {
 
         .gear-badge {
           position: absolute;
-          inset-block-start: 6px;
-          inset-inline-end: 6px;
-          inline-size: 8px;
-          block-size: 8px;
+          inset-block-start: var(--badge-inset);
+          inset-inline-end: var(--badge-inset);
+          inline-size: var(--badge-size);
+          block-size: var(--badge-size);
           border-radius: var(--radius-full);
           background: var(--color-accent);
           pointer-events: none;
@@ -247,8 +249,8 @@ class BottomNav extends AppElement {
         }
 
         .export-badge {
-          inline-size: 8px;
-          block-size: 8px;
+          inline-size: var(--badge-size);
+          block-size: var(--badge-size);
           border-radius: var(--radius-full);
           background: var(--color-accent);
           flex-shrink: 0;
@@ -418,7 +420,6 @@ class BottomNav extends AppElement {
     this._onPillYears = () => {
       const onLists = window.location.pathname.startsWith(`${BASE_PATH}lists`);
       if (onLists) {
-        // Lists → Year: save lists scroll, navigate to year, restore year scroll
         this._saveScroll(window.location.pathname);
         const target = `${BASE_PATH}${this._currentYear}`;
         navigate(target);
@@ -426,10 +427,8 @@ class BottomNav extends AppElement {
       } else {
         const todayPath = `${BASE_PATH}${new Date().getFullYear()}`;
         if (window.location.pathname === todayPath) {
-          // Same year → scroll to top
           requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
         } else {
-          // Different year → save current year scroll, navigate to today, restore today's scroll
           this._saveScroll(window.location.pathname);
           navigate(todayPath);
           this._restoreScroll(todayPath);
@@ -447,15 +446,12 @@ class BottomNav extends AppElement {
       const onLists     = currentPath.startsWith(listsRoot);
       if (onLists) {
         if (currentPath === listsRoot) {
-          // Already on /lists root → scroll to top
           requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
         } else {
-          // On a list detail → go to /lists root and restore its scroll position
           navigate(listsRoot);
           this._restoreScroll(listsRoot);
         }
       } else {
-        // Year → Lists: save year scroll, navigate to last lists path, restore lists scroll
         this._saveScroll(currentPath);
         navigate(this._lastListsPath);
         this._restoreScroll(this._lastListsPath);
@@ -730,8 +726,8 @@ class BottomNav extends AppElement {
       .then(keys => Promise.all(keys.map(k => caches.delete(k))))
       .then(() => navigator.serviceWorker.getRegistrations())
       .then(regs => Promise.all(regs.map(r => r.unregister())))
-      .then(() => location.reload())
-      .catch(() => location.reload());
+      .then(() => location.replace(BASE_PATH))
+      .catch(() => location.replace(BASE_PATH));
   }
 
   _subscribeVersion() {

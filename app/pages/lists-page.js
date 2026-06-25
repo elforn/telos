@@ -24,7 +24,7 @@ class ListsPage extends AppElement {
           inset-block-start: var(--update-banner-height, 0px);
           z-index: 100;
           background: var(--color-surface);
-          border-block-end: 1px solid var(--color-border);
+          border-block-end: var(--header-strip-height) solid var(--color-border);
           padding-block-start: var(--safe-area-top);
           padding-inline: var(--page-padding);
         }
@@ -238,18 +238,6 @@ class ListsPage extends AppElement {
     const list = { id: crypto.randomUUID(), name, items: [] };
     if (color) list.color = color;
     setState('lists', [...(getState().lists ?? []), list]);
-  }
-
-  _update(id, name, color) {
-    setState('lists', (getState().lists ?? []).map(l => {
-      if (l.id !== id) return l;
-      const { color: _, ...rest } = l;
-      return color ? { ...rest, name, color } : { ...rest, name };
-    }));
-  }
-
-  _delete(id) {
-    setState('lists', (getState().lists ?? []).filter(l => l.id !== id));
   }
 
   // ── Drag helpers ──────────────────────────────────────────────────────────

@@ -13,9 +13,6 @@ import { icons } from '../icons.js';
 import '../components/export-sheet/export-sheet.js';
 import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdown.js';
 
-const lsKey = id => `lists.showStatus.${id}`;
-const DRAG_CLONE_SHADOW = '0 8px 24px rgba(0,0,0,0.18)';
-
 const EXPORT_MODE_LIST      = 'list';
 const EXPORT_MODE_SELECTION = 'selection';
 const EXPORT_MODE_ITEM      = 'item';
@@ -40,7 +37,7 @@ class ListDetailPage extends AppElement {
           inset-block-start: var(--update-banner-height, 0px);
           z-index: 100;
           background: var(--color-surface);
-          border-block-end: 1px solid var(--color-border);
+          border-block-end: var(--header-strip-height) solid var(--color-border);
           padding-block-start: var(--safe-area-top);
           padding-inline: var(--page-padding);
         }
@@ -526,8 +523,8 @@ class ListDetailPage extends AppElement {
         <add-row id="add-row">+ ${t('list-detail.add')}</add-row>
       </main>
 
-      <dialog id="menu">
-        <div class="menu-handle"></div>
+      <dialog id="menu" aria-label="${t('list-detail.menu')}">
+        <div class="menu-handle" aria-hidden="true"></div>
         <div class="menu-section">
           <p class="menu-section-label">${t('list-detail.status-label')}</p>
           <div class="status-pill-group" role="group" aria-label="${t('list-detail.status-label')}">
@@ -537,11 +534,11 @@ class ListDetailPage extends AppElement {
         </div>
         <button class="menu-item" id="import-menu-btn">
           <span>${t('list-detail.add-from-text')}</span>
-          <span class="menu-item-value">›</span>
+          <span class="menu-item-value" aria-hidden="true">›</span>
         </button>
         <button class="menu-item" id="export-menu-btn">
           <span>${t('list-detail.extract-markdown')}</span>
-          <span class="menu-item-value">›</span>
+          <span class="menu-item-value" aria-hidden="true">›</span>
         </button>
         <div class="menu-delete-section">
           <button class="menu-delete-btn" id="list-delete-btn">${t('list-detail.delete-list')}</button>
@@ -560,8 +557,8 @@ class ListDetailPage extends AppElement {
         <button type="button" class="bulk-btn" id="bulk-move-btn">${t('list-detail.bulk-move')}</button>
       </div>
 
-      <dialog id="bulk-status-sheet">
-        <div class="menu-handle"></div>
+      <dialog id="bulk-status-sheet" aria-label="${t('list-detail.bulk-status-label')}">
+        <div class="menu-handle" aria-hidden="true"></div>
         <div class="menu-section">
           <p class="menu-section-label">${t('list-detail.bulk-status-label')}</p>
           <div class="status-pill-group" role="group" aria-label="${t('list-detail.bulk-status-label')}">
@@ -572,11 +569,11 @@ class ListDetailPage extends AppElement {
         </div>
       </dialog>
 
-      <dialog id="bulk-more-sheet">
-        <div class="menu-handle"></div>
+      <dialog id="bulk-more-sheet" aria-label="${t('list-detail.bulk-more')}">
+        <div class="menu-handle" aria-hidden="true"></div>
         <button class="menu-item" id="bulk-export-btn">
           <span>${t('list-detail.bulk-extract-markdown')}</span>
-          <span class="menu-item-value">›</span>
+          <span class="menu-item-value" aria-hidden="true">›</span>
         </button>
       </dialog>
 
@@ -585,7 +582,7 @@ class ListDetailPage extends AppElement {
       <list-picker-dialog id="bulk-picker"></list-picker-dialog>
 
       <dialog id="import-dialog" aria-label="${t('list-detail.import-heading')}">
-        <div class="menu-handle"></div>
+        <div class="menu-handle" aria-hidden="true"></div>
         <div class="menu-section">
           <p class="menu-section-label">${t('list-detail.import-heading')}</p>
           <textarea id="import-textarea"
@@ -608,9 +605,9 @@ class ListDetailPage extends AppElement {
     this._listId = this.params?.listId;
     if (!this._listId) { navigate(`${BASE_PATH}lists`); return; }
 
-
     this._itemList    = this.shadowRoot.querySelector('#item-list');
     this._nameEl      = this.shadowRoot.querySelector('#list-name');
+    this._pageHeader  = this.shadowRoot.querySelector('.page-header');
     this._dialog      = this.shadowRoot.querySelector('#dialog');
     this._listDialog  = this.shadowRoot.querySelector('#list-dialog');
     this._menuDialog  = this.shadowRoot.querySelector('#menu');
@@ -620,9 +617,7 @@ class ListDetailPage extends AppElement {
     this._selectionMode = false;
     this._selectedIds   = new Set();
 
-    // Status preference — per list
-    this._showStatus = localStorage.getItem(lsKey(this._listId)) !== 'false';
-    this._applyStatusPref();
+    this._showStatus = true; // updated from store on first _onLists call
 
     this._onBack = () => navigate(`${BASE_PATH}lists`);
     this.shadowRoot.querySelector('#back-btn').addEventListener('click', this._onBack);
@@ -692,15 +687,15 @@ class ListDetailPage extends AppElement {
 
     this._onStatusShow = () => {
       if (this._showStatus) return;
-      this._showStatus = true;
-      localStorage.setItem(lsKey(this._listId), 'true');
-      this._applyStatusPref();
+      setState('lists', (getState().lists ?? []).map(l =>
+        l.id === this._listId ? { ...l, showStatus: true } : l
+      ));
     };
     this._onStatusHide = () => {
       if (!this._showStatus) return;
-      this._showStatus = false;
-      localStorage.setItem(lsKey(this._listId), 'false');
-      this._applyStatusPref();
+      setState('lists', (getState().lists ?? []).map(l =>
+        l.id === this._listId ? { ...l, showStatus: false } : l
+      ));
     };
     this.shadowRoot.querySelector('#status-show-btn').addEventListener('click', this._onStatusShow);
     this.shadowRoot.querySelector('#status-hide-btn').addEventListener('click', this._onStatusHide);
@@ -1108,6 +1103,9 @@ class ListDetailPage extends AppElement {
       const list = (lists ?? []).find(l => l.id === this._listId);
       if (!list) { navigate(`${BASE_PATH}lists`); return; }
       this._nameEl.textContent = list.name;
+      this._pageHeader.style.borderBlockEndColor = list.color ?? '';
+      this._showStatus = list.showStatus ?? true;
+      this._applyStatusPref();
       this._renderItems(list.items ?? []);
     };
     subscribe('lists', this._onLists);
@@ -1163,7 +1161,7 @@ class ListDetailPage extends AppElement {
       this._insertLine?.remove();
       this._drag = null;
     }
-    if (this._onLists) unsubscribe('lists', this._onLists);
+    unsubscribe('lists', this._onLists);
     this.shadowRoot?.querySelector('#export-menu-btn')?.removeEventListener('click', this._onExportMenuBtn);
     this.shadowRoot?.querySelector('#bulk-export-btn')?.removeEventListener('click', this._onBulkExportBtn);
     this._exportSheet?.removeEventListener('extract-confirm', this._onExportConfirm);
@@ -1293,7 +1291,7 @@ class ListDetailPage extends AppElement {
       'background:var(--color-surface)',
       'border:0.5px solid var(--color-border)',
       'border-radius:var(--radius-md)',
-      `box-shadow:${DRAG_CLONE_SHADOW}`,
+      'box-shadow:var(--shadow-drag)',
       'display:flex',
       'align-items:center',
       'padding:0 var(--space-3)',

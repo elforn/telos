@@ -197,7 +197,7 @@ describe('list-dialog — cancel', () => {
 
 // ── draft ─────────────────────────────────────────────────────────────────────
 
-const LIST_DRAFT_KEY = 'telos.draft.new-list';
+const LIST_DRAFT_KEY = 'telos:draft.new-list';
 
 describe('list-dialog — draft', () => {
   it('loads draft name when opening a new list', () => {

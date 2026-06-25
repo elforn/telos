@@ -143,8 +143,7 @@ describe('list-detail-page — status toggle', () => {
   });
 
   it('hide pill is active when preference is off', async () => {
-    localStorage.setItem('lists.showStatus.l1', 'false');
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, showStatus: false }] } });
     const el = mount();
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#status-hide-btn').classList.contains('active')).toBe(true)
@@ -161,8 +160,7 @@ describe('list-detail-page — status toggle', () => {
   });
 
   it('hide pill is active and show pill is inactive when status is hidden', async () => {
-    localStorage.setItem('lists.showStatus.l1', 'false');
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, showStatus: false }] } });
     const el = mount();
     await vi.waitFor(() => {
       expect(el.shadowRoot.querySelector('#status-hide-btn').classList.contains('active')).toBe(true);
@@ -175,7 +173,9 @@ describe('list-detail-page — status toggle', () => {
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#status-hide-btn')).not.toBeNull());
     el.shadowRoot.querySelector('#status-hide-btn').click();
-    expect(el.shadowRoot.querySelector('#item-list').style.getPropertyValue('--list-badge-display')).toBe('none');
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#item-list').style.getPropertyValue('--list-badge-display')).toBe('none')
+    );
   });
 
   it('clicking hide then show pill restores badge', async () => {
@@ -183,22 +183,34 @@ describe('list-detail-page — status toggle', () => {
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#status-hide-btn')).not.toBeNull());
     el.shadowRoot.querySelector('#status-hide-btn').click();
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#item-list').style.getPropertyValue('--list-badge-display')).toBe('none')
+    );
     el.shadowRoot.querySelector('#status-show-btn').click();
-    expect(el.shadowRoot.querySelector('#item-list').style.getPropertyValue('--list-badge-display')).toBe('');
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#item-list').style.getPropertyValue('--list-badge-display')).toBe('')
+    );
   });
 
-  it('clicking hide pill persists false to localStorage', async () => {
+  it('clicking hide pill sets showStatus: false on the list in the store', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#status-hide-btn')).not.toBeNull());
     el.shadowRoot.querySelector('#status-hide-btn').click();
-    expect(localStorage.getItem('lists.showStatus.l1')).toBe('false');
+    await vi.waitFor(() => expect(getState().lists[0].showStatus).toBe(false));
+  });
+
+  it('clicking show pill sets showStatus: true on the list in the store', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, showStatus: false }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#status-hide-btn').classList.contains('active')).toBe(true));
+    el.shadowRoot.querySelector('#status-show-btn').click();
+    await vi.waitFor(() => expect(getState().lists[0].showStatus).toBe(true));
   });
 
   it('preference is scoped per list — different lists are independent', async () => {
-    localStorage.setItem('lists.showStatus.l1', 'false');
     const LIST2 = { id: 'l2', name: 'Books', items: [] };
-    await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST2] } });
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, showStatus: false }, LIST2] } });
 
     const el1 = document.createElement('list-detail-page');
     el1.params = { listId: 'l1' };

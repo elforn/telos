@@ -5,7 +5,7 @@ import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
 import { icons } from '../../icons.js';
 
-const DRAFT_KEY = 'telos.draft.new-goal';
+const DRAFT_KEY = 'telos:draft.new-goal';
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 
 class GoalDialog extends AppElement {
@@ -236,7 +236,7 @@ class GoalDialog extends AppElement {
           font-weight: var(--font-weight-semibold);
           color: var(--color-text-muted);
           text-transform: uppercase;
-          letter-spacing: 0.08em;
+          letter-spacing: var(--letter-spacing-caps);
           margin: 0 0 var(--space-3);
         }
 
@@ -633,9 +633,11 @@ class GoalDialog extends AppElement {
     if (!ta) return;
     ta.style.blockSize = 'auto';
     const vh = window.visualViewport?.height ?? window.innerHeight;
-    const minH = 56;
-    const maxH = Math.max(vh - 260, 100);
-    ta.style.blockSize = `${Math.max(ta.scrollHeight, minH)}px`;
+    const MIN_H        = 56;
+    const CHROME_H     = 260; // approx header + footer + input chrome
+    const MIN_WRAP_H   = 100;
+    const maxH = Math.max(vh - CHROME_H, MIN_WRAP_H);
+    ta.style.blockSize = `${Math.max(ta.scrollHeight, MIN_H)}px`;
     const wrap = ta.closest('.textarea-wrap');
     if (wrap) wrap.style.maxBlockSize = `${maxH}px`;
   }
