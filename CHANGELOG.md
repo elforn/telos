@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [1.8.0] — 2026-06-25
+
 ### Added
 - Markdown highlighting in note and description fields — `*italic*`, `**bold**`, and `# headings` are tinted in colour as you type; the textarea stays plain text so cursor position is always accurate
 - Import list items from text — paste or type one item per line in the list detail menu; indent a line to make it a note on the item above
@@ -18,6 +22,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - Tapping a status badge on a list item cycles through Open → Paused → Done → Open without opening the edit dialog
 - Cancelling the goal or item edit dialog now reverts any unsaved changes — previously typing in a form and then cancelling would leave those values in the field on next open
+- List detail page header separator now uses the list's accent colour when one is set — makes it instantly clear which list you're viewing
+- Show/Hide status preference for each list is now stored with the list itself — the preference survives a fresh install and is included in export/import
+- Header separator is now consistently 3 px across the Goals and Lists pages
+
+### Fixed
+- Toast appears above the bottom nav bar so navigation remains usable while a toast is showing
+- Repair installation now lands on the app's home screen instead of the current path, which previously 404'd on GitHub Pages after cache clearing
 
 ---
 
