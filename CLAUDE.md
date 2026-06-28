@@ -35,7 +35,7 @@ All state lives in a **simple store** (setState/getState — no event log, no re
   { id, title, description?, tags: string[], tracking }
   ```
   `tracking` is one of three types:
-  - `{ type: 'percentage', value: number }` — value 0–100; `-1` means failed. Default for all new goals.
+  - `{ type: 'percentage', value: number }` — value 0–100; Default for all new goals.
   - `{ type: 'weekly', target: number, entries: string[] }` — target = times/week (e.g. 3). "Every day" is a UI preset for target=7. `entries` = unique ISO date strings (YYYY-MM-DD), one per calendar day max; past dates allowed.
   - `{ type: 'monthly', target: number, entries: string[] }` — target = times/month. Same `entries` shape as weekly, different aggregation window.
 
