@@ -25,7 +25,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, lists: [] } });
+await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, lists: [], goalsTagsVisible: {}, listsTagsVisible: {} } });
 
 // Migrate goals.description → goals.notes (one-time, safe to run repeatedly)
 (function migrateGoalDescriptionToNotes() {

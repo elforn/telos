@@ -737,6 +737,26 @@ describe('item-dialog — immediate status commit', () => {
   });
 });
 
+// ── Tag chip aria-labels ──────────────────────────────────────────────────────
+
+describe('item-dialog — tag chip aria-labels', () => {
+  it('tag chip remove button has aria-label containing the tag name', () => {
+    const el = mount();
+    el.open({ ...ITEM, tags: ['health', 'fitness'] });
+    const chips = el.shadowRoot.querySelectorAll('.tag-chip-remove');
+    expect(chips).toHaveLength(2);
+    expect(chips[0].getAttribute('aria-label')).toContain('health');
+    expect(chips[1].getAttribute('aria-label')).toContain('fitness');
+  });
+
+  it('tag chip remove button aria-label is not a raw hex value', () => {
+    const el = mount();
+    el.open({ ...ITEM, tags: ['work'] });
+    const btn = el.shadowRoot.querySelector('.tag-chip-remove');
+    expect(btn.getAttribute('aria-label')).not.toMatch(/#[0-9a-fA-F]/);
+  });
+});
+
 // ── Add to goal ───────────────────────────────────────────────────────────────
 
 describe('item-dialog — add to goal', () => {

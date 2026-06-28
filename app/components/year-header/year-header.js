@@ -4,18 +4,19 @@ import { t } from '../../../_lib/core/strings.js';
 import * as Store from '../../../_lib/core/store/store.js';
 import { compressImage } from '../../../_lib/modules/images/images.js';
 import '../export-sheet/export-sheet.js';
+import { icons } from '../../icons.js';
 
 const PALETTE = [
-  { hex: '#5BADE0', label: 'Sky blue' },
-  { hex: '#3B82F6', label: 'Blue' },
-  { hex: '#6366F1', label: 'Indigo' },
-  { hex: '#8B5CF6', label: 'Violet' },
-  { hex: '#EC4899', label: 'Pink' },
-  { hex: '#EF4444', label: 'Red' },
-  { hex: '#F97316', label: 'Orange' },
-  { hex: '#EAB308', label: 'Yellow' },
-  { hex: '#22C55E', label: 'Green' },
-  { hex: '#14B8A6', label: 'Teal' },
+  { hex: '#5BADE0', key: 'year-header.color-sky-blue' },
+  { hex: '#3B82F6', key: 'year-header.color-blue' },
+  { hex: '#6366F1', key: 'year-header.color-indigo' },
+  { hex: '#8B5CF6', key: 'year-header.color-violet' },
+  { hex: '#EC4899', key: 'year-header.color-pink' },
+  { hex: '#EF4444', key: 'year-header.color-red' },
+  { hex: '#F97316', key: 'year-header.color-orange' },
+  { hex: '#EAB308', key: 'year-header.color-yellow' },
+  { hex: '#22C55E', key: 'year-header.color-green' },
+  { hex: '#14B8A6', key: 'year-header.color-teal' },
 ];
 
 class YearHeader extends Gestures(AppElement) {
@@ -33,6 +34,7 @@ class YearHeader extends Gestures(AppElement) {
           .menu-sheet { animation: none; }
           .header-img { animation: none; }
           dialog[open], dialog::backdrop { animation: none; }
+          .header-bg, h1, .nav-btn, .menu-btn, .filter-btn { transition: none; }
         }
 
         :host {
@@ -54,6 +56,53 @@ class YearHeader extends Gestures(AppElement) {
           padding-block-start: var(--safe-area-top);
         }
 
+        /* ── Header actions ───────────────────────────────────────────── */
+
+        .header-actions {
+          display: flex;
+          align-items: center;
+        }
+
+        .filter-btn {
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--color-text-secondary);
+          border-radius: var(--radius-full);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          touch-action: manipulation;
+        }
+
+        .filter-btn svg {
+          inline-size: 22px;
+          block-size: 22px;
+          pointer-events: none;
+        }
+
+        h1, .nav-btn, .menu-btn, .filter-btn {
+          transition: color 0.3s ease-out;
+        }
+
+        .filter-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .filter-btn-dot {
+          position: absolute;
+          inset-block-start: 8px;
+          inset-inline-end: 6px;
+          inline-size: 6px;
+          block-size: 6px;
+          border-radius: var(--radius-full);
+          background: var(--color-accent);
+        }
+
         /* ── Image mode ────────────────────────────────────────────────── */
 
         :host([data-has-image]:not(.compact)) {
@@ -63,14 +112,15 @@ class YearHeader extends Gestures(AppElement) {
         }
 
         .header-bg {
-          display: none;
           position: absolute;
           inset: 0;
           pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.35s ease-out;
         }
 
         :host([data-has-image]:not(.compact)) .header-bg {
-          display: block;
+          opacity: 1;
         }
 
         .header-image {
@@ -95,18 +145,22 @@ class YearHeader extends Gestures(AppElement) {
         :host([data-has-image]:not(.compact)) .top-row {
           position: relative;
           z-index: 1;
-          padding-block-start: calc(var(--space-2) + var(--safe-area-top));
           padding-inline: var(--page-padding);
         }
 
         :host([data-has-image]:not(.compact)) h1,
-        :host([data-has-image]:not(.compact)) .nav-btn,
-        :host([data-has-image]:not(.compact)) .menu-btn {
+        :host([data-has-image]:not(.compact)) .nav-btn {
           color: white;
         }
 
+        :host([data-has-image]:not(.compact)) .menu-btn,
+        :host([data-has-image]:not(.compact)) .filter-btn {
+          color: rgba(255,255,255,0.55);
+        }
+
         :host([data-has-image]:not(.compact)) .nav-btn:focus-visible,
-        :host([data-has-image]:not(.compact)) .menu-btn:focus-visible {
+        :host([data-has-image]:not(.compact)) .menu-btn:focus-visible,
+        :host([data-has-image]:not(.compact)) .filter-btn:focus-visible {
           outline-color: white;
         }
 
@@ -127,11 +181,7 @@ class YearHeader extends Gestures(AppElement) {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding-block: var(--space-3);
-        }
-
-        :host(.compact) .top-row {
-          padding-block: var(--space-3);
+          min-block-size: 64px;
         }
 
         .year-nav {
@@ -146,7 +196,6 @@ class YearHeader extends Gestures(AppElement) {
           background: none;
           border: none;
           cursor: pointer;
-          font-size: var(--font-size-heading);
           color: var(--color-text-secondary);
           border-radius: var(--radius-full);
           display: flex;
@@ -154,9 +203,15 @@ class YearHeader extends Gestures(AppElement) {
           justify-content: center;
         }
 
+        .nav-btn svg {
+          inline-size: 22px;
+          block-size: 22px;
+          pointer-events: none;
+        }
+
         /* Pull the ‹ icon flush with the screen edge so it aligns
            with the left edge of goal items (page-padding inset). */
-        #prev { margin-inline-start: calc(-1 * var(--page-padding)); }
+        #prev { margin-inline-start: calc(-0.8 * var(--page-padding)); }
 
         .nav-btn:focus-visible {
           outline: 2px solid var(--color-accent);
@@ -179,12 +234,18 @@ class YearHeader extends Gestures(AppElement) {
           background: none;
           border: none;
           cursor: pointer;
-          font-size: var(--font-size-subheading);
           color: var(--color-text-secondary);
           border-radius: var(--radius-full);
           display: flex;
           align-items: center;
           justify-content: center;
+          margin-inline-end: var(--edge-btn-bleed);
+        }
+
+        .menu-btn svg {
+          inline-size: 22px;
+          block-size: 22px;
+          pointer-events: none;
         }
 
         .menu-btn:focus-visible {
@@ -282,6 +343,50 @@ class YearHeader extends Gestures(AppElement) {
           color: var(--color-text-muted);
         }
 
+        .menu-section {
+          padding: var(--space-4) var(--space-5);
+          border-block-start: 0.5px solid var(--color-border);
+        }
+
+        .menu-section .menu-section-label {
+          padding-inline: 0;
+          padding-block-start: 0;
+          margin-block-end: var(--space-2);
+        }
+
+        .status-pill-group {
+          display: flex;
+          gap: var(--space-1);
+          background: var(--color-surface-raised);
+          border-radius: var(--radius-full);
+          padding: var(--pill-inset);
+        }
+
+        .status-pill {
+          flex: 1;
+          min-block-size: var(--touch-target);
+          border: none;
+          border-radius: var(--radius-full);
+          background: none;
+          cursor: pointer;
+          font-family: var(--font-family);
+          font-size: var(--font-size-body);
+          font-weight: var(--font-weight-medium);
+          color: var(--color-text-secondary);
+          text-align: center;
+        }
+
+        .status-pill.active {
+          background: var(--color-surface);
+          color: var(--color-text-primary);
+          box-shadow: var(--shadow-card);
+        }
+
+        .status-pill:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
         .color-dot {
           display: inline-block;
           inline-size: 10px;
@@ -328,22 +433,37 @@ class YearHeader extends Gestures(AppElement) {
 
       <div class="top-row">
         <nav class="year-nav" aria-label="${t('home-page.year-progress')}">
-          <button id="prev" class="nav-btn" aria-label="${t('home-page.prev-year')}">‹</button>
+          <button id="prev" class="nav-btn" aria-label="${t('home-page.prev-year')}">${icons.chevronLeft}</button>
           <h1 id="year">${year}</h1>
-          <button id="next" class="nav-btn" aria-label="${t('home-page.next-year')}">›</button>
+          <button id="next" class="nav-btn" aria-label="${t('home-page.next-year')}">${icons.chevronRight}</button>
         </nav>
-        <button id="menu-btn" class="menu-btn" aria-label="${t('year-header.menu')}" aria-expanded="false">☰</button>
+        <div class="header-actions">
+          <button id="filter-btn" class="filter-btn" aria-label="${t('home-page.filter-toggle')}" aria-expanded="false">
+            ${icons.funnel}
+            <span class="filter-btn-dot" hidden aria-hidden="true"></span>
+          </button>
+          <button id="menu-btn" class="menu-btn" aria-label="${t('year-header.menu')}" aria-expanded="false">${icons.dotsVertical}</button>
+        </div>
       </div>
 
       <div class="strip-bar">
         <div class="strip-fill" id="strip-fill" style="width:${pct}%"></div>
       </div>
 
+      <slot name="filter-bar"></slot>
+
       <input type="file" id="photo-input" accept="image/*" hidden>
 
       <dialog id="menu">
         <div class="menu-handle"></div>
         <p class="menu-section-label">${t('year-header.year-section')}</p>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('settings.tag-strip')}</p>
+          <div class="status-pill-group" role="group" aria-label="${t('settings.tag-strip')}">
+            <button class="status-pill" id="tags-show-btn">${t('settings.reminder-on')}</button>
+            <button class="status-pill" id="tags-hide-btn">${t('settings.reminder-off')}</button>
+          </div>
+        </div>
         <button class="menu-item" id="year-photo-btn">
           <span>${t('year-header.photo')}</span>
           <span class="menu-item-value">›</span>
@@ -364,7 +484,7 @@ class YearHeader extends Gestures(AppElement) {
         <div class="menu-handle"></div>
         <p class="menu-section-label">${t('year-header.color')}</p>
         <div class="color-grid">
-          ${PALETTE.map(({ hex, label }) => `<button class="swatch" data-color="${hex}" style="background:${hex}" aria-label="${label}"></button>`).join('')}
+          ${PALETTE.map(({ hex, key }) => `<button class="swatch" data-color="${hex}" style="background:${hex}" aria-label="${t(key)}"></button>`).join('')}
         </div>
         <button class="menu-item" id="color-reset-btn">
           <span>${t('year-header.color-reset')}</span>
@@ -417,11 +537,41 @@ class YearHeader extends Gestures(AppElement) {
     };
     Store.subscribe('images', this._onImages);
 
+    this._onGoalsTagsVisible = tagsVisible => {
+      const visible = tagsVisible?.[String(this._year)] === true;
+      document.documentElement.style.setProperty('--tag-strip-display', visible ? 'block' : 'none');
+      this.shadowRoot?.querySelector('#tags-show-btn')?.classList.toggle('active', visible);
+      this.shadowRoot?.querySelector('#tags-hide-btn')?.classList.toggle('active', !visible);
+    };
+    Store.subscribe('goalsTagsVisible', this._onGoalsTagsVisible);
+
     this._updateYear();
 
+    this._scrollCompacting = false;
+    this._lastFullHeight = this.offsetHeight;
     document.documentElement.style.setProperty('--year-header-height', `${this.offsetHeight}px`);
     this._ro = new ResizeObserver(() => {
-      document.documentElement.style.setProperty('--year-header-height', `${this.offsetHeight}px`);
+      const h = this.offsetHeight;
+      if (this._scrollCompacting) {
+        // Going compact via scroll: update height but pad body so the document
+        // stays tall enough that scrollY can't drop below backThreshold.
+        const D = this._lastFullHeight - h;
+        if (D > 0) {
+          const docH   = document.documentElement.scrollHeight;
+          const winH   = window.innerHeight;
+          const minDocH = winH + 20; // backThreshold(10) + buffer(10)
+          const newDocH = docH - D;
+          if (newDocH < minDocH) {
+            document.body.style.paddingBlockEnd = `${minDocH - newDocH + 10}px`;
+          }
+        }
+        document.documentElement.style.setProperty('--year-header-height', `${h}px`);
+      } else {
+        // forceCompact, un-compact, or other resize — update freely
+        this._lastFullHeight = h;
+        document.body.style.paddingBlockEnd = '';
+        document.documentElement.style.setProperty('--year-header-height', `${h}px`);
+      }
     });
     this._ro.observe(this);
 
@@ -432,6 +582,8 @@ class YearHeader extends Gestures(AppElement) {
     this._setupPhoto();
     this._setupColor();
     this._setupExport();
+    this._setupFilterBtn();
+    this._setupTags();
   }
 
   onTap() {
@@ -441,11 +593,15 @@ class YearHeader extends Gestures(AppElement) {
 
   unsubscribe() {
     Store.unsubscribe('images', this._onImages);
+    Store.unsubscribe('goalsTagsVisible', this._onGoalsTagsVisible);
+    this.shadowRoot?.querySelector('#tags-show-btn')?.removeEventListener('click', this._onTagsShowBtn);
+    this.shadowRoot?.querySelector('#tags-hide-btn')?.removeEventListener('click', this._onTagsHideBtn);
     if (this._imageUrl) URL.revokeObjectURL(this._imageUrl);
 
-    ['#prev', '#next', '#menu-btn', '#year'].forEach(sel =>
+    ['#prev', '#next', '#menu-btn', '#filter-btn', '#year'].forEach(sel =>
       this.shadowRoot.querySelector(sel)?.removeEventListener('pointerdown', this._stopGesture)
     );
+    this.shadowRoot.querySelector('#filter-btn')?.removeEventListener('click', this._onFilterBtnClick);
     this.shadowRoot.querySelector('#prev')?.removeEventListener('click', this._onPrev);
     this.shadowRoot.querySelector('#next')?.removeEventListener('click', this._onNext);
     this.shadowRoot.querySelector('#menu-btn')?.removeEventListener('click', this._onMenuBtn);
@@ -464,25 +620,87 @@ class YearHeader extends Gestures(AppElement) {
     this.shadowRoot.querySelector('#export-sheet')?.removeEventListener('extract-confirm', this._onExportConfirm);
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--year-header-height');
-    window.removeEventListener('scroll', this._onScroll);
+    document.documentElement.style.overflowAnchor = '';
+    document.body.style.paddingBlockEnd = '';
+    document.body.style.overscrollBehaviorY = '';
+    window.removeEventListener('scroll',      this._onScroll);
+    window.removeEventListener('touchstart',  this._onTouchStart);
+    window.removeEventListener('touchend',    this._onTouchEnd);
+    window.removeEventListener('touchcancel', this._onTouchEnd);
+    window.removeEventListener('touchmove',   this._onTouchMove);
   }
 
   _setupScrollToTop() {
     // Prevent pointerdown on interactive elements from reaching the Gestures mixin — they are not scroll-to-top targets
     this._stopGesture = e => e.stopPropagation();
-    ['#prev', '#next', '#menu-btn', '#year'].forEach(sel =>
-      this.shadowRoot.querySelector(sel).addEventListener('pointerdown', this._stopGesture)
+    ['#prev', '#next', '#menu-btn', '#filter-btn', '#year'].forEach(sel =>
+      this.shadowRoot.querySelector(sel)?.addEventListener('pointerdown', this._stopGesture)
     );
   }
 
   _setupScroll() {
+    this._compactTime = 0;
+    this._touch = false;
+    this._touchStartY = 0;
+    this._lastScrollY = 0;
+
+    this._onTouchStart = (e) => {
+      this._touch = true;
+      this._touchStartY = e.changedTouches[0].clientY;
+    };
+    this._onTouchEnd = () => { this._touch = false; };
+
+    // When compact and scrollY≈0, scroll events don't fire (y can't go below 0).
+    // Detect the unfold swipe from touch displacement instead.
+    this._onTouchMove = (e) => {
+      if (!this._compact || this._forceCompact || window.scrollY > 1) return;
+      const elapsed = Date.now() - this._compactTime;
+      if (elapsed < 300) return;
+      const dy = e.changedTouches[0].clientY - this._touchStartY;
+      if (dy > 8) {
+        document.body.style.overscrollBehaviorY = '';
+        document.documentElement.style.overflowAnchor = '';
+        document.body.style.paddingBlockEnd = '';
+        this._compact = false;
+        this._scrollCompacting = false;
+        if (!this._forceCompact) this.classList.remove('compact');
+      }
+    };
+
+    window.addEventListener('touchstart',  this._onTouchStart,  { passive: true });
+    window.addEventListener('touchend',    this._onTouchEnd,    { passive: true });
+    window.addEventListener('touchcancel', this._onTouchEnd,    { passive: true });
+    window.addEventListener('touchmove',   this._onTouchMove,   { passive: true });
+
     this._onScroll = () => {
       const y = window.scrollY;
+      // Track direction so scrolling *down* from y=0 while compact doesn't
+      // trigger the back-threshold check (which would falsely UN-COMPACT).
+      const scrollingUp = y < this._lastScrollY;
+      this._lastScrollY = y;
+
       const hasImage = this.hasAttribute('data-has-image');
-      const goThreshold   = hasImage ? 20 : 80;
+      const goThreshold   = hasImage ? 40 : 80;
       const backThreshold = hasImage ? 10 : 60;
-      if (!this._compact && y > goThreshold)    { this._compact = true;  this.classList.add('compact'); }
-      else if (this._compact && y < backThreshold) { this._compact = false; this.classList.remove('compact'); }
+
+      if (!this._compact && y > goThreshold) {
+        this._compact = true;
+        this._scrollCompacting = true;
+        this._compactTime = Date.now();
+        document.documentElement.style.overflowAnchor = 'none';
+        document.body.style.overscrollBehaviorY = 'none';
+        this.classList.add('compact');
+
+      } else if (this._compact && y < backThreshold && scrollingUp) {
+        const elapsed = Date.now() - this._compactTime;
+        if (elapsed < 300) return;
+        document.body.style.overscrollBehaviorY = '';
+        this._compact = false;
+        this._scrollCompacting = false;
+        document.documentElement.style.overflowAnchor = '';
+        document.body.style.paddingBlockEnd = '';
+        if (!this._forceCompact) this.classList.remove('compact');
+      }
     };
     window.addEventListener('scroll', this._onScroll, { passive: true });
   }
@@ -631,12 +849,55 @@ class YearHeader extends Gestures(AppElement) {
     this._exportSheet.addEventListener('extract-confirm', this._onExportConfirm);
   }
 
+  _setupTags() {
+    this._onTagsShowBtn = () => {
+      const year = String(this._year);
+      Store.setState('goalsTagsVisible', { ...Store.getState().goalsTagsVisible, [year]: true });
+      this._menuDialog.close();
+    };
+    this._onTagsHideBtn = () => {
+      const year = String(this._year);
+      Store.setState('goalsTagsVisible', { ...Store.getState().goalsTagsVisible, [year]: false });
+      this._menuDialog.close();
+    };
+    this.shadowRoot.querySelector('#tags-show-btn').addEventListener('click', this._onTagsShowBtn);
+    this.shadowRoot.querySelector('#tags-hide-btn').addEventListener('click', this._onTagsHideBtn);
+  }
+
+  _setupFilterBtn() {
+    const btn = this.shadowRoot.querySelector('#filter-btn');
+    this._onFilterBtnClick = () => {
+      this.dispatchEvent(new CustomEvent('filter-click', { bubbles: true, composed: true }));
+    };
+    btn.addEventListener('click', this._onFilterBtnClick);
+  }
+
+  set filterDot(v) {
+    const dot = this.shadowRoot?.querySelector('.filter-btn-dot');
+    if (dot) dot.hidden = !v;
+  }
+
+  set filterExpanded(v) {
+    const btn = this.shadowRoot?.querySelector('#filter-btn');
+    if (btn) btn.setAttribute('aria-expanded', String(!!v));
+  }
+
+  set forceCompact(v) {
+    this._forceCompact = v;
+    if (v) {
+      this.classList.add('compact');
+    } else if (!this._compact) {
+      this.classList.remove('compact');
+    }
+  }
+
   _updateYear() {
     const year = this._year ?? new Date().getFullYear();
     if (this._yearEl) this._yearEl.textContent = String(year);
     const pct = yearProgress(year);
     if (this._stripFill) this._stripFill.style.width = `${pct}%`;
     this._updateImageFor(year);
+    if (this._onGoalsTagsVisible) this._onGoalsTagsVisible(Store.getState().goalsTagsVisible);
   }
 
   async _updateImageFor(year) {

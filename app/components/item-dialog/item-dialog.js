@@ -4,6 +4,7 @@ import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
 import { icons } from '../../icons.js';
+import { tagColor } from '../../utils/tag-color.js';
 
 const STATUSES = ['open', 'paused', 'done'];
 const SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
@@ -13,15 +14,17 @@ class ItemDialog extends AppElement {
   // ── Public properties ────────────────────────────────────────────────────────
 
   set availableLists(val) { this._availableLists = val ?? []; }
-  get availableLists()    { return this._availableLists ?? []; }
+  get availableLists() { return this._availableLists ?? []; }
 
   set currentYear(val) { this._currentYear = val; }
-  get currentYear()    { return this._currentYear ?? new Date().getFullYear(); }
+  get currentYear() { return this._currentYear ?? new Date().getFullYear(); }
+
+  set existingTags(val) { this._existingTags = val ?? []; }
 
   // ── Public API ───────────────────────────────────────────────────────────────
 
   open(item = null) {
-    this._item  = item;
+    this._item = item;
     this._isNew = !item;
     this._showView('main');
 
@@ -37,9 +40,14 @@ class ItemDialog extends AppElement {
 
     this._noteInput.value = item?.note ?? draft?.note ?? '';
     this._noteHighlight?.sync();
-    this._urlInput.value  = item?.url  ?? draft?.url  ?? '';
+    this._urlInput.value = item?.url ?? draft?.url ?? '';
     this._syncUrlOpen();
     this._showUrlField(!!(item?.url ?? draft?.url));
+
+    this._tags = [...(item?.tags ?? draft?.tags ?? [])];
+    this._tagInput.value = '';
+    this._renderTagChips();
+    this._updateSuggestions();
 
     this._menuBtn.hidden = this._isNew;
 
@@ -263,6 +271,123 @@ class ItemDialog extends AppElement {
           outline-offset: 2px;
         }
 
+        /* ── Tags ────────────────────────────────────────────────────────── */
+
+        .tag-chips-wrap {
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          align-items: center;
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding: var(--space-2) var(--space-3);
+          min-block-size: var(--touch-target);
+          box-sizing: border-box;
+          cursor: text;
+          margin-block-end: var(--space-4);
+        }
+
+        .tag-chips-wrap:focus-within { border-color: var(--color-accent); }
+
+        .tag-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-1);
+          padding-block: var(--space-1);
+          padding-inline-start: var(--space-3);
+          padding-inline-end: var(--space-1);
+          color: var(--color-text-primary);
+          border-radius: var(--radius-full);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-medium);
+          font-family: var(--font-family);
+          white-space: nowrap;
+          min-block-size: 28px;
+        }
+
+        .tag-chip-remove {
+          background: rgba(0,0,0,0.12);
+          border: none;
+          border-radius: var(--radius-full);
+          min-block-size: 20px;
+          inline-size: 20px;
+          padding: 0;
+          cursor: pointer;
+          color: var(--color-text-primary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+          font-size: 0.9em;
+          touch-action: manipulation;
+        }
+
+        .tag-chip-remove:hover { background: rgba(0,0,0,0.22); }
+
+        #tag-input {
+          flex: 1;
+          min-inline-size: 80px;
+          background: none;
+          border: none;
+          padding: 0;
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          outline: none;
+          margin-block-end: 0;
+          inline-size: auto;
+          display: inline;
+        }
+
+        #tag-input::placeholder { color: var(--color-text-muted); }
+
+        /* ── Tag suggestions ─────────────────────────────────────────────── */
+
+        .tag-area {
+          position: relative;
+          margin-block-end: var(--space-4);
+        }
+
+        .tag-area .tag-chips-wrap {
+          margin-block-end: 0;
+        }
+
+        #tag-suggestions {
+          position: absolute;
+          inset-block-end: 100%;
+          inset-inline: 0;
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          padding-block-start: var(--space-3);
+          padding-block-end: var(--space-2);
+          background: var(--color-surface);
+          border-block-start: 0.5px solid var(--color-border);
+          box-shadow: 0 -4px 10px rgba(0,0,0,0.07);
+          border-start-start-radius: var(--radius-sm);
+          border-start-end-radius: var(--radius-sm);
+          z-index: 1;
+        }
+
+        #tag-suggestions[hidden] { display: none; }
+
+        .tag-suggestion {
+          min-block-size: 28px;
+          padding-block: 0;
+          padding-inline: var(--space-3);
+          border-radius: var(--radius-full);
+          border: 1px solid var(--color-border);
+          background: none;
+          color: var(--color-text-secondary);
+          font-size: var(--font-size-caption);
+          touch-action: manipulation;
+        }
+
+        .tag-suggestion:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
 
         /* ── Action sheet ────────────────────────────────────────────────── */
         #action-sheet {
@@ -436,7 +561,7 @@ class ItemDialog extends AppElement {
           outline-offset: 2px;
         }
 
-        #menu-btn { background: none; color: var(--color-text-secondary); padding-inline: var(--space-3); letter-spacing: 0.05em; }
+        #menu-btn { background: none; color: var(--color-text-secondary); padding-inline: var(--space-2); display: flex; align-items: center; }
         #delete { background: none; color: var(--color-danger); }
         #cancel { background: none; color: var(--color-text-secondary); }
 
@@ -512,6 +637,17 @@ class ItemDialog extends AppElement {
               <button type="button" id="url-open" hidden>${t('item-dialog.url-open')}</button>
             </div>
           </div>
+          <div class="tag-area">
+            <div id="tag-suggestions" hidden aria-label="${t('item-dialog.tags-label')}"></div>
+            <div class="tag-chips-wrap" id="tag-chips-wrap" role="group" aria-label="${t('item-dialog.tags-label')}">
+              <input type="text"
+                     id="tag-input"
+                     aria-label="${t('item-dialog.tags-placeholder')}"
+                     placeholder="${t('item-dialog.tags-placeholder')}"
+                     autocomplete="off"
+                     autocapitalize="none" />
+            </div>
+          </div>
         </div>
 
         <!-- ── View 2: Goal promoter ──────────────────────────────────────── -->
@@ -535,7 +671,7 @@ class ItemDialog extends AppElement {
 
         <!-- ── Footer: main ───────────────────────────────────────────────── -->
         <div slot="footer" class="actions footer-main">
-          <button type="button" id="menu-btn" hidden aria-label="${t('item-dialog.more-actions')}">···</button>
+          <button type="button" id="menu-btn" hidden aria-label="${t('item-dialog.more-actions')}">${icons.dotsVertical}</button>
           <button type="button" id="delete" hidden>${t('item-dialog.delete')}</button>
           <div class="actions-end">
             <button type="button" id="cancel">${t('item-dialog.cancel')}</button>
@@ -563,34 +699,38 @@ class ItemDialog extends AppElement {
   }
 
   subscribe() {
-    this._modal      = this.shadowRoot.querySelector('#modal');
+    this._modal = this.shadowRoot.querySelector('#modal');
     this._titleInput = this.shadowRoot.querySelector('#title-input');
-    this._noteInput  = this.shadowRoot.querySelector('#note-input');
+    this._noteInput = this.shadowRoot.querySelector('#note-input');
     this._noteHighlight = attachMarkdownHighlight(
       this._noteInput,
       this.shadowRoot.querySelector('.md-highlight'),
     );
     this._noteCopyBtn = this.shadowRoot.querySelector('#note-copy-btn');
-    this._urlInput   = this.shadowRoot.querySelector('#url-input');
-    this._urlOpen    = this.shadowRoot.querySelector('#url-open');
-    this._urlToggle  = this.shadowRoot.querySelector('#url-toggle');
-    this._urlRow     = this.shadowRoot.querySelector('.url-row');
-    this._saveBtn    = this.shadowRoot.querySelector('#save');
-    this._deleteBtn  = this.shadowRoot.querySelector('#delete');
-    this._menuBtn    = this.shadowRoot.querySelector('#menu-btn');
+    this._urlInput = this.shadowRoot.querySelector('#url-input');
+    this._urlOpen = this.shadowRoot.querySelector('#url-open');
+    this._urlToggle = this.shadowRoot.querySelector('#url-toggle');
+    this._urlRow = this.shadowRoot.querySelector('.url-row');
+    this._tagChipsWrap = this.shadowRoot.querySelector('#tag-chips-wrap');
+    this._tagInput = this.shadowRoot.querySelector('#tag-input');
+    this._tagSuggestions = this.shadowRoot.querySelector('#tag-suggestions');
+    this._saveBtn = this.shadowRoot.querySelector('#save');
+    this._deleteBtn = this.shadowRoot.querySelector('#delete');
+    this._menuBtn = this.shadowRoot.querySelector('#menu-btn');
     this._actionSheet = this.shadowRoot.querySelector('#action-sheet');
-    this._viewMain         = this.shadowRoot.querySelector('#view-main');
+    this._viewMain = this.shadowRoot.querySelector('#view-main');
     this._viewGoalPromoter = this.shadowRoot.querySelector('#view-goal-promoter');
-    this._footerMain         = this.shadowRoot.querySelector('.footer-main');
+    this._footerMain = this.shadowRoot.querySelector('.footer-main');
     this._footerGoalPromoter = this.shadowRoot.querySelector('.footer-goal-promoter');
-    this._listPickerDialog   = this.shadowRoot.querySelector('#list-picker');
-    this._yearSelect        = this.shadowRoot.querySelector('#year-select');
-    this._inGoalsSection    = this.shadowRoot.querySelector('#in-goals-section');
-    this._inGoalsList       = this.shadowRoot.querySelector('#in-goals-list');
-    this._addToGoalCta      = this.shadowRoot.querySelector('#add-to-goal-cta');
+    this._listPickerDialog = this.shadowRoot.querySelector('#list-picker');
+    this._yearSelect = this.shadowRoot.querySelector('#year-select');
+    this._inGoalsSection = this.shadowRoot.querySelector('#in-goals-section');
+    this._inGoalsList = this.shadowRoot.querySelector('#in-goals-list');
+    this._addToGoalCta = this.shadowRoot.querySelector('#add-to-goal-cta');
 
     this._saved = false;
-    this._view  = 'main';
+    this._view = 'main';
+    this._tags = [];
 
     // ── Main view ─────────────────────────────────────────────────────────────
 
@@ -612,14 +752,16 @@ class ItemDialog extends AppElement {
           this._noteCopyBtn.innerHTML = icons.copy;
           this._noteCopyBtn.classList.remove('is-copied');
         }, 1500);
-      } catch {} // clipboard unavailable — fail silently
+      } catch { } // clipboard unavailable — fail silently
     };
 
     this._onUrlInput = () => { this._syncUrlOpen(); this._saveDraft(); };
 
     this._onUrlToggle = () => {
-      this._showUrlField(this._urlRow.hidden);
-      if (!this._urlRow.hidden) this._urlInput.focus();
+      const opening = this._urlRow.hidden;
+      this._showUrlField(opening);
+      if (opening) this._urlInput.focus();
+      else this._noteInput.focus();
       requestAnimationFrame(() => this._syncNoteHeight());
     };
 
@@ -629,12 +771,12 @@ class ItemDialog extends AppElement {
     };
 
     this._onSave = () => {
-      const { title, status, note, url } = this._getFormValues();
+      const { title, status, note, url, tags } = this._getFormValues();
       if (!title) return;
       this._saved = true;
       if (this._isNew) localStorage.removeItem(DRAFT_KEY);
       this.dispatchEvent(new CustomEvent('item-saved', {
-        bubbles: true, composed: true, detail: { title, status, note, url },
+        bubbles: true, composed: true, detail: { title, status, note, url, tags },
       }));
       this._modal.close();
     };
@@ -671,15 +813,56 @@ class ItemDialog extends AppElement {
 
     this._onResize = () => this._syncNoteHeight();
 
-    this._titleInput.addEventListener('input',   this._onTitleInput);
+    // ── Tag input ─────────────────────────────────────────────────────────────
+
+    this._onTagKeyDown = e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        this._addTag(this._tagInput.value);
+      } else if (e.key === 'Backspace' && !this._tagInput.value && this._tags.length) {
+        e.preventDefault();
+        this._removeTag(this._tags[this._tags.length - 1]);
+      }
+    };
+
+    this._onTagInput = () => {
+      const val = this._tagInput.value;
+      if (val.includes(',')) {
+        val.split(',').slice(0, -1).forEach(p => this._addTag(p));
+        this._tagInput.value = val.split(',').at(-1);
+      }
+      this._updateSuggestions();
+    };
+
+    this._onTagBlur = () => {
+      if (this._tagInput.value.trim()) this._addTag(this._tagInput.value);
+    };
+
+    this._onTagWrapClick = e => {
+      const removeBtn = e.target.closest('.tag-chip-remove');
+      if (removeBtn) { this._removeTag(removeBtn.dataset.tag); return; }
+      this._tagInput.focus();
+    };
+
+    this._titleInput.addEventListener('input', this._onTitleInput);
     this._titleInput.addEventListener('keydown', this._onKeyDown);
-    this._noteInput.addEventListener('input',    this._onNoteInput);
+    this._noteInput.addEventListener('input', this._onNoteInput);
     this._noteCopyBtn.addEventListener('pointerdown', e => e.preventDefault());
-    this._noteCopyBtn.addEventListener('click',  this._onNoteCopy);
-    this._urlInput.addEventListener('input',     this._onUrlInput);
-    this._urlToggle.addEventListener('click',    this._onUrlToggle);
-    this._urlOpen.addEventListener('click',      this._onUrlOpen);
-    this._saveBtn.addEventListener('click',   this._onSave);
+    this._noteCopyBtn.addEventListener('click', this._onNoteCopy);
+    this._urlInput.addEventListener('input', this._onUrlInput);
+    this._urlToggle.addEventListener('pointerdown', e => e.preventDefault());
+    this._urlToggle.addEventListener('click', this._onUrlToggle);
+    this._urlOpen.addEventListener('click', this._onUrlOpen);
+    this._tagInput.addEventListener('keydown', this._onTagKeyDown);
+    this._tagInput.addEventListener('input', this._onTagInput);
+    this._tagInput.addEventListener('blur', this._onTagBlur);
+    this._tagChipsWrap.addEventListener('click', this._onTagWrapClick);
+    this._onSuggestionPointerDown = e => e.preventDefault();
+    this._tagSuggestions.addEventListener('pointerdown', this._onSuggestionPointerDown);
+    this._onChipRemovePointerDown = e => { if (e.target.closest('.tag-chip-remove')) e.preventDefault(); };
+    this._tagChipsWrap.addEventListener('pointerdown', this._onChipRemovePointerDown);
+    this._saveBtn.addEventListener('click', this._onSave);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
     this._modal.addEventListener('modal-close', this._onModalClose);
@@ -696,6 +879,8 @@ class ItemDialog extends AppElement {
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
     };
+    this._onStatusPointerDown = e => e.preventDefault();
+    this.shadowRoot.querySelector('.status-options').addEventListener('pointerdown', this._onStatusPointerDown);
     this.shadowRoot.querySelector('.status-options').addEventListener('click', this._onStatusClick);
     this.shadowRoot.querySelector('.status-options').addEventListener('change', this._onStatusChange);
 
@@ -730,11 +915,11 @@ class ItemDialog extends AppElement {
 
     this._onListPick = e => {
       const { targetListIds, newListName, copy } = e.detail;
-      const { title, status, note, url } = this._getFormValues();
+      const { title, status, note, url, tags } = this._getFormValues();
       if (this._isNew) localStorage.removeItem(DRAFT_KEY);
       this.dispatchEvent(new CustomEvent('item-move', {
         bubbles: true, composed: true,
-        detail: { title, status, note, url, targetListIds, newListName, copy },
+        detail: { title, status, note, url, tags, targetListIds, newListName, copy },
       }));
       this._modal.close();
     };
@@ -757,18 +942,25 @@ class ItemDialog extends AppElement {
 
   unsubscribe() {
     this._noteHighlight?.detach();
-    this._titleInput?.removeEventListener('input',   this._onTitleInput);
+    this._titleInput?.removeEventListener('input', this._onTitleInput);
     this._titleInput?.removeEventListener('keydown', this._onKeyDown);
-    this._noteInput?.removeEventListener('input',    this._onNoteInput);
-    this._noteCopyBtn?.removeEventListener('click',  this._onNoteCopy);
-    this._urlInput?.removeEventListener('input',     this._onUrlInput);
-    this._urlToggle?.removeEventListener('click',    this._onUrlToggle);
-    this._urlOpen?.removeEventListener('click',      this._onUrlOpen);
-    this._saveBtn?.removeEventListener('click',   this._onSave);
+    this._noteInput?.removeEventListener('input', this._onNoteInput);
+    this._noteCopyBtn?.removeEventListener('click', this._onNoteCopy);
+    this._urlInput?.removeEventListener('input', this._onUrlInput);
+    this._urlToggle?.removeEventListener('click', this._onUrlToggle);
+    this._urlOpen?.removeEventListener('click', this._onUrlOpen);
+    this._tagInput?.removeEventListener('keydown', this._onTagKeyDown);
+    this._tagInput?.removeEventListener('input', this._onTagInput);
+    this._tagInput?.removeEventListener('blur', this._onTagBlur);
+    this._tagChipsWrap?.removeEventListener('click', this._onTagWrapClick);
+    this._tagSuggestions?.removeEventListener('pointerdown', this._onSuggestionPointerDown);
+    this._tagChipsWrap?.removeEventListener('pointerdown', this._onChipRemovePointerDown);
+    this._saveBtn?.removeEventListener('click', this._onSave);
     this._deleteBtn?.removeEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).removeEventListener('resize', this._onResize);
+    this.shadowRoot.querySelector('.status-options')?.removeEventListener('pointerdown', this._onStatusPointerDown);
     this.shadowRoot.querySelector('.status-options')?.removeEventListener('click', this._onStatusClick);
     this.shadowRoot.querySelector('.status-options')?.removeEventListener('change', this._onStatusChange);
 
@@ -789,9 +981,9 @@ class ItemDialog extends AppElement {
 
   _showView(name) {
     this._view = name;
-    this._viewMain.hidden         = name !== 'main';
+    this._viewMain.hidden = name !== 'main';
     this._viewGoalPromoter.hidden = name !== 'goal-promoter';
-    this._footerMain.hidden         = name !== 'main';
+    this._footerMain.hidden = name !== 'main';
     this._footerGoalPromoter.hidden = name !== 'goal-promoter';
 
     if (name === 'goal-promoter') this._renderGoalPromoter();
@@ -804,9 +996,9 @@ class ItemDialog extends AppElement {
     const y = this.currentYear;
     this._yearSelect.replaceChildren();
     for (let i = 0; i < 5; i++) {
-      const yr  = y - 2 + i;
+      const yr = y - 2 + i;
       const opt = document.createElement('option');
-      opt.value       = String(yr);
+      opt.value = String(yr);
       opt.textContent = String(yr);
       this._yearSelect.appendChild(opt);
     }
@@ -835,38 +1027,110 @@ class ItemDialog extends AppElement {
   }
 
   _updateGoalGuard() {
-    const year    = this._yearSelect?.value;
+    const year = this._yearSelect?.value;
     const section = this._checkedSection();
     const alreadyAdded = (this._item?.inGoals ?? []).some(
       e => String(e.year) === String(year) && e.section === section
     );
-    this._addToGoalCta.disabled    = alreadyAdded;
+    this._addToGoalCta.disabled = alreadyAdded;
     this._addToGoalCta.textContent = alreadyAdded
       ? t('item-dialog.goal-already-added')
       : t('item-dialog.goal-add-cta');
   }
 
   _commitPromote() {
-    const year    = this._yearSelect?.value;
+    const year = this._yearSelect?.value;
     const section = this._checkedSection();
     if (!year || !section) return;
-    const { title, status, note, url } = this._getFormValues();
+    const { title, status, note, url, tags } = this._getFormValues();
     if (this._isNew) localStorage.removeItem(DRAFT_KEY);
     this.dispatchEvent(new CustomEvent('item-promote', {
       bubbles: true, composed: true,
-      detail: { title, status, note, url, year, section },
+      detail: { title, status, note, url, tags, year, section },
     }));
     this._modal.close();
+  }
+
+  // ── Tag helpers ───────────────────────────────────────────────────────────
+
+  _addTag(raw) {
+    const tag = raw.replace(/,/g, '').trim().toLowerCase();
+    if (!tag || this._tags.includes(tag)) { this._tagInput.value = ''; return; }
+    this._tags.push(tag);
+    this._tagInput.value = '';
+    this._renderTagChips();
+    this._saveDraft();
+    this._updateSuggestions();
+    this._dispatchTagsChanged();
+  }
+
+  _removeTag(tag) {
+    this._tags = this._tags.filter(t => t !== tag);
+    this._renderTagChips();
+    this._saveDraft();
+    this._dispatchTagsChanged();
+  }
+
+  _dispatchTagsChanged() {
+    if (this._isNew) return;
+    this.dispatchEvent(new CustomEvent('item-tags-changed', {
+      bubbles: true, composed: true, detail: { tags: [...this._tags] },
+    }));
+  }
+
+  _renderTagChips() {
+    this._tagChipsWrap.querySelectorAll('.tag-chip').forEach(c => c.remove());
+    for (const tag of this._tags) {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip';
+      chip.style.background = tagColor(tag);
+      chip.appendChild(document.createTextNode(tag));
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tag-chip-remove';
+      btn.dataset.tag = tag;
+      btn.setAttribute('aria-label', t('tag.remove', { tag }));
+      btn.textContent = '×';
+      chip.appendChild(btn);
+      this._tagChipsWrap.insertBefore(chip, this._tagInput);
+    }
+  }
+
+  _updateSuggestions() {
+    if (!this._tagSuggestions) return;
+    const partial = this._tagInput.value.trim().toLowerCase();
+    if (!partial) { this._tagSuggestions.hidden = true; this._tagSuggestions.replaceChildren(); return; }
+    const matches = (this._existingTags ?? []).filter(t => t.includes(partial) && !this._tags.includes(t));
+    if (!matches.length) { this._tagSuggestions.hidden = true; this._tagSuggestions.replaceChildren(); return; }
+    this._tagSuggestions.replaceChildren();
+    for (const tag of matches) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tag-suggestion';
+      btn.textContent = tag;
+      btn.style.borderColor = tagColor(tag);
+      btn.addEventListener('click', () => { this._addTag(tag); this._tagInput.focus(); });
+      this._tagSuggestions.appendChild(btn);
+    }
+    this._tagSuggestions.hidden = false;
   }
 
   // ── Shared helpers ────────────────────────────────────────────────────────
 
   _getFormValues() {
-    const title  = this._titleInput.value.trim();
+    // Commit any uncommitted tag text on save
+    const rawTag = this._tagInput?.value.trim().toLowerCase().replace(/,/g, '');
+    if (rawTag && !this._tags.includes(rawTag)) {
+      this._tags.push(rawTag);
+      if (this._tagInput) this._tagInput.value = '';
+      this._renderTagChips();
+    }
+    const title = this._titleInput.value.trim();
     const status = this.shadowRoot.querySelector('input[name="status"]:checked')?.value ?? 'open';
-    const note   = this._noteInput.value.trim() || undefined;
-    const url    = this._urlInput.value.trim()  || undefined;
-    return { title, status, note, url };
+    const note = this._noteInput.value.trim() || undefined;
+    const url = this._urlInput.value.trim() || undefined;
+    const tags = [...this._tags];
+    return { title, status, note, url, tags };
   }
 
   _syncNoteHeight() {
@@ -874,9 +1138,9 @@ class ItemDialog extends AppElement {
     if (!ta) return;
     ta.style.blockSize = 'auto';
     const vh = window.visualViewport?.height ?? window.innerHeight;
-    const urlRowH    = this._urlRow?.hidden ? 0 : (this._urlRow?.offsetHeight ?? 0);
-    const MIN_H      = 56;
-    const CHROME_H   = 280; // approx header + footer + title + status chrome
+    const urlRowH = this._urlRow?.hidden ? 0 : (this._urlRow?.offsetHeight ?? 0);
+    const MIN_H = 56;
+    const CHROME_H = 340; // approx header + footer + title + status + tags chrome
     const MIN_WRAP_H = 120;
     const maxH = Math.max(vh - CHROME_H - urlRowH, MIN_WRAP_H);
     ta.style.blockSize = `${Math.max(ta.scrollHeight, MIN_H)}px`;
@@ -892,8 +1156,9 @@ class ItemDialog extends AppElement {
     if (!this._isNew) return;
     localStorage.setItem(DRAFT_KEY, JSON.stringify({
       title: this._titleInput.value,
-      note:  this._noteInput.value,
-      url:   this._urlInput.value,
+      note: this._noteInput.value,
+      url: this._urlInput.value,
+      tags: [...this._tags],
     }));
   }
 

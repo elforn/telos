@@ -100,6 +100,7 @@ class ListsPageItem extends Gestures(AppElement) {
           border: none;
           cursor: grab;
           color: var(--color-text-muted);
+          opacity: 0.45;
           display: flex;
           align-items: center;
           justify-content: center;

@@ -9,6 +9,8 @@ import '../components/goal-item/goal-item.js';
 import '../components/goal-dialog/goal-dialog.js';
 import '../components/add-row/add-row.js';
 import { exportGoalsMarkdown } from '../utils/export-markdown.js';
+import { icons } from '../icons.js';
+import { tagColor } from '../utils/tag-color.js';
 
 class HomePage extends AppElement {
   template() {
@@ -24,7 +26,7 @@ class HomePage extends AppElement {
           flex-direction: column;
           gap: var(--space-2);
           padding: 0 var(--page-padding);
-          padding-block-start: calc(var(--update-banner-height, 0px) + var(--year-header-height, 81px) + var(--space-2));
+          padding-block-start: calc(var(--update-banner-height, 0px) + var(--year-header-height, 81px) + var(--space-3));
           padding-block-end: calc(var(--bottom-nav-height) + var(--space-2));
         }
 
@@ -123,11 +125,222 @@ class HomePage extends AppElement {
         .list-section:not(.empty).add-open add-row   { display: block; }
         .list-section:not(.empty).add-open .fold-btn { display: flex; }
 
+        /* ── Filter bar (slotted into year-header) ───────────────────────── */
+
+        #filter-bar {
+          border-block-start: 0.5px solid var(--color-border);
+          padding-block: var(--space-2);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-1);
+          background: var(--color-surface);
+        }
+
+        #filter-bar[hidden] { display: none; }
+
+        .filter-top-row {
+          display: flex;
+          align-items: center;
+        }
+
+        .filter-search-wrap {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          gap: var(--space-1);
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding-inline: var(--space-3);
+        }
+
+        .filter-search-wrap:focus-within {
+          border-color: var(--color-accent);
+        }
+
+        .filter-search-icon {
+          flex-shrink: 0;
+          color: var(--color-text-muted);
+          display: flex;
+          align-items: center;
+        }
+
+        .filter-search-icon svg {
+          inline-size: 16px;
+          block-size: 16px;
+          pointer-events: none;
+        }
+
+        #filter-search {
+          flex: 1;
+          min-block-size: 34px;
+          background: none;
+          border: none;
+          outline: none;
+          font-family: var(--font-family);
+          font-size: var(--font-size-body);
+          color: var(--color-text-primary);
+        }
+
+        #filter-search::-webkit-search-cancel-button { display: none; }
+
+        #filter-search::placeholder {
+          color: var(--color-text-muted);
+        }
+
+        .filter-clear-btn,
+        .filter-expand-btn {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
+          border: none;
+          background: none;
+          cursor: pointer;
+          color: var(--color-text-muted);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: var(--radius-sm);
+          touch-action: manipulation;
+        }
+
+        .filter-clear-btn svg {
+          inline-size: 20px;
+          block-size: 20px;
+          pointer-events: none;
+        }
+
+        .filter-clear-btn {
+          margin-inline-end: var(--edge-btn-bleed);
+        }
+
+        .filter-clear-btn.active {
+          color: var(--color-danger);
+        }
+
+        .filter-expand-btn svg {
+          inline-size: 16px;
+          block-size: 16px;
+          pointer-events: none;
+        }
+
+        .filter-expand-btn {
+          position: relative;
+        }
+
+        .filter-expand-btn[aria-expanded="true"] svg {
+          transform: rotate(180deg);
+        }
+
+        .filter-expand-dot {
+          position: absolute;
+          inset-block-start: 6px;
+          inset-inline-end: 6px;
+          inline-size: 6px;
+          block-size: 6px;
+          border-radius: var(--radius-full);
+          background: var(--color-accent);
+          pointer-events: none;
+        }
+
+        .filter-clear-btn:focus-visible,
+        .filter-expand-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        #filter-panel {
+          display: flex;
+          flex-direction: column;
+          gap: calc(var(--space-1) + 1px);
+        }
+
+        #filter-panel[hidden] { display: none; }
+
+        .filter-row {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          overflow-x: auto;
+          flex-wrap: nowrap;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .filter-row::-webkit-scrollbar { display: none; }
+
+        .filter-pill,
+        .filter-tag-chip {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target-small);
+          padding-inline: var(--space-3);
+          border-radius: var(--radius-full);
+          border: 1px solid var(--color-border);
+          background: none;
+          cursor: pointer;
+          font-family: var(--font-family);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-medium);
+          color: var(--color-text-secondary);
+          white-space: nowrap;
+          touch-action: manipulation;
+        }
+
+        .filter-pill.active {
+          background: var(--color-accent);
+          border-color: var(--color-accent);
+          color: var(--color-text-on-accent);
+        }
+
+        .filter-tag-chip {
+          border-color: var(--tag-color, var(--color-border));
+        }
+
+        .filter-tag-chip.active {
+          background: var(--tag-color, var(--color-accent));
+          border-color: var(--tag-color, var(--color-accent));
+          color: var(--color-text-primary);
+        }
+
+        .filter-pill:focus-visible,
+        .filter-tag-chip:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        #filter-empty {
+          text-align: center;
+          padding-block: var(--space-8);
+          color: var(--color-text-muted);
+          font-size: var(--font-size-body);
+        }
+
       </style>
 
-      <year-header id="header"></year-header>
+      <year-header id="header">
+        <div slot="filter-bar" id="filter-bar" hidden>
+          <div class="filter-top-row">
+            <div class="filter-search-wrap">
+              <span class="filter-search-icon" aria-hidden="true">${icons.magnifyingGlass}</span>
+              <input type="search" id="filter-search" placeholder="${t('home-page.filter-search')}" aria-label="${t('home-page.filter-search')}" autocomplete="off" />
+            </div>
+            <button class="filter-expand-btn" id="filter-expand-btn" aria-label="${t('home-page.filter-expand')}" aria-expanded="false">${icons.chevronDown}<span class="filter-expand-dot" hidden aria-hidden="true"></span></button>
+            <button class="filter-clear-btn" id="filter-clear-btn" aria-label="${t('home-page.filter-clear')}">${icons.funnelX}</button>
+          </div>
+          <div id="filter-panel" hidden>
+            <div class="filter-row" id="filter-states-row" role="group" aria-label="${t('home-page.filter-toggle')}">
+              <button class="filter-pill" id="fstate-done" aria-pressed="false">${t('home-page.filter-done')}</button>
+              <button class="filter-pill" id="fstate-ongoing" aria-pressed="false">${t('home-page.filter-ongoing')}</button>
+              <button class="filter-pill" id="fstate-not-started" aria-pressed="false">${t('home-page.filter-not-started')}</button>
+            </div>
+            <div class="filter-row" id="filter-tag-row" hidden></div>
+          </div>
+        </div>
+      </year-header>
 
       <main>
+        <p id="filter-empty" hidden>${t('home-page.filter-empty')}</p>
+
         <section id="capstone-section" class="list-section empty" aria-label="${t('home-page.capstone-section')}">
           <h2 class="section-heading">${t('home-page.capstone-section')}</h2>
           <div id="capstone-list" class="item-list" role="list"></div>
@@ -194,6 +407,99 @@ class HomePage extends AppElement {
     this._onYearNavigate = e => navigate(`${BASE_PATH}${e.detail.year}`);
     this._header.addEventListener('year-navigate', this._onYearNavigate);
 
+    // ── Filter bar ────────────────────────────────────────────────────────────
+
+    this._filterBar      = this.shadowRoot.querySelector('#filter-bar');
+    this._filterSearch   = this.shadowRoot.querySelector('#filter-search');
+    this._filterPanel    = this.shadowRoot.querySelector('#filter-panel');
+    this._filterTagRow   = this.shadowRoot.querySelector('#filter-tag-row');
+    this._filterEmpty    = this.shadowRoot.querySelector('#filter-empty');
+    this._filterExpandBtn = this.shadowRoot.querySelector('#filter-expand-btn');
+
+    this._filter = { query: '', states: new Set(), tags: new Set() };
+    this._panelExpanded = false;
+    this._barExpanded = false;
+    this._loadFilter();
+
+    this._onGoalFilterTagChip = e => {
+      const tag = e.currentTarget.dataset.tag;
+      if (this._filter.tags.has(tag)) this._filter.tags.delete(tag);
+      else this._filter.tags.add(tag);
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyGoalFilter();
+    };
+
+    this._onFilterClick = () => {
+      const nowOpen = this._filterBar.hidden;
+      this._filterBar.hidden = !nowOpen;
+      this._header.filterExpanded = nowOpen;
+      this._header.forceCompact = nowOpen;
+      this._barExpanded = nowOpen;
+      if (!nowOpen) this._panelExpanded = false;
+      this._saveFilter();
+      if (nowOpen) {
+        if (this._filterPanel) this._filterPanel.hidden = true;
+        if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', 'false');
+        requestAnimationFrame(() => this._filterSearch?.focus());
+      } else {
+        if (this._filterPanel) this._filterPanel.hidden = true;
+        if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', 'false');
+      }
+    };
+    this._header.addEventListener('filter-click', this._onFilterClick);
+
+    this._onFilterExpand = () => {
+      const panelOpen = this._filterPanel.hidden;
+      this._filterPanel.hidden = !panelOpen;
+      this._filterExpandBtn.setAttribute('aria-expanded', String(panelOpen));
+      this._panelExpanded = panelOpen;
+      this._saveFilter();
+    };
+    this._filterExpandBtn.addEventListener('click', this._onFilterExpand);
+
+    this._onFilterSearch = () => {
+      this._filter.query = this._filterSearch.value;
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyGoalFilter();
+    };
+    this._filterSearch.addEventListener('input', this._onFilterSearch);
+
+    this._onFilterState = e => {
+      const btn = e.target.closest('.filter-pill');
+      if (!btn) return;
+      const id = btn.id;
+      const stateMap = { 'fstate-done': 'done', 'fstate-ongoing': 'ongoing', 'fstate-not-started': 'not-started' };
+      const state = stateMap[id];
+      if (!state) return;
+      if (this._filter.states.has(state)) this._filter.states.delete(state);
+      else this._filter.states.add(state);
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyGoalFilter();
+    };
+    this.shadowRoot.querySelector('#filter-states-row').addEventListener('click', this._onFilterState);
+
+    this._onFilterClear = () => {
+      this._filter = { query: '', states: new Set(), tags: new Set() };
+      this._filterSearch.value = '';
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyGoalFilter();
+    };
+    this.shadowRoot.querySelector('#filter-clear-btn').addEventListener('click', this._onFilterClear);
+
+    if (this._barExpanded) {
+      this._filterBar.hidden = false;
+      this._header.filterExpanded = true;
+      this._header.forceCompact = true;
+      if (this._panelExpanded) {
+        this._filterPanel.hidden = false;
+        this._filterExpandBtn.setAttribute('aria-expanded', 'true');
+      }
+    }
+
     // ── Store subscription ────────────────────────────────────────────────────
 
     this._onAccentColors = colors => this._applyAccent(colors?.[String(this._year)]);
@@ -218,6 +524,14 @@ class HomePage extends AppElement {
       this._renderList(this._focusList,     yg.focus     ?? []);
       this._focusSection.classList.toggle('empty',     (yg.focus     ?? []).length === 0);
       if ((yg.focus     ?? []).length === 0) this._focusSection.classList.remove('add-open');
+
+      const allGoals = [
+        ...(yg.capstone ?? []), ...(yg.milestones ?? []),
+        ...(yg.wow ?? []),      ...(yg.focus ?? []),
+      ];
+      this._rebuildTagChips(allGoals);
+      this._syncFilterUI();
+      this._applyGoalFilter();
     };
     subscribe('goals', this._onGoals);
 
@@ -227,7 +541,7 @@ class HomePage extends AppElement {
       sectionEl.classList.add('add-open');
       this._editingSection = section;
       this._editingGoal    = null;
-      this._dialog.open(null);
+      this._openGoalDialog(null);
     };
     const makeFold = sectionEl => () => sectionEl.classList.remove('add-open');
 
@@ -352,9 +666,7 @@ class HomePage extends AppElement {
     this._onCapstoneGoalTap = e => {
       this._editingSection = 'capstone';
       this._editingGoal    = e.detail.goal;
-      this._dialog.currentYear    = this._year;
-      this._dialog.availableLists = getState().lists ?? [];
-      this._dialog.open(e.detail.goal, { year: String(this._year), section: 'capstone' });
+      this._openGoalDialog(e.detail.goal, { year: String(this._year), section: 'capstone' });
     };
     this._capstoneList.addEventListener('goal-tap', this._onCapstoneGoalTap);
 
@@ -369,7 +681,7 @@ class HomePage extends AppElement {
     this._onAddCapstone = () => {
       this._editingSection = 'capstone';
       this._editingGoal    = null;
-      this._dialog.open(null);
+      this._openGoalDialog(null);
     };
     this.shadowRoot.querySelector('#add-capstone').addEventListener('click', this._onAddCapstone);
 
@@ -378,9 +690,7 @@ class HomePage extends AppElement {
     this._onMilestoneGoalTap = e => {
       this._editingSection = 'milestones';
       this._editingGoal    = e.detail.goal;
-      this._dialog.currentYear    = this._year;
-      this._dialog.availableLists = getState().lists ?? [];
-      this._dialog.open(e.detail.goal, { year: String(this._year), section: 'milestones' });
+      this._openGoalDialog(e.detail.goal, { year: String(this._year), section: 'milestones' });
     };
     this._milestoneList.addEventListener('goal-tap', this._onMilestoneGoalTap);
 
@@ -395,7 +705,7 @@ class HomePage extends AppElement {
     this._onAddMilestone = () => {
       this._editingSection = 'milestones';
       this._editingGoal    = null;
-      this._dialog.open(null);
+      this._openGoalDialog(null);
     };
     this.shadowRoot.querySelector('#add-milestone').addEventListener('click', this._onAddMilestone);
 
@@ -404,9 +714,7 @@ class HomePage extends AppElement {
     this._onWowGoalTap = e => {
       this._editingSection = 'wow';
       this._editingGoal    = e.detail.goal;
-      this._dialog.currentYear    = this._year;
-      this._dialog.availableLists = getState().lists ?? [];
-      this._dialog.open(e.detail.goal, { year: String(this._year), section: 'wow' });
+      this._openGoalDialog(e.detail.goal, { year: String(this._year), section: 'wow' });
     };
     this._wowList.addEventListener('goal-tap', this._onWowGoalTap);
 
@@ -421,7 +729,7 @@ class HomePage extends AppElement {
     this._onAddWow = () => {
       this._editingSection = 'wow';
       this._editingGoal    = null;
-      this._dialog.open(null);
+      this._openGoalDialog(null);
     };
     this.shadowRoot.querySelector('#add-wow').addEventListener('click', this._onAddWow);
 
@@ -430,9 +738,7 @@ class HomePage extends AppElement {
     this._onFocusGoalTap = e => {
       this._editingSection = 'focus';
       this._editingGoal    = e.detail.goal;
-      this._dialog.currentYear    = this._year;
-      this._dialog.availableLists = getState().lists ?? [];
-      this._dialog.open(e.detail.goal, { year: String(this._year), section: 'focus' });
+      this._openGoalDialog(e.detail.goal, { year: String(this._year), section: 'focus' });
     };
     this._focusList.addEventListener('goal-tap', this._onFocusGoalTap);
 
@@ -447,7 +753,7 @@ class HomePage extends AppElement {
     this._onAddFocus = () => {
       this._editingSection = 'focus';
       this._editingGoal    = null;
-      this._dialog.open(null);
+      this._openGoalDialog(null);
     };
     this.shadowRoot.querySelector('#add-focus').addEventListener('click', this._onAddFocus);
 
@@ -463,14 +769,22 @@ class HomePage extends AppElement {
 
     // ── Dialog save ───────────────────────────────────────────────────────────
 
+    this._onGoalTagsChanged = e => {
+      if (!this._editingGoal) return;
+      this._mutateSection(this._editingSection, list =>
+        list.map(g => g.id === this._editingGoal.id ? { ...g, tags: e.detail.tags } : g)
+      );
+    };
+    this.shadowRoot.addEventListener('goal-tags-changed', this._onGoalTagsChanged);
+
     this._onGoalSaved = e => {
-      const { title, notes } = e.detail;
+      const { title, notes, tags } = e.detail;
       if (this._editingGoal) {
         const snapshot = getState().goals;
-        this._editGoal(this._editingSection, this._editingGoal.id, title, notes);
+        this._editGoal(this._editingSection, this._editingGoal.id, title, notes, tags);
         toast(t('home.toast-goal-saved'), 'success', { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
       } else {
-        this._addGoal(this._editingSection, title, notes);
+        this._addGoal(this._editingSection, title, notes, tags);
         toast(t('home.toast-goal-saved'), 'success');
       }
     };
@@ -595,12 +909,18 @@ class HomePage extends AppElement {
     this.shadowRoot.querySelector('#fold-focus')?.removeEventListener('click',         this._onFoldFocus);
 
     this.shadowRoot.removeEventListener('year-export-confirm', this._onYearExportConfirm);
+    this.shadowRoot.removeEventListener('goal-tags-changed', this._onGoalTagsChanged);
     this.shadowRoot.removeEventListener('goal-saved',       this._onGoalSaved);
     this.shadowRoot.removeEventListener('goal-drag-start',  this._onGoalDragStart);
     this.shadowRoot.removeEventListener('goal-reorder-key', this._onGoalReorderKey);
     this._dialog?.removeEventListener('goal-delete',       this._onDialogDelete);
     this._dialog?.removeEventListener('goal-move',         this._onGoalMove);
     this._dialog?.removeEventListener('goal-create-item',  this._onGoalCreateItem);
+    this._header?.removeEventListener('filter-click', this._onFilterClick);
+    this._filterExpandBtn?.removeEventListener('click', this._onFilterExpand);
+    this._filterSearch?.removeEventListener('input', this._onFilterSearch);
+    this.shadowRoot?.querySelector('#filter-states-row')?.removeEventListener('click', this._onFilterState);
+    this.shadowRoot?.querySelector('#filter-clear-btn')?.removeEventListener('click', this._onFilterClear);
 
     if (this._drag) {
       const { dragEl, clone } = this._drag;
@@ -648,13 +968,13 @@ class HomePage extends AppElement {
     setState('goals', { ...getState().goals, [year]: { ...yg, [section]: fn(yg[section] ?? []) } });
   }
 
-  _addGoal(section, title, notes) {
-    const goal = { id: crypto.randomUUID(), title, notes, percentage: 0 };
+  _addGoal(section, title, notes, tags) {
+    const goal = { id: crypto.randomUUID(), title, notes, tags: tags ?? [], percentage: 0 };
     this._mutateSection(section, list => [...list, goal]);
   }
 
-  _editGoal(section, id, title, notes) {
-    this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, title, notes } : g));
+  _editGoal(section, id, title, notes, tags) {
+    this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, title, notes, tags } : g));
   }
 
   _setProgress(section, id, percentage) {
@@ -669,6 +989,135 @@ class HomePage extends AppElement {
     const snapshot = getState().goals;
     this._deleteGoal(section, id);
     toast(t('home.toast-goal-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
+  }
+
+  // ── Filter helpers ────────────────────────────────────────────────────────
+
+  _loadFilter() {
+    try {
+      const raw = localStorage.getItem(`telos:filter:goals:${this._year}`);
+      if (raw) {
+        const { query = '', states = [], tags = [], panelExpanded = false, barExpanded = false } = JSON.parse(raw);
+        this._filter = { query, states: new Set(states), tags: new Set(tags) };
+        this._panelExpanded = panelExpanded;
+        this._barExpanded = barExpanded;
+      }
+    } catch { /* ignore */ }
+  }
+
+  _saveFilter() {
+    const { query, states, tags } = this._filter;
+    if (query || states.size || tags.size || this._barExpanded || this._panelExpanded) {
+      localStorage.setItem(`telos:filter:goals:${this._year}`,
+        JSON.stringify({ query, states: [...states], tags: [...tags], panelExpanded: this._panelExpanded, barExpanded: this._barExpanded }));
+    } else {
+      localStorage.removeItem(`telos:filter:goals:${this._year}`);
+    }
+  }
+
+  _isFilterActive() {
+    const { query, states, tags } = this._filter;
+    return !!(query || states.size || tags.size);
+  }
+
+  _syncFilterUI() {
+    if (!this._filterBar) return;
+    if (this._filterSearch) this._filterSearch.value = this._filter.query;
+    const active = this._isFilterActive();
+    const stateMap = { 'fstate-done': 'done', 'fstate-ongoing': 'ongoing', 'fstate-not-started': 'not-started' };
+    for (const [id, key] of Object.entries(stateMap)) {
+      const btn = this.shadowRoot.querySelector(`#${id}`);
+      if (btn) {
+        const on = this._filter.states.has(key);
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', String(on));
+      }
+    }
+    this._header.filterDot = active;
+    this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
+    const expandDot = this._filterExpandBtn?.querySelector('.filter-expand-dot');
+    if (expandDot) expandDot.hidden = !(this._filter.states.size || this._filter.tags.size);
+    this._filterTagRow?.querySelectorAll('.filter-tag-chip').forEach(chip => {
+      const on = this._filter.tags.has(chip.dataset.tag);
+      chip.classList.toggle('active', on);
+      chip.setAttribute('aria-pressed', String(on));
+    });
+  }
+
+  _rebuildTagChips(goals) {
+    if (!this._filterTagRow) return;
+    const allTags = new Set();
+    for (const goal of goals) {
+      for (const tag of (goal.tags ?? [])) allTags.add(tag);
+    }
+    if (allTags.size === 0) {
+      this._filterTagRow.hidden = true;
+      this._filterTagRow.replaceChildren();
+      return;
+    }
+    this._filterTagRow.hidden = false;
+    this._filterTagRow.replaceChildren();
+    for (const tag of [...allTags].sort()) {
+      const btn = document.createElement('button');
+      btn.className = 'filter-tag-chip';
+      btn.type = 'button';
+      btn.dataset.tag = tag;
+      btn.textContent = tag;
+      btn.style.setProperty('--tag-color', tagColor(tag));
+      const on = this._filter.tags.has(tag);
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', String(on));
+      btn.addEventListener('click', this._onGoalFilterTagChip);
+      this._filterTagRow.appendChild(btn);
+    }
+  }
+
+  _applyGoalFilter() {
+    const { query, states, tags } = this._filter;
+    const q = query.toLowerCase().trim();
+    const active = !!(q || states.size || tags.size);
+    let anyVisible = false;
+
+    const sections = [
+      { list: this._capstoneList,  section: this._capstoneSection },
+      { list: this._milestoneList, section: this._milestoneSection },
+      { list: this._wowList,       section: this._wowSection },
+      { list: this._focusList,     section: this._focusSection },
+    ];
+
+    for (const { list, section } of sections) {
+      if (!list) continue;
+      let sectionVisible = false;
+      list.querySelectorAll('goal-item').forEach(el => {
+        const goal = el._goal;
+        if (!goal) { el.hidden = false; sectionVisible = true; return; }
+        let show = true;
+        if (q) {
+          const hay = `${goal.title ?? ''} ${goal.notes ?? ''}`.toLowerCase();
+          if (!hay.includes(q)) show = false;
+        }
+        if (show && states.size) {
+          const pct = goal.percentage ?? 0;
+          const gstate = pct === 100 ? 'done' : pct === 0 ? 'not-started' : 'ongoing';
+          if (!states.has(gstate)) show = false;
+        }
+        if (show && tags.size) {
+          const gtags = goal.tags ?? [];
+          if (![...tags].some(tag => gtags.includes(tag))) show = false;
+        }
+        el.hidden = !show;
+        if (show) { anyVisible = true; sectionVisible = true; }
+      });
+      const hide = active && !sectionVisible;
+      const heading = section?.querySelector('.section-heading');
+      if (heading) heading.hidden = hide;
+      const addLine = section?.querySelector('.add-line');
+      if (addLine) addLine.hidden = hide;
+    }
+
+    if (this._filterEmpty) this._filterEmpty.hidden = !active || anyVisible;
+    this._header.filterDot = active;
+    this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -766,6 +1215,29 @@ class HomePage extends AppElement {
     ].join(';');
     clone.textContent = title;
     return clone;
+  }
+
+  _openGoalDialog(goal, opts) {
+    this._dialog.existingTags   = this._collectAllTags();
+    this._dialog.currentYear    = this._year;
+    this._dialog.availableLists = getState().lists ?? [];
+    this._dialog.open(goal, opts);
+  }
+
+  _collectAllTags() {
+    const tags  = new Set();
+    const state = getState();
+    for (const yg of Object.values(state.goals ?? {})) {
+      for (const section of Object.values(yg)) {
+        if (Array.isArray(section)) {
+          for (const goal of section) for (const tag of (goal.tags ?? [])) tags.add(tag);
+        }
+      }
+    }
+    for (const list of (state.lists ?? [])) {
+      for (const item of (list.items ?? [])) for (const tag of (item.tags ?? [])) tags.add(tag);
+    }
+    return [...tags].sort();
   }
 
   _placeGoal(fromSection, fromIndex, toSection, toIndex) {

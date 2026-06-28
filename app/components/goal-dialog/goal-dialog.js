@@ -4,6 +4,7 @@ import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
 import { icons } from '../../icons.js';
+import { tagColor } from '../../utils/tag-color.js';
 
 const DRAFT_KEY = 'telos:draft.new-goal';
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
@@ -16,6 +17,8 @@ class GoalDialog extends AppElement {
 
   set availableLists(val) { this._availableLists = val ?? []; }
   get availableLists()    { return this._availableLists ?? []; }
+
+  set existingTags(val)   { this._existingTags   = val ?? []; }
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -31,6 +34,12 @@ class GoalDialog extends AppElement {
     if (this._menuBtn) this._menuBtn.hidden = !goal;
     this._descInput.value = goal?.notes ?? draft?.notes ?? '';
     this._descHighlight?.sync();
+
+    this._tags = [...(goal?.tags ?? draft?.tags ?? [])];
+    this._tagInput.value = '';
+    this._renderTagChips();
+    this._updateSuggestions();
+
     this._saved = false;
     this._showView('main');
     this._modal.show(this._input);
@@ -147,6 +156,124 @@ class GoalDialog extends AppElement {
         }
 
         .copy-btn.is-copied { color: var(--color-accent); }
+
+        /* ── Tags ────────────────────────────────────────────────────────── */
+
+        .tag-chips-wrap {
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          align-items: center;
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding: var(--space-2) var(--space-3);
+          min-block-size: var(--touch-target);
+          box-sizing: border-box;
+          cursor: text;
+          margin-block-end: var(--space-4);
+        }
+
+        .tag-chips-wrap:focus-within { border-color: var(--color-accent); }
+
+        .tag-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-1);
+          padding-block: var(--space-1);
+          padding-inline-start: var(--space-3);
+          padding-inline-end: var(--space-1);
+          color: var(--color-text-primary);
+          border-radius: var(--radius-full);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-medium);
+          font-family: var(--font-family);
+          white-space: nowrap;
+          min-block-size: 28px;
+        }
+
+        .tag-chip-remove {
+          background: rgba(0,0,0,0.12);
+          border: none;
+          border-radius: var(--radius-full);
+          min-block-size: 20px;
+          inline-size: 20px;
+          padding: 0;
+          cursor: pointer;
+          color: var(--color-text-primary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+          font-size: 0.9em;
+          touch-action: manipulation;
+        }
+
+        .tag-chip-remove:hover { background: rgba(0,0,0,0.22); }
+
+        #tag-input {
+          flex: 1;
+          min-inline-size: 80px;
+          background: none;
+          border: none;
+          padding: 0;
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          outline: none;
+          margin-block-end: 0;
+          inline-size: auto;
+          display: inline;
+        }
+
+        #tag-input::placeholder { color: var(--color-text-muted); }
+
+        /* ── Tag suggestions ─────────────────────────────────────────────── */
+
+        .tag-area {
+          position: relative;
+          margin-block-end: var(--space-4);
+        }
+
+        .tag-area .tag-chips-wrap {
+          margin-block-end: 0;
+        }
+
+        #tag-suggestions {
+          position: absolute;
+          inset-block-end: 100%;
+          inset-inline: 0;
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          padding-block-start: var(--space-3);
+          padding-block-end: var(--space-2);
+          background: var(--color-surface);
+          border-block-start: 0.5px solid var(--color-border);
+          box-shadow: 0 -4px 10px rgba(0,0,0,0.07);
+          border-start-start-radius: var(--radius-sm);
+          border-start-end-radius: var(--radius-sm);
+          z-index: 1;
+        }
+
+        #tag-suggestions[hidden] { display: none; }
+
+        .tag-suggestion {
+          min-block-size: 28px;
+          padding-block: 0;
+          padding-inline: var(--space-3);
+          border-radius: var(--radius-full);
+          border: 1px solid var(--color-border);
+          background: none;
+          color: var(--color-text-secondary);
+          font-size: var(--font-size-caption);
+          touch-action: manipulation;
+        }
+
+        .tag-suggestion:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
 
         /* ── Buttons ─────────────────────────────────────────────────────── */
 
@@ -313,7 +440,7 @@ class GoalDialog extends AppElement {
           margin-inline-start: auto;
         }
 
-        #menu-btn { background: none; color: var(--color-text-secondary); padding-inline: var(--space-3); letter-spacing: 0.05em; }
+        #menu-btn { background: none; color: var(--color-text-secondary); padding-inline: var(--space-2); display: flex; align-items: center; }
         #delete { background: none; color: var(--color-danger); }
         #cancel, #move-back { background: none; color: var(--color-text-secondary); }
 
@@ -356,6 +483,17 @@ class GoalDialog extends AppElement {
                       placeholder="${t('goal-dialog.notes-placeholder')}"></textarea>
             <button type="button" class="copy-btn" id="desc-copy-btn" aria-label="${t('goal-dialog.copy-notes')}" title="${t('goal-dialog.copy-notes')}">${icons.copy}</button>
           </div>
+          <div class="tag-area">
+            <div id="tag-suggestions" hidden aria-label="${t('goal-dialog.tags-label')}"></div>
+            <div class="tag-chips-wrap" id="tag-chips-wrap" role="group" aria-label="${t('goal-dialog.tags-label')}">
+              <input type="text"
+                     id="tag-input"
+                     aria-label="${t('goal-dialog.tags-placeholder')}"
+                     placeholder="${t('goal-dialog.tags-placeholder')}"
+                     autocomplete="off"
+                     autocapitalize="none" />
+            </div>
+          </div>
         </div>
 
         <!-- ── View: move to year+section ───────────────────────────────── -->
@@ -375,7 +513,7 @@ class GoalDialog extends AppElement {
 
         <!-- ── Footer: main ─────────────────────────────────────────────── -->
         <div slot="footer" class="actions footer-main">
-          <button type="button" id="menu-btn" hidden aria-label="${t('goal-dialog.more-actions')}">···</button>
+          <button type="button" id="menu-btn" hidden aria-label="${t('goal-dialog.more-actions')}">${icons.dotsVertical}</button>
           <button type="button" id="delete" hidden>${t('goal-dialog.delete')}</button>
           <div class="actions-end">
             <button type="button" id="cancel">${t('goal-dialog.cancel')}</button>
@@ -414,6 +552,9 @@ class GoalDialog extends AppElement {
       this.shadowRoot.querySelector('.md-highlight'),
     );
     this._descCopyBtn   = this.shadowRoot.querySelector('#desc-copy-btn');
+    this._tagChipsWrap    = this.shadowRoot.querySelector('#tag-chips-wrap');
+    this._tagInput        = this.shadowRoot.querySelector('#tag-input');
+    this._tagSuggestions  = this.shadowRoot.querySelector('#tag-suggestions');
     this._saveBtn       = this.shadowRoot.querySelector('#save');
     this._deleteBtn     = this.shadowRoot.querySelector('#delete');
     this._menuBtn       = this.shadowRoot.querySelector('#menu-btn');
@@ -430,6 +571,7 @@ class GoalDialog extends AppElement {
 
     this._saved  = false;
     this._isNew  = false;
+    this._tags   = [];
 
     // ── Main view ─────────────────────────────────────────────────────────────
 
@@ -463,8 +605,9 @@ class GoalDialog extends AppElement {
       this._saved = true;
       if (this._isNew) localStorage.removeItem(DRAFT_KEY);
       const notes = this._descInput.value.trim() || undefined;
+      const tags  = this._getTagValues();
       this.dispatchEvent(new CustomEvent('goal-saved', {
-        bubbles: true, composed: true, detail: { title, notes },
+        bubbles: true, composed: true, detail: { title, notes, tags },
       }));
       this._modal.close();
     };
@@ -492,11 +635,51 @@ class GoalDialog extends AppElement {
     this._onKeyDown = e => { if (e.key === 'Enter') this._onSave(); };
     this._onResize  = () => this._syncDescHeight();
 
+    // ── Tag input ─────────────────────────────────────────────────────────────
+
+    this._onTagKeyDown = e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        this._addTag(this._tagInput.value);
+      } else if (e.key === 'Backspace' && !this._tagInput.value && this._tags.length) {
+        e.preventDefault();
+        this._removeTag(this._tags[this._tags.length - 1]);
+      }
+    };
+
+    this._onTagInput = () => {
+      const val = this._tagInput.value;
+      if (val.includes(',')) {
+        val.split(',').slice(0, -1).forEach(p => this._addTag(p));
+        this._tagInput.value = val.split(',').at(-1);
+      }
+      this._updateSuggestions();
+    };
+
+    this._onTagBlur = () => {
+      if (this._tagInput.value.trim()) this._addTag(this._tagInput.value);
+    };
+
+    this._onTagWrapClick = e => {
+      const removeBtn = e.target.closest('.tag-chip-remove');
+      if (removeBtn) { this._removeTag(removeBtn.dataset.tag); return; }
+      this._tagInput.focus();
+    };
+
     this._input.addEventListener('input',   this._onInput);
     this._input.addEventListener('keydown', this._onKeyDown);
     this._descInput.addEventListener('input', this._onDescInput);
     this._descCopyBtn.addEventListener('pointerdown', e => e.preventDefault());
     this._descCopyBtn.addEventListener('click', this._onDescCopy);
+    this._tagInput.addEventListener('keydown',   this._onTagKeyDown);
+    this._tagInput.addEventListener('input',     this._onTagInput);
+    this._tagInput.addEventListener('blur',      this._onTagBlur);
+    this._tagChipsWrap.addEventListener('click', this._onTagWrapClick);
+    this._onSuggestionPointerDown = e => e.preventDefault();
+    this._tagSuggestions.addEventListener('pointerdown', this._onSuggestionPointerDown);
+    this._onChipRemovePointerDown = e => { if (e.target.closest('.tag-chip-remove')) e.preventDefault(); };
+    this._tagChipsWrap.addEventListener('pointerdown', this._onChipRemovePointerDown);
     this._saveBtn.addEventListener('click', this._onSave);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
@@ -560,6 +743,12 @@ class GoalDialog extends AppElement {
     this._input?.removeEventListener('keydown', this._onKeyDown);
     this._descInput?.removeEventListener('input', this._onDescInput);
     this._descCopyBtn?.removeEventListener('click', this._onDescCopy);
+    this._tagInput?.removeEventListener('keydown',   this._onTagKeyDown);
+    this._tagInput?.removeEventListener('input',     this._onTagInput);
+    this._tagInput?.removeEventListener('blur',      this._onTagBlur);
+    this._tagChipsWrap?.removeEventListener('click', this._onTagWrapClick);
+    this._tagSuggestions?.removeEventListener('pointerdown', this._onSuggestionPointerDown);
+    this._tagChipsWrap?.removeEventListener('pointerdown', this._onChipRemovePointerDown);
     this._saveBtn?.removeEventListener('click', this._onSave);
     this._deleteBtn?.removeEventListener('click', this._onDelete);
     this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
@@ -575,6 +764,80 @@ class GoalDialog extends AppElement {
     this._moveMoveBtn?.removeEventListener('click', this._onMoveCta);
     this._moveCopyBtn?.removeEventListener('click', this._onCopyCta);
     this._listPickerDialog?.removeEventListener('list-pick', this._onListPick);
+  }
+
+  // ── Tag helpers ───────────────────────────────────────────────────────────
+
+  _addTag(raw) {
+    const tag = raw.replace(/,/g, '').trim().toLowerCase();
+    if (!tag || this._tags.includes(tag)) { this._tagInput.value = ''; return; }
+    this._tags.push(tag);
+    this._tagInput.value = '';
+    this._renderTagChips();
+    this._saveDraft();
+    this._updateSuggestions();
+    this._dispatchTagsChanged();
+  }
+
+  _removeTag(tag) {
+    this._tags = this._tags.filter(t => t !== tag);
+    this._renderTagChips();
+    this._saveDraft();
+    this._dispatchTagsChanged();
+  }
+
+  _dispatchTagsChanged() {
+    if (this._isNew) return;
+    this.dispatchEvent(new CustomEvent('goal-tags-changed', {
+      bubbles: true, composed: true, detail: { tags: [...this._tags] },
+    }));
+  }
+
+  _renderTagChips() {
+    this._tagChipsWrap.querySelectorAll('.tag-chip').forEach(c => c.remove());
+    for (const tag of this._tags) {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip';
+      chip.style.background = tagColor(tag);
+      chip.appendChild(document.createTextNode(tag));
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tag-chip-remove';
+      btn.dataset.tag = tag;
+      btn.setAttribute('aria-label', t('tag.remove', { tag }));
+      btn.textContent = '×';
+      chip.appendChild(btn);
+      this._tagChipsWrap.insertBefore(chip, this._tagInput);
+    }
+  }
+
+  _updateSuggestions() {
+    if (!this._tagSuggestions) return;
+    const partial = this._tagInput.value.trim().toLowerCase();
+    if (!partial) { this._tagSuggestions.hidden = true; this._tagSuggestions.replaceChildren(); return; }
+    const matches = (this._existingTags ?? []).filter(t => t.includes(partial) && !this._tags.includes(t));
+    if (!matches.length) { this._tagSuggestions.hidden = true; this._tagSuggestions.replaceChildren(); return; }
+    this._tagSuggestions.replaceChildren();
+    for (const tag of matches) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tag-suggestion';
+      btn.textContent = tag;
+      btn.style.borderColor = tagColor(tag);
+      btn.addEventListener('click', () => { this._addTag(tag); this._tagInput.focus(); });
+      this._tagSuggestions.appendChild(btn);
+    }
+    this._tagSuggestions.hidden = false;
+  }
+
+  _getTagValues() {
+    const rawTag = this._tagInput?.value.trim().toLowerCase().replace(/,/g, '');
+    if (rawTag && !this._tags.includes(rawTag)) {
+      this._tags.push(rawTag);
+      if (this._tagInput) this._tagInput.value = '';
+      this._renderTagChips();
+    }
+    return [...this._tags];
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
@@ -634,7 +897,7 @@ class GoalDialog extends AppElement {
     ta.style.blockSize = 'auto';
     const vh = window.visualViewport?.height ?? window.innerHeight;
     const MIN_H        = 56;
-    const CHROME_H     = 260; // approx header + footer + input chrome
+    const CHROME_H     = 320; // approx header + footer + input + tags chrome
     const MIN_WRAP_H   = 100;
     const maxH = Math.max(vh - CHROME_H, MIN_WRAP_H);
     ta.style.blockSize = `${Math.max(ta.scrollHeight, MIN_H)}px`;
@@ -651,6 +914,7 @@ class GoalDialog extends AppElement {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({
       title: this._input.value,
       notes: this._descInput.value,
+      tags:  [...this._tags],
     }));
   }
 }

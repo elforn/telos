@@ -332,6 +332,14 @@ class BottomNav extends AppElement {
         </div>
 
         <div class="section">
+          <h3 class="section-label">${t('settings.export-reminder')}</h3>
+          <div class="pill-group" id="reminder-group" role="group" aria-label="${t('settings.export-reminder')}">
+            <button class="option-pill" data-reminder="on">${t('settings.reminder-on')}</button>
+            <button class="option-pill" data-reminder="off">${t('settings.reminder-off')}</button>
+          </div>
+        </div>
+
+        <div class="section">
           <h3 class="section-label">${t('year-header.app-section')}</h3>
           <div class="actions-group">
             <button class="action-row" id="export-all-btn">
@@ -349,14 +357,6 @@ class BottomNav extends AppElement {
               <span>${t('settings.repair')}</span>
               <span class="action-icon">↺</span>
             </button>
-          </div>
-        </div>
-
-        <div class="section">
-          <h3 class="section-label">${t('settings.export-reminder')}</h3>
-          <div class="pill-group" id="reminder-group" role="group" aria-label="${t('settings.export-reminder')}">
-            <button class="option-pill" data-reminder="on">${t('settings.reminder-on')}</button>
-            <button class="option-pill" data-reminder="off">${t('settings.reminder-off')}</button>
           </div>
         </div>
 
@@ -414,6 +414,7 @@ class BottomNav extends AppElement {
       this._updateGearBadge();
     };
     this.shadowRoot.querySelector('#reminder-group').addEventListener('click', this._onReminderGroup);
+
   }
 
   _subscribeNav() {
@@ -789,20 +790,28 @@ class BottomNav extends AppElement {
     const onLists = window.location.pathname.startsWith(`${BASE_PATH}lists`);
     this._pillYears?.classList.toggle('active', !onLists);
     this._pillLists?.classList.toggle('active', onLists);
+    this._pillYears?.setAttribute('aria-current', onLists ? 'false' : 'page');
+    this._pillLists?.setAttribute('aria-current', onLists ? 'page' : 'false');
   }
 
   _updateSettingsPills() {
     const theme = getTheme();
     this.shadowRoot.querySelectorAll('[data-theme]').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.theme === theme);
+      const active = btn.dataset.theme === theme;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
     });
     const locale = getLocale();
     this.shadowRoot.querySelectorAll('[data-locale]').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.locale === locale);
+      const active = btn.dataset.locale === locale;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
     });
     const reminderEnabled = localStorage.getItem(EXPORT_REMINDER_KEY) !== 'false';
     this.shadowRoot.querySelectorAll('[data-reminder]').forEach(btn => {
-      btn.classList.toggle('active', (btn.dataset.reminder === 'on') === reminderEnabled);
+      const active = (btn.dataset.reminder === 'on') === reminderEnabled;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
     });
   }
 }

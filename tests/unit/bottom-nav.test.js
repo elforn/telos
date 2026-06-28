@@ -123,6 +123,85 @@ describe('bottom-nav — settings pills', () => {
   });
 });
 
+// ── aria-current on nav pills ─────────────────────────────────────────────────
+
+describe('bottom-nav — aria-current', () => {
+  it('Years pill has aria-current="page" when on a year path', () => {
+    navTo('/2026');
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#pill-years').getAttribute('aria-current')).toBe('page');
+    expect(el.shadowRoot.querySelector('#pill-lists').getAttribute('aria-current')).toBe('false');
+  });
+
+  it('Lists pill has aria-current="page" when on /lists', () => {
+    navTo('/lists');
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#pill-lists').getAttribute('aria-current')).toBe('page');
+    expect(el.shadowRoot.querySelector('#pill-years').getAttribute('aria-current')).toBe('false');
+  });
+
+  it('aria-current updates when navigating between sections', () => {
+    const el = mount();
+    navTo('/lists');
+    expect(el.shadowRoot.querySelector('#pill-lists').getAttribute('aria-current')).toBe('page');
+    navTo('/2026');
+    expect(el.shadowRoot.querySelector('#pill-years').getAttribute('aria-current')).toBe('page');
+    expect(el.shadowRoot.querySelector('#pill-lists').getAttribute('aria-current')).toBe('false');
+  });
+});
+
+// ── aria-pressed on settings pills ───────────────────────────────────────────
+
+describe('bottom-nav — aria-pressed on settings pills', () => {
+  it('active theme pill has aria-pressed="true" after opening settings', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const active = [...el.shadowRoot.querySelectorAll('[data-theme]')]
+      .find(b => b.classList.contains('active'));
+    expect(active?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('inactive theme pills have aria-pressed="false" after opening settings', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const inactive = [...el.shadowRoot.querySelectorAll('[data-theme]')]
+      .filter(b => !b.classList.contains('active'));
+    expect(inactive.every(b => b.getAttribute('aria-pressed') === 'false')).toBe(true);
+  });
+
+  it('active locale pill has aria-pressed="true" after opening settings', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const active = [...el.shadowRoot.querySelectorAll('[data-locale]')]
+      .find(b => b.classList.contains('active'));
+    expect(active?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('inactive locale pills have aria-pressed="false" after opening settings', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const inactive = [...el.shadowRoot.querySelectorAll('[data-locale]')]
+      .filter(b => !b.classList.contains('active'));
+    expect(inactive.every(b => b.getAttribute('aria-pressed') === 'false')).toBe(true);
+  });
+
+  it('active reminder pill has aria-pressed="true" after opening settings', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const active = [...el.shadowRoot.querySelectorAll('[data-reminder]')]
+      .find(b => b.classList.contains('active'));
+    expect(active?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('inactive reminder pills have aria-pressed="false" after opening settings', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const inactive = [...el.shadowRoot.querySelectorAll('[data-reminder]')]
+      .filter(b => !b.classList.contains('active'));
+    expect(inactive.every(b => b.getAttribute('aria-pressed') === 'false')).toBe(true);
+  });
+});
+
 // ── Lists path memory ─────────────────────────────────────────────────────────
 
 describe('bottom-nav — lists path memory', () => {

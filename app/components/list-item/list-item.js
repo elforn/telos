@@ -2,10 +2,11 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
+import { tagStrip } from '../../utils/tag-color.js';
 
-const DONE_WIDTH      = 48;   // square-ish done button
-const DELETE_WIDTH    = 60;   // icon-only delete button
-const COMMIT_RATIO    = 2.0;  // fraction of reveal width needed to commit
+const DONE_WIDTH = 48;   // square-ish done button
+const DELETE_WIDTH = 60;   // icon-only delete button
+const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
 const SWIPE_DEAD_ZONE = 15;   // px of drag before row starts moving
 
@@ -105,6 +106,7 @@ class ListItem extends Gestures(AppElement) {
           border: none;
           cursor: grab;
           color: var(--color-text-muted);
+          opacity: 0.45;
           font-size: var(--font-size-body);
           display: flex;
           align-items: center;
@@ -122,6 +124,16 @@ class ListItem extends Gestures(AppElement) {
           font-weight: var(--font-weight-medium);
           color: var(--color-text-primary);
           word-break: break-word;
+        }
+
+        .tag-strip {
+          position: absolute;
+          inset-block-end: 0;
+          inset-inline-start: var(--space-10);
+          inset-inline-end: var(--space-3);
+          block-size: 3px;
+          pointer-events: none;
+          display: var(--tag-strip-display, block);
         }
 
         .row[data-status="done"] {
@@ -158,6 +170,7 @@ class ListItem extends Gestures(AppElement) {
         .badge {
           display: var(--list-badge-display, inline-flex);
           flex-shrink: 0;
+          min-block-size: 20px;
           font-size: var(--font-size-micro);
           font-weight: var(--font-weight-semibold);
           border-radius: var(--radius-full);
@@ -233,19 +246,21 @@ class ListItem extends Gestures(AppElement) {
         <span class="note-icon" aria-hidden="true">${icons.info}</span>
         <span class="url-icon"  aria-hidden="true">${icons.link}</span>
         <button type="button" class="badge" id="badge-btn" data-status="open"></button>
+        <span class="tag-strip" aria-hidden="true"></span>
       </div>
     `;
   }
 
   subscribe() {
     this.setAttribute('role', 'listitem');
-    this._row      = this.shadowRoot.querySelector('.row');
-    this._title    = this.shadowRoot.querySelector('.title');
+    this._row = this.shadowRoot.querySelector('.row');
+    this._title = this.shadowRoot.querySelector('.title');
+    this._stripEl = this.shadowRoot.querySelector('.tag-strip');
     this._noteIcon = this.shadowRoot.querySelector('.note-icon');
-    this._urlIcon  = this.shadowRoot.querySelector('.url-icon');
-    this._badge    = this.shadowRoot.querySelector('.badge');
+    this._urlIcon = this.shadowRoot.querySelector('.url-icon');
+    this._badge = this.shadowRoot.querySelector('.badge');
     this._deleteEl = this.shadowRoot.querySelector('#delete-btn');
-    this._doneEl   = this.shadowRoot.querySelector('#done-btn');
+    this._doneEl = this.shadowRoot.querySelector('#done-btn');
     this._revealedDir = null;
 
     this._update();
@@ -304,8 +319,8 @@ class ListItem extends Gestures(AppElement) {
     };
     this._onBadgeKey = e => { e.stopPropagation(); if (e.detail === 0) this._onBadgePointerUp(e); };
     this._badge.addEventListener('pointerdown', this._stopPointerDown);
-    this._badge.addEventListener('pointerup',   this._onBadgePointerUp);
-    this._badge.addEventListener('click',        this._onBadgeKey);
+    this._badge.addEventListener('pointerup', this._onBadgePointerUp);
+    this._badge.addEventListener('click', this._onBadgeKey);
 
     this._dragBtn = this.shadowRoot.querySelector('#drag-btn');
     this._dragBtn.setAttribute('aria-label', t('list-item.drag'));
@@ -328,7 +343,7 @@ class ListItem extends Gestures(AppElement) {
       }));
     };
     this._dragBtn.addEventListener('pointerdown', this._onDragBtnDown);
-    this._dragBtn.addEventListener('keydown',     this._onDragBtnKey);
+    this._dragBtn.addEventListener('keydown', this._onDragBtnKey);
   }
 
   unsubscribe() {
@@ -340,10 +355,10 @@ class ListItem extends Gestures(AppElement) {
     this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
     this._row?.removeEventListener('keydown', this._onKeyDown);
     this._badge?.removeEventListener('pointerdown', this._stopPointerDown);
-    this._badge?.removeEventListener('pointerup',   this._onBadgePointerUp);
-    this._badge?.removeEventListener('click',        this._onBadgeKey);
+    this._badge?.removeEventListener('pointerup', this._onBadgePointerUp);
+    this._badge?.removeEventListener('click', this._onBadgeKey);
     this._dragBtn?.removeEventListener('pointerdown', this._onDragBtnDown);
-    this._dragBtn?.removeEventListener('keydown',     this._onDragBtnKey);
+    this._dragBtn?.removeEventListener('keydown', this._onDragBtnKey);
   }
 
   // ── Gestures ──────────────────────────────────────────────────────────────
@@ -415,7 +430,7 @@ class ListItem extends Gestures(AppElement) {
 
   _closeReveal() {
     this._row.style.transition = 'transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)';
-    this._row.style.transform  = '';
+    this._row.style.transform = '';
     this._revealedDir = null;
   }
 
@@ -428,19 +443,24 @@ class ListItem extends Gestures(AppElement) {
 
   _update() {
     if (!this._row) return;
-    const title  = this._item?.title  ?? '';
+    const title = this._item?.title ?? '';
     const status = this._item?.status ?? 'open';
     const isDone = status === 'done';
-    this._title.textContent    = title;
+    this._title.textContent = title;
     this._row.setAttribute('aria-label', title);
-    this._row.dataset.status   = status;
-    this._row.dataset.hasNote  = String(!!this._item?.note);
-    this._row.dataset.hasUrl   = String(!!this._item?.url);
-    this._badge.textContent    = t(`item-dialog.status-${status}`);
+    this._row.dataset.status = status;
+    this._row.dataset.hasNote = String(!!this._item?.note);
+    this._row.dataset.hasUrl = String(!!this._item?.url);
+    this._badge.textContent = t(`item-dialog.status-${status}`);
     this._badge.dataset.status = status;
     this._doneEl.innerHTML = isDone ? icons.undo : icons.check;
     this._doneEl.setAttribute('aria-label', isDone ? t('list-item.restore') : t('list-item.mark-done'));
     this._doneEl.classList.toggle('is-restore', isDone);
+    if (this._stripEl) {
+      const bg = tagStrip(this._item?.tags ?? []);
+      this._stripEl.style.background = bg;
+      this._stripEl.hidden = !bg;
+    }
   }
 }
 

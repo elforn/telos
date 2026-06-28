@@ -10,6 +10,7 @@ import '../components/list-dialog/list-dialog.js';
 import '../components/add-row/add-row.js';
 import '../components/list-picker-dialog/list-picker-dialog.js';
 import { icons } from '../icons.js';
+import { tagColor } from '../utils/tag-color.js';
 import '../components/export-sheet/export-sheet.js';
 import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdown.js';
 
@@ -65,6 +66,10 @@ class ListDetailPage extends AppElement {
           touch-action: manipulation;
         }
 
+        .menu-btn {
+          margin-inline-end: var(--edge-btn-bleed);
+        }
+
         .back-btn svg,
         .menu-btn svg {
           inline-size: 22px;
@@ -73,7 +78,7 @@ class ListDetailPage extends AppElement {
         }
 
         .back-btn {
-          margin-inline-start: calc(-1 * var(--page-padding));
+          margin-inline-start: calc(-0.8 * var(--page-padding));
         }
 
         .back-btn:focus-visible,
@@ -104,7 +109,8 @@ class ListDetailPage extends AppElement {
           cursor: pointer;
           font: inherit;
           color: inherit;
-          padding: 0;
+          padding-left: 3px;
+          padding-top: 4px;
           text-align: start;
         }
 
@@ -508,18 +514,266 @@ class ListDetailPage extends AppElement {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
+
+        /* ── Filter button ───────────────────────────────────────────────── */
+
+        .filter-btn {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--color-text-secondary);
+          border-radius: var(--radius-full);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          touch-action: manipulation;
+          position: relative;
+        }
+
+        .filter-btn svg {
+          inline-size: 22px;
+          block-size: 22px;
+          pointer-events: none;
+        }
+
+        .filter-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .filter-btn-dot {
+          position: absolute;
+          inset-block-start: 10px;
+          inset-inline-end: 10px;
+          inline-size: 6px;
+          block-size: 6px;
+          border-radius: var(--radius-full);
+          background: var(--color-accent);
+        }
+
+        /* ── Filter bar ──────────────────────────────────────────────────── */
+
+        #filter-bar {
+          padding-block: var(--space-2);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-1);
+          border-block-start: 0.5px solid var(--color-border);
+        }
+
+        #filter-bar[hidden] { display: none; }
+
+        .filter-top-row {
+          display: flex;
+          align-items: center;
+        }
+
+        .filter-search-wrap {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          gap: var(--space-1);
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding-inline: var(--space-3);
+        }
+
+        .filter-search-wrap:focus-within {
+          border-color: var(--color-accent);
+        }
+
+        .filter-search-icon {
+          flex-shrink: 0;
+          color: var(--color-text-muted);
+          display: flex;
+          align-items: center;
+        }
+
+        .filter-search-icon svg {
+          inline-size: 16px;
+          block-size: 16px;
+          pointer-events: none;
+        }
+
+        #filter-search {
+          flex: 1;
+          min-block-size: 34px;
+          background: none;
+          border: none;
+          outline: none;
+          font-family: var(--font-family);
+          font-size: var(--font-size-body);
+          color: var(--color-text-primary);
+        }
+
+        #filter-search::-webkit-search-cancel-button { display: none; }
+
+        #filter-search::placeholder {
+          color: var(--color-text-muted);
+        }
+
+        .filter-clear-btn,
+        .filter-expand-btn {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
+          border: none;
+          background: none;
+          cursor: pointer;
+          color: var(--color-text-muted);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: var(--radius-sm);
+          touch-action: manipulation;
+        }
+
+        .filter-clear-btn svg {
+          inline-size: 20px;
+          block-size: 20px;
+          pointer-events: none;
+        }
+
+        .filter-clear-btn {
+          margin-inline-end: var(--edge-btn-bleed);
+        }
+
+        .filter-clear-btn.active {
+          color: var(--color-danger);
+        }
+
+        .filter-expand-btn svg {
+          inline-size: 16px;
+          block-size: 16px;
+          pointer-events: none;
+        }
+
+        .filter-expand-btn {
+          position: relative;
+        }
+
+        .filter-expand-btn[aria-expanded="true"] svg {
+          transform: rotate(180deg);
+        }
+
+        .filter-expand-dot {
+          position: absolute;
+          inset-block-start: 6px;
+          inset-inline-end: 6px;
+          inline-size: 6px;
+          block-size: 6px;
+          border-radius: var(--radius-full);
+          background: var(--color-accent);
+          pointer-events: none;
+        }
+
+        .filter-clear-btn:focus-visible,
+        .filter-expand-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        #filter-panel {
+          display: flex;
+          flex-direction: column;
+          gap: calc(var(--space-1) + 1px);
+        }
+
+        #filter-panel[hidden] { display: none; }
+
+        .filter-row {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          overflow-x: auto;
+          flex-wrap: nowrap;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .filter-row::-webkit-scrollbar { display: none; }
+
+        .filter-pill,
+        .filter-tag-chip {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target-small);
+          padding-inline: var(--space-3);
+          border-radius: var(--radius-full);
+          border: 1px solid var(--color-border);
+          background: none;
+          cursor: pointer;
+          font-family: var(--font-family);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-medium);
+          color: var(--color-text-secondary);
+          white-space: nowrap;
+          touch-action: manipulation;
+        }
+
+        .filter-pill.active {
+          background: var(--color-accent);
+          border-color: var(--color-accent);
+          color: var(--color-text-on-accent);
+        }
+
+        .filter-tag-chip {
+          border-color: var(--tag-color, var(--color-border));
+        }
+
+        .filter-tag-chip.active {
+          background: var(--tag-color, var(--color-accent));
+          border-color: var(--tag-color, var(--color-accent));
+          color: var(--color-text-primary);
+        }
+
+        .filter-pill:focus-visible,
+        .filter-tag-chip:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        #filter-empty {
+          text-align: center;
+          padding-block: var(--space-8);
+          color: var(--color-text-muted);
+          font-size: var(--font-size-body);
+        }
       </style>
 
       <div class="page-header">
         <div class="top-row">
           <button class="back-btn" id="back-btn" aria-label="${t('list-detail.back')}">${icons.chevronLeft}</button>
           <h1><button class="name-edit-btn" id="name-edit-btn" aria-label="${t('list-detail.edit-name')}"><span id="list-name"></span><span class="name-pencil" aria-hidden="true">${icons.pencil}</span></button></h1>
+          <button class="filter-btn" id="filter-btn" aria-label="${t('list-detail.filter-toggle')}" aria-expanded="false">${icons.funnel}<span class="filter-btn-dot" hidden aria-hidden="true"></span></button>
           <button class="menu-btn" id="menu-btn" aria-label="${t('list-detail.menu')}" aria-expanded="false">${icons.dotsVertical}</button>
+        </div>
+        <div id="filter-bar" hidden>
+          <div class="filter-top-row">
+            <div class="filter-search-wrap">
+              <span class="filter-search-icon" aria-hidden="true">${icons.magnifyingGlass}</span>
+              <input type="search" id="filter-search" placeholder="${t('list-detail.filter-search')}" aria-label="${t('list-detail.filter-search')}" autocomplete="off" />
+            </div>
+            <button class="filter-expand-btn" id="filter-expand-btn" aria-label="${t('list-detail.filter-expand')}" aria-expanded="false">${icons.chevronDown}<span class="filter-expand-dot" hidden aria-hidden="true"></span></button>
+            <button class="filter-clear-btn" id="filter-clear-btn" aria-label="${t('list-detail.filter-clear')}">${icons.funnelX}</button>
+          </div>
+          <div id="filter-panel" hidden>
+            <div class="filter-row" id="filter-status-row" role="group" aria-label="${t('list-detail.status-label')}">
+              <button class="filter-pill" id="fstatus-open" aria-pressed="false">${t('item-dialog.status-open')}</button>
+              <button class="filter-pill" id="fstatus-paused" aria-pressed="false">${t('item-dialog.status-paused')}</button>
+              <button class="filter-pill" id="fstatus-done" aria-pressed="false">${t('item-dialog.status-done')}</button>
+            </div>
+            <div class="filter-row" id="filter-tag-row" hidden></div>
+          </div>
         </div>
       </div>
 
       <main>
         <div id="item-list" role="list"></div>
+        <p id="filter-empty" hidden>${t('list-detail.filter-empty')}</p>
         <add-row id="add-row">+ ${t('list-detail.add')}</add-row>
       </main>
 
@@ -530,6 +784,13 @@ class ListDetailPage extends AppElement {
           <div class="status-pill-group" role="group" aria-label="${t('list-detail.status-label')}">
             <button class="status-pill" id="status-show-btn">${t('list-detail.status-show')}</button>
             <button class="status-pill" id="status-hide-btn">${t('list-detail.status-hide')}</button>
+          </div>
+        </div>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('settings.tag-strip')}</p>
+          <div class="status-pill-group" role="group" aria-label="${t('settings.tag-strip')}">
+            <button class="status-pill" id="tags-show-btn">${t('settings.reminder-on')}</button>
+            <button class="status-pill" id="tags-hide-btn">${t('settings.reminder-off')}</button>
           </div>
         </div>
         <button class="menu-item" id="import-menu-btn">
@@ -736,13 +997,13 @@ class ListDetailPage extends AppElement {
     this._itemList.addEventListener('item-status-cycle', this._onItemStatusCycle);
 
     this._onItemSaved = e => {
-      const { title, status, note, url } = e.detail;
+      const { title, status, note, url, tags } = e.detail;
       if (this._editingItem) {
         const snapshot = getState().lists;
-        this._editItem(this._editingItem.id, { title, status, note, url });
+        this._editItem(this._editingItem.id, { title, status, note, url, tags });
         toast(t('lists.toast-item-saved'), 'success', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
       } else {
-        this._addItem({ title, status, note, url });
+        this._addItem({ title, status, note, url, tags });
         toast(t('lists.toast-item-saved'), 'success');
       }
     };
@@ -773,11 +1034,19 @@ class ListDetailPage extends AppElement {
     };
     this._dialog.addEventListener('item-status-changed', this._onItemStatusChanged);
 
+    this._onItemTagsChanged = e => {
+      if (!this._editingItem) return;
+      this._mutateItems(items => items.map(i =>
+        i.id === this._editingItem.id ? { ...i, tags: e.detail.tags } : i
+      ));
+    };
+    this._dialog.addEventListener('item-tags-changed', this._onItemTagsChanged);
+
     this._onItemMove = e => {
       if (!this._editingItem) return;
-      const { title, status, note, url, targetListIds, newListName, copy } = e.detail;
+      const { title, status, note, url, tags, targetListIds, newListName, copy } = e.detail;
       const item         = this._editingItem;
-      const updatedItem  = { ...item, title, status, note, url };
+      const updatedItem  = { ...item, title, status, note, url, tags };
       const currentLists = getState().lists ?? [];
       const targetNames  = currentLists
         .filter(l => targetListIds.includes(l.id))
@@ -809,7 +1078,7 @@ class ListDetailPage extends AppElement {
 
     this._onItemPromote = e => {
       if (!this._editingItem) return;
-      const { title, status, note, url, year, section } = e.detail;
+      const { title, status, note, url, tags, year, section } = e.detail;
       const item    = this._editingItem;
       const goalId  = crypto.randomUUID();
       const goal    = { id: goalId, title, tags: [], tracking: { type: 'percentage', value: 0 } };
@@ -823,7 +1092,7 @@ class ListDetailPage extends AppElement {
       });
 
       const updatedItem = {
-        ...item, title, status, note, url,
+        ...item, title, status, note, url, tags,
         inGoals: [...(item.inGoals ?? []), { year: yearStr, section, goalId }],
       };
       setState('lists', (getState().lists ?? []).map(l =>
@@ -1097,18 +1366,132 @@ class ListDetailPage extends AppElement {
     };
     this._importCtaBtn.addEventListener('click', this._onImportCta);
 
+    // ── Filter bar ────────────────────────────────────────────────────────────
+
+    this._filterBar       = this.shadowRoot.querySelector('#filter-bar');
+    this._filterSearch    = this.shadowRoot.querySelector('#filter-search');
+    this._filterPanel     = this.shadowRoot.querySelector('#filter-panel');
+    this._filterTagRow    = this.shadowRoot.querySelector('#filter-tag-row');
+    this._filterEmpty     = this.shadowRoot.querySelector('#filter-empty');
+    this._filterExpandBtn = this.shadowRoot.querySelector('#filter-expand-btn');
+    this._filterBtnEl     = this.shadowRoot.querySelector('#filter-btn');
+
+    this._filter = { query: '', statuses: new Set(), tags: new Set() };
+    this._panelExpanded = false;
+    this._barExpanded = false;
+    this._loadFilter();
+
+    this._onFilterTagChip = e => {
+      const tag = e.currentTarget.dataset.tag;
+      if (this._filter.tags.has(tag)) this._filter.tags.delete(tag);
+      else this._filter.tags.add(tag);
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyFilter();
+    };
+
+    this._onFilterBtn = () => {
+      const nowOpen = this._filterBar.hidden;
+      this._filterBar.hidden = !nowOpen;
+      this._filterBtnEl.setAttribute('aria-expanded', String(nowOpen));
+      this._barExpanded = nowOpen;
+      if (!nowOpen) this._panelExpanded = false;
+      this._saveFilter();
+      if (nowOpen) {
+        if (this._filterPanel) this._filterPanel.hidden = true;
+        if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', 'false');
+        requestAnimationFrame(() => this._filterSearch?.focus());
+      } else {
+        if (this._filterPanel) this._filterPanel.hidden = true;
+        if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', 'false');
+      }
+    };
+    this._filterBtnEl.addEventListener('click', this._onFilterBtn);
+
+    this._onFilterExpand = () => {
+      const panelOpen = this._filterPanel.hidden;
+      this._filterPanel.hidden = !panelOpen;
+      this._filterExpandBtn.setAttribute('aria-expanded', String(panelOpen));
+      this._panelExpanded = panelOpen;
+      this._saveFilter();
+    };
+    this._filterExpandBtn.addEventListener('click', this._onFilterExpand);
+
+    this._onFilterSearch = () => {
+      this._filter.query = this._filterSearch.value;
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyFilter();
+    };
+    this._filterSearch.addEventListener('input', this._onFilterSearch);
+
+    this._onFilterStatus = e => {
+      const btn = e.target.closest('.filter-pill');
+      if (!btn) return;
+      const statusMap = { 'fstatus-open': 'open', 'fstatus-paused': 'paused', 'fstatus-done': 'done' };
+      const s = statusMap[btn.id];
+      if (!s) return;
+      if (this._filter.statuses.has(s)) this._filter.statuses.delete(s);
+      else this._filter.statuses.add(s);
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyFilter();
+    };
+    this.shadowRoot.querySelector('#filter-status-row').addEventListener('click', this._onFilterStatus);
+
+    this._onFilterClear = () => {
+      this._filter = { query: '', statuses: new Set(), tags: new Set() };
+      this._filterSearch.value = '';
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyFilter();
+    };
+    this.shadowRoot.querySelector('#filter-clear-btn').addEventListener('click', this._onFilterClear);
+
+    if (this._barExpanded) {
+      this._filterBar.hidden = false;
+      this._filterBtnEl.setAttribute('aria-expanded', 'true');
+      if (this._panelExpanded) {
+        this._filterPanel.hidden = false;
+        this._filterExpandBtn.setAttribute('aria-expanded', 'true');
+      }
+    }
+
     // ── Store ─────────────────────────────────────────────────────────────────
 
     this._onLists = lists => {
       const list = (lists ?? []).find(l => l.id === this._listId);
       if (!list) { navigate(`${BASE_PATH}lists`); return; }
       this._nameEl.textContent = list.name;
+      this.shadowRoot.querySelector('#name-edit-btn')?.setAttribute('aria-label', `${t('list-detail.edit-name')}: ${list.name}`);
       this._pageHeader.style.borderBlockEndColor = list.color ?? '';
       this._showStatus = list.showStatus ?? true;
       this._applyStatusPref();
       this._renderItems(list.items ?? []);
+      this._rebuildTagChips(list.items ?? []);
+      this._syncFilterUI();
+      this._applyFilter();
     };
     subscribe('lists', this._onLists);
+
+    this._onListsTagsVisible = tagsVisible => {
+      const visible = tagsVisible?.[this._listId] === true;
+      document.documentElement.style.setProperty('--tag-strip-display', visible ? 'block' : 'none');
+      this.shadowRoot?.querySelector('#tags-show-btn')?.classList.toggle('active', visible);
+      this.shadowRoot?.querySelector('#tags-hide-btn')?.classList.toggle('active', !visible);
+    };
+    subscribe('listsTagsVisible', this._onListsTagsVisible);
+
+    this._onTagsShowBtn = () => {
+      setState('listsTagsVisible', { ...getState().listsTagsVisible, [this._listId]: true });
+      this._menuDialog.close();
+    };
+    this._onTagsHideBtn = () => {
+      setState('listsTagsVisible', { ...getState().listsTagsVisible, [this._listId]: false });
+      this._menuDialog.close();
+    };
+    this.shadowRoot.querySelector('#tags-show-btn').addEventListener('click', this._onTagsShowBtn);
+    this.shadowRoot.querySelector('#tags-hide-btn').addEventListener('click', this._onTagsHideBtn);
   }
 
   unsubscribe() {
@@ -1148,6 +1531,7 @@ class ListDetailPage extends AppElement {
     this._dialog?.removeEventListener('item-delete', this._onDialogDelete);
     this._dialog?.removeEventListener('item-cancelled', this._onItemCancelled);
     this._dialog?.removeEventListener('item-status-changed', this._onItemStatusChanged);
+    this._dialog?.removeEventListener('item-tags-changed',   this._onItemTagsChanged);
     this._dialog?.removeEventListener('item-move',   this._onItemMove);
     this._dialog?.removeEventListener('item-promote', this._onItemPromote);
     if (this._drag) {
@@ -1162,6 +1546,9 @@ class ListDetailPage extends AppElement {
       this._drag = null;
     }
     unsubscribe('lists', this._onLists);
+    unsubscribe('listsTagsVisible', this._onListsTagsVisible);
+    this.shadowRoot?.querySelector('#tags-show-btn')?.removeEventListener('click', this._onTagsShowBtn);
+    this.shadowRoot?.querySelector('#tags-hide-btn')?.removeEventListener('click', this._onTagsHideBtn);
     this.shadowRoot?.querySelector('#export-menu-btn')?.removeEventListener('click', this._onExportMenuBtn);
     this.shadowRoot?.querySelector('#bulk-export-btn')?.removeEventListener('click', this._onBulkExportBtn);
     this._exportSheet?.removeEventListener('extract-confirm', this._onExportConfirm);
@@ -1171,6 +1558,11 @@ class ListDetailPage extends AppElement {
     this.shadowRoot?.querySelector('#import-cancel-btn')?.removeEventListener('click', this._onImportCancel);
     this._importDialog?.removeEventListener('click', this._onImportBackdrop);
     this._importCtaBtn?.removeEventListener('click', this._onImportCta);
+    this._filterBtnEl?.removeEventListener('click', this._onFilterBtn);
+    this._filterExpandBtn?.removeEventListener('click', this._onFilterExpand);
+    this._filterSearch?.removeEventListener('input', this._onFilterSearch);
+    this.shadowRoot?.querySelector('#filter-status-row')?.removeEventListener('click', this._onFilterStatus);
+    this.shadowRoot?.querySelector('#filter-clear-btn')?.removeEventListener('click', this._onFilterClear);
   }
 
   // ── Selection mode ────────────────────────────────────────────────────────
@@ -1212,6 +1604,7 @@ class ListDetailPage extends AppElement {
     const state = getState();
     this._dialog.availableLists = (state.lists ?? []).filter(l => l.id !== this._listId);
     this._dialog.currentYear    = new Date().getFullYear();
+    this._dialog.existingTags   = this._collectAllTags(state);
 
     if (!item || !(item.inGoals ?? []).length) return item;
     // Prune inGoals entries whose goal no longer exists — writes to store if any are found.
@@ -1239,17 +1632,32 @@ class ListDetailPage extends AppElement {
     ));
   }
 
-  _addItem({ title, status, note, url }) {
+  _addItem({ title, status, note, url, tags }) {
     const item = {
       id: crypto.randomUUID(), title, status,
       note, url, dueDate: undefined,
-      tags: [], inGoals: [],
+      tags: tags ?? [], inGoals: [],
     };
     this._mutateItems(items => [...items, item]);
   }
 
-  _editItem(id, { title, status, note, url }) {
-    this._mutateItems(items => items.map(i => i.id === id ? { ...i, title, status, note, url } : i));
+  _editItem(id, { title, status, note, url, tags }) {
+    this._mutateItems(items => items.map(i => i.id === id ? { ...i, title, status, note, url, tags } : i));
+  }
+
+  _collectAllTags(state = getState()) {
+    const tags = new Set();
+    for (const yg of Object.values(state.goals ?? {})) {
+      for (const section of Object.values(yg)) {
+        if (Array.isArray(section)) {
+          for (const goal of section) for (const tag of (goal.tags ?? [])) tags.add(tag);
+        }
+      }
+    }
+    for (const list of (state.lists ?? [])) {
+      for (const item of (list.items ?? [])) for (const tag of (item.tags ?? [])) tags.add(tag);
+    }
+    return [...tags].sort();
   }
 
   _deleteItem(id) {
@@ -1333,6 +1741,116 @@ class ListDetailPage extends AppElement {
     const hideBtn = this.shadowRoot?.querySelector('#status-hide-btn');
     if (showBtn) showBtn.classList.toggle('active', this._showStatus);
     if (hideBtn) hideBtn.classList.toggle('active', !this._showStatus);
+  }
+
+  // ── Filter helpers ────────────────────────────────────────────────────────
+
+  _loadFilter() {
+    try {
+      const raw = localStorage.getItem(`telos:filter:list:${this._listId}`);
+      if (raw) {
+        const { query = '', statuses = [], tags = [], panelExpanded = false, barExpanded = false } = JSON.parse(raw);
+        this._filter = { query, statuses: new Set(statuses), tags: new Set(tags) };
+        this._panelExpanded = panelExpanded;
+        this._barExpanded = barExpanded;
+      }
+    } catch { /* ignore */ }
+  }
+
+  _saveFilter() {
+    const { query, statuses, tags } = this._filter;
+    if (query || statuses.size || tags.size || this._barExpanded || this._panelExpanded) {
+      localStorage.setItem(`telos:filter:list:${this._listId}`,
+        JSON.stringify({ query, statuses: [...statuses], tags: [...tags], panelExpanded: this._panelExpanded, barExpanded: this._barExpanded }));
+    } else {
+      localStorage.removeItem(`telos:filter:list:${this._listId}`);
+    }
+  }
+
+  _isFilterActive() {
+    const { query, statuses, tags } = this._filter;
+    return !!(query || statuses.size || tags.size);
+  }
+
+  _syncFilterUI() {
+    if (!this._filterBar) return;
+    if (this._filterSearch) this._filterSearch.value = this._filter.query;
+    const active = this._isFilterActive();
+    for (const s of ['open', 'paused', 'done']) {
+      const btn = this.shadowRoot.querySelector(`#fstatus-${s}`);
+      if (btn) {
+        const on = this._filter.statuses.has(s);
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', String(on));
+      }
+    }
+    const dot = this._filterBtnEl?.querySelector('.filter-btn-dot');
+    if (dot) dot.hidden = !active;
+    this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
+    const expandDot = this._filterExpandBtn?.querySelector('.filter-expand-dot');
+    if (expandDot) expandDot.hidden = !(this._filter.statuses.size || this._filter.tags.size);
+    this._filterTagRow?.querySelectorAll('.filter-tag-chip').forEach(chip => {
+      const on = this._filter.tags.has(chip.dataset.tag);
+      chip.classList.toggle('active', on);
+      chip.setAttribute('aria-pressed', String(on));
+    });
+  }
+
+  _rebuildTagChips(items) {
+    if (!this._filterTagRow) return;
+    const allTags = new Set();
+    for (const item of items) {
+      for (const tag of (item.tags ?? [])) allTags.add(tag);
+    }
+    if (allTags.size === 0) {
+      this._filterTagRow.hidden = true;
+      this._filterTagRow.replaceChildren();
+      return;
+    }
+    this._filterTagRow.hidden = false;
+    this._filterTagRow.replaceChildren();
+    for (const tag of [...allTags].sort()) {
+      const btn = document.createElement('button');
+      btn.className = 'filter-tag-chip';
+      btn.type = 'button';
+      btn.dataset.tag = tag;
+      btn.textContent = tag;
+      btn.style.setProperty('--tag-color', tagColor(tag));
+      const on = this._filter.tags.has(tag);
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', String(on));
+      btn.addEventListener('click', this._onFilterTagChip);
+      this._filterTagRow.appendChild(btn);
+    }
+  }
+
+  _applyFilter() {
+    const { query, statuses, tags } = this._filter;
+    const q = query.toLowerCase().trim();
+    const active = !!(q || statuses.size || tags.size);
+    let anyVisible = false;
+
+    this._itemList?.querySelectorAll('list-item').forEach(el => {
+      const item = el._item;
+      if (!item) { el.hidden = false; return; }
+      let show = true;
+      if (q) {
+        const hay = `${item.title ?? ''} ${item.note ?? ''}`.toLowerCase();
+        if (!hay.includes(q)) show = false;
+      }
+      if (show && statuses.size && !statuses.has(item.status)) show = false;
+      if (show && tags.size) {
+        const itags = item.tags ?? [];
+        if (![...tags].some(tag => itags.includes(tag))) show = false;
+      }
+      el.hidden = !show;
+      if (show) anyVisible = true;
+    });
+
+    if (this._filterEmpty) this._filterEmpty.hidden = !active || anyVisible;
+    const dot = this._filterBtnEl?.querySelector('.filter-btn-dot');
+    if (dot) dot.hidden = !active;
+    this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
   }
 
   // ── Bulk helpers ──────────────────────────────────────────────────────────

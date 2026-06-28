@@ -1016,6 +1016,26 @@ describe('list-detail-page — name edit button', () => {
     expect(btn.getAttribute('aria-label')).toBeTruthy();
   });
 
+  it('name-edit-btn aria-label includes the list name after store resolves', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#name-edit-btn')?.getAttribute('aria-label')).toContain('Gift ideas')
+    );
+  });
+
+  it('name-edit-btn aria-label updates when list name changes in the store', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#name-edit-btn')?.getAttribute('aria-label')).toContain('Gift ideas')
+    );
+    setState('lists', [{ ...LIST, name: 'Travel plans' }]);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#name-edit-btn')?.getAttribute('aria-label')).toContain('Travel plans')
+    );
+  });
+
   it('clicking name-edit-btn calls list-dialog.open with the current list', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();

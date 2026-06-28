@@ -2,6 +2,7 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
+import { tagStrip } from '../../utils/tag-color.js';
 
 const REVEAL_WIDTH    = 60;
 const COMMIT_RATIO    = 2.0;  // fraction of reveal width needed to commit
@@ -73,17 +74,32 @@ class GoalItem extends Gestures(AppElement) {
           pointer-events: none;
         }
 
-        .title {
+        .content {
           position: relative;
           z-index: 1;
+          flex: 1;
+          min-inline-size: 0;
+          overflow: hidden;
+        }
+
+        .title {
           font-size: var(--font-size-body);
           font-weight: var(--font-weight-medium);
           color: var(--color-text-primary);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          flex: 1;
-          min-inline-size: 0;
+        }
+
+        .tag-strip {
+          position: absolute;
+          inset-block-end: 0;
+          inset-inline-start: var(--space-10);
+          inset-inline-end: var(--space-4);
+          block-size: 3px;
+          pointer-events: none;
+          z-index: 2;
+          display: var(--tag-strip-display, block);
         }
 
         .desc-icon {
@@ -123,6 +139,7 @@ class GoalItem extends Gestures(AppElement) {
           border: none;
           cursor: grab;
           color: var(--color-text-muted);
+          opacity: 0.45;
           font-size: var(--font-size-body);
           display: flex;
           align-items: center;
@@ -310,7 +327,10 @@ class GoalItem extends Gestures(AppElement) {
            aria-valuenow="0">
         <div class="fill" style="width:0%"></div>
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
-        <span class="title"></span>
+        <span class="content">
+          <span class="title"></span>
+        </span>
+        <span class="tag-strip" aria-hidden="true"></span>
         <span class="desc-icon" aria-hidden="true">${icons.info}</span>
         <span class="pct-label" hidden></span>
       </div>
@@ -322,6 +342,7 @@ class GoalItem extends Gestures(AppElement) {
     this._bar      = this.shadowRoot.querySelector('.bar');
     this._fill     = this.shadowRoot.querySelector('.fill');
     this._title    = this.shadowRoot.querySelector('.title');
+    this._stripEl  = this.shadowRoot.querySelector('.tag-strip');
     this._pctLabel = this.shadowRoot.querySelector('.pct-label');
     this._revealedDir = null;
 
@@ -518,6 +539,11 @@ class GoalItem extends Gestures(AppElement) {
     this._bar.dataset.hasDesc = String(!!this._goal?.notes);
     this._setPct(this._pct);
     if (this._pct === 100 && prevPct !== undefined && prevPct < 100) this._celebrate();
+    if (this._stripEl) {
+      const bg = tagStrip(this._goal?.tags ?? []);
+      this._stripEl.style.background = bg;
+      this._stripEl.hidden = !bg;
+    }
   }
 }
 
