@@ -2,7 +2,7 @@
 
 A yearly goal planner
 
-Scaffolded from Socle 0.2.5 on 2026-06-06. Now on 0.9.5.
+Scaffolded from Socle 0.2.5 on 2026-06-06. Now on 0.9.20.
 Installed modules: core, gestures, sync, images, app-header, modal-dialog, toast
 
 ---
@@ -126,7 +126,8 @@ npm run test:e2e     # Playwright E2E tests
 - CSS logical properties throughout (`margin-inline-start`, not `margin-left`)
 - Elements with `position: sticky` or `fixed` at the top use `padding-block-start: var(--safe-area-top)` to avoid the notch; bottom elements use `padding-block-end: calc(var(--space-N) + var(--safe-area-bottom, 0px))`
 - All custom events must use `{ bubbles: true, composed: true }` — without `composed: true`, events fired inside a shadow root are swallowed and never reach parent listeners
-- Every new feature passes `/test`, `/i18n`, `/a11y`, `/review`, and `/docs` before `/commit`
+- Every new feature passes `/i18n`, `/a11y`, `/test`, `/docs`, and `/review` before `/commit`.
+- And to always run `/test-pwa` and bump at least a patch version for the app before pushing (commit the new version and push after the commit).
 
 ---
 
@@ -188,7 +189,7 @@ unsubscribe('goals', this._onGoals);
 
 ## Testing
 
-Unit tests live in `tests/unit/`. Co-located `*.test.js` files exist in `_lib/` — read them as examples of correct test patterns.
+Unit tests live in `tests/unit/`. E2E tests live in `tests/e2e/`. Co-located `*.test.js` files exist in `_lib/` — read them as examples of correct test patterns.
 
 **Environments:**
 - Add `// @vitest-environment happy-dom` only when the test needs `document`, `customElements`, or Shadow DOM
@@ -211,8 +212,8 @@ await vi.waitFor(() => expect(el.shadowRoot.querySelector('.title').textContent)
 ## Dev server and mobile testing
 
 ```bash
-npm run dev:https    # mobile — https://localhost:3000 + https://<LAN-IP>:3000
-npm run dev          # desktop — http://localhost:3000
+npm run dev:https    # mobile — https://localhost:3002 + https://<LAN-IP>:3002
+npm run dev          # desktop — http://localhost:3002
 ```
 
 Service workers only register on HTTPS or `localhost`. Always use `dev:https` when testing offline mode or SW behaviour on a real device.
@@ -244,9 +245,9 @@ Cert files (`*.pem`, `*.key`, `*.crt`) are gitignored — never commit them.
 - `/component <name> <tier>` — scaffold a new Web Component
 - `/migration <version> <description>` — scaffold a schema migration
 
-**After completing a feature:** `/test` → `/i18n` → `/a11y` → `/review` → `/docs feature` → `/commit`
+**After completing a feature:** `/i18n` → `/a11y` → `/test` → `/docs feature` → `/review` → `/commit`
 
-**Before shipping:** `/test-pwa` → `/status` → `/docs changelog` → `/commit`
+**Before shipping:** `/test-pwa` → `/status` → `/docs changelog` → bump at least patch version → `/commit` → git push
 
 **To upgrade `_lib/`:** `npx socle update`
 
