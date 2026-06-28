@@ -751,3 +751,81 @@ test.describe('Goal delete via dialog', () => {
     expect(await goalItemCount(page, '#capstone-list')).toBe(0);
   });
 });
+
+// ── Focus section ─────────────────────────────────────────────────────────────
+
+test.describe('Focus section', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+  });
+
+  test('can create a focus goal', async ({ page }) => {
+    await openDialog(page, '#add-focus');
+    await fillAndSaveDialog(page, 'Read 24 books');
+
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#focus-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+
+    expect(await goalItemCount(page, '#focus-list')).toBe(1);
+  });
+
+  test('created focus goal persists across page reload', async ({ page }) => {
+    await openDialog(page, '#add-focus');
+    await fillAndSaveDialog(page, 'Focus persisted');
+
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#focus-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+
+    await waitForIDBFlush(page);
+    await page.reload();
+    await waitForPage(page);
+
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#focus-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+
+    const title = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#focus-list goal-item');
+      return item?.shadowRoot?.querySelector('.title')?.textContent?.trim();
+    });
+    expect(title).toBe('Focus persisted');
+  });
+
+  test('delete via delete button removes a focus goal', async ({ page }) => {
+    await openDialog(page, '#add-focus');
+    await fillAndSaveDialog(page, 'To be deleted');
+
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#focus-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#focus-list goal-item').shadowRoot
+        .querySelector('#delete-btn').click();
+    });
+
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#focus-list');
+      return list?.querySelectorAll('goal-item').length === 0;
+    });
+
+    expect(await goalItemCount(page, '#focus-list')).toBe(0);
+  });
+});
