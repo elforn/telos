@@ -304,26 +304,30 @@ class ItemDialog extends AppElement {
           font-family: var(--font-family);
           white-space: nowrap;
           min-block-size: 28px;
+          border: none;
+          cursor: pointer;
+          touch-action: manipulation;
         }
 
-        .tag-chip-remove {
+        .tag-chip:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .tag-chip-x {
           background: rgba(0,0,0,0.12);
-          border: none;
           border-radius: var(--radius-full);
-          min-block-size: 20px;
           inline-size: 20px;
-          padding: 0;
-          cursor: pointer;
-          color: var(--color-text-primary);
+          block-size: 20px;
           display: flex;
           align-items: center;
           justify-content: center;
           line-height: 1;
           font-size: 0.9em;
-          touch-action: manipulation;
+          pointer-events: none;
         }
 
-        .tag-chip-remove:hover { background: rgba(0,0,0,0.22); }
+        .tag-chip:hover .tag-chip-x { background: rgba(0,0,0,0.22); }
 
         #tag-input {
           flex: 1;
@@ -840,8 +844,8 @@ class ItemDialog extends AppElement {
     };
 
     this._onTagWrapClick = e => {
-      const removeBtn = e.target.closest('.tag-chip-remove');
-      if (removeBtn) { this._removeTag(removeBtn.dataset.tag); return; }
+      const chip = e.target.closest('.tag-chip');
+      if (chip) { this._removeTag(chip.dataset.tag); return; }
       this._tagInput.focus();
     };
 
@@ -860,7 +864,7 @@ class ItemDialog extends AppElement {
     this._tagChipsWrap.addEventListener('click', this._onTagWrapClick);
     this._onSuggestionPointerDown = e => e.preventDefault();
     this._tagSuggestions.addEventListener('pointerdown', this._onSuggestionPointerDown);
-    this._onChipRemovePointerDown = e => { if (e.target.closest('.tag-chip-remove')) e.preventDefault(); };
+    this._onChipRemovePointerDown = e => { if (e.target.closest('.tag-chip')) e.preventDefault(); };
     this._tagChipsWrap.addEventListener('pointerdown', this._onChipRemovePointerDown);
     this._saveBtn.addEventListener('click', this._onSave);
     this._deleteBtn.addEventListener('click', this._onDelete);
@@ -1081,18 +1085,19 @@ class ItemDialog extends AppElement {
   _renderTagChips() {
     this._tagChipsWrap.querySelectorAll('.tag-chip').forEach(c => c.remove());
     for (const tag of this._tags) {
-      const chip = document.createElement('span');
-      chip.className = 'tag-chip';
-      chip.style.background = tagColor(tag);
-      chip.appendChild(document.createTextNode(tag));
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'tag-chip-remove';
+      btn.className = 'tag-chip';
       btn.dataset.tag = tag;
       btn.setAttribute('aria-label', t('tag.remove', { tag }));
-      btn.textContent = '×';
-      chip.appendChild(btn);
-      this._tagChipsWrap.insertBefore(chip, this._tagInput);
+      btn.style.background = tagColor(tag);
+      btn.appendChild(document.createTextNode(tag));
+      const x = document.createElement('span');
+      x.className = 'tag-chip-x';
+      x.setAttribute('aria-hidden', 'true');
+      x.textContent = '×';
+      btn.appendChild(x);
+      this._tagChipsWrap.insertBefore(btn, this._tagInput);
     }
   }
 

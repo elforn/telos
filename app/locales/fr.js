@@ -201,12 +201,16 @@ defineStrings({
   'list-detail.filter-clear':      'Effacer les filtres',
   'list-detail.filter-expand':     'Plus de filtres',
   'list-detail.filter-empty':      'Aucun élément ne correspond',
+  'list-detail.filter-count':      '{count} éléments correspondent',
 
   'lists-page.filter-toggle':      'Filtrer',
   'lists-page.filter-search':      'Rechercher des listes…',
+  'lists-page.filter-expand':      'Plus de filtres',
   'lists-page.filter-clear':       'Effacer les filtres',
   'lists-page.filter-empty':       'Aucune liste ne correspond',
-  'lists-page.filter-empty-only':  '+ Vides',
+  'lists-page.filter-empty-only':  'Vides',
+  'lists-page.filter-not-empty':   'Non vides',
+  'lists-page.filter-count':       '{count} listes correspondent',
 
   'home-page.filter-toggle':       'Filtrer',
   'home-page.filter-search':       'Rechercher des objectifs…',
@@ -216,6 +220,7 @@ defineStrings({
   'home-page.filter-not-started':  'Non commencé',
   'home-page.filter-clear':        'Effacer les filtres',
   'home-page.filter-empty':        'Aucun objectif ne correspond',
+  'home-page.filter-count':        '{count} objectifs correspondent',
 
   'bottom-nav.years':    'Années',
   'bottom-nav.lists':    'Listes',

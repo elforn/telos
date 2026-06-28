@@ -193,12 +193,16 @@ defineStrings({
   'list-detail.filter-clear':         'Clear filters',
   'list-detail.filter-expand':        'More filters',
   'list-detail.filter-empty':         'No items match',
+  'list-detail.filter-count':         '{count} items match',
 
   'lists-page.filter-toggle':         'Filter',
   'lists-page.filter-search':         'Search lists…',
+  'lists-page.filter-expand':         'More filters',
   'lists-page.filter-clear':          'Clear filters',
   'lists-page.filter-empty':          'No lists match',
-  'lists-page.filter-empty-only':     '+ Empty',
+  'lists-page.filter-empty-only':     'Empty',
+  'lists-page.filter-not-empty':      'Not empty',
+  'lists-page.filter-count':          '{count} lists match',
 
   'home-page.filter-toggle':          'Filter',
   'home-page.filter-search':          'Search goals…',
@@ -208,6 +212,7 @@ defineStrings({
   'home-page.filter-not-started':     'Not started',
   'home-page.filter-clear':           'Clear filters',
   'home-page.filter-empty':           'No goals match',
+  'home-page.filter-count':           '{count} goals match',
 
   'list-detail.add-from-text':       'Add from text',
   'list-detail.import-heading':      'Import items',

@@ -742,6 +742,16 @@ class ListDetailPage extends AppElement {
           color: var(--color-text-muted);
           font-size: var(--font-size-body);
         }
+
+        .sr-only {
+          position: absolute;
+          width: 1px; height: 1px;
+          padding: 0; margin: -1px;
+          overflow: hidden;
+          clip: rect(0,0,0,0);
+          white-space: nowrap;
+          border-width: 0;
+        }
       </style>
 
       <div class="page-header">
@@ -757,7 +767,7 @@ class ListDetailPage extends AppElement {
               <span class="filter-search-icon" aria-hidden="true">${icons.magnifyingGlass}</span>
               <input type="search" id="filter-search" placeholder="${t('list-detail.filter-search')}" aria-label="${t('list-detail.filter-search')}" autocomplete="off" />
             </div>
-            <button class="filter-expand-btn" id="filter-expand-btn" aria-label="${t('list-detail.filter-expand')}" aria-expanded="false">${icons.chevronDown}<span class="filter-expand-dot" hidden aria-hidden="true"></span></button>
+            <button class="filter-expand-btn" id="filter-expand-btn" aria-label="${t('list-detail.filter-expand')}" aria-expanded="false" aria-controls="filter-panel">${icons.chevronDown}<span class="filter-expand-dot" hidden aria-hidden="true"></span></button>
             <button class="filter-clear-btn" id="filter-clear-btn" aria-label="${t('list-detail.filter-clear')}">${icons.funnelX}</button>
           </div>
           <div id="filter-panel" hidden>
@@ -774,6 +784,7 @@ class ListDetailPage extends AppElement {
       <main>
         <div id="item-list" role="list"></div>
         <p id="filter-empty" hidden>${t('list-detail.filter-empty')}</p>
+        <p role="status" class="sr-only" id="filter-live"></p>
         <add-row id="add-row">+ ${t('list-detail.add')}</add-row>
       </main>
 
@@ -1373,6 +1384,7 @@ class ListDetailPage extends AppElement {
     this._filterPanel     = this.shadowRoot.querySelector('#filter-panel');
     this._filterTagRow    = this.shadowRoot.querySelector('#filter-tag-row');
     this._filterEmpty     = this.shadowRoot.querySelector('#filter-empty');
+    this._filterLive      = this.shadowRoot.querySelector('#filter-live');
     this._filterExpandBtn = this.shadowRoot.querySelector('#filter-expand-btn');
     this._filterBtnEl     = this.shadowRoot.querySelector('#filter-btn');
 
@@ -1397,23 +1409,15 @@ class ListDetailPage extends AppElement {
       this._barExpanded = nowOpen;
       if (!nowOpen) this._panelExpanded = false;
       this._saveFilter();
-      if (nowOpen) {
-        if (this._filterPanel) this._filterPanel.hidden = true;
-        if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', 'false');
-        requestAnimationFrame(() => this._filterSearch?.focus());
-      } else {
-        if (this._filterPanel) this._filterPanel.hidden = true;
-        if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', 'false');
-      }
+      this._syncFilterUI();
+      if (nowOpen) requestAnimationFrame(() => this._filterSearch?.focus());
     };
     this._filterBtnEl.addEventListener('click', this._onFilterBtn);
 
     this._onFilterExpand = () => {
-      const panelOpen = this._filterPanel.hidden;
-      this._filterPanel.hidden = !panelOpen;
-      this._filterExpandBtn.setAttribute('aria-expanded', String(panelOpen));
-      this._panelExpanded = panelOpen;
+      this._panelExpanded = !this._panelExpanded;
       this._saveFilter();
+      this._syncFilterUI();
     };
     this._filterExpandBtn.addEventListener('click', this._onFilterExpand);
 
@@ -1451,10 +1455,6 @@ class ListDetailPage extends AppElement {
     if (this._barExpanded) {
       this._filterBar.hidden = false;
       this._filterBtnEl.setAttribute('aria-expanded', 'true');
-      if (this._panelExpanded) {
-        this._filterPanel.hidden = false;
-        this._filterExpandBtn.setAttribute('aria-expanded', 'true');
-      }
     }
 
     // ── Store ─────────────────────────────────────────────────────────────────
@@ -1794,6 +1794,9 @@ class ListDetailPage extends AppElement {
       chip.classList.toggle('active', on);
       chip.setAttribute('aria-pressed', String(on));
     });
+    const panelOpen = this._panelExpanded || this._filter.statuses.size > 0 || this._filter.tags.size > 0;
+    if (this._filterPanel) this._filterPanel.hidden = !panelOpen;
+    if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', String(panelOpen));
   }
 
   _rebuildTagChips(items) {
@@ -1829,6 +1832,7 @@ class ListDetailPage extends AppElement {
     const q = query.toLowerCase().trim();
     const active = !!(q || statuses.size || tags.size);
     let anyVisible = false;
+    let visibleCount = 0;
 
     this._itemList?.querySelectorAll('list-item').forEach(el => {
       const item = el._item;
@@ -1844,10 +1848,11 @@ class ListDetailPage extends AppElement {
         if (![...tags].some(tag => itags.includes(tag))) show = false;
       }
       el.hidden = !show;
-      if (show) anyVisible = true;
+      if (show) { anyVisible = true; visibleCount++; }
     });
 
     if (this._filterEmpty) this._filterEmpty.hidden = !active || anyVisible;
+    if (this._filterLive) this._filterLive.textContent = active ? t('list-detail.filter-count', { count: visibleCount }) : '';
     const dot = this._filterBtnEl?.querySelector('.filter-btn-dot');
     if (dot) dot.hidden = !active;
     this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);

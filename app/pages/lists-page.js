@@ -190,9 +190,47 @@ class ListsPage extends AppElement {
           color: var(--color-danger);
         }
 
-        .filter-clear-btn:focus-visible {
+        .filter-clear-btn:focus-visible,
+        .filter-expand-btn:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
+        }
+
+        .filter-expand-btn {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
+          border: none;
+          background: none;
+          cursor: pointer;
+          color: var(--color-text-muted);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: var(--radius-sm);
+          touch-action: manipulation;
+          position: relative;
+        }
+
+        .filter-expand-btn svg {
+          inline-size: 16px;
+          block-size: 16px;
+          pointer-events: none;
+        }
+
+        .filter-expand-btn[aria-expanded="true"] svg {
+          transform: rotate(180deg);
+        }
+
+        .filter-expand-dot {
+          position: absolute;
+          inset-block-start: 6px;
+          inset-inline-end: 6px;
+          inline-size: 6px;
+          block-size: 6px;
+          border-radius: var(--radius-full);
+          background: var(--color-accent);
+          pointer-events: none;
         }
 
         .filter-chip-row {
@@ -235,6 +273,16 @@ class ListsPage extends AppElement {
           font-size: var(--font-size-body);
         }
 
+        .sr-only {
+          position: absolute;
+          width: 1px; height: 1px;
+          padding: 0; margin: -1px;
+          overflow: hidden;
+          clip: rect(0,0,0,0);
+          white-space: nowrap;
+          border-width: 0;
+        }
+
       </style>
 
       <div class="page-header">
@@ -248,16 +296,19 @@ class ListsPage extends AppElement {
               <span class="filter-search-icon" aria-hidden="true">${icons.magnifyingGlass}</span>
               <input type="search" id="filter-search" placeholder="${t('lists-page.filter-search')}" aria-label="${t('lists-page.filter-search')}" autocomplete="off" />
             </div>
+            <button class="filter-expand-btn" id="filter-expand-btn" aria-label="${t('lists-page.filter-expand')}" aria-expanded="false" aria-controls="filter-panel">${icons.chevronDown}<span class="filter-expand-dot" hidden aria-hidden="true"></span></button>
             <button class="filter-clear-btn" id="filter-clear-btn" aria-label="${t('lists-page.filter-clear')}">${icons.funnelX}</button>
           </div>
-          <div class="filter-chip-row" id="chip-row" hidden>
-            <button class="filter-chip" id="empty-only-btn" aria-pressed="false">${t('lists-page.filter-empty-only')}</button>
+          <div class="filter-chip-row" id="filter-panel" hidden>
+            <button class="filter-chip" id="empty-btn" aria-pressed="false">${t('lists-page.filter-empty-only')}</button>
+            <button class="filter-chip" id="not-empty-btn" aria-pressed="false">${t('lists-page.filter-not-empty')}</button>
           </div>
         </div>
       </div>
       <main>
         <div id="list-container" role="list"></div>
         <p id="filter-empty" hidden>${t('lists-page.filter-empty')}</p>
+        <p role="status" class="sr-only" id="filter-live"></p>
         <add-row id="add-row">+ ${t('lists-page.add')}</add-row>
       </main>
       <list-dialog id="dialog"></list-dialog>
@@ -304,11 +355,15 @@ class ListsPage extends AppElement {
     this._filterBtnDot = this.shadowRoot.querySelector('.filter-btn-dot');
     this._filterSearch = this.shadowRoot.querySelector('#filter-search');
     this._filterEmpty  = this.shadowRoot.querySelector('#filter-empty');
+    this._filterLive   = this.shadowRoot.querySelector('#filter-live');
 
-    this._filter = { query: '', emptyOnly: false };
+    this._filter = { query: '', emptyFilter: null };
     this._barExpanded = false;
-    this._emptyOnlyBtn = this.shadowRoot.querySelector('#empty-only-btn');
-    this._chipRow      = this.shadowRoot.querySelector('#chip-row');
+    this._panelExpanded = false;
+    this._filterExpandBtn = this.shadowRoot.querySelector('#filter-expand-btn');
+    this._filterPanel     = this.shadowRoot.querySelector('#filter-panel');
+    this._emptyBtn        = this.shadowRoot.querySelector('#empty-btn');
+    this._notEmptyBtn     = this.shadowRoot.querySelector('#not-empty-btn');
     this._loadFilter();
 
     const filterBtn = this.shadowRoot.querySelector('#filter-btn');
@@ -317,7 +372,9 @@ class ListsPage extends AppElement {
       this._filterBar.hidden = !nowOpen;
       filterBtn.setAttribute('aria-expanded', String(nowOpen));
       this._barExpanded = nowOpen;
+      if (!nowOpen) this._panelExpanded = false;
       this._saveFilter();
+      this._syncFilterUI();
       if (nowOpen) requestAnimationFrame(() => this._filterSearch?.focus());
     };
     filterBtn.addEventListener('click', this._onFilterBtn);
@@ -330,16 +387,31 @@ class ListsPage extends AppElement {
     };
     this._filterSearch.addEventListener('input', this._onFilterSearch);
 
-    this._onEmptyOnly = () => {
-      this._filter.emptyOnly = !this._filter.emptyOnly;
+    this._onFilterExpand = () => {
+      this._panelExpanded = !this._panelExpanded;
+      this._saveFilter();
+      this._syncFilterUI();
+    };
+    this._filterExpandBtn.addEventListener('click', this._onFilterExpand);
+
+    this._onEmptyBtn = () => {
+      this._filter.emptyFilter = this._filter.emptyFilter === 'empty' ? null : 'empty';
       this._saveFilter();
       this._syncFilterUI();
       this._applyFilter();
     };
-    this._emptyOnlyBtn.addEventListener('click', this._onEmptyOnly);
+    this._emptyBtn.addEventListener('click', this._onEmptyBtn);
+
+    this._onNotEmptyBtn = () => {
+      this._filter.emptyFilter = this._filter.emptyFilter === 'not-empty' ? null : 'not-empty';
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyFilter();
+    };
+    this._notEmptyBtn.addEventListener('click', this._onNotEmptyBtn);
 
     this._onFilterClear = () => {
-      this._filter = { query: '', emptyOnly: false };
+      this._filter = { query: '', emptyFilter: null };
       this._saveFilter();
       this._syncFilterUI();
       this._applyFilter();
@@ -477,8 +549,10 @@ class ListsPage extends AppElement {
     unsubscribe('pendingListUndo', this._onPendingListUndo);
     this.shadowRoot?.querySelector('#filter-btn')?.removeEventListener('click', this._onFilterBtn);
     this._filterSearch?.removeEventListener('input', this._onFilterSearch);
+    this._filterExpandBtn?.removeEventListener('click', this._onFilterExpand);
+    this._emptyBtn?.removeEventListener('click', this._onEmptyBtn);
+    this._notEmptyBtn?.removeEventListener('click', this._onNotEmptyBtn);
     this.shadowRoot?.querySelector('#filter-clear-btn')?.removeEventListener('click', this._onFilterClear);
-    this._emptyOnlyBtn?.removeEventListener('click', this._onEmptyOnly);
   }
 
   // ── Store mutations ───────────────────────────────────────────────────────
@@ -549,17 +623,19 @@ class ListsPage extends AppElement {
     try {
       const raw = localStorage.getItem('telos:filter:lists');
       if (raw) {
-        const { query = '', emptyOnly = false, barExpanded = false } = JSON.parse(raw);
-        this._filter = { query, emptyOnly };
+        const { query = '', emptyFilter = null, barExpanded = false, panelExpanded = false } = JSON.parse(raw);
+        this._filter = { query, emptyFilter };
         this._barExpanded = barExpanded;
+        this._panelExpanded = panelExpanded;
       }
     } catch { /* ignore */ }
   }
 
   _saveFilter() {
-    if (this._filter.query || this._filter.emptyOnly || this._barExpanded) {
+    if (this._filter.query || this._filter.emptyFilter || this._barExpanded || this._panelExpanded) {
       localStorage.setItem('telos:filter:lists', JSON.stringify({
-        query: this._filter.query, emptyOnly: this._filter.emptyOnly, barExpanded: this._barExpanded,
+        query: this._filter.query, emptyFilter: this._filter.emptyFilter,
+        barExpanded: this._barExpanded, panelExpanded: this._panelExpanded,
       }));
     } else {
       localStorage.removeItem('telos:filter:lists');
@@ -568,23 +644,33 @@ class ListsPage extends AppElement {
 
   _syncFilterUI() {
     if (this._filterSearch) this._filterSearch.value = this._filter.query;
-    const active = !!(this._filter.query || this._filter.emptyOnly);
+    const active = !!(this._filter.query || this._filter.emptyFilter);
     if (this._filterBtnDot) this._filterBtnDot.hidden = !active;
     this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
-    const hasEmptyLists = [...(this._container?.querySelectorAll('lists-page-item') ?? [])]
-      .some(el => (el._list?.items ?? []).length === 0);
-    if (this._chipRow)      this._chipRow.hidden = !hasEmptyLists;
-    if (this._emptyOnlyBtn) {
-      this._emptyOnlyBtn.classList.toggle('active', this._filter.emptyOnly);
-      this._emptyOnlyBtn.setAttribute('aria-pressed', String(this._filter.emptyOnly));
+
+    const panelOpen = this._panelExpanded || !!this._filter.emptyFilter;
+    if (this._filterPanel) this._filterPanel.hidden = !panelOpen;
+    if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', String(panelOpen));
+    const expandDot = this._filterExpandBtn?.querySelector('.filter-expand-dot');
+    if (expandDot) expandDot.hidden = !this._filter.emptyFilter;
+
+    const ef = this._filter.emptyFilter;
+    if (this._emptyBtn) {
+      this._emptyBtn.classList.toggle('active', ef === 'empty');
+      this._emptyBtn.setAttribute('aria-pressed', String(ef === 'empty'));
+    }
+    if (this._notEmptyBtn) {
+      this._notEmptyBtn.classList.toggle('active', ef === 'not-empty');
+      this._notEmptyBtn.setAttribute('aria-pressed', String(ef === 'not-empty'));
     }
   }
 
   _applyFilter() {
-    const q         = this._filter.query.toLowerCase().trim();
-    const emptyOnly = this._filter.emptyOnly;
-    const active    = !!(q || emptyOnly);
-    let anyVisible  = false;
+    const q           = this._filter.query.toLowerCase().trim();
+    const emptyFilter = this._filter.emptyFilter;
+    const active      = !!(q || emptyFilter);
+    let anyVisible    = false;
+    let visibleCount  = 0;
 
     this._container?.querySelectorAll('lists-page-item').forEach(el => {
       const list = el._list;
@@ -600,12 +686,14 @@ class ListsPage extends AppElement {
         );
         show = nameMatch || itemMatch;
       }
-      if (show && emptyOnly) show = (list.items ?? []).length === 0;
+      if (show && emptyFilter === 'empty')     show = (list.items ?? []).length === 0;
+      if (show && emptyFilter === 'not-empty') show = (list.items ?? []).length > 0;
       el.hidden = !show;
-      if (show) anyVisible = true;
+      if (show) { anyVisible = true; visibleCount++; }
     });
 
     if (this._filterEmpty) this._filterEmpty.hidden = !active || anyVisible;
+    if (this._filterLive) this._filterLive.textContent = active ? t('lists-page.filter-count', { count: visibleCount }) : '';
     if (this._filterBtnDot) this._filterBtnDot.hidden = !active;
     this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
   }

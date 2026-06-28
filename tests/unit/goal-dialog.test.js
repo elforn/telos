@@ -546,19 +546,19 @@ describe('goal-dialog — copy notes', () => {
 });
 
 describe('goal-dialog — tag chip aria-labels', () => {
-  it('tag chip remove button has aria-label containing the tag name', () => {
+  it('tag chip has aria-label containing the tag name', () => {
     const el = mount();
     el.open({ id: '1', title: 'Run a 5k', tags: ['health', 'fitness'] });
-    const chips = el.shadowRoot.querySelectorAll('.tag-chip-remove');
+    const chips = el.shadowRoot.querySelectorAll('.tag-chip');
     expect(chips).toHaveLength(2);
     expect(chips[0].getAttribute('aria-label')).toContain('health');
     expect(chips[1].getAttribute('aria-label')).toContain('fitness');
   });
 
-  it('tag chip remove button aria-label is not a raw hex value', () => {
+  it('tag chip aria-label is not a raw hex value', () => {
     const el = mount();
     el.open({ id: '1', title: 'Goal', tags: ['work'] });
-    const btn = el.shadowRoot.querySelector('.tag-chip-remove');
+    const btn = el.shadowRoot.querySelector('.tag-chip');
     expect(btn.getAttribute('aria-label')).not.toMatch(/#[0-9a-fA-F]/);
   });
 });

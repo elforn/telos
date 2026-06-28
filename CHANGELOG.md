@@ -9,6 +9,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.9.1] — 2026-06-28
+
+### Added
+- "Empty" and "Not empty" filter pills on the Lists page — quickly show only lists with no items, or only lists that have at least one item
+- "More filters" expand button label for the filter panel on the Lists page (i18n: en, ca, fr)
+- Filter result count announced to screen readers via a live region on all three filter pages (Lists, Goals, List items) — e.g. "3 lists match"
+- `aria-controls` attribute on filter expand buttons links them to their panel for better assistive-technology support (all three filter pages)
+
+### Changed
+- Tapping anywhere on a tag chip in the goal or item edit dialog now removes the tag — previously only the × button was the target
+- Filter panel now stays open when the filter bar is reopened if an active pill filter was set — Goals and List items pages now match the existing Lists page behaviour
+- Clearing filters no longer collapses the expanded filter panel — clear resets filter values only; the panel stays where you left it
+
+---
+
 ## [1.8.0] — 2026-06-25
 
 ### Added

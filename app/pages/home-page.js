@@ -315,6 +315,16 @@ class HomePage extends AppElement {
           font-size: var(--font-size-body);
         }
 
+        .sr-only {
+          position: absolute;
+          width: 1px; height: 1px;
+          padding: 0; margin: -1px;
+          overflow: hidden;
+          clip: rect(0,0,0,0);
+          white-space: nowrap;
+          border-width: 0;
+        }
+
       </style>
 
       <year-header id="header">
@@ -324,7 +334,7 @@ class HomePage extends AppElement {
               <span class="filter-search-icon" aria-hidden="true">${icons.magnifyingGlass}</span>
               <input type="search" id="filter-search" placeholder="${t('home-page.filter-search')}" aria-label="${t('home-page.filter-search')}" autocomplete="off" />
             </div>
-            <button class="filter-expand-btn" id="filter-expand-btn" aria-label="${t('home-page.filter-expand')}" aria-expanded="false">${icons.chevronDown}<span class="filter-expand-dot" hidden aria-hidden="true"></span></button>
+            <button class="filter-expand-btn" id="filter-expand-btn" aria-label="${t('home-page.filter-expand')}" aria-expanded="false" aria-controls="filter-panel">${icons.chevronDown}<span class="filter-expand-dot" hidden aria-hidden="true"></span></button>
             <button class="filter-clear-btn" id="filter-clear-btn" aria-label="${t('home-page.filter-clear')}">${icons.funnelX}</button>
           </div>
           <div id="filter-panel" hidden>
@@ -340,6 +350,7 @@ class HomePage extends AppElement {
 
       <main>
         <p id="filter-empty" hidden>${t('home-page.filter-empty')}</p>
+        <p role="status" class="sr-only" id="filter-live"></p>
 
         <section id="capstone-section" class="list-section empty" aria-label="${t('home-page.capstone-section')}">
           <h2 class="section-heading">${t('home-page.capstone-section')}</h2>
@@ -414,6 +425,7 @@ class HomePage extends AppElement {
     this._filterPanel    = this.shadowRoot.querySelector('#filter-panel');
     this._filterTagRow   = this.shadowRoot.querySelector('#filter-tag-row');
     this._filterEmpty    = this.shadowRoot.querySelector('#filter-empty');
+    this._filterLive     = this.shadowRoot.querySelector('#filter-live');
     this._filterExpandBtn = this.shadowRoot.querySelector('#filter-expand-btn');
 
     this._filter = { query: '', states: new Set(), tags: new Set() };
@@ -438,23 +450,15 @@ class HomePage extends AppElement {
       this._barExpanded = nowOpen;
       if (!nowOpen) this._panelExpanded = false;
       this._saveFilter();
-      if (nowOpen) {
-        if (this._filterPanel) this._filterPanel.hidden = true;
-        if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', 'false');
-        requestAnimationFrame(() => this._filterSearch?.focus());
-      } else {
-        if (this._filterPanel) this._filterPanel.hidden = true;
-        if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', 'false');
-      }
+      this._syncFilterUI();
+      if (nowOpen) requestAnimationFrame(() => this._filterSearch?.focus());
     };
     this._header.addEventListener('filter-click', this._onFilterClick);
 
     this._onFilterExpand = () => {
-      const panelOpen = this._filterPanel.hidden;
-      this._filterPanel.hidden = !panelOpen;
-      this._filterExpandBtn.setAttribute('aria-expanded', String(panelOpen));
-      this._panelExpanded = panelOpen;
+      this._panelExpanded = !this._panelExpanded;
       this._saveFilter();
+      this._syncFilterUI();
     };
     this._filterExpandBtn.addEventListener('click', this._onFilterExpand);
 
@@ -494,10 +498,6 @@ class HomePage extends AppElement {
       this._filterBar.hidden = false;
       this._header.filterExpanded = true;
       this._header.forceCompact = true;
-      if (this._panelExpanded) {
-        this._filterPanel.hidden = false;
-        this._filterExpandBtn.setAttribute('aria-expanded', 'true');
-      }
     }
 
     // ── Store subscription ────────────────────────────────────────────────────
@@ -1042,6 +1042,9 @@ class HomePage extends AppElement {
       chip.classList.toggle('active', on);
       chip.setAttribute('aria-pressed', String(on));
     });
+    const panelOpen = this._panelExpanded || this._filter.states.size > 0 || this._filter.tags.size > 0;
+    if (this._filterPanel) this._filterPanel.hidden = !panelOpen;
+    if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', String(panelOpen));
   }
 
   _rebuildTagChips(goals) {
@@ -1077,6 +1080,7 @@ class HomePage extends AppElement {
     const q = query.toLowerCase().trim();
     const active = !!(q || states.size || tags.size);
     let anyVisible = false;
+    let visibleCount = 0;
 
     const sections = [
       { list: this._capstoneList,  section: this._capstoneSection },
@@ -1106,7 +1110,7 @@ class HomePage extends AppElement {
           if (![...tags].some(tag => gtags.includes(tag))) show = false;
         }
         el.hidden = !show;
-        if (show) { anyVisible = true; sectionVisible = true; }
+        if (show) { anyVisible = true; sectionVisible = true; visibleCount++; }
       });
       const hide = active && !sectionVisible;
       const heading = section?.querySelector('.section-heading');
@@ -1116,6 +1120,7 @@ class HomePage extends AppElement {
     }
 
     if (this._filterEmpty) this._filterEmpty.hidden = !active || anyVisible;
+    if (this._filterLive) this._filterLive.textContent = active ? t('home-page.filter-count', { count: visibleCount }) : '';
     this._header.filterDot = active;
     this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
   }

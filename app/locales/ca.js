@@ -201,12 +201,16 @@ defineStrings({
   'list-detail.filter-clear':      'Elimina els filtres',
   'list-detail.filter-expand':     'Més filtres',
   'list-detail.filter-empty':      'Cap element coincideix',
+  'list-detail.filter-count':      '{count} elements coincideixen',
 
   'lists-page.filter-toggle':      'Filtra',
   'lists-page.filter-search':      'Cerca llistes…',
+  'lists-page.filter-expand':      'Més filtres',
   'lists-page.filter-clear':       'Elimina els filtres',
   'lists-page.filter-empty':       'Cap llista coincideix',
-  'lists-page.filter-empty-only':  '+ Buides',
+  'lists-page.filter-empty-only':  'Buides',
+  'lists-page.filter-not-empty':   'No buides',
+  'lists-page.filter-count':       '{count} llistes coincideixen',
 
   'home-page.filter-toggle':       'Filtra',
   'home-page.filter-search':       'Cerca objectius…',
@@ -216,6 +220,7 @@ defineStrings({
   'home-page.filter-not-started':  'Sense iniciar',
   'home-page.filter-clear':        'Elimina els filtres',
   'home-page.filter-empty':        'Cap objectiu coincideix',
+  'home-page.filter-count':        '{count} objectius coincideixen',
 
   'bottom-nav.years':    'Anys',
   'bottom-nav.lists':    'Llistes',
