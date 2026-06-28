@@ -176,3 +176,57 @@ describe('year-header — accent color picker', () => {
   });
 });
 
+// ── year-header — tag strip toggle ────────────────────────────────────────────
+
+describe('year-header — tag strip toggle', () => {
+  beforeEach(() => {
+    Store.setState('goalsTagsVisible', {});
+  });
+
+  it('clicking tags-show-btn sets goalsTagsVisible[year] to true', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#tags-show-btn').click();
+    expect(Store.getState().goalsTagsVisible?.['2026']).toBe(true);
+  });
+
+  it('clicking tags-hide-btn sets goalsTagsVisible[year] to false', () => {
+    Store.setState('goalsTagsVisible', { '2026': true });
+    const el = mount();
+    el.shadowRoot.querySelector('#tags-hide-btn').click();
+    expect(Store.getState().goalsTagsVisible?.['2026']).toBe(false);
+  });
+
+  it('tags-show-btn gets active class when strip is visible', () => {
+    Store.setState('goalsTagsVisible', { '2026': true });
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#tags-show-btn').classList.contains('active')).toBe(true);
+    expect(el.shadowRoot.querySelector('#tags-hide-btn').classList.contains('active')).toBe(false);
+  });
+
+  it('tags-hide-btn gets active class when strip is hidden', () => {
+    Store.setState('goalsTagsVisible', { '2026': false });
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#tags-show-btn').classList.contains('active')).toBe(false);
+    expect(el.shadowRoot.querySelector('#tags-hide-btn').classList.contains('active')).toBe(true);
+  });
+
+  it('sets --tag-strip-display: block on documentElement when visible', () => {
+    Store.setState('goalsTagsVisible', { '2026': true });
+    mount();
+    expect(document.documentElement.style.getPropertyValue('--tag-strip-display')).toBe('block');
+  });
+
+  it('sets --tag-strip-display: none on documentElement when hidden', () => {
+    Store.setState('goalsTagsVisible', { '2026': false });
+    mount();
+    expect(document.documentElement.style.getPropertyValue('--tag-strip-display')).toBe('none');
+  });
+
+  it('does not affect a different year', () => {
+    Store.setState('goalsTagsVisible', { '2025': true });
+    const el = mount(2026);
+    // year 2026 not set → visible is false → hide btn should be active
+    expect(el.shadowRoot.querySelector('#tags-hide-btn').classList.contains('active')).toBe(true);
+  });
+});
+

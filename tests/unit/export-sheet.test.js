@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import '../../../app/strings.js';
-import './export-sheet.js';
+import '../../app/strings.js';
+import '../../app/components/export-sheet/export-sheet.js';
 
 function mount() {
   const el = document.createElement('export-sheet');

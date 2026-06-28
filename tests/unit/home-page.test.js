@@ -347,3 +347,179 @@ describe('home-page — goal reorder', () => {
     });
   });
 });
+
+// ── home-page — _rebuildTagChips ──────────────────────────────────────────────
+
+describe('home-page — _rebuildTagChips', () => {
+  it('creates a chip for each unique tag across goals', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    el._rebuildTagChips([
+      { id: 'g1', title: 'A', tags: ['health', 'finance'] },
+      { id: 'g2', title: 'B', tags: ['health'] },
+    ]);
+    const chips = el.shadowRoot.querySelector('#filter-tag-row').querySelectorAll('.filter-tag-chip');
+    expect(chips.length).toBe(2);
+  });
+
+  it('sorts tags alphabetically', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    el._rebuildTagChips([
+      { id: 'g1', title: 'A', tags: ['zebra', 'apple', 'mango'] },
+    ]);
+    const chips = [...el.shadowRoot.querySelector('#filter-tag-row').querySelectorAll('.filter-tag-chip')];
+    expect(chips.map(c => c.dataset.tag)).toEqual(['apple', 'mango', 'zebra']);
+  });
+
+  it('hides the tag row when no tags are present', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    el._rebuildTagChips([{ id: 'g1', title: 'A', tags: [] }]);
+    expect(el.shadowRoot.querySelector('#filter-tag-row').hidden).toBe(true);
+  });
+
+  it('shows the tag row when tags are present', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    el._rebuildTagChips([{ id: 'g1', title: 'A', tags: ['focus'] }]);
+    expect(el.shadowRoot.querySelector('#filter-tag-row').hidden).toBe(false);
+  });
+
+  it('marks active chips based on current filter', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    el._filter.tags = new Set(['health']);
+    el._rebuildTagChips([{ id: 'g1', title: 'A', tags: ['health', 'finance'] }]);
+    const chips = [...el.shadowRoot.querySelector('#filter-tag-row').querySelectorAll('.filter-tag-chip')];
+    const healthChip   = chips.find(c => c.dataset.tag === 'health');
+    const financeChip  = chips.find(c => c.dataset.tag === 'finance');
+    expect(healthChip.classList.contains('active')).toBe(true);
+    expect(financeChip.classList.contains('active')).toBe(false);
+  });
+});
+
+// ── home-page — _applyGoalFilter ─────────────────────────────────────────────
+
+describe('home-page — _applyGoalFilter', () => {
+  it('hides goal-items that do not match the text query', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'Run a marathon', percentage: 0, tags: [] },
+      { id: 'c2', title: 'Learn piano',    percentage: 0, tags: [] },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
+    );
+
+    el._filter = { query: 'piano', states: new Set(), tags: new Set() };
+    el._applyGoalFilter();
+
+    const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
+    const marathon = items.find(i => i._goal.title === 'Run a marathon');
+    const piano    = items.find(i => i._goal.title === 'Learn piano');
+    expect(marathon.hidden).toBe(true);
+    expect(piano.hidden).toBe(false);
+  });
+
+  it('shows all goal-items when query is empty', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'Alpha', percentage: 0, tags: [] },
+      { id: 'c2', title: 'Beta',  percentage: 0, tags: [] },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
+    );
+
+    el._filter = { query: '', states: new Set(), tags: new Set() };
+    el._applyGoalFilter();
+
+    const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
+    expect(items.every(i => !i.hidden)).toBe(true);
+  });
+
+  it('filters by state: "done" shows only 100% goals', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'Done goal',    percentage: 100, tags: [] },
+      { id: 'c2', title: 'Ongoing goal', percentage: 50,  tags: [] },
+      { id: 'c3', title: 'Fresh goal',   percentage: 0,   tags: [] },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
+    );
+
+    el._filter = { query: '', states: new Set(['done']), tags: new Set() };
+    el._applyGoalFilter();
+
+    const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
+    expect(items.find(i => i._goal.title === 'Done goal').hidden).toBe(false);
+    expect(items.find(i => i._goal.title === 'Ongoing goal').hidden).toBe(true);
+    expect(items.find(i => i._goal.title === 'Fresh goal').hidden).toBe(true);
+  });
+
+  it('filters by state: "not-started" shows only 0% goals', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'Done',    percentage: 100, tags: [] },
+      { id: 'c2', title: 'Ongoing', percentage: 50,  tags: [] },
+      { id: 'c3', title: 'Fresh',   percentage: 0,   tags: [] },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
+    );
+
+    el._filter = { query: '', states: new Set(['not-started']), tags: new Set() };
+    el._applyGoalFilter();
+
+    const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
+    expect(items.find(i => i._goal.title === 'Fresh').hidden).toBe(false);
+    expect(items.find(i => i._goal.title === 'Done').hidden).toBe(true);
+    expect(items.find(i => i._goal.title === 'Ongoing').hidden).toBe(true);
+  });
+
+  it('filters by tag: hides goals that do not have the tag', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'Health goal',  percentage: 0, tags: ['health'] },
+      { id: 'c2', title: 'Finance goal', percentage: 0, tags: ['finance'] },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
+    );
+
+    el._filter = { query: '', states: new Set(), tags: new Set(['health']) };
+    el._applyGoalFilter();
+
+    const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
+    expect(items.find(i => i._goal.title === 'Health goal').hidden).toBe(false);
+    expect(items.find(i => i._goal.title === 'Finance goal').hidden).toBe(true);
+  });
+
+  it('combines query and tag filter (AND logic)', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'Run daily',    percentage: 0, tags: ['health'] },
+      { id: 'c2', title: 'Run finances', percentage: 0, tags: ['finance'] },
+      { id: 'c3', title: 'Piano',        percentage: 0, tags: ['health'] },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
+    );
+
+    el._filter = { query: 'run', states: new Set(), tags: new Set(['health']) };
+    el._applyGoalFilter();
+
+    const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
+    expect(items.find(i => i._goal.title === 'Run daily').hidden).toBe(false);
+    expect(items.find(i => i._goal.title === 'Run finances').hidden).toBe(true);
+    expect(items.find(i => i._goal.title === 'Piano').hidden).toBe(true);
+  });
+});

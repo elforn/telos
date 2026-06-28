@@ -1249,6 +1249,203 @@ describe('list-detail-page — extract-confirm', () => {
   });
 });
 
+// ── list-detail-page — _parseImportText ──────────────────────────────────────
+
+describe('list-detail-page — _parseImportText', () => {
+  let el;
+  beforeEach(() => { el = document.createElement('list-detail-page'); });
+
+  it('parses non-empty lines as separate items', () => {
+    const items = el._parseImportText('Alpha\nBeta\nGamma');
+    expect(items.map(i => i.title)).toEqual(['Alpha', 'Beta', 'Gamma']);
+  });
+
+  it('skips empty lines between items', () => {
+    const items = el._parseImportText('Alpha\n\nBeta');
+    expect(items).toHaveLength(2);
+    expect(items[0].title).toBe('Alpha');
+    expect(items[1].title).toBe('Beta');
+  });
+
+  it('strips leading bullet (- )', () => {
+    const items = el._parseImportText('- Buy milk\n* Read book\n• Exercise');
+    expect(items[0].title).toBe('Buy milk');
+    expect(items[1].title).toBe('Read book');
+    expect(items[2].title).toBe('Exercise');
+  });
+
+  it('attaches indented lines as a note on the preceding item', () => {
+    const items = el._parseImportText('Alpha\n  a continuation line\nBeta');
+    expect(items[0].title).toBe('Alpha');
+    expect(items[0].note).toBe('a continuation line');
+    expect(items[1].note).toBeUndefined();
+  });
+
+  it('joins multiple indented lines with newline in note', () => {
+    const items = el._parseImportText('Alpha\n  line one\n  line two');
+    expect(items[0].note).toBe('line one\nline two');
+  });
+
+  it('truncates title at 120 chars at a word boundary', () => {
+    const long = 'word '.repeat(30).trim(); // 149 chars
+    const items = el._parseImportText(long);
+    expect(items[0].title.length).toBeLessThanOrEqual(120);
+    expect(items[0].title.endsWith(' ')).toBe(false);
+  });
+
+  it('overflowed title text goes into note', () => {
+    const long = 'word '.repeat(30).trim();
+    const items = el._parseImportText(long);
+    expect(items[0].note).toBe(long);
+  });
+
+  it('extracts a URL from the title text', () => {
+    const items = el._parseImportText('Read this https://example.com article');
+    expect(items[0].url).toBe('https://example.com');
+  });
+
+  it('extracts a URL from an indented continuation line', () => {
+    const items = el._parseImportText('Check docs\n  see https://docs.example.com for details');
+    expect(items[0].url).toBe('https://docs.example.com');
+  });
+
+  it('uses the last URL when multiple URLs appear in text', () => {
+    const items = el._parseImportText('See https://first.com and https://second.com');
+    expect(items[0].url).toBe('https://second.com');
+  });
+
+  it('strips trailing punctuation from extracted URL', () => {
+    const items = el._parseImportText('Read https://example.com.');
+    expect(items[0].url).toBe('https://example.com');
+  });
+
+  it('returns undefined url when no URL is present', () => {
+    const items = el._parseImportText('No link here');
+    expect(items[0].url).toBeUndefined();
+  });
+
+  it('returns empty array for blank input', () => {
+    expect(el._parseImportText('')).toHaveLength(0);
+    expect(el._parseImportText('   \n\n  ')).toHaveLength(0);
+  });
+});
+
+// ── list-detail-page — _applyFilter ──────────────────────────────────────────
+
+describe('list-detail-page — _applyFilter', () => {
+  const ITEM_OPEN   = { id: 'i1', title: 'Open task',   status: 'open',   tags: ['work'],   inGoals: [] };
+  const ITEM_DONE   = { id: 'i2', title: 'Done task',   status: 'done',   tags: ['health'], inGoals: [] };
+  const ITEM_PAUSED = { id: 'i3', title: 'Paused task', status: 'paused', tags: ['work'],   inGoals: [] };
+
+  it('text query hides items whose title does not match', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_OPEN, ITEM_DONE] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+
+    el._filter = { query: 'done', statuses: new Set(), tags: new Set() };
+    el._applyFilter();
+
+    const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
+    expect(items.find(i => i._item.title === 'Done task').hidden).toBe(false);
+    expect(items.find(i => i._item.title === 'Open task').hidden).toBe(true);
+  });
+
+  it('empty query shows all items', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_OPEN, ITEM_DONE] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+
+    el._filter = { query: '', statuses: new Set(), tags: new Set() };
+    el._applyFilter();
+
+    const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
+    expect(items.every(i => !i.hidden)).toBe(true);
+  });
+
+  it('status filter shows only matching-status items', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_OPEN, ITEM_DONE, ITEM_PAUSED] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
+
+    el._filter = { query: '', statuses: new Set(['paused']), tags: new Set() };
+    el._applyFilter();
+
+    const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
+    expect(items.find(i => i._item.status === 'paused').hidden).toBe(false);
+    expect(items.find(i => i._item.status === 'open').hidden).toBe(true);
+    expect(items.find(i => i._item.status === 'done').hidden).toBe(true);
+  });
+
+  it('tag filter hides items that do not carry the tag', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_OPEN, ITEM_DONE] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+
+    el._filter = { query: '', statuses: new Set(), tags: new Set(['health']) };
+    el._applyFilter();
+
+    const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
+    expect(items.find(i => i._item.id === 'i2').hidden).toBe(false); // health tag
+    expect(items.find(i => i._item.id === 'i1').hidden).toBe(true);  // work tag only
+  });
+
+  it('combines query and status filter (AND logic)', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_OPEN, ITEM_DONE, ITEM_PAUSED] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
+
+    el._filter = { query: 'task', statuses: new Set(['open']), tags: new Set() };
+    el._applyFilter();
+
+    const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
+    expect(items.find(i => i._item.status === 'open').hidden).toBe(false);
+    expect(items.find(i => i._item.status === 'done').hidden).toBe(true);
+    expect(items.find(i => i._item.status === 'paused').hidden).toBe(true);
+  });
+});
+
+// ── list-detail-page — listsTagsVisible toggle ────────────────────────────────
+
+describe('list-detail-page — listsTagsVisible toggle', () => {
+  it('clicking tags-show-btn sets listsTagsVisible[listId] to true', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    el.shadowRoot.querySelector('#tags-show-btn').click();
+    expect(getState().listsTagsVisible?.['l1']).toBe(true);
+  });
+
+  it('clicking tags-hide-btn sets listsTagsVisible[listId] to false', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    setState('listsTagsVisible', { l1: true });
+    const el = mount();
+    el.shadowRoot.querySelector('#tags-hide-btn').click();
+    expect(getState().listsTagsVisible?.['l1']).toBe(false);
+  });
+
+  it('tags-show-btn gets active class when strip is visible', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    setState('listsTagsVisible', { l1: true });
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#tags-show-btn').classList.contains('active')).toBe(true);
+    expect(el.shadowRoot.querySelector('#tags-hide-btn').classList.contains('active')).toBe(false);
+  });
+
+  it('tags-hide-btn gets active class when strip is hidden', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    setState('listsTagsVisible', { l1: false });
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#tags-show-btn').classList.contains('active')).toBe(false);
+    expect(el.shadowRoot.querySelector('#tags-hide-btn').classList.contains('active')).toBe(true);
+  });
+
+  it('does not affect other list IDs', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    el.shadowRoot.querySelector('#tags-show-btn').click();
+    expect(getState().listsTagsVisible?.['l2']).toBeUndefined();
+  });
+});
+
 // ── E2E deferred ─────────────────────────────────────────────────────────────
 // The following behaviours require a real browser and are covered by tests/e2e/lists.spec.js:
 // - Back button navigates to /lists
