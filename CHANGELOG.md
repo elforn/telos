@@ -9,6 +9,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.9.2] — 2026-06-30
+
+### Changed
+- Drag handles (⠿) on goals, list items, and lists are tighter — 2 px trailing padding and a 5 px leading pull-in so the handle sits closer to the row edge without affecting touch target size
+
+### Fixed
+- Deleting a list item via the edit dialog showed a competing "Item saved" undo toast alongside the "Item deleted" toast — only the delete toast now appears
+
+---
+
 ## [1.9.1] — 2026-06-28
 
 ### Added
