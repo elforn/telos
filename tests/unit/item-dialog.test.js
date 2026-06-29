@@ -166,153 +166,198 @@ describe('item-dialog — open', () => {
   });
 });
 
-// ── save ──────────────────────────────────────────────────────────────────────
+// ── new item creation ─────────────────────────────────────────────────────────
 
-describe('item-dialog — save', () => {
-  it('save button is disabled when title is empty', () => {
-    const el = mount();
-    el.open(null);
-    expect(el.shadowRoot.querySelector('#save').disabled).toBe(true);
-  });
-
-  it('save button enables when title has text', () => {
-    const el = mount();
-    el.open(null);
-    const inp = el.shadowRoot.querySelector('#title-input');
-    inp.value = 'New item';
-    inp.dispatchEvent(new Event('input'));
-    expect(el.shadowRoot.querySelector('#save').disabled).toBe(false);
-  });
-
-  it('dispatches item-saved with title and status on save click', () => {
+describe('item-dialog — new item creation', () => {
+  it('dispatches item-created on modal-close when title is non-empty', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('item-saved', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#title-input');
-    inp.value = 'My item';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'My item';
+    el.shadowRoot.querySelector('#modal').close();
     expect(events).toHaveLength(1);
     expect(events[0].detail.title).toBe('My item');
     expect(events[0].detail.status).toBe('open');
   });
 
-  it('includes note in item-saved detail when note is filled', () => {
+  it('trims whitespace from title in item-created', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('item-saved', e => events.push(e));
-    el.shadowRoot.querySelector('#title-input').value = 'Item';
-    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#note-input').value = 'A helpful note';
-    el.shadowRoot.querySelector('#save').click();
-    expect(events[0].detail.note).toBe('A helpful note');
-  });
-
-  it('note is undefined in item-saved detail when note is empty', () => {
-    const el = mount();
-    el.open(null);
-    const events = [];
-    el.addEventListener('item-saved', e => events.push(e));
-    el.shadowRoot.querySelector('#title-input').value = 'Item';
-    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
-    expect(events[0].detail.note).toBeUndefined();
-  });
-
-  it('includes url in item-saved detail when url is filled', () => {
-    const el = mount();
-    el.open(null);
-    const events = [];
-    el.addEventListener('item-saved', e => events.push(e));
-    el.shadowRoot.querySelector('#title-input').value = 'Item';
-    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#url-input').value = 'https://example.com';
-    el.shadowRoot.querySelector('#save').click();
-    expect(events[0].detail.url).toBe('https://example.com');
-  });
-
-  it('url is undefined in item-saved detail when url is empty', () => {
-    const el = mount();
-    el.open(null);
-    const events = [];
-    el.addEventListener('item-saved', e => events.push(e));
-    el.shadowRoot.querySelector('#title-input').value = 'Item';
-    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
-    expect(events[0].detail.url).toBeUndefined();
-  });
-
-  it('dispatches item-saved with the selected status', () => {
-    const el = mount();
-    el.open({ ...ITEM, status: 'done' });
-    const events = [];
-    el.addEventListener('item-saved', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#title-input');
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
-    expect(events[0].detail.status).toBe('done');
-  });
-
-  it('does not dispatch item-saved when title is only whitespace', () => {
-    const el = mount();
-    el.open(null);
-    const events = [];
-    el.addEventListener('item-saved', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#title-input');
-    inp.value = '   ';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
-    expect(events).toHaveLength(0);
-  });
-
-  it('trims whitespace from the saved title', () => {
-    const el = mount();
-    el.open(null);
-    const events = [];
-    el.addEventListener('item-saved', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#title-input');
-    inp.value = '  Flowers  ';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = '  Flowers  ';
+    el.shadowRoot.querySelector('#modal').close();
     expect(events[0].detail.title).toBe('Flowers');
   });
 
-  it('closes the dialog after saving', () => {
-    const el = mount();
-    const modal = el.shadowRoot.querySelector('#modal');
-    el.open(null);
-    const inp = el.shadowRoot.querySelector('#title-input');
-    inp.value = 'Something';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
-    expect(modal.close).toHaveBeenCalledOnce();
-  });
-
-  it('dispatches item-saved on Enter key in the title input', () => {
+  it('does not dispatch item-created when title is whitespace only', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('item-saved', e => events.push(e));
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = '   ';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events).toHaveLength(0);
+  });
+
+  it('includes note in item-created when note is filled', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('#note-input').value = 'A helpful note';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.note).toBe('A helpful note');
+  });
+
+  it('note is undefined in item-created when note is empty', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.note).toBeUndefined();
+  });
+
+  it('includes url in item-created when url is filled', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('#url-input').value = 'https://example.com';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.url).toBe('https://example.com');
+  });
+
+  it('url is undefined in item-created when url is empty', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.url).toBeUndefined();
+  });
+
+  it('dispatches item-created on Enter key when title is non-empty', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
     const inp = el.shadowRoot.querySelector('#title-input');
     inp.value = 'Enter save';
-    inp.dispatchEvent(new Event('input'));
     inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(events[0].detail.title).toBe('Enter save');
   });
 
-  it('item-saved is bubbles and composed', () => {
+  it('Enter key does nothing when title is empty', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(null);
+    el.shadowRoot.querySelector('#title-input').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
+    expect(modal.close).not.toHaveBeenCalled();
+  });
+
+  it('item-created is bubbles and composed', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('item-saved', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#title-input');
-    inp.value = 'Test';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Test';
+    el.shadowRoot.querySelector('#modal').close();
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
+  });
+});
+
+// ── edit existing (blur-save) ──────────────────────────────────────────────────
+
+describe('item-dialog — edit existing (blur-save)', () => {
+  it('dispatches item-title-changed when title blurs with a new value', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-title-changed', e => events.push(e));
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.value = 'Updated title';
+    inp.dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.title).toBe('Updated title');
+  });
+
+  it('does not dispatch item-title-changed when title is unchanged on blur', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-title-changed', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(0);
+  });
+
+  it('reverts title field to last valid value when cleared on blur', () => {
+    const el = mount();
+    el.open(ITEM);
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.value = '';
+    inp.dispatchEvent(new Event('blur'));
+    expect(inp.value).toBe(ITEM.title);
+  });
+
+  it('dispatches item-note-changed when note blurs with a new value', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-note-changed', e => events.push(e));
+    const inp = el.shadowRoot.querySelector('#note-input');
+    inp.value = 'New note';
+    inp.dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.note).toBe('New note');
+  });
+
+  it('dispatches item-url-changed when url blurs with a new value', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-url-changed', e => events.push(e));
+    const inp = el.shadowRoot.querySelector('#url-input');
+    inp.value = 'https://new.example.com';
+    inp.dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.url).toBe('https://new.example.com');
+  });
+
+  it('dispatches item-closed on modal close for existing item', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-closed', e => events.push(e));
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events).toHaveLength(1);
+  });
+
+  it('Close button closes the modal', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(ITEM);
+    el.shadowRoot.querySelector('#close').click();
+    expect(modal.close).toHaveBeenCalledOnce();
+  });
+
+  it('Enter key closes for existing item', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(ITEM);
+    el.shadowRoot.querySelector('#title-input').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
+    expect(modal.close).toHaveBeenCalledOnce();
   });
 });
 
@@ -347,17 +392,6 @@ describe('item-dialog — delete', () => {
   });
 });
 
-// ── cancel ────────────────────────────────────────────────────────────────────
-
-describe('item-dialog — cancel', () => {
-  it('closes the dialog when cancel is clicked', () => {
-    const el = mount();
-    const modal = el.shadowRoot.querySelector('#modal');
-    el.open(null);
-    el.shadowRoot.querySelector('#cancel').click();
-    expect(modal.close).toHaveBeenCalledOnce();
-  });
-});
 
 // ── draft ─────────────────────────────────────────────────────────────────────
 
@@ -429,39 +463,158 @@ describe('item-dialog — draft', () => {
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
   });
 
-  it('clears draft on save', () => {
+  it('clears draft when modal closes with non-empty title', () => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'Draft', note: '', url: '' }));
     const el = mount();
     el.open(null);
-    const inp = el.shadowRoot.querySelector('#title-input');
-    inp.value = 'Saved item';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.shadowRoot.querySelector('#title-input').value = 'Saved item';
+    el.shadowRoot.querySelector('#modal').close();
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
   });
 
-  it('clears draft on cancel', () => {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'Draft', note: '', url: '' }));
+  it('preserves draft when modal closes with empty title', () => {
     const el = mount();
-    el.open(null);
-    el.shadowRoot.querySelector('#cancel').click();
-    expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
-  });
-
-  it('preserves draft on backdrop close', () => {
-
-    const el = mount();
-    const modal = el.shadowRoot.querySelector('#modal');
     el.open(null);
     const inp = el.shadowRoot.querySelector('#title-input');
     inp.value = 'In progress';
     inp.dispatchEvent(new Event('input'));
-    modal.dispatchEvent(new CustomEvent('modal-close', { bubbles: true, composed: true }));
+    inp.value = '';
+    el.shadowRoot.querySelector('#modal').close();
     expect(JSON.parse(localStorage.getItem(DRAFT_KEY)).title).toBe('In progress');
   });
 });
 
 // ── Move to list ──────────────────────────────────────────────────────────────
+
+// ── create on title blur ──────────────────────────────────────────────────────
+
+describe('item-dialog — create on title blur', () => {
+  it('dispatches item-created when title blurs with a non-empty value on a new item', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.value = 'Blur-created item';
+    inp.dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.title).toBe('Blur-created item');
+  });
+
+  it('includes a generated id in item-created from title blur', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.value = 'Item';
+    inp.dispatchEvent(new Event('blur'));
+    expect(typeof events[0].detail.id).toBe('string');
+    expect(events[0].detail.id.length).toBeGreaterThan(0);
+  });
+
+  it('does not dispatch item-created when title blurs empty on a new item', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(0);
+  });
+
+  it('shows delete and menu buttons after title blur creates the item', () => {
+    const el = mount();
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.value = 'New item';
+    inp.dispatchEvent(new Event('blur'));
+    expect(el.shadowRoot.querySelector('#delete').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
+  });
+
+  it('dispatches item-closed (not item-created again) when modal closes after title blur', () => {
+    const el = mount();
+    el.open(null);
+    const created = [];
+    const closed  = [];
+    el.addEventListener('item-created', e => created.push(e));
+    el.addEventListener('item-closed',  e => closed.push(e));
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.value = 'Once only';
+    inp.dispatchEvent(new Event('blur'));
+    el.shadowRoot.querySelector('#modal').close();
+    expect(created).toHaveLength(1);
+    expect(closed).toHaveLength(1);
+  });
+});
+
+// ── tags on existing item ─────────────────────────────────────────────────────
+
+describe('item-dialog — tags on existing item', () => {
+  it('dispatches item-tags-changed when a tag is added', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-tags-changed', e => events.push(e));
+    const inp = el.shadowRoot.querySelector('#tag-input');
+    inp.value = 'newtag';
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.tags).toContain('newtag');
+  });
+
+  it('dispatches item-tags-changed when a tag chip is clicked to remove it', () => {
+    const el = mount();
+    el.open({ ...ITEM, tags: ['health'] });
+    const events = [];
+    el.addEventListener('item-tags-changed', e => events.push(e));
+    el.shadowRoot.querySelector('.tag-chip[data-tag="health"]').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.tags).not.toContain('health');
+  });
+
+  it('does not dispatch item-tags-changed when adding a tag to a new item', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-tags-changed', e => events.push(e));
+    const inp = el.shadowRoot.querySelector('#tag-input');
+    inp.value = 'newtag';
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(events).toHaveLength(0);
+  });
+});
+
+// ── move/promote from new item bypasses create-on-close ──────────────────────
+
+describe('item-dialog — skip create on move from new item', () => {
+  it('does not dispatch item-created when move is confirmed on a new item', () => {
+    const el = mount();
+    el.availableLists = [{ id: 'la', name: 'Shopping', color: null }];
+    el.open(null);
+    el.shadowRoot.querySelector('#title-input').value = 'Moved item';
+    const created = [];
+    el.addEventListener('item-created', e => created.push(e));
+    openListPicker(el);
+    pickerShadow(el).querySelector('[data-list-id="la"]').click();
+    pickerShadow(el).querySelector('#move-btn').click();
+    expect(created).toHaveLength(0);
+  });
+
+  it('dispatches item-move when move is confirmed on a new item', () => {
+    const el = mount();
+    el.availableLists = [{ id: 'la', name: 'Shopping', color: null }];
+    el.open(null);
+    el.shadowRoot.querySelector('#title-input').value = 'Moved item';
+    const moves = [];
+    el.addEventListener('item-move', e => moves.push(e));
+    openListPicker(el);
+    pickerShadow(el).querySelector('[data-list-id="la"]').click();
+    pickerShadow(el).querySelector('#move-btn').click();
+    expect(moves).toHaveLength(1);
+    expect(moves[0].detail.title).toBe('Moved item');
+  });
+});
 
 const LIST_A = { id: 'la', name: 'Shopping', color: null };
 const LIST_B = { id: 'lb', name: 'Ideas',    color: '#FF0000' };

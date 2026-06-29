@@ -48,7 +48,7 @@ test.describe('Offline behaviour', () => {
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
-        .querySelector('goal-dialog').shadowRoot.querySelector('#save').click();
+        .querySelector('goal-dialog').shadowRoot.querySelector('#close').click();
     });
     await page.waitForFunction(() => {
       const list = document.querySelector('app-router')?.shadowRoot

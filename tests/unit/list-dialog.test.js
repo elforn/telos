@@ -60,95 +60,121 @@ describe('list-dialog — open', () => {
   });
 });
 
-// ── save ──────────────────────────────────────────────────────────────────────
+// ── new list creation ─────────────────────────────────────────────────────────
 
-describe('list-dialog — save', () => {
-  it('save button is disabled when input is empty', () => {
-    const el = mount();
-    el.open(null);
-    expect(el.shadowRoot.querySelector('#save').disabled).toBe(true);
-  });
-
-  it('save button enables when input has text', () => {
-    const el = mount();
-    el.open(null);
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = 'Books';
-    inp.dispatchEvent(new Event('input'));
-    expect(el.shadowRoot.querySelector('#save').disabled).toBe(false);
-  });
-
-  it('dispatches list-saved with the name on save click', () => {
+describe('list-dialog — new list creation', () => {
+  it('dispatches list-created on modal-close when name is non-empty', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('list-saved', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = 'Reading list';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.addEventListener('list-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Reading list';
+    el.shadowRoot.querySelector('#modal').close();
     expect(events).toHaveLength(1);
     expect(events[0].detail.name).toBe('Reading list');
   });
 
-  it('does not dispatch list-saved when input is only whitespace', () => {
+  it('trims whitespace from name in list-created', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('list-saved', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = '   ';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
-    expect(events).toHaveLength(0);
-  });
-
-  it('trims whitespace from the saved name', () => {
-    const el = mount();
-    el.open(null);
-    const events = [];
-    el.addEventListener('list-saved', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = '  Books  ';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.addEventListener('list-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = '  Books  ';
+    el.shadowRoot.querySelector('#modal').close();
     expect(events[0].detail.name).toBe('Books');
   });
 
-  it('closes the dialog after saving', () => {
-    const el = mount();
-    const modal = el.shadowRoot.querySelector('#modal');
-    el.open(null);
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = 'Ideas';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
-    expect(modal.close).toHaveBeenCalledOnce();
-  });
-
-  it('dispatches list-saved on Enter key in input', () => {
+  it('does not dispatch list-created when name is whitespace only', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('list-saved', e => events.push(e));
+    el.addEventListener('list-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = '   ';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events).toHaveLength(0);
+  });
+
+  it('dispatches list-created on Enter key when name is non-empty', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('list-created', e => events.push(e));
     const inp = el.shadowRoot.querySelector('#input');
     inp.value = 'Keyboard save';
-    inp.dispatchEvent(new Event('input'));
     inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(events[0].detail.name).toBe('Keyboard save');
   });
 
-  it('list-saved is bubbles and composed', () => {
+  it('list-created is bubbles and composed', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('list-saved', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = 'Test';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.addEventListener('list-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Test';
+    el.shadowRoot.querySelector('#modal').close();
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
+  });
+});
+
+// ── edit existing (blur-save) ─────────────────────────────────────────────────
+
+describe('list-dialog — edit existing (blur-save)', () => {
+  it('dispatches list-name-changed when name blurs with a new value', () => {
+    const el = mount();
+    el.open(LIST);
+    const events = [];
+    el.addEventListener('list-name-changed', e => events.push(e));
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'Updated name';
+    inp.dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.name).toBe('Updated name');
+  });
+
+  it('does not dispatch list-name-changed when name is unchanged on blur', () => {
+    const el = mount();
+    el.open(LIST);
+    const events = [];
+    el.addEventListener('list-name-changed', e => events.push(e));
+    el.shadowRoot.querySelector('#input').dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(0);
+  });
+
+  it('reverts name field to last valid value when cleared on blur', () => {
+    const el = mount();
+    el.open(LIST);
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = '';
+    inp.dispatchEvent(new Event('blur'));
+    expect(inp.value).toBe(LIST.name);
+  });
+
+  it('dispatches list-closed on modal close for existing list', () => {
+    const el = mount();
+    el.open(LIST);
+    const events = [];
+    el.addEventListener('list-closed', e => events.push(e));
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events).toHaveLength(1);
+  });
+
+  it('Close button closes the modal', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(LIST);
+    el.shadowRoot.querySelector('#close').click();
+    expect(modal.close).toHaveBeenCalledOnce();
+  });
+
+  it('Enter key blurs and closes for existing list', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(LIST);
+    el.shadowRoot.querySelector('#input').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
+    expect(modal.close).toHaveBeenCalledOnce();
   });
 });
 
@@ -183,17 +209,6 @@ describe('list-dialog — delete', () => {
   });
 });
 
-// ── cancel ────────────────────────────────────────────────────────────────────
-
-describe('list-dialog — cancel', () => {
-  it('closes the dialog when cancel is clicked', () => {
-    const el = mount();
-    const modal = el.shadowRoot.querySelector('#modal');
-    el.open(null);
-    el.shadowRoot.querySelector('#cancel').click();
-    expect(modal.close).toHaveBeenCalledOnce();
-  });
-});
 
 // ── draft ─────────────────────────────────────────────────────────────────────
 
@@ -246,33 +261,23 @@ describe('list-dialog — draft', () => {
     expect(localStorage.getItem(LIST_DRAFT_KEY)).toBeNull();
   });
 
-  it('clears draft on save', () => {
+  it('clears draft when modal closes with non-empty name', () => {
     localStorage.setItem(LIST_DRAFT_KEY, JSON.stringify({ name: 'Draft', color: null }));
     const el = mount();
     el.open(null);
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = 'Saved list';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.shadowRoot.querySelector('#input').value = 'Saved list';
+    el.shadowRoot.querySelector('#modal').close();
     expect(localStorage.getItem(LIST_DRAFT_KEY)).toBeNull();
   });
 
-  it('clears draft on cancel', () => {
-    localStorage.setItem(LIST_DRAFT_KEY, JSON.stringify({ name: 'Draft', color: null }));
+  it('preserves draft when modal closes with empty name', () => {
     const el = mount();
-    el.open(null);
-    el.shadowRoot.querySelector('#cancel').click();
-    expect(localStorage.getItem(LIST_DRAFT_KEY)).toBeNull();
-  });
-
-  it('preserves draft on backdrop close', () => {
-    const el = mount();
-    const modal = el.shadowRoot.querySelector('#modal');
     el.open(null);
     const inp = el.shadowRoot.querySelector('#input');
     inp.value = 'In progress';
     inp.dispatchEvent(new Event('input'));
-    modal.dispatchEvent(new CustomEvent('modal-close', { bubbles: true, composed: true }));
+    inp.value = '';
+    el.shadowRoot.querySelector('#modal').close();
     expect(JSON.parse(localStorage.getItem(LIST_DRAFT_KEY)).name).toBe('In progress');
   });
 });
@@ -303,28 +308,24 @@ describe('list-dialog — color picker', () => {
     expect(pressed[0].dataset.color).toBe('#E5534B');
   });
 
-  it('color is included in list-saved detail when a swatch is selected', () => {
+  it('color is included in list-created detail when a swatch is selected', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('list-saved', e => events.push(e));
+    el.addEventListener('list-created', e => events.push(e));
     el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = 'Books';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.shadowRoot.querySelector('#input').value = 'Books';
+    el.shadowRoot.querySelector('#modal').close();
     expect(events[0].detail.color).toBe('#4A94D4');
   });
 
-  it('color is null in list-saved detail when no swatch is selected', () => {
+  it('color is null in list-created detail when no swatch is selected', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('list-saved', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = 'Books';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.addEventListener('list-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Books';
+    el.shadowRoot.querySelector('#modal').close();
     expect(events[0].detail.color).toBeNull();
   });
 
@@ -340,14 +341,12 @@ describe('list-dialog — color picker', () => {
     expect(el.shadowRoot.querySelector('.swatch[data-color=""]').getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('selecting none swatch clears a previously set color', () => {
+  it('selecting none swatch dispatches list-color-changed with null in edit mode', () => {
     const el = mount();
     el.open(LIST_WITH_COLOR);
     const events = [];
-    el.addEventListener('list-saved', e => events.push(e));
+    el.addEventListener('list-color-changed', e => events.push(e));
     el.shadowRoot.querySelector('.swatch[data-color=""]').click();
-    el.shadowRoot.querySelector('#input').dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
     expect(events[0].detail.color).toBeNull();
   });
 });

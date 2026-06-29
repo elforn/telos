@@ -44,10 +44,12 @@ async function fillDesc(page, desc) {
 
 async function saveDialog(page) {
   await page.evaluate(() => {
-    document.querySelector('app-router').shadowRoot
+    const sr = document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
-      .querySelector('goal-dialog').shadowRoot
-      .querySelector('#save').click();
+      .querySelector('goal-dialog').shadowRoot;
+    sr.querySelector('#input').dispatchEvent(new Event('blur'));
+    sr.querySelector('#desc-input').dispatchEvent(new Event('blur'));
+    sr.querySelector('#close').click();
   });
 }
 

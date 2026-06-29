@@ -327,12 +327,14 @@ class ListsPage extends AppElement {
     };
     this._container.addEventListener('list-tap', this._onListTap);
 
-    this._onListSaved = e => {
+    this._onListCreated = e => {
       const { name, color } = e.detail;
+      const snapshot = getState().lists ?? [];
       this._create(name, color);
-      toast(t('lists.toast-list-saved'), 'success');
+      toast(t('lists.toast-list-saved'), 'success',
+        { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
     };
-    this.shadowRoot.addEventListener('list-saved', this._onListSaved);
+    this.shadowRoot.addEventListener('list-created', this._onListCreated);
 
     this._onListColorCycle = e => {
       const list = e.detail?.list;
@@ -533,7 +535,7 @@ class ListsPage extends AppElement {
     this._container?.removeEventListener('list-color-cycle', this._onListColorCycle);
     this._container?.removeEventListener('list-drag-start',  this._onListDragStart);
     this._container?.removeEventListener('list-reorder-key', this._onListReorderKey);
-    this.shadowRoot?.removeEventListener('list-saved', this._onListSaved);
+    this.shadowRoot?.removeEventListener('list-created', this._onListCreated);
     if (this._drag) {
       const { dragEl, clone } = this._drag;
       dragEl.removeEventListener('pointermove',   this._onDragMove);

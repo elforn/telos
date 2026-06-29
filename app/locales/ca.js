@@ -16,8 +16,10 @@ defineStrings({
   'goal-dialog.placeholder':            'Què aconseguiràs aquest any?',
   'goal-dialog.notes-placeholder': 'Notes',
   'goal-dialog.copy-notes': 'Copia les notes',
-  'goal-dialog.save':            'Desa',
-  'goal-dialog.cancel':          'Cancel·la',
+  'goal-dialog.close':           'Tanca',
+  'goal-dialog.save-and-close': 'Desa i tanca',
+  'goal-dialog.title-new':      'Nou objectiu',
+  'goal-dialog.title-edit':     'Edita l\'objectiu',
   'goal-dialog.delete':          'Elimina',
 
   'home-page.done':              'Fet',
@@ -138,8 +140,10 @@ defineStrings({
   'list-detail.import-toast':        '{n} elements importats',
 
   'list-dialog.name-placeholder': 'Nom de la llista',
-  'list-dialog.save':             'Desa',
-  'list-dialog.cancel':           'Cancel·la',
+  'list-dialog.close':            'Tanca',
+  'list-dialog.save-and-close':   'Desa i tanca',
+  'list-dialog.title-new':        'Nova llista',
+  'list-dialog.title-edit':       'Edita la llista',
   'list-dialog.delete':           'Elimina',
 
   'item-dialog.title-placeholder':'Títol',
@@ -152,8 +156,10 @@ defineStrings({
   'item-dialog.url-placeholder':  'Enllaç (https://…)',
   'item-dialog.url-toggle':       'Enllaç',
   'item-dialog.url-open':         'Obre',
-  'item-dialog.save':             'Desa',
-  'item-dialog.cancel':           'Cancel·la',
+  'item-dialog.close':            'Tanca',
+  'item-dialog.save-and-close':   'Desa i tanca',
+  'item-dialog.title-new':        'Nou element',
+  'item-dialog.title-edit':       'Edita l\'element',
   'item-dialog.delete':           'Elimina',
 
   'item-dialog.move-to-list':           'Mou a una llista',
@@ -244,4 +250,5 @@ defineStrings({
   'undo.button':  'Desfés',
   'toast.close':  'Tanca',
   'tag.remove':   'Elimina {tag}',
+  'dialog.saved-sr': 'Desat',
 }, 'ca');

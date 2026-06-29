@@ -29,7 +29,6 @@ class GoalDialog extends AppElement {
     this._fromSection = section ?? 'capstone';
     const draft = this._isNew ? this._loadDraft() : null;
     this._input.value = goal?.title ?? draft?.title ?? '';
-    this._saveBtn.disabled = !this._input.value.trim();
     if (this._deleteBtn) this._deleteBtn.hidden = !goal;
     if (this._menuBtn) this._menuBtn.hidden = !goal;
     this._descInput.value = goal?.notes ?? draft?.notes ?? '';
@@ -40,7 +39,14 @@ class GoalDialog extends AppElement {
     this._renderTagChips();
     this._updateSuggestions();
 
-    this._saved = false;
+    this._lastValidTitle = goal?.title ?? draft?.title ?? '';
+    this._lastValidNotes = goal?.notes ?? draft?.notes ?? '';
+
+    this._closeBtn.setAttribute('aria-label',
+      this._isNew ? t('goal-dialog.save-and-close') : t('goal-dialog.close'));
+    this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
+      this._isNew ? t('goal-dialog.title-new') : t('goal-dialog.title-edit'));
+
     this._showView('main');
     this._modal.show(this._input);
     setTimeout(() => {
@@ -55,6 +61,18 @@ class GoalDialog extends AppElement {
       <style>
         /* Halve the modal's default 24px top/bottom padding */
         #modal { --space-6: var(--space-3); }
+
+        .sr-only {
+          position: absolute;
+          inline-size: 1px;
+          block-size: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip: rect(0,0,0,0);
+          white-space: nowrap;
+          border-width: 0;
+        }
 
         input[type="text"] {
           display: block;
@@ -446,14 +464,14 @@ class GoalDialog extends AppElement {
 
         #menu-btn { background: none; color: var(--color-text-secondary); padding-inline: var(--space-2); display: flex; align-items: center; }
         #delete { background: none; color: var(--color-danger); }
-        #cancel, #move-back { background: none; color: var(--color-text-secondary); }
+        #close, #move-back { background: none; color: var(--color-text-secondary); }
 
-        #save, #copy-btn {
+        #copy-btn {
           background: var(--color-accent);
           color: var(--color-text-inverse);
         }
 
-        #save:disabled, #copy-btn:disabled {
+        #copy-btn:disabled {
           opacity: 0.4;
           cursor: default;
         }
@@ -520,8 +538,7 @@ class GoalDialog extends AppElement {
           <button type="button" id="menu-btn" hidden aria-label="${t('goal-dialog.more-actions')}">${icons.dotsVertical}</button>
           <button type="button" id="delete" hidden>${t('goal-dialog.delete')}</button>
           <div class="actions-end">
-            <button type="button" id="cancel">${t('goal-dialog.cancel')}</button>
-            <button type="button" id="save" disabled>${t('goal-dialog.save')}</button>
+            <button type="button" id="close" aria-label="${t('goal-dialog.close')}">${t('goal-dialog.close')}</button>
           </div>
         </div>
 
@@ -533,6 +550,8 @@ class GoalDialog extends AppElement {
             <button type="button" id="copy-btn" disabled>${t('goal-dialog.copy-cta')}</button>
           </div>
         </div>
+
+        <div id="save-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
       </modal-dialog>
 
       <!-- ── Action sheet (outside modal-dialog) ──────────────────────────── -->
@@ -559,9 +578,10 @@ class GoalDialog extends AppElement {
     this._tagChipsWrap    = this.shadowRoot.querySelector('#tag-chips-wrap');
     this._tagInput        = this.shadowRoot.querySelector('#tag-input');
     this._tagSuggestions  = this.shadowRoot.querySelector('#tag-suggestions');
-    this._saveBtn       = this.shadowRoot.querySelector('#save');
     this._deleteBtn     = this.shadowRoot.querySelector('#delete');
     this._menuBtn       = this.shadowRoot.querySelector('#menu-btn');
+    this._closeBtn      = this.shadowRoot.querySelector('#close');
+    this._saveStatus    = this.shadowRoot.querySelector('#save-status');
     this._viewMain      = this.shadowRoot.querySelector('#view-main');
     this._viewMove      = this.shadowRoot.querySelector('#view-move');
     this._footerMain    = this.shadowRoot.querySelector('.footer-main');
@@ -573,20 +593,41 @@ class GoalDialog extends AppElement {
     this._actionSheet       = this.shadowRoot.querySelector('#action-sheet');
     this._listPickerDialog  = this.shadowRoot.querySelector('#list-picker');
 
-    this._saved  = false;
-    this._isNew  = false;
-    this._tags   = [];
+    this._isNew           = false;
+    this._tags            = [];
+    this._lastValidTitle  = '';
+    this._lastValidNotes  = '';
 
     // ── Main view ─────────────────────────────────────────────────────────────
 
-    this._onInput = () => {
-      this._saveBtn.disabled = !this._input.value.trim();
-      this._saveDraft();
+    this._onInput = () => { this._saveDraft(); };
+
+    this._onTitleBlur = () => {
+      if (this._isNew) return;
+      const v = this._input.value.trim();
+      if (!v) { this._input.value = this._lastValidTitle; return; }
+      if (v === this._lastValidTitle) return;
+      this._lastValidTitle = v;
+      this.dispatchEvent(new CustomEvent('goal-title-changed', {
+        bubbles: true, composed: true, detail: { title: v },
+      }));
+      this._announceSaved();
     };
 
     this._onDescInput = () => {
       this._syncDescHeight();
       this._saveDraft();
+    };
+
+    this._onNotesBlur = () => {
+      if (this._isNew) return;
+      const v = this._descInput.value.trim();
+      if (v === this._lastValidNotes) return;
+      this._lastValidNotes = v;
+      this.dispatchEvent(new CustomEvent('goal-notes-changed', {
+        bubbles: true, composed: true, detail: { notes: v || undefined },
+      }));
+      this._announceSaved();
     };
 
     this._onDescCopy = async () => {
@@ -603,23 +644,7 @@ class GoalDialog extends AppElement {
       } catch {} // clipboard unavailable — fail silently
     };
 
-    this._onSave = () => {
-      const title = this._input.value.trim();
-      if (!title) return;
-      this._saved = true;
-      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
-      const notes = this._descInput.value.trim() || undefined;
-      const tags  = this._getTagValues();
-      this.dispatchEvent(new CustomEvent('goal-saved', {
-        bubbles: true, composed: true, detail: { title, notes, tags },
-      }));
-      this._modal.close();
-    };
-
-    this._onCancel = () => {
-      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
-      this._modal.close();
-    };
+    this._onClose = () => { this._modal.close(); };
 
     this._onDelete = () => {
       this.dispatchEvent(new CustomEvent('goal-delete', { bubbles: true, composed: true }));
@@ -628,15 +653,34 @@ class GoalDialog extends AppElement {
 
     this._onModalClose = e => {
       e.stopPropagation();
-      if (!this._saved) {
-        this.dispatchEvent(new CustomEvent('goal-cancelled', { bubbles: true, composed: true }));
+      if (this._isNew) {
+        const title = this._input.value.trim();
+        if (title) {
+          localStorage.removeItem(DRAFT_KEY);
+          const notes = this._descInput.value.trim() || undefined;
+          const tags  = this._getTagValues();
+          this.dispatchEvent(new CustomEvent('goal-created', {
+            bubbles: true, composed: true, detail: { title, notes, tags },
+          }));
+        }
+      } else {
+        this.dispatchEvent(new CustomEvent('goal-closed', { bubbles: true, composed: true }));
       }
-      this._saved = false;
       if (this._actionSheet?.open) this._actionSheet.close();
       clearTimeout(this._copyResetTimer);
     };
 
-    this._onKeyDown = e => { if (e.key === 'Enter') this._onSave(); };
+    this._onKeyDown = e => {
+      if (e.key !== 'Enter') return;
+      if (this._isNew) {
+        if (!this._input.value.trim()) return; // require title for new goals
+        this._modal.close();
+      } else {
+        this._input.blur(); // triggers _onTitleBlur before close
+        this._modal.close();
+      }
+    };
+
     this._onResize  = () => this._syncDescHeight();
 
     // ── Tag input ─────────────────────────────────────────────────────────────
@@ -673,7 +717,9 @@ class GoalDialog extends AppElement {
 
     this._input.addEventListener('input',   this._onInput);
     this._input.addEventListener('keydown', this._onKeyDown);
+    this._input.addEventListener('blur',    this._onTitleBlur);
     this._descInput.addEventListener('input', this._onDescInput);
+    this._descInput.addEventListener('blur',  this._onNotesBlur);
     this._descCopyBtn.addEventListener('pointerdown', e => e.preventDefault());
     this._descCopyBtn.addEventListener('click', this._onDescCopy);
     this._tagInput.addEventListener('keydown',   this._onTagKeyDown);
@@ -684,9 +730,8 @@ class GoalDialog extends AppElement {
     this._tagSuggestions.addEventListener('pointerdown', this._onSuggestionPointerDown);
     this._onChipRemovePointerDown = e => { if (e.target.closest('.tag-chip')) e.preventDefault(); };
     this._tagChipsWrap.addEventListener('pointerdown', this._onChipRemovePointerDown);
-    this._saveBtn.addEventListener('click', this._onSave);
     this._deleteBtn.addEventListener('click', this._onDelete);
-    this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
+    this._closeBtn.addEventListener('click', this._onClose);
     this._modal.addEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).addEventListener('resize', this._onResize);
 
@@ -745,7 +790,9 @@ class GoalDialog extends AppElement {
     this._descHighlight?.detach();
     this._input?.removeEventListener('input',   this._onInput);
     this._input?.removeEventListener('keydown', this._onKeyDown);
+    this._input?.removeEventListener('blur',    this._onTitleBlur);
     this._descInput?.removeEventListener('input', this._onDescInput);
+    this._descInput?.removeEventListener('blur',  this._onNotesBlur);
     this._descCopyBtn?.removeEventListener('click', this._onDescCopy);
     this._tagInput?.removeEventListener('keydown',   this._onTagKeyDown);
     this._tagInput?.removeEventListener('input',     this._onTagInput);
@@ -753,9 +800,8 @@ class GoalDialog extends AppElement {
     this._tagChipsWrap?.removeEventListener('click', this._onTagWrapClick);
     this._tagSuggestions?.removeEventListener('pointerdown', this._onSuggestionPointerDown);
     this._tagChipsWrap?.removeEventListener('pointerdown', this._onChipRemovePointerDown);
-    this._saveBtn?.removeEventListener('click', this._onSave);
     this._deleteBtn?.removeEventListener('click', this._onDelete);
-    this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
+    this._closeBtn?.removeEventListener('click', this._onClose);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).removeEventListener('resize', this._onResize);
     this._menuBtn?.removeEventListener('click', this._onMenuBtn);
@@ -921,6 +967,13 @@ class GoalDialog extends AppElement {
       notes: this._descInput.value,
       tags:  [...this._tags],
     }));
+  }
+
+  _announceSaved() {
+    if (!this._saveStatus) return;
+    this._saveStatus.textContent = t('dialog.saved-sr');
+    clearTimeout(this._announceTimer);
+    this._announceTimer = setTimeout(() => { this._saveStatus.textContent = ''; }, 1500);
   }
 }
 

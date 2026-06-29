@@ -17,16 +17,13 @@ async function createCapstoneGoal(page, title) {
     return d?.open;
   });
   await page.evaluate(t => {
-    const inp = document.querySelector('app-router').shadowRoot
+    const sr = document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
-      .querySelector('goal-dialog').shadowRoot
-      .querySelector('input');
+      .querySelector('goal-dialog').shadowRoot;
+    const inp = sr.querySelector('input');
     inp.value = t;
     inp.dispatchEvent(new Event('input', { bubbles: true }));
-    document.querySelector('app-router').shadowRoot
-      .querySelector('home-page').shadowRoot
-      .querySelector('goal-dialog').shadowRoot
-      .querySelector('#save').click();
+    sr.querySelector('#close').click();
   }, title);
   await page.waitForFunction(() => {
     const list = document.querySelector('app-router')?.shadowRoot

@@ -37,7 +37,7 @@ async function createList(page, name) {
     document.querySelector('app-router').shadowRoot
       .querySelector('lists-page').shadowRoot
       .querySelector('list-dialog').shadowRoot
-      .querySelector('#save').click();
+      .querySelector('#close').click();
   });
   await page.waitForFunction(() =>
     (document.querySelector('app-router')?.shadowRoot
@@ -87,10 +87,13 @@ async function fillTitle(page, title) {
 
 async function saveItemDialog(page) {
   await page.evaluate(() => {
-    document.querySelector('app-router').shadowRoot
+    const sr = document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
-      .querySelector('item-dialog').shadowRoot
-      .querySelector('#save').click();
+      .querySelector('item-dialog').shadowRoot;
+    // Flush URL input blur synchronously so item-url-changed fires before close
+    const urlInput = sr.querySelector('#url-input');
+    if (urlInput && !urlInput.hidden && urlInput.value) urlInput.dispatchEvent(new Event('blur'));
+    sr.querySelector('#close').click();
   });
   await page.waitForFunction(() =>
     (document.querySelector('app-router')?.shadowRoot
@@ -395,7 +398,7 @@ test.describe('List item — tags', () => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
         .querySelector('item-dialog').shadowRoot
-        .querySelector('#save').click();
+        .querySelector('#close').click();
     });
 
     await page.waitForFunction(() => {

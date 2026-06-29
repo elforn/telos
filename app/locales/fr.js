@@ -16,8 +16,10 @@ defineStrings({
   'goal-dialog.placeholder':            'Que ferez-vous cette année ?',
   'goal-dialog.notes-placeholder': 'Notes',
   'goal-dialog.copy-notes': 'Copier les notes',
-  'goal-dialog.save':            'Enregistrer',
-  'goal-dialog.cancel':          'Annuler',
+  'goal-dialog.close':           'Fermer',
+  'goal-dialog.save-and-close': 'Enregistrer et fermer',
+  'goal-dialog.title-new':      'Nouvel objectif',
+  'goal-dialog.title-edit':     'Modifier l\'objectif',
   'goal-dialog.delete':          'Supprimer',
 
   'home-page.done':              'Terminé',
@@ -138,8 +140,10 @@ defineStrings({
   'list-detail.import-toast':        '{n} éléments importés',
 
   'list-dialog.name-placeholder': 'Nom de la liste',
-  'list-dialog.save':             'Enregistrer',
-  'list-dialog.cancel':           'Annuler',
+  'list-dialog.close':            'Fermer',
+  'list-dialog.save-and-close':   'Enregistrer et fermer',
+  'list-dialog.title-new':        'Nouvelle liste',
+  'list-dialog.title-edit':       'Modifier la liste',
   'list-dialog.delete':           'Supprimer',
 
   'item-dialog.title-placeholder':'Titre',
@@ -152,8 +156,10 @@ defineStrings({
   'item-dialog.url-placeholder':  'Lien (https://…)',
   'item-dialog.url-toggle':       'Lien',
   'item-dialog.url-open':         'Ouvrir',
-  'item-dialog.save':             'Enregistrer',
-  'item-dialog.cancel':           'Annuler',
+  'item-dialog.close':            'Fermer',
+  'item-dialog.save-and-close':   'Enregistrer et fermer',
+  'item-dialog.title-new':        'Nouvel élément',
+  'item-dialog.title-edit':       'Modifier l\'élément',
   'item-dialog.delete':           'Supprimer',
 
   'item-dialog.move-to-list':           'Déplacer vers une liste',
@@ -244,4 +250,5 @@ defineStrings({
   'undo.button':  'Annuler',
   'toast.close':  'Fermer',
   'tag.remove':   'Retirer {tag}',
+  'dialog.saved-sr': 'Enregistré',
 }, 'fr');

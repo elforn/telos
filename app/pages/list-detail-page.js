@@ -913,23 +913,19 @@ class ListDetailPage extends AppElement {
     this._onNameEdit = () => {
       const list = getState().lists?.find(l => l.id === this._listId);
       if (list) {
-        this._originalListColor = list.color ?? null;
+        this._listEditSnapshot = getState().lists;
         this._listDialog.open(list);
       }
     };
     this.shadowRoot.querySelector('#name-edit-btn').addEventListener('click', this._onNameEdit);
 
     // ── List dialog (edit name / color) ───────────────────────────────────────
-    this._onListSaved = e => {
-      const { name, color } = e.detail;
-      setState('lists', (getState().lists ?? []).map(l => {
-        if (l.id !== this._listId) return l;
-        const { color: _, ...rest } = l;
-        return color ? { ...rest, name, color } : { ...rest, name };
-      }));
-      toast(t('lists.toast-list-saved'), 'success');
+    this._onListNameChanged = e => {
+      setState('lists', (getState().lists ?? []).map(l =>
+        l.id !== this._listId ? l : { ...l, name: e.detail.name }
+      ));
     };
-    this._listDialog.addEventListener('list-saved', this._onListSaved);
+    this._listDialog.addEventListener('list-name-changed', this._onListNameChanged);
 
     this._onListColorChanged = e => {
       setState('lists', (getState().lists ?? []).map(l => {
@@ -940,15 +936,15 @@ class ListDetailPage extends AppElement {
     };
     this._listDialog.addEventListener('list-color-changed', this._onListColorChanged);
 
-    this._onListCancelled = () => {
-      const orig = this._originalListColor;
-      setState('lists', (getState().lists ?? []).map(l => {
-        if (l.id !== this._listId) return l;
-        const { color: _, ...rest } = l;
-        return orig ? { ...rest, color: orig } : rest;
-      }));
+    this._onListClosed = () => {
+      const snap = this._listEditSnapshot;
+      this._listEditSnapshot = null;
+      if (snap && JSON.stringify(getState().lists) !== JSON.stringify(snap)) {
+        toast(t('lists.toast-list-saved'), 'success',
+          { action: { label: t('undo.button'), onClick: () => setState('lists', snap) } });
+      }
     };
-    this._listDialog.addEventListener('list-cancelled', this._onListCancelled);
+    this._listDialog.addEventListener('list-closed', this._onListClosed);
 
     this._onListDialogDelete = () => this._deleteCurrentList();
     this._listDialog.addEventListener('list-delete', this._onListDialogDelete);
@@ -974,6 +970,7 @@ class ListDetailPage extends AppElement {
 
     this._onAddRow = () => {
       this._editingItem = null;
+      this._itemEditSnapshot = getState().lists;
       this._prepareDialog(null);
       this._dialog.open(null);
     };
@@ -983,6 +980,7 @@ class ListDetailPage extends AppElement {
       if (this._selectionMode) return;
       const cleanItem = this._prepareDialog(e.detail.item);
       this._editingItem = cleanItem;
+      this._itemEditSnapshot = getState().lists;
       this._dialog.open(cleanItem);
     };
     this._itemList.addEventListener('item-tap', this._onItemTap);
@@ -1007,35 +1005,56 @@ class ListDetailPage extends AppElement {
     };
     this._itemList.addEventListener('item-status-cycle', this._onItemStatusCycle);
 
-    this._onItemSaved = e => {
-      const { title, status, note, url, tags } = e.detail;
-      if (this._editingItem) {
-        const snapshot = getState().lists;
-        this._editItem(this._editingItem.id, { title, status, note, url, tags });
-        toast(t('lists.toast-item-saved'), 'success', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
-      } else {
-        this._addItem({ title, status, note, url, tags });
-        toast(t('lists.toast-item-saved'), 'success');
+    this._onItemCreated = e => {
+      const { id, title, status, note, url, tags } = e.detail;
+      this._addItem({ id, title, status, note, url, tags });
+      this._editingItem = { id, title, status, note, url, tags, inGoals: [] };
+    };
+    this.shadowRoot.addEventListener('item-created', this._onItemCreated);
+
+    this._onItemClosed = () => {
+      const snap = this._itemEditSnapshot;
+      this._itemEditSnapshot = null;
+      if (snap && JSON.stringify(getState().lists) !== JSON.stringify(snap)) {
+        toast(t('lists.toast-item-saved'), 'success',
+          { action: { label: t('undo.button'), onClick: () => setState('lists', snap) } });
       }
     };
-    this.shadowRoot.addEventListener('item-saved', this._onItemSaved);
+    this._dialog.addEventListener('item-closed', this._onItemClosed);
 
     this._onDialogDelete = () => {
       if (this._editingItem) {
         const snapshot = getState().lists;
+        this._itemEditSnapshot = null; // suppress item-closed undo toast — delete has its own
         this._deleteItem(this._editingItem.id);
         toast(t('lists.toast-item-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
       }
     };
     this._dialog.addEventListener('item-delete', this._onDialogDelete);
 
-    this._onItemCancelled = () => {
+    this._onItemTitleChanged = e => {
       if (!this._editingItem) return;
       this._mutateItems(items => items.map(i =>
-        i.id === this._editingItem.id ? { ...i, status: this._editingItem.status } : i
+        i.id === this._editingItem.id ? { ...i, title: e.detail.title } : i
       ));
     };
-    this._dialog.addEventListener('item-cancelled', this._onItemCancelled);
+    this._dialog.addEventListener('item-title-changed', this._onItemTitleChanged);
+
+    this._onItemNoteChanged = e => {
+      if (!this._editingItem) return;
+      this._mutateItems(items => items.map(i =>
+        i.id === this._editingItem.id ? { ...i, note: e.detail.note } : i
+      ));
+    };
+    this._dialog.addEventListener('item-note-changed', this._onItemNoteChanged);
+
+    this._onItemUrlChanged = e => {
+      if (!this._editingItem) return;
+      this._mutateItems(items => items.map(i =>
+        i.id === this._editingItem.id ? { ...i, url: e.detail.url } : i
+      ));
+    };
+    this._dialog.addEventListener('item-url-changed', this._onItemUrlChanged);
 
     this._onItemStatusChanged = e => {
       if (!this._editingItem) return;
@@ -1500,9 +1519,9 @@ class ListDetailPage extends AppElement {
     this._menuDialog?.removeEventListener('close', this._onMenuClose);
     this._menuDialog?.removeEventListener('click', this._onBackdrop);
     this.shadowRoot?.querySelector('#name-edit-btn')?.removeEventListener('click', this._onNameEdit);
-    this._listDialog?.removeEventListener('list-saved', this._onListSaved);
+    this._listDialog?.removeEventListener('list-name-changed', this._onListNameChanged);
     this._listDialog?.removeEventListener('list-color-changed', this._onListColorChanged);
-    this._listDialog?.removeEventListener('list-cancelled', this._onListCancelled);
+    this._listDialog?.removeEventListener('list-closed', this._onListClosed);
     this._listDialog?.removeEventListener('list-delete', this._onListDialogDelete);
     this.shadowRoot?.querySelector('#list-delete-btn')?.removeEventListener('click', this._onListDeleteBtn);
     this.shadowRoot?.querySelector('#status-show-btn')?.removeEventListener('click', this._onStatusShow);
@@ -1527,9 +1546,12 @@ class ListDetailPage extends AppElement {
     this._itemList?.removeEventListener('item-select-toggle',  this._onItemSelectToggle);
     this._itemList?.removeEventListener('item-drag-start',  this._onItemDragStart);
     this._itemList?.removeEventListener('item-reorder-key', this._onItemReorderKey);
-    this.shadowRoot?.removeEventListener('item-saved', this._onItemSaved);
+    this.shadowRoot?.removeEventListener('item-created', this._onItemCreated);
+    this._dialog?.removeEventListener('item-closed', this._onItemClosed);
     this._dialog?.removeEventListener('item-delete', this._onDialogDelete);
-    this._dialog?.removeEventListener('item-cancelled', this._onItemCancelled);
+    this._dialog?.removeEventListener('item-title-changed', this._onItemTitleChanged);
+    this._dialog?.removeEventListener('item-note-changed',  this._onItemNoteChanged);
+    this._dialog?.removeEventListener('item-url-changed',   this._onItemUrlChanged);
     this._dialog?.removeEventListener('item-status-changed', this._onItemStatusChanged);
     this._dialog?.removeEventListener('item-tags-changed',   this._onItemTagsChanged);
     this._dialog?.removeEventListener('item-move',   this._onItemMove);
@@ -1632,9 +1654,9 @@ class ListDetailPage extends AppElement {
     ));
   }
 
-  _addItem({ title, status, note, url, tags }) {
+  _addItem({ id, title, status, note, url, tags }) {
     const item = {
-      id: crypto.randomUUID(), title, status,
+      id: id ?? crypto.randomUUID(), title, status,
       note, url, dueDate: undefined,
       tags: tags ?? [], inGoals: [],
     };

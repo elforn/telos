@@ -105,11 +105,11 @@ describe('lists-page — rendering', () => {
 });
 
 describe('lists-page — create list', () => {
-  it('creates a new list when list-saved fires after add click', async () => {
+  it('creates a new list when list-created fires after add click', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     el.shadowRoot.querySelector('#add-row').click();
-    el.shadowRoot.dispatchEvent(new CustomEvent('list-saved', {
+    el.shadowRoot.dispatchEvent(new CustomEvent('list-created', {
       bubbles: true, composed: true, detail: { name: 'Reading list' },
     }));
     await vi.waitFor(() => expect(getItems(el).length).toBe(1));
@@ -121,7 +121,7 @@ describe('lists-page — create list', () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
     el.shadowRoot.querySelector('#add-row').click();
-    el.shadowRoot.dispatchEvent(new CustomEvent('list-saved', {
+    el.shadowRoot.dispatchEvent(new CustomEvent('list-created', {
       bubbles: true, composed: true, detail: { name: 'Ideas' },
     }));
     await vi.waitFor(() => expect(getItems(el).length).toBe(1));

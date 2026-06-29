@@ -50,7 +50,7 @@ async function createList(page, name, expectedCount = 1) {
     document.querySelector('app-router').shadowRoot
       .querySelector('lists-page').shadowRoot
       .querySelector('list-dialog').shadowRoot
-      .querySelector('#save').click();
+      .querySelector('#close').click();
   });
   await page.waitForFunction((count) =>
     (document.querySelector('app-router')?.shadowRoot
@@ -120,7 +120,7 @@ async function createItem(page, title) {
     document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
       .querySelector('item-dialog').shadowRoot
-      .querySelector('#save').click();
+      .querySelector('#close').click();
   });
   await page.waitForFunction(() =>
     (document.querySelector('app-router')?.shadowRoot
@@ -425,18 +425,14 @@ test.describe('Lists — list management', () => {
       return d?.open;
     });
     await page.evaluate(() => {
-      const inp = document.querySelector('app-router').shadowRoot
+      const sr = document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
-        .querySelector('list-dialog').shadowRoot
-        .querySelector('#input');
+        .querySelector('list-dialog').shadowRoot;
+      const inp = sr.querySelector('#input');
       inp.value = 'New name';
       inp.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('list-detail-page').shadowRoot
-        .querySelector('list-dialog').shadowRoot
-        .querySelector('#save').click();
+      inp.dispatchEvent(new Event('blur'));
+      sr.querySelector('#close').click();
     });
     // Go back and verify
     await page.evaluate(() => {
@@ -712,18 +708,14 @@ test.describe('Lists — item management', () => {
       return d?.open;
     });
     await page.evaluate(() => {
-      const inp = document.querySelector('app-router').shadowRoot
+      const sr = document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
-        .querySelector('item-dialog').shadowRoot
-        .querySelector('#title-input');
+        .querySelector('item-dialog').shadowRoot;
+      const inp = sr.querySelector('#title-input');
       inp.value = 'Edited title';
       inp.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('list-detail-page').shadowRoot
-        .querySelector('item-dialog').shadowRoot
-        .querySelector('#save').click();
+      inp.dispatchEvent(new Event('blur'));
+      sr.querySelector('#close').click();
     });
     await page.waitForFunction(() => {
       const title = document.querySelector('app-router')?.shadowRoot

@@ -28,7 +28,7 @@ async function openAndSaveGoal(page, title) {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
       .querySelector('goal-dialog').shadowRoot
-      .querySelector('#save').click();
+      .querySelector('#close').click();
   });
 }
 

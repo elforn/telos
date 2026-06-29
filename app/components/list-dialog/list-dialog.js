@@ -14,10 +14,13 @@ class ListDialog extends AppElement {
     this._isNew = !list;
     const draft = this._isNew ? this._loadDraft() : null;
     this._input.value = list?.name ?? draft?.name ?? '';
-    this._saveBtn.disabled = !this._input.value.trim();
     this._deleteBtn.hidden = !list;
     this._selectColor(list?.color ?? draft?.color ?? null);
-    this._saved = false;
+    this._lastValidName = list?.name ?? draft?.name ?? '';
+    this._closeBtn?.setAttribute('aria-label',
+      this._isNew ? t('list-dialog.save-and-close') : t('list-dialog.close'));
+    this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
+      this._isNew ? t('list-dialog.title-new') : t('list-dialog.title-edit'));
     this._modal.show(this._input);
   }
 
@@ -26,6 +29,18 @@ class ListDialog extends AppElement {
       <style>
         /* Halve the modal's default 24px top/bottom padding */
         #modal { --space-6: var(--space-3); }
+
+        .sr-only {
+          position: absolute;
+          inline-size: 1px;
+          block-size: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip: rect(0,0,0,0);
+          white-space: nowrap;
+          border-width: 0;
+        }
 
         /* ── Color swatches (always visible, above the input) ───────────── */
 
@@ -119,14 +134,7 @@ class ListDialog extends AppElement {
         }
 
         #delete { background: none; color: var(--color-danger); }
-        #cancel { background: none; color: var(--color-text-secondary); }
-
-        #save {
-          background: var(--color-accent);
-          color: var(--color-text-inverse);
-        }
-
-        #save:disabled { opacity: 0.4; cursor: default; }
+        #close  { background: none; color: var(--color-text-secondary); }
       </style>
 
       <modal-dialog id="modal">
@@ -146,52 +154,46 @@ class ListDialog extends AppElement {
                aria-label="${t('list-dialog.name-placeholder')}"
                placeholder="${t('list-dialog.name-placeholder')}"
                autocomplete="off"
+               enterkeyhint="go"
                maxlength="60" />
         <div slot="footer" class="actions">
           <button type="button" id="delete" hidden>${t('list-dialog.delete')}</button>
           <div class="actions-end">
-            <button type="button" id="cancel">${t('list-dialog.cancel')}</button>
-            <button type="button" id="save" disabled>${t('list-dialog.save')}</button>
+            <button type="button" id="close" aria-label="${t('list-dialog.close')}">${t('list-dialog.close')}</button>
           </div>
         </div>
+
+        <div id="save-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
       </modal-dialog>
     `;
   }
 
   subscribe() {
-    this._modal  = this.shadowRoot.querySelector('#modal');
-    this._input  = this.shadowRoot.querySelector('#input');
+    this._modal         = this.shadowRoot.querySelector('#modal');
+    this._input         = this.shadowRoot.querySelector('#input');
     this._colorSwatches = this.shadowRoot.querySelector('.color-swatches');
-    this._saveBtn       = this.shadowRoot.querySelector('#save');
     this._deleteBtn     = this.shadowRoot.querySelector('#delete');
-    this._selectedColor  = null;
-    this._saved          = false;
-    this._isNew          = false;
+    this._closeBtn      = this.shadowRoot.querySelector('#close');
+    this._saveStatus    = this.shadowRoot.querySelector('#save-status');
+    this._selectedColor = null;
+    this._isNew         = false;
+    this._lastValidName = '';
 
-    this._onInput = () => {
-      this._saveBtn.disabled = !this._input.value.trim();
-      this._saveDraft();
-    };
+    this._onInput = () => { this._saveDraft(); };
 
-    this._onSave = () => {
-      const name = this._input.value.trim();
-      if (!name) return;
-      this._saved = true;
-      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
-      this.dispatchEvent(new CustomEvent('list-saved', {
-        bubbles: true, composed: true,
-        detail: { name, color: this._selectedColor },
+    this._onNameBlur = () => {
+      if (this._isNew) return;
+      const v = this._input.value.trim();
+      if (!v) { this._input.value = this._lastValidName; return; }
+      if (v === this._lastValidName) return;
+      this._lastValidName = v;
+      this.dispatchEvent(new CustomEvent('list-name-changed', {
+        bubbles: true, composed: true, detail: { name: v },
       }));
-      this._modal.close();
+      this._announceSaved();
     };
 
-    this._onCancel = () => {
-      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
-      if (!this._isNew) {
-        this.dispatchEvent(new CustomEvent('list-cancelled', { bubbles: true, composed: true }));
-      }
-      this._modal.close();
-    };
+    this._onClose = () => { this._modal.close(); };
 
     this._onDelete = () => {
       this.dispatchEvent(new CustomEvent('list-delete', { bubbles: true, composed: true }));
@@ -200,10 +202,31 @@ class ListDialog extends AppElement {
 
     this._onModalClose = e => {
       e.stopPropagation();
-      this._saved = false;
+      if (this._isNew) {
+        const name = this._input.value.trim();
+        if (name) {
+          localStorage.removeItem(DRAFT_KEY);
+          this.dispatchEvent(new CustomEvent('list-created', {
+            bubbles: true, composed: true,
+            detail: { name, color: this._selectedColor },
+          }));
+        }
+        // else: keep draft (color preserved for next open)
+      } else {
+        this.dispatchEvent(new CustomEvent('list-closed', { bubbles: true, composed: true }));
+      }
     };
 
-    this._onKeyDown = e => { if (e.key === 'Enter') this._onSave(); };
+    this._onKeyDown = e => {
+      if (e.key !== 'Enter') return;
+      if (this._isNew) {
+        if (!this._input.value.trim()) return; // require name for new lists
+        this._modal.close();
+      } else {
+        this._input.blur(); // triggers _onNameBlur before close
+        this._modal.close();
+      }
+    };
 
     this._onSwatchClick = e => {
       const swatch = e.target.closest('.swatch');
@@ -220,9 +243,9 @@ class ListDialog extends AppElement {
 
     this._input.addEventListener('input',   this._onInput);
     this._input.addEventListener('keydown', this._onKeyDown);
-    this._saveBtn.addEventListener('click',   this._onSave);
+    this._input.addEventListener('blur',    this._onNameBlur);
     this._deleteBtn.addEventListener('click', this._onDelete);
-    this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
+    this._closeBtn.addEventListener('click', this._onClose);
     this._onSwatchPointerDown = e => e.preventDefault();
     this._colorSwatches.addEventListener('pointerdown', this._onSwatchPointerDown);
     this._colorSwatches.addEventListener('click', this._onSwatchClick);
@@ -232,9 +255,9 @@ class ListDialog extends AppElement {
   unsubscribe() {
     this._input?.removeEventListener('input',   this._onInput);
     this._input?.removeEventListener('keydown', this._onKeyDown);
-    this._saveBtn?.removeEventListener('click',   this._onSave);
+    this._input?.removeEventListener('blur',    this._onNameBlur);
     this._deleteBtn?.removeEventListener('click', this._onDelete);
-    this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
+    this._closeBtn?.removeEventListener('click', this._onClose);
     this._colorSwatches?.removeEventListener('pointerdown', this._onSwatchPointerDown);
     this._colorSwatches?.removeEventListener('click', this._onSwatchClick);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
@@ -257,6 +280,13 @@ class ListDialog extends AppElement {
     this._colorSwatches.querySelectorAll('.swatch').forEach(s => {
       s.setAttribute('aria-pressed', String((s.dataset.color || null) === color));
     });
+  }
+
+  _announceSaved() {
+    if (!this._saveStatus) return;
+    this._saveStatus.textContent = t('dialog.saved-sr');
+    clearTimeout(this._announceTimer);
+    this._announceTimer = setTimeout(() => { this._saveStatus.textContent = ''; }, 1500);
   }
 }
 

@@ -58,7 +58,7 @@ async function saveDialog(page) {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
       .querySelector('goal-dialog').shadowRoot
-      .querySelector('#save').click();
+      .querySelector('#close').click();
   });
 }
 
@@ -299,7 +299,7 @@ test.describe('Goal tags — tag strip hidden when no tags', () => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('#save').click();
+        .querySelector('#close').click();
     });
     await page.waitForFunction(() => {
       const list = document.querySelector('app-router')?.shadowRoot

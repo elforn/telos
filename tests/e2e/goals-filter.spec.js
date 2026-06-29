@@ -105,7 +105,7 @@ async function createGoal(page, addId, listId, title, tag = null) {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
       .querySelector('goal-dialog').shadowRoot
-      .querySelector('#save').click();
+      .querySelector('#close').click();
   });
 
   await page.waitForFunction(([id, count]) =>

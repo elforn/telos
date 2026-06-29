@@ -10,6 +10,18 @@ const STATUSES = ['open', 'paused', 'done'];
 const SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
 const DRAFT_KEY = 'telos:draft.new-item';
 
+// Events emitted (all bubbles + composed):
+//   item-created        { id, title, status, note, url, tags }
+//   item-closed
+//   item-title-changed  { title }
+//   item-note-changed   { note }
+//   item-url-changed    { url }
+//   item-status-changed { status }
+//   item-tags-changed   { tags }
+//   item-delete
+//   item-move           { title, status, note, url, tags, targetListIds, newListName, copy }
+//   item-promote        { title, status, note, url, tags, year, section }
+//   item-export-request { item }
 class ItemDialog extends AppElement {
   // ── Public properties ────────────────────────────────────────────────────────
 
@@ -26,11 +38,11 @@ class ItemDialog extends AppElement {
   open(item = null) {
     this._item = item;
     this._isNew = !item;
+    this._skipCreate = false;
     this._showView('main');
 
     const draft = this._isNew ? this._loadDraft() : null;
     this._titleInput.value = item?.title ?? draft?.title ?? '';
-    this._saveBtn.disabled = !this._titleInput.value.trim();
     this._deleteBtn.hidden = !item;
     this._deleteBtn.textContent = t('item-dialog.delete');
 
@@ -51,7 +63,15 @@ class ItemDialog extends AppElement {
 
     this._menuBtn.hidden = this._isNew;
 
-    this._saved = false;
+    this._lastValidTitle = item?.title ?? draft?.title ?? '';
+    this._lastValidNote  = item?.note  ?? draft?.note  ?? '';
+    this._lastValidUrl   = item?.url   ?? draft?.url   ?? '';
+
+    this._closeBtn.setAttribute('aria-label',
+      this._isNew ? t('item-dialog.save-and-close') : t('item-dialog.close'));
+    this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
+      this._isNew ? t('item-dialog.title-new') : t('item-dialog.title-edit'));
+
     this._modal.show(item ? this._noteInput : this._titleInput);
     requestAnimationFrame(() => requestAnimationFrame(() => this._syncNoteHeight()));
   }
@@ -59,8 +79,28 @@ class ItemDialog extends AppElement {
   template() {
     return `
       <style>
+        :host {
+          --_note-min-h:          3.5rem;
+          --_chip-x-font-size:    0.9em;
+          --_chip-x-bg:           rgba(0, 0, 0, 0.12);
+          --_chip-x-bg-hover:     rgba(0, 0, 0, 0.22);
+          --_suggestions-shadow:  0 -4px 10px rgba(0, 0, 0, 0.07);
+        }
+
         /* ── Modal padding override ──────────────────────────────────────── */
         #modal { --space-6: var(--space-3); }
+
+        .sr-only {
+          position: absolute;
+          inline-size: 1px;
+          block-size: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip: rect(0,0,0,0);
+          white-space: nowrap;
+          border-width: 0;
+        }
 
         /* ── Text inputs ─────────────────────────────────────────────────── */
         input[type="text"] {
@@ -102,7 +142,7 @@ class ItemDialog extends AppElement {
           font-size: var(--font-size-body);
           font-family: var(--font-family);
           color: var(--color-text-primary);
-          line-height: 1.5;
+          line-height: var(--line-height-normal);
           white-space: pre-wrap;
           overflow-wrap: break-word;
           word-break: break-word;
@@ -129,10 +169,10 @@ class ItemDialog extends AppElement {
           outline: none;
           box-sizing: border-box;
           resize: none;
-          min-block-size: 3.5rem;
+          min-block-size: var(--_note-min-h);
           overflow: hidden;
           margin-block-end: 0;
-          line-height: 1.5;
+          line-height: var(--line-height-normal);
         }
 
         textarea::placeholder { color: var(--color-text-muted); }
@@ -315,7 +355,7 @@ class ItemDialog extends AppElement {
         }
 
         .tag-chip-x {
-          background: rgba(0,0,0,0.12);
+          background: var(--_chip-x-bg);
           border-radius: var(--radius-full);
           inline-size: 20px;
           block-size: 20px;
@@ -323,11 +363,11 @@ class ItemDialog extends AppElement {
           align-items: center;
           justify-content: center;
           line-height: 1;
-          font-size: 0.9em;
+          font-size: var(--_chip-x-font-size);
           pointer-events: none;
         }
 
-        .tag-chip:hover .tag-chip-x { background: rgba(0,0,0,0.22); }
+        .tag-chip:hover .tag-chip-x { background: var(--_chip-x-bg-hover); }
 
         #tag-input {
           flex: 1;
@@ -368,7 +408,7 @@ class ItemDialog extends AppElement {
           padding-block-end: var(--space-2);
           background: var(--color-surface);
           border-block-start: 0.5px solid var(--color-border);
-          box-shadow: 0 -4px 10px rgba(0,0,0,0.07);
+          box-shadow: var(--_suggestions-shadow);
           border-start-start-radius: var(--radius-sm);
           border-start-end-radius: var(--radius-sm);
           z-index: 1;
@@ -567,14 +607,14 @@ class ItemDialog extends AppElement {
 
         #menu-btn { background: none; color: var(--color-text-secondary); padding-inline: var(--space-2); display: flex; align-items: center; }
         #delete { background: none; color: var(--color-danger); }
-        #cancel { background: none; color: var(--color-text-secondary); }
+        #close { background: none; color: var(--color-text-secondary); }
 
-        #save, #add-to-goal-cta {
+        #add-to-goal-cta {
           background: var(--color-accent);
           color: var(--color-text-inverse);
         }
 
-        #save:disabled, #add-to-goal-cta:disabled {
+        #add-to-goal-cta:disabled {
           opacity: 0.4;
           cursor: default;
         }
@@ -678,8 +718,7 @@ class ItemDialog extends AppElement {
           <button type="button" id="menu-btn" hidden aria-label="${t('item-dialog.more-actions')}">${icons.dotsVertical}</button>
           <button type="button" id="delete" hidden>${t('item-dialog.delete')}</button>
           <div class="actions-end">
-            <button type="button" id="cancel">${t('item-dialog.cancel')}</button>
-            <button type="button" id="save" disabled>${t('item-dialog.save')}</button>
+            <button type="button" id="close" aria-label="${t('item-dialog.close')}">${t('item-dialog.close')}</button>
           </div>
         </div>
 
@@ -689,6 +728,7 @@ class ItemDialog extends AppElement {
           <button type="button" id="add-to-goal-cta">${t('item-dialog.goal-add-cta')}</button>
         </div>
 
+        <div id="save-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
       </modal-dialog>
 
       <dialog id="action-sheet" aria-label="${t('item-dialog.more-actions')}">
@@ -718,9 +758,10 @@ class ItemDialog extends AppElement {
     this._tagChipsWrap = this.shadowRoot.querySelector('#tag-chips-wrap');
     this._tagInput = this.shadowRoot.querySelector('#tag-input');
     this._tagSuggestions = this.shadowRoot.querySelector('#tag-suggestions');
-    this._saveBtn = this.shadowRoot.querySelector('#save');
     this._deleteBtn = this.shadowRoot.querySelector('#delete');
     this._menuBtn = this.shadowRoot.querySelector('#menu-btn');
+    this._closeBtn = this.shadowRoot.querySelector('#close');
+    this._saveStatus = this.shadowRoot.querySelector('#save-status');
     this._actionSheet = this.shadowRoot.querySelector('#action-sheet');
     this._viewMain = this.shadowRoot.querySelector('#view-main');
     this._viewGoalPromoter = this.shadowRoot.querySelector('#view-goal-promoter');
@@ -732,18 +773,62 @@ class ItemDialog extends AppElement {
     this._inGoalsList = this.shadowRoot.querySelector('#in-goals-list');
     this._addToGoalCta = this.shadowRoot.querySelector('#add-to-goal-cta');
 
-    this._saved = false;
-    this._view = 'main';
-    this._tags = [];
+    this._isNew          = false;
+    this._skipCreate      = false;
+    this._view           = 'main';
+    this._tags           = [];
+    this._lastValidTitle = '';
+    this._lastValidNote  = '';
+    this._lastValidUrl   = '';
 
     // ── Main view ─────────────────────────────────────────────────────────────
 
-    this._onTitleInput = () => {
-      this._saveBtn.disabled = !this._titleInput.value.trim();
-      this._saveDraft();
+    this._onTitleInput = () => { this._saveDraft(); };
+
+    this._onTitleBlur = () => {
+      const v = this._titleInput.value.trim();
+      if (this._isNew) {
+        if (!v) return;
+        const { status, note, url, tags } = this._getFormValues();
+        const id = crypto.randomUUID();
+        this._item = { id, title: v, status, note, url, tags, inGoals: [] };
+        this._isNew = false;
+        this._lastValidTitle = v;
+        this._lastValidNote  = note;
+        this._lastValidUrl   = url;
+        localStorage.removeItem(DRAFT_KEY);
+        this.dispatchEvent(new CustomEvent('item-created', {
+          bubbles: true, composed: true,
+          detail: { id, title: v, status, note, url, tags },
+        }));
+        this._closeBtn.setAttribute('aria-label', t('item-dialog.close'));
+        this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
+          t('item-dialog.title-edit'));
+        this._deleteBtn.hidden = false;
+        this._menuBtn.hidden = false;
+        return;
+      }
+      if (!v) { this._titleInput.value = this._lastValidTitle; return; }
+      if (v === this._lastValidTitle) return;
+      this._lastValidTitle = v;
+      this.dispatchEvent(new CustomEvent('item-title-changed', {
+        bubbles: true, composed: true, detail: { title: v },
+      }));
+      this._announceSaved();
     };
 
     this._onNoteInput = () => { this._syncNoteHeight(); this._saveDraft(); };
+
+    this._onNoteBlur = () => {
+      if (this._isNew) return;
+      const v = this._noteInput.value.trim();
+      if (v === this._lastValidNote) return;
+      this._lastValidNote = v;
+      this.dispatchEvent(new CustomEvent('item-note-changed', {
+        bubbles: true, composed: true, detail: { note: v || undefined },
+      }));
+      this._announceSaved();
+    };
 
     this._onNoteCopy = async () => {
       const text = this._noteInput.value.trim();
@@ -761,6 +846,17 @@ class ItemDialog extends AppElement {
 
     this._onUrlInput = () => { this._syncUrlOpen(); this._saveDraft(); };
 
+    this._onUrlBlur = () => {
+      if (this._isNew) return;
+      const v = this._urlInput.value.trim();
+      if (v === this._lastValidUrl) return;
+      this._lastValidUrl = v;
+      this.dispatchEvent(new CustomEvent('item-url-changed', {
+        bubbles: true, composed: true, detail: { url: v || undefined },
+      }));
+      this._announceSaved();
+    };
+
     this._onUrlToggle = () => {
       const opening = this._urlRow.hidden;
       this._showUrlField(opening);
@@ -774,24 +870,7 @@ class ItemDialog extends AppElement {
       if (url) window.open(url, '_blank', 'noopener');
     };
 
-    this._onSave = () => {
-      const { title, status, note, url, tags } = this._getFormValues();
-      if (!title) return;
-      this._saved = true;
-      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
-      this.dispatchEvent(new CustomEvent('item-saved', {
-        bubbles: true, composed: true, detail: { title, status, note, url, tags },
-      }));
-      this._modal.close();
-    };
-
-    this._onCancel = () => {
-      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
-      if (!this._isNew) {
-        this.dispatchEvent(new CustomEvent('item-cancelled', { bubbles: true, composed: true }));
-      }
-      this._modal.close();
-    };
+    this._onClose = () => { this._modal.close(); };
 
     this._onDelete = () => {
       this.dispatchEvent(new CustomEvent('item-delete', { bubbles: true, composed: true }));
@@ -800,12 +879,42 @@ class ItemDialog extends AppElement {
 
     this._onModalClose = e => {
       e.stopPropagation();
-      this._saved = false;
+      if (this._isNew) {
+        if (this._skipCreate) {
+          // move/promote already dispatched — just clear draft
+          localStorage.removeItem(DRAFT_KEY);
+        } else {
+          const { title, status, note, url, tags } = this._getFormValues();
+          if (title) {
+            const id = crypto.randomUUID();
+            this._isNew = false;
+            this._lastValidTitle = title;
+            localStorage.removeItem(DRAFT_KEY);
+            this.dispatchEvent(new CustomEvent('item-created', {
+              bubbles: true, composed: true, detail: { id, title, status, note, url, tags },
+            }));
+          }
+          // else: keep draft (note/url preserved for next open)
+        }
+        this._skipCreate = false;
+      } else {
+        this.dispatchEvent(new CustomEvent('item-closed', { bubbles: true, composed: true }));
+      }
       clearTimeout(this._copyResetTimer);
       if (this._actionSheet?.open) this._actionSheet.close();
     };
 
-    this._onKeyDown = e => { if (e.key === 'Enter') this._onSave(); };
+    this._onKeyDown = e => {
+      if (e.key !== 'Enter') return;
+      if (this._isNew) {
+        if (!this._titleInput.value.trim()) return; // require title for new items
+        this._titleInput.blur(); // commits item via _onTitleBlur → clears draft → _isNew = false
+        this._modal.close();
+      } else {
+        this._titleInput.blur(); // triggers _onTitleBlur before close
+        this._modal.close();
+      }
+    };
 
     this._onStatusChange = e => {
       if (this._isNew) return;
@@ -849,12 +958,15 @@ class ItemDialog extends AppElement {
       this._tagInput.focus();
     };
 
-    this._titleInput.addEventListener('input', this._onTitleInput);
+    this._titleInput.addEventListener('input',   this._onTitleInput);
     this._titleInput.addEventListener('keydown', this._onKeyDown);
+    this._titleInput.addEventListener('blur',    this._onTitleBlur);
     this._noteInput.addEventListener('input', this._onNoteInput);
+    this._noteInput.addEventListener('blur',  this._onNoteBlur);
     this._noteCopyBtn.addEventListener('pointerdown', e => e.preventDefault());
     this._noteCopyBtn.addEventListener('click', this._onNoteCopy);
     this._urlInput.addEventListener('input', this._onUrlInput);
+    this._urlInput.addEventListener('blur',  this._onUrlBlur);
     this._urlToggle.addEventListener('pointerdown', e => e.preventDefault());
     this._urlToggle.addEventListener('click', this._onUrlToggle);
     this._urlOpen.addEventListener('click', this._onUrlOpen);
@@ -866,9 +978,8 @@ class ItemDialog extends AppElement {
     this._tagSuggestions.addEventListener('pointerdown', this._onSuggestionPointerDown);
     this._onChipRemovePointerDown = e => { if (e.target.closest('.tag-chip')) e.preventDefault(); };
     this._tagChipsWrap.addEventListener('pointerdown', this._onChipRemovePointerDown);
-    this._saveBtn.addEventListener('click', this._onSave);
     this._deleteBtn.addEventListener('click', this._onDelete);
-    this.shadowRoot.querySelector('#cancel').addEventListener('click', this._onCancel);
+    this._closeBtn.addEventListener('click', this._onClose);
     this._modal.addEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).addEventListener('resize', this._onResize);
     // preventDefault stops the browser's default label→radio handling so we
@@ -920,7 +1031,10 @@ class ItemDialog extends AppElement {
     this._onListPick = e => {
       const { targetListIds, newListName, copy } = e.detail;
       const { title, status, note, url, tags } = this._getFormValues();
-      if (this._isNew) localStorage.removeItem(DRAFT_KEY);
+      if (this._isNew) {
+        this._skipCreate = true;
+        localStorage.removeItem(DRAFT_KEY);
+      }
       this.dispatchEvent(new CustomEvent('item-move', {
         bubbles: true, composed: true,
         detail: { title, status, note, url, tags, targetListIds, newListName, copy },
@@ -946,11 +1060,14 @@ class ItemDialog extends AppElement {
 
   unsubscribe() {
     this._noteHighlight?.detach();
-    this._titleInput?.removeEventListener('input', this._onTitleInput);
+    this._titleInput?.removeEventListener('input',   this._onTitleInput);
     this._titleInput?.removeEventListener('keydown', this._onKeyDown);
+    this._titleInput?.removeEventListener('blur',    this._onTitleBlur);
     this._noteInput?.removeEventListener('input', this._onNoteInput);
+    this._noteInput?.removeEventListener('blur',  this._onNoteBlur);
     this._noteCopyBtn?.removeEventListener('click', this._onNoteCopy);
     this._urlInput?.removeEventListener('input', this._onUrlInput);
+    this._urlInput?.removeEventListener('blur',  this._onUrlBlur);
     this._urlToggle?.removeEventListener('click', this._onUrlToggle);
     this._urlOpen?.removeEventListener('click', this._onUrlOpen);
     this._tagInput?.removeEventListener('keydown', this._onTagKeyDown);
@@ -959,9 +1076,8 @@ class ItemDialog extends AppElement {
     this._tagChipsWrap?.removeEventListener('click', this._onTagWrapClick);
     this._tagSuggestions?.removeEventListener('pointerdown', this._onSuggestionPointerDown);
     this._tagChipsWrap?.removeEventListener('pointerdown', this._onChipRemovePointerDown);
-    this._saveBtn?.removeEventListener('click', this._onSave);
     this._deleteBtn?.removeEventListener('click', this._onDelete);
-    this.shadowRoot.querySelector('#cancel')?.removeEventListener('click', this._onCancel);
+    this._closeBtn?.removeEventListener('click', this._onClose);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).removeEventListener('resize', this._onResize);
     this.shadowRoot.querySelector('.status-options')?.removeEventListener('pointerdown', this._onStatusPointerDown);
@@ -1047,7 +1163,10 @@ class ItemDialog extends AppElement {
     const section = this._checkedSection();
     if (!year || !section) return;
     const { title, status, note, url, tags } = this._getFormValues();
-    if (this._isNew) localStorage.removeItem(DRAFT_KEY);
+    if (this._isNew) {
+      this._skipCreate = true;
+      localStorage.removeItem(DRAFT_KEY);
+    }
     this.dispatchEvent(new CustomEvent('item-promote', {
       bubbles: true, composed: true,
       detail: { title, status, note, url, tags, year, section },
@@ -1069,7 +1188,7 @@ class ItemDialog extends AppElement {
   }
 
   _removeTag(tag) {
-    this._tags = this._tags.filter(t => t !== tag);
+    this._tags = this._tags.filter(existing => existing !== tag);
     this._renderTagChips();
     this._saveDraft();
     this._dispatchTagsChanged();
@@ -1105,7 +1224,7 @@ class ItemDialog extends AppElement {
     if (!this._tagSuggestions) return;
     const partial = this._tagInput.value.trim().toLowerCase();
     if (!partial) { this._tagSuggestions.hidden = true; this._tagSuggestions.replaceChildren(); return; }
-    const matches = (this._existingTags ?? []).filter(t => t.includes(partial) && !this._tags.includes(t));
+    const matches = (this._existingTags ?? []).filter(tag => tag.includes(partial) && !this._tags.includes(tag));
     if (!matches.length) { this._tagSuggestions.hidden = true; this._tagSuggestions.replaceChildren(); return; }
     this._tagSuggestions.replaceChildren();
     for (const tag of matches) {
@@ -1122,14 +1241,17 @@ class ItemDialog extends AppElement {
 
   // ── Shared helpers ────────────────────────────────────────────────────────
 
-  _getFormValues() {
-    // Commit any uncommitted tag text on save
-    const rawTag = this._tagInput?.value.trim().toLowerCase().replace(/,/g, '');
-    if (rawTag && !this._tags.includes(rawTag)) {
-      this._tags.push(rawTag);
+  _commitPendingTag() {
+    const raw = this._tagInput?.value.trim().toLowerCase().replace(/,/g, '');
+    if (raw && !this._tags.includes(raw)) {
+      this._tags.push(raw);
       if (this._tagInput) this._tagInput.value = '';
       this._renderTagChips();
     }
+  }
+
+  _getFormValues() {
+    this._commitPendingTag();
     const title = this._titleInput.value.trim();
     const status = this.shadowRoot.querySelector('input[name="status"]:checked')?.value ?? 'open';
     const note = this._noteInput.value.trim() || undefined;
@@ -1174,6 +1296,13 @@ class ItemDialog extends AppElement {
   _showUrlField(show) {
     this._urlRow.hidden = !show;
     this._urlToggle.setAttribute('aria-expanded', String(show));
+  }
+
+  _announceSaved() {
+    if (!this._saveStatus) return;
+    this._saveStatus.textContent = t('dialog.saved-sr');
+    clearTimeout(this._announceTimer);
+    this._announceTimer = setTimeout(() => { this._saveStatus.textContent = ''; }, 1500);
   }
 }
 

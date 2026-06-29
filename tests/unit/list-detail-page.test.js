@@ -230,12 +230,12 @@ describe('list-detail-page — status toggle', () => {
 // ── Store mutations ───────────────────────────────────────────────────────────
 
 describe('list-detail-page — add item', () => {
-  it('adds an item when item-saved fires with no editing item', async () => {
+  it('adds an item when item-created fires', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#add-row')).not.toBeNull());
     el.shadowRoot.querySelector('#add-row').click();
-    el.shadowRoot.dispatchEvent(new CustomEvent('item-saved', {
+    el.shadowRoot.dispatchEvent(new CustomEvent('item-created', {
       bubbles: true, composed: true, detail: { title: 'New item', status: 'open' },
     }));
     await vi.waitFor(() => expect(getState().lists[0].items).toHaveLength(1));
@@ -249,7 +249,7 @@ describe('list-detail-page — add item', () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#add-row')).not.toBeNull());
-    el.shadowRoot.dispatchEvent(new CustomEvent('item-saved', {
+    el.shadowRoot.dispatchEvent(new CustomEvent('item-created', {
       bubbles: true, composed: true,
       detail: { title: 'Item', status: 'open', note: 'My note', url: 'https://example.com' },
     }));
@@ -263,15 +263,15 @@ describe('list-detail-page — add item', () => {
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#add-row')).not.toBeNull());
     el.shadowRoot.querySelector('#add-row').click();
-    el.shadowRoot.dispatchEvent(new CustomEvent('item-saved', {
+    el.shadowRoot.dispatchEvent(new CustomEvent('item-created', {
       bubbles: true, composed: true, detail: { title: 'New item', status: 'open' },
     }));
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
   });
 });
 
-describe('list-detail-page — edit item', () => {
-  it('edits an item when item-saved fires after item-tap sets editing context', async () => {
+describe('list-detail-page — edit item (blur-save)', () => {
+  it('updates title when item-title-changed fires after item-tap', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
@@ -279,14 +279,13 @@ describe('list-detail-page — edit item', () => {
     el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
       bubbles: true, composed: true, detail: { item: ITEM },
     }));
-    el.shadowRoot.dispatchEvent(new CustomEvent('item-saved', {
-      bubbles: true, composed: true, detail: { title: 'Edited title', status: 'done' },
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-title-changed', {
+      bubbles: true, composed: true, detail: { title: 'Edited title' },
     }));
     await vi.waitFor(() => expect(getState().lists[0].items[0].title).toBe('Edited title'));
-    expect(getState().lists[0].items[0].status).toBe('done');
   });
 
-  it('persists note and url when editing an item', async () => {
+  it('updates note when item-note-changed fires after item-tap', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
@@ -294,12 +293,24 @@ describe('list-detail-page — edit item', () => {
     el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
       bubbles: true, composed: true, detail: { item: ITEM },
     }));
-    el.shadowRoot.dispatchEvent(new CustomEvent('item-saved', {
-      bubbles: true, composed: true,
-      detail: { title: 'Item', status: 'open', note: 'Updated note', url: 'https://example.com' },
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-note-changed', {
+      bubbles: true, composed: true, detail: { note: 'Updated note' },
     }));
     await vi.waitFor(() => expect(getState().lists[0].items[0].note).toBe('Updated note'));
-    expect(getState().lists[0].items[0].url).toBe('https://example.com');
+  });
+
+  it('updates url when item-url-changed fires after item-tap', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-url-changed', {
+      bubbles: true, composed: true, detail: { url: 'https://new.example.com' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].items[0].url).toBe('https://new.example.com'));
   });
 });
 
@@ -1049,36 +1060,15 @@ describe('list-detail-page — name edit button', () => {
 
 // ── Edit list via list-dialog ─────────────────────────────────────────────────
 
-describe('list-detail-page — edit list (list-saved)', () => {
-  it('updates list name in the store when list-saved fires from list-dialog', async () => {
+describe('list-detail-page — edit list (blur-save)', () => {
+  it('updates list name in the store when list-name-changed fires from list-dialog', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
-    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-saved', {
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-name-changed', {
       bubbles: true, composed: true, detail: { name: 'Renamed list' },
     }));
     await vi.waitFor(() => expect(getState().lists[0].name).toBe('Renamed list'));
-  });
-
-  it('updates list color in the store when list-saved fires with a color', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
-    const el = mount();
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
-    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-saved', {
-      bubbles: true, composed: true, detail: { name: 'Gift ideas', color: '#ff0000' },
-    }));
-    await vi.waitFor(() => expect(getState().lists[0].color).toBe('#ff0000'));
-  });
-
-  it('removes color from list in the store when list-saved fires without a color', async () => {
-    const listWithColor = { ...LIST, color: '#ff0000' };
-    await boot({ dbName: freshName(), initialState: { lists: [listWithColor] } });
-    const el = mount();
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
-    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-saved', {
-      bubbles: true, composed: true, detail: { name: 'Gift ideas' },
-    }));
-    await vi.waitFor(() => expect(getState().lists[0]).not.toHaveProperty('color'));
   });
 
   it('does not affect other lists when renaming', async () => {
@@ -1086,7 +1076,7 @@ describe('list-detail-page — edit list (list-saved)', () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST2] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
-    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-saved', {
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-name-changed', {
       bubbles: true, composed: true, detail: { name: 'Renamed' },
     }));
     await vi.waitFor(() => expect(getState().lists[0].name).toBe('Renamed'));

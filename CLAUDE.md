@@ -245,7 +245,7 @@ Cert files (`*.pem`, `*.key`, `*.crt`) are gitignored — never commit them.
 - `/component <name> <tier>` — scaffold a new Web Component
 - `/migration <version> <description>` — scaffold a schema migration
 
-**After completing a feature:** `/i18n` → `/a11y` → `/test` → `/docs feature` → `/review` → `/commit`
+**After completing a feature:** `/i18n` → `/a11y` → `/test` → `/review` → `/docs feature` → `/commit`
 
 **Before shipping:** `/test-pwa` → `/status` → `/docs changelog` → bump at least patch version → `/commit` → git push
 

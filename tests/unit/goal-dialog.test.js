@@ -63,80 +63,150 @@ describe('goal-dialog — open', () => {
   });
 });
 
-describe('goal-dialog — save', () => {
-  it('save button is disabled when input is empty', () => {
+describe('goal-dialog — new goal creation', () => {
+  it('dispatches goal-created on modal-close when title is non-empty', () => {
     const el = mount();
-    el.open();
-    expect(el.shadowRoot.querySelector('#save').disabled).toBe(true);
-  });
-
-  it('save button enables when input has text', () => {
-    const el = mount();
-    el.open();
-    const input = el.shadowRoot.querySelector('#input');
-    input.value = 'My goal';
-    input.dispatchEvent(new Event('input'));
-    expect(el.shadowRoot.querySelector('#save').disabled).toBe(false);
-  });
-
-  it('dispatches goal-saved with the title on save click', () => {
-    const el = mount();
-    el.open();
+    el.open(null);
     const events = [];
-    el.addEventListener('goal-saved', e => events.push(e));
+    el.addEventListener('goal-created', e => events.push(e));
     const input = el.shadowRoot.querySelector('#input');
     input.value = 'Grand Capstone';
-    input.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.shadowRoot.querySelector('#modal').close();
     expect(events).toHaveLength(1);
     expect(events[0].detail.title).toBe('Grand Capstone');
   });
 
-  it('does not dispatch goal-saved if input is only whitespace', () => {
+  it('trims whitespace from title in goal-created', () => {
     const el = mount();
-    el.open();
+    el.open(null);
     const events = [];
-    el.addEventListener('goal-saved', e => events.push(e));
-    const input = el.shadowRoot.querySelector('#input');
-    input.value = '   ';
-    input.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = '  My goal  ';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.title).toBe('My goal');
+  });
+
+  it('does not dispatch goal-created when title is empty', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = '';
+    el.shadowRoot.querySelector('#modal').close();
     expect(events).toHaveLength(0);
   });
 
-  it('closes the dialog after saving', () => {
+  it('does not dispatch goal-created when title is whitespace only', () => {
     const el = mount();
-    const modal = el.shadowRoot.querySelector('#modal');
-    el.open();
-    const input = el.shadowRoot.querySelector('#input');
-    input.value = 'Grand Capstone';
-    input.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
-    expect(modal.close).toHaveBeenCalledOnce();
+    el.open(null);
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = '   ';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events).toHaveLength(0);
   });
 
-  it('dispatches goal-saved on Enter key in input', () => {
+  it('dispatches goal-created on Enter key when title is non-empty', () => {
     const el = mount();
-    el.open();
+    el.open(null);
     const events = [];
-    el.addEventListener('goal-saved', e => events.push(e));
+    el.addEventListener('goal-created', e => events.push(e));
     const input = el.shadowRoot.querySelector('#input');
     input.value = 'Keyboard save';
-    input.dispatchEvent(new Event('input'));
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(events[0].detail.title).toBe('Keyboard save');
   });
 
-  it('trims whitespace from saved title', () => {
+  it('Enter key does nothing when title is empty', () => {
     const el = mount();
-    el.open();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(null);
+    el.shadowRoot.querySelector('#input').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
+    expect(modal.close).not.toHaveBeenCalled();
+  });
+});
+
+describe('goal-dialog — edit existing (blur-save)', () => {
+  it('dispatches goal-title-changed when title field blurs with a new value', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Original' });
     const events = [];
-    el.addEventListener('goal-saved', e => events.push(e));
+    el.addEventListener('goal-title-changed', e => events.push(e));
     const input = el.shadowRoot.querySelector('#input');
-    input.value = '  My goal  ';
-    input.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
-    expect(events[0].detail.title).toBe('My goal');
+    input.value = 'Updated';
+    input.dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.title).toBe('Updated');
+  });
+
+  it('does not dispatch goal-title-changed when title is unchanged on blur', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Same' });
+    const events = [];
+    el.addEventListener('goal-title-changed', e => events.push(e));
+    el.shadowRoot.querySelector('#input').dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(0);
+  });
+
+  it('reverts title field to last valid value when cleared on blur', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Keep me' });
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = '';
+    input.dispatchEvent(new Event('blur'));
+    expect(input.value).toBe('Keep me');
+  });
+
+  it('dispatches goal-notes-changed when notes field blurs with a new value', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Goal', notes: 'Old notes' });
+    const events = [];
+    el.addEventListener('goal-notes-changed', e => events.push(e));
+    const desc = el.shadowRoot.querySelector('#desc-input');
+    desc.value = 'New notes';
+    desc.dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.notes).toBe('New notes');
+  });
+
+  it('dispatches goal-notes-changed with undefined when notes are cleared', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Goal', notes: 'Old notes' });
+    const events = [];
+    el.addEventListener('goal-notes-changed', e => events.push(e));
+    const desc = el.shadowRoot.querySelector('#desc-input');
+    desc.value = '';
+    desc.dispatchEvent(new Event('blur'));
+    expect(events[0].detail.notes).toBeUndefined();
+  });
+
+  it('dispatches goal-closed on modal close for existing goal', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'My goal' });
+    const events = [];
+    el.addEventListener('goal-closed', e => events.push(e));
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events).toHaveLength(1);
+  });
+
+  it('Close button closes the modal', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open({ id: '1', title: 'My goal' });
+    el.shadowRoot.querySelector('#close').click();
+    expect(modal.close).toHaveBeenCalledOnce();
+  });
+
+  it('Enter key blurs and closes for existing goal', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open({ id: '1', title: 'My goal' });
+    el.shadowRoot.querySelector('#input').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    );
+    expect(modal.close).toHaveBeenCalledOnce();
   });
 });
 
@@ -208,33 +278,24 @@ describe('goal-dialog — draft', () => {
     expect(localStorage.getItem(GOAL_DRAFT_KEY)).toBeNull();
   });
 
-  it('clears draft on save', () => {
+  it('clears draft when modal closes with non-empty title', () => {
     localStorage.setItem(GOAL_DRAFT_KEY, JSON.stringify({ title: 'Draft goal' }));
     const el = mount();
     el.open(null);
     const inp = el.shadowRoot.querySelector('#input');
     inp.value = 'Saved goal';
-    inp.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.shadowRoot.querySelector('#modal').close();
     expect(localStorage.getItem(GOAL_DRAFT_KEY)).toBeNull();
   });
 
-  it('clears draft on cancel', () => {
-    localStorage.setItem(GOAL_DRAFT_KEY, JSON.stringify({ title: 'Draft goal' }));
+  it('preserves draft when modal closes with empty title', () => {
     const el = mount();
-    el.open(null);
-    el.shadowRoot.querySelector('#cancel').click();
-    expect(localStorage.getItem(GOAL_DRAFT_KEY)).toBeNull();
-  });
-
-  it('preserves draft on backdrop close', () => {
-    const el = mount();
-    const modal = el.shadowRoot.querySelector('#modal');
     el.open(null);
     const inp = el.shadowRoot.querySelector('#input');
     inp.value = 'In progress';
     inp.dispatchEvent(new Event('input'));
-    modal.dispatchEvent(new CustomEvent('modal-close', { bubbles: true, composed: true }));
+    inp.value = '';
+    el.shadowRoot.querySelector('#modal').close();
     expect(JSON.parse(localStorage.getItem(GOAL_DRAFT_KEY)).title).toBe('In progress');
   });
 });
@@ -259,30 +320,24 @@ describe('goal-dialog — notes', () => {
     expect(el.shadowRoot.querySelector('#desc-input').value).toBe('');
   });
 
-  it('includes notes in goal-saved event', () => {
+  it('includes notes in goal-created event', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('goal-saved', e => events.push(e));
-    const input = el.shadowRoot.querySelector('#input');
-    input.value = 'My goal';
-    input.dispatchEvent(new Event('input'));
-    const desc = el.shadowRoot.querySelector('#desc-input');
-    desc.value = 'Some details';
-    desc.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'My goal';
+    el.shadowRoot.querySelector('#desc-input').value = 'Some details';
+    el.shadowRoot.querySelector('#modal').close();
     expect(events[0].detail.notes).toBe('Some details');
   });
 
-  it('emits undefined notes when textarea is empty', () => {
+  it('emits undefined notes in goal-created when textarea is empty', () => {
     const el = mount();
     el.open(null);
     const events = [];
-    el.addEventListener('goal-saved', e => events.push(e));
-    const input = el.shadowRoot.querySelector('#input');
-    input.value = 'My goal';
-    input.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'My goal';
+    el.shadowRoot.querySelector('#modal').close();
     expect(events[0].detail.notes).toBeUndefined();
   });
 
@@ -545,6 +600,68 @@ describe('goal-dialog — copy notes', () => {
   });
 });
 
+describe('goal-dialog — blur-save announce', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('sets save-status text when title blurs with a changed value', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Original' });
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = 'Updated';
+    input.dispatchEvent(new Event('blur'));
+    expect(el.shadowRoot.querySelector('#save-status').textContent).toBe('Saved');
+  });
+
+  it('clears save-status text after 1500ms', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Original' });
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = 'Updated';
+    input.dispatchEvent(new Event('blur'));
+    vi.advanceTimersByTime(1500);
+    expect(el.shadowRoot.querySelector('#save-status').textContent).toBe('');
+  });
+
+  it('rapid blurs cancel the previous timer so only the last one clears', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Original' });
+    const input = el.shadowRoot.querySelector('#input');
+
+    input.value = 'Change 1';
+    input.dispatchEvent(new Event('blur'));
+    expect(el.shadowRoot.querySelector('#save-status').textContent).toBe('Saved');
+
+    vi.advanceTimersByTime(800); // 800ms into the first timer — hasn't fired yet
+
+    input.value = 'Change 2';
+    input.dispatchEvent(new Event('blur')); // clears first timer, starts new 1500ms
+    expect(el.shadowRoot.querySelector('#save-status').textContent).toBe('Saved');
+
+    vi.advanceTimersByTime(700); // 1500ms since first blur — first timer was cancelled
+    expect(el.shadowRoot.querySelector('#save-status').textContent).toBe('Saved'); // still visible
+
+    vi.advanceTimersByTime(800); // 1500ms since second blur — second timer fires
+    expect(el.shadowRoot.querySelector('#save-status').textContent).toBe('');
+  });
+
+  it('does not set save-status when title is unchanged on blur', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Same' });
+    el.shadowRoot.querySelector('#input').dispatchEvent(new Event('blur'));
+    expect(el.shadowRoot.querySelector('#save-status').textContent).toBe('');
+  });
+
+  it('sets save-status when notes field blurs with a changed value', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Goal', notes: 'Old' });
+    const desc = el.shadowRoot.querySelector('#desc-input');
+    desc.value = 'New notes';
+    desc.dispatchEvent(new Event('blur'));
+    expect(el.shadowRoot.querySelector('#save-status').textContent).toBe('Saved');
+  });
+});
+
 describe('goal-dialog — tag chip aria-labels', () => {
   it('tag chip has aria-label containing the tag name', () => {
     const el = mount();
@@ -563,25 +680,3 @@ describe('goal-dialog — tag chip aria-labels', () => {
   });
 });
 
-describe('goal-dialog — cancel', () => {
-  it('dispatches goal-cancelled when cancel is clicked', () => {
-    const el = mount();
-    el.open();
-    const events = [];
-    el.addEventListener('goal-cancelled', e => events.push(e));
-    el.shadowRoot.querySelector('#cancel').click();
-    expect(events).toHaveLength(1);
-  });
-
-  it('does not dispatch goal-cancelled after a successful save', () => {
-    const el = mount();
-    el.open();
-    const cancelled = [];
-    el.addEventListener('goal-cancelled', e => cancelled.push(e));
-    const input = el.shadowRoot.querySelector('#input');
-    input.value = 'My goal';
-    input.dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#save').click();
-    expect(cancelled).toHaveLength(0);
-  });
-});

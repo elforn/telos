@@ -767,7 +767,7 @@ class HomePage extends AppElement {
     };
     this.shadowRoot.addEventListener('year-export-confirm', this._onYearExportConfirm);
 
-    // ── Dialog save ───────────────────────────────────────────────────────────
+    // ── Dialog events ─────────────────────────────────────────────────────────
 
     this._onGoalTagsChanged = e => {
       if (!this._editingGoal) return;
@@ -777,18 +777,40 @@ class HomePage extends AppElement {
     };
     this.shadowRoot.addEventListener('goal-tags-changed', this._onGoalTagsChanged);
 
-    this._onGoalSaved = e => {
-      const { title, notes, tags } = e.detail;
-      if (this._editingGoal) {
-        const snapshot = getState().goals;
-        this._editGoal(this._editingSection, this._editingGoal.id, title, notes, tags);
-        toast(t('home.toast-goal-saved'), 'success', { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
-      } else {
-        this._addGoal(this._editingSection, title, notes, tags);
-        toast(t('home.toast-goal-saved'), 'success');
+    this._onGoalTitleChanged = e => {
+      if (!this._editingGoal) return;
+      this._mutateSection(this._editingSection, list =>
+        list.map(g => g.id === this._editingGoal.id ? { ...g, title: e.detail.title } : g)
+      );
+    };
+    this.shadowRoot.addEventListener('goal-title-changed', this._onGoalTitleChanged);
+
+    this._onGoalNotesChanged = e => {
+      if (!this._editingGoal) return;
+      this._mutateSection(this._editingSection, list =>
+        list.map(g => g.id === this._editingGoal.id ? { ...g, notes: e.detail.notes } : g)
+      );
+    };
+    this.shadowRoot.addEventListener('goal-notes-changed', this._onGoalNotesChanged);
+
+    this._onGoalClosed = () => {
+      const snap = this._editSnapshot;
+      this._editSnapshot = null;
+      if (snap && JSON.stringify(getState().goals) !== JSON.stringify(snap)) {
+        toast(t('home.toast-goal-saved'), 'success',
+          { action: { label: t('undo.button'), onClick: () => setState('goals', snap) } });
       }
     };
-    this.shadowRoot.addEventListener('goal-saved', this._onGoalSaved);
+    this.shadowRoot.addEventListener('goal-closed', this._onGoalClosed);
+
+    this._onGoalCreated = e => {
+      const { title, notes, tags } = e.detail;
+      const snapshot = getState().goals;
+      this._addGoal(this._editingSection, title, notes, tags);
+      toast(t('home.toast-goal-saved'), 'success',
+        { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
+    };
+    this.shadowRoot.addEventListener('goal-created', this._onGoalCreated);
 
     this._onDialogDelete = () => {
       if (this._editingGoal) {
@@ -909,8 +931,11 @@ class HomePage extends AppElement {
     this.shadowRoot.querySelector('#fold-focus')?.removeEventListener('click',         this._onFoldFocus);
 
     this.shadowRoot.removeEventListener('year-export-confirm', this._onYearExportConfirm);
-    this.shadowRoot.removeEventListener('goal-tags-changed', this._onGoalTagsChanged);
-    this.shadowRoot.removeEventListener('goal-saved',       this._onGoalSaved);
+    this.shadowRoot.removeEventListener('goal-tags-changed',   this._onGoalTagsChanged);
+    this.shadowRoot.removeEventListener('goal-title-changed', this._onGoalTitleChanged);
+    this.shadowRoot.removeEventListener('goal-notes-changed', this._onGoalNotesChanged);
+    this.shadowRoot.removeEventListener('goal-closed',        this._onGoalClosed);
+    this.shadowRoot.removeEventListener('goal-created',       this._onGoalCreated);
     this.shadowRoot.removeEventListener('goal-drag-start',  this._onGoalDragStart);
     this.shadowRoot.removeEventListener('goal-reorder-key', this._onGoalReorderKey);
     this._dialog?.removeEventListener('goal-delete',       this._onDialogDelete);
@@ -1226,6 +1251,7 @@ class HomePage extends AppElement {
     this._dialog.existingTags   = this._collectAllTags();
     this._dialog.currentYear    = this._year;
     this._dialog.availableLists = getState().lists ?? [];
+    if (goal) this._editSnapshot = getState().goals;
     this._dialog.open(goal, opts);
   }
 

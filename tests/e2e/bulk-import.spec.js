@@ -37,7 +37,7 @@ async function createList(page, name) {
     document.querySelector('app-router').shadowRoot
       .querySelector('lists-page').shadowRoot
       .querySelector('list-dialog').shadowRoot
-      .querySelector('#save').click();
+      .querySelector('#close').click();
   });
   await page.waitForFunction(() =>
     (document.querySelector('app-router')?.shadowRoot

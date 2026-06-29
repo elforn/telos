@@ -136,11 +136,11 @@ describe('home-page — store integration', () => {
 });
 
 describe('home-page — goal mutations', () => {
-  it('adds a capstone goal when goal-saved fires after clicking add', async () => {
+  it('adds a capstone goal when goal-created fires after clicking add', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     el.shadowRoot.querySelector('#add-capstone').click();
-    el.shadowRoot.dispatchEvent(new CustomEvent('goal-saved', {
+    el.shadowRoot.dispatchEvent(new CustomEvent('goal-created', {
       bubbles: true, composed: true, detail: { title: 'New Capstone' },
     }));
     await vi.waitFor(() =>
@@ -151,7 +151,7 @@ describe('home-page — goal mutations', () => {
     expect(item._goal.percentage).toBe(0);
   });
 
-  it('edits title when goal-saved fires after goal-tap on existing goal', async () => {
+  it('edits title when goal-title-changed fires after goal-tap on existing goal', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
       '2026': { capstone: [{ id: 'c1', title: 'Old Title', percentage: 0 }], milestones: [], wow: [] },
     }, images: {} } });
@@ -162,7 +162,7 @@ describe('home-page — goal mutations', () => {
     el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-tap', {
       bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Old Title', percentage: 0 } },
     }));
-    el.shadowRoot.dispatchEvent(new CustomEvent('goal-saved', {
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-title-changed', {
       bubbles: true, composed: true, detail: { title: 'New Title' },
     }));
     await vi.waitFor(() =>
@@ -203,11 +203,11 @@ describe('home-page — goal mutations', () => {
     );
   });
 
-  it('stores notes when goal-saved includes one', async () => {
+  it('stores notes when goal-created includes one', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     el.shadowRoot.querySelector('#add-capstone').click();
-    el.shadowRoot.dispatchEvent(new CustomEvent('goal-saved', {
+    el.shadowRoot.dispatchEvent(new CustomEvent('goal-created', {
       bubbles: true, composed: true, detail: { title: 'Goal', notes: 'Some context' },
     }));
     await vi.waitFor(() =>
@@ -215,7 +215,7 @@ describe('home-page — goal mutations', () => {
     );
   });
 
-  it('updates notes when editing an existing goal', async () => {
+  it('updates notes when goal-notes-changed fires after goal-tap on existing goal', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
       '2026': { capstone: [{ id: 'c1', title: 'Goal', percentage: 0 }], milestones: [], wow: [] },
     }, images: {} } });
@@ -226,8 +226,8 @@ describe('home-page — goal mutations', () => {
     el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-tap', {
       bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Goal', percentage: 0 } },
     }));
-    el.shadowRoot.dispatchEvent(new CustomEvent('goal-saved', {
-      bubbles: true, composed: true, detail: { title: 'Goal', notes: 'Updated notes' },
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-notes-changed', {
+      bubbles: true, composed: true, detail: { notes: 'Updated notes' },
     }));
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list goal-item')._goal.notes).toBe('Updated notes')
