@@ -145,7 +145,8 @@ class GoalItem extends Gestures(AppElement) {
           align-items: center;
           justify-content: center;
           padding-block: 0;
-          padding-inline: 0 6px;
+          padding-inline: 0 2px;
+          margin-inline-start: -5px;
           font-family: var(--font-family);
           touch-action: none;
         }

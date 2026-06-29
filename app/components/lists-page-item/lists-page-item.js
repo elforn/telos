@@ -105,7 +105,8 @@ class ListsPageItem extends Gestures(AppElement) {
           align-items: center;
           justify-content: center;
           padding-block: 0;
-          padding-inline: 0;
+          padding-inline: 0 2px;
+          margin-inline-start: -5px;
           touch-action: none;
         }
 
