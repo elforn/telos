@@ -4,8 +4,8 @@ import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { tagStrip } from '../../utils/tag-color.js';
 
-const REVEAL_WIDTH    = 60;
-const COMMIT_RATIO    = 2.0;  // fraction of reveal width needed to commit
+const REVEAL_WIDTH = 60;
+const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
 const SWIPE_DEAD_ZONE = 15;   // px of drag before bar starts moving
 
@@ -154,6 +154,27 @@ class GoalItem extends Gestures(AppElement) {
         :host(.hold-active) .bar {
           box-shadow: 0 0 0 2px var(--color-accent);
         }
+
+        .archive-dot {
+          display: none;
+          position: absolute;
+          inset-block-start: 50%;
+          transform: translateY(-50%);
+          inset-inline-start: calc(var(--space-1) * 1.3);
+          inline-size: var(--space-1);
+          block-size: var(--space-1);
+          border-radius: var(--radius-full);
+          background: var(--color-accent);
+          z-index: 0;
+          opacity: 0.2;
+          pointer-events: none;
+          user-select: none;
+        }
+
+        :host([data-archived="true"]) .archive-dot {
+          display: block;
+        }
+
 
         @keyframes fill-celebrate {
           0%   { background-position: 200% center; }
@@ -327,6 +348,7 @@ class GoalItem extends Gestures(AppElement) {
            aria-valuemax="100"
            aria-valuenow="0">
         <div class="fill" style="width:0%"></div>
+        <span class="archive-dot" aria-hidden="true"></span>
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="content">
           <span class="title"></span>
@@ -340,10 +362,10 @@ class GoalItem extends Gestures(AppElement) {
 
   subscribe() {
     this.setAttribute('role', 'listitem');
-    this._bar      = this.shadowRoot.querySelector('.bar');
-    this._fill     = this.shadowRoot.querySelector('.fill');
-    this._title    = this.shadowRoot.querySelector('.title');
-    this._stripEl  = this.shadowRoot.querySelector('.tag-strip');
+    this._bar = this.shadowRoot.querySelector('.bar');
+    this._fill = this.shadowRoot.querySelector('.fill');
+    this._title = this.shadowRoot.querySelector('.title');
+    this._stripEl = this.shadowRoot.querySelector('.tag-strip');
     this._pctLabel = this.shadowRoot.querySelector('.pct-label');
     this._revealedDir = null;
 
@@ -373,7 +395,7 @@ class GoalItem extends Gestures(AppElement) {
     this._onKeyDown = e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._tap(); }
       if (e.key === 'ArrowRight') this.onHoldDragKey('right');
-      if (e.key === 'ArrowLeft')  this.onHoldDragKey('left');
+      if (e.key === 'ArrowLeft') this.onHoldDragKey('left');
     };
     this._bar.addEventListener('keydown', this._onKeyDown);
 
@@ -397,7 +419,7 @@ class GoalItem extends Gestures(AppElement) {
       }));
     };
     this._dragBtn.addEventListener('pointerdown', this._onDragBtnDown);
-    this._dragBtn.addEventListener('keydown',     this._onDragBtnKey);
+    this._dragBtn.addEventListener('keydown', this._onDragBtnKey);
   }
 
   unsubscribe() {
@@ -406,7 +428,7 @@ class GoalItem extends Gestures(AppElement) {
     this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
     this._bar?.removeEventListener('keydown', this._onKeyDown);
     this._dragBtn?.removeEventListener('pointerdown', this._onDragBtnDown);
-    this._dragBtn?.removeEventListener('keydown',     this._onDragBtnKey);
+    this._dragBtn?.removeEventListener('keydown', this._onDragBtnKey);
   }
 
   // ── Gestures ──────────────────────────────────────────────────────────────
@@ -490,7 +512,7 @@ class GoalItem extends Gestures(AppElement) {
 
   _closeReveal() {
     this._bar.style.transition = 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
-    this._bar.style.transform  = '';
+    this._bar.style.transform = '';
     this._revealedDir = null;
   }
 
@@ -502,7 +524,7 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   _setDragMode(active) {
-    this._title.hidden    = active;
+    this._title.hidden = active;
     this._pctLabel.hidden = !active;
   }
 
@@ -517,10 +539,10 @@ class GoalItem extends Gestures(AppElement) {
     this._fill.addEventListener('animationend', () => this._fill.classList.remove('celebrate'), { once: true });
     const r = (a, b) => +(a + Math.random() * (b - a)).toFixed(1);
     const shape = () => ['50%', '50%', '20%', '0%'][Math.floor(Math.random() * 4)];
-    this.style.setProperty('--b1-rot',    `${r(-20, 20)}deg`);
-    this.style.setProperty('--b2-rot',    `${r(-20, 20)}deg`);
-    this.style.setProperty('--b-scale',   `${r(0.82, 1.18)}`);
-    this.style.setProperty('--b2-delay',  `${Math.round(80 + Math.random() * 120)}ms`);
+    this.style.setProperty('--b1-rot', `${r(-20, 20)}deg`);
+    this.style.setProperty('--b2-rot', `${r(-20, 20)}deg`);
+    this.style.setProperty('--b-scale', `${r(0.82, 1.18)}`);
+    this.style.setProperty('--b2-delay', `${Math.round(80 + Math.random() * 120)}ms`);
     this.style.setProperty('--b1-radius', shape());
     this.style.setProperty('--b2-radius', shape());
     this.classList.add('celebrating');
@@ -532,12 +554,13 @@ class GoalItem extends Gestures(AppElement) {
 
   _update() {
     if (!this._bar) return;
-    const pct    = this._goal?.percentage ?? 0;
+    const pct = this._goal?.percentage ?? 0;
     const prevPct = this._pct;
-    this._pct    = Math.max(0, pct);
+    this._pct = Math.max(0, pct);
     this._title.textContent = this._goal?.title ?? '';
     this._bar.setAttribute('aria-label', this._goal?.title ?? '');
     this._bar.dataset.hasDesc = String(!!this._goal?.notes);
+    this.dataset.archived = String(!!this._goal?.archived);
     this._setPct(this._pct);
     if (this._pct === 100 && prevPct !== undefined && prevPct < 100) this._celebrate();
     if (this._stripEl) {

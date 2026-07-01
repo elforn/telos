@@ -31,6 +31,11 @@ class GoalDialog extends AppElement {
     this._input.value = goal?.title ?? draft?.title ?? '';
     if (this._deleteBtn) this._deleteBtn.hidden = !goal;
     if (this._menuBtn) this._menuBtn.hidden = !goal;
+    if (this._archiveBtn) {
+      this._archiveBtn.hidden = !goal;
+      this._archiveBtn.textContent = goal?.archived ? t('goal-dialog.unarchive') : t('goal-dialog.archive');
+      this._archiveBtn.setAttribute('aria-pressed', String(!!goal?.archived));
+    }
     this._descInput.value = goal?.notes ?? draft?.notes ?? '';
     this._descHighlight?.sync();
 
@@ -464,6 +469,7 @@ class GoalDialog extends AppElement {
 
         #menu-btn { background: none; color: var(--color-text-secondary); padding-inline: var(--space-2); display: flex; align-items: center; }
         #delete { background: none; color: var(--color-danger); }
+        #archive { background: none; color: var(--color-text-secondary); }
         #close, #move-back { background: none; color: var(--color-text-secondary); }
 
         #copy-btn {
@@ -537,6 +543,7 @@ class GoalDialog extends AppElement {
         <div slot="footer" class="actions footer-main">
           <button type="button" id="menu-btn" hidden aria-label="${t('goal-dialog.more-actions')}">${icons.dotsVertical}</button>
           <button type="button" id="delete" hidden>${t('goal-dialog.delete')}</button>
+          <button type="button" id="archive" hidden aria-pressed="false">${t('goal-dialog.archive')}</button>
           <div class="actions-end">
             <button type="button" id="close" aria-label="${t('goal-dialog.close')}">${t('goal-dialog.close')}</button>
           </div>
@@ -579,6 +586,7 @@ class GoalDialog extends AppElement {
     this._tagInput        = this.shadowRoot.querySelector('#tag-input');
     this._tagSuggestions  = this.shadowRoot.querySelector('#tag-suggestions');
     this._deleteBtn     = this.shadowRoot.querySelector('#delete');
+    this._archiveBtn    = this.shadowRoot.querySelector('#archive');
     this._menuBtn       = this.shadowRoot.querySelector('#menu-btn');
     this._closeBtn      = this.shadowRoot.querySelector('#close');
     this._saveStatus    = this.shadowRoot.querySelector('#save-status');
@@ -743,6 +751,19 @@ class GoalDialog extends AppElement {
     this._onSheetBackdrop = e => { if (e.target === this._actionSheet) this._actionSheet.close(); };
     this._actionSheet.addEventListener('click', this._onSheetBackdrop);
 
+    this._onArchivePD = e => e.preventDefault();
+    this._archiveBtn.addEventListener('pointerdown', this._onArchivePD);
+    this._onActionArchive = () => {
+      const archived = !this._goal?.archived;
+      if (this._goal) this._goal = { ...this._goal, archived };
+      this._archiveBtn.textContent = archived ? t('goal-dialog.unarchive') : t('goal-dialog.archive');
+      this._archiveBtn.setAttribute('aria-pressed', String(archived));
+      this.dispatchEvent(new CustomEvent('goal-archived-changed', {
+        bubbles: true, composed: true, detail: { archived },
+      }));
+    };
+    this._archiveBtn.addEventListener('click', this._onActionArchive);
+
     this._onActionMove = () => { this._actionSheet.close(); this._showView('move'); };
     this.shadowRoot.querySelector('#action-move-btn').addEventListener('click', this._onActionMove);
 
@@ -806,6 +827,8 @@ class GoalDialog extends AppElement {
     (window.visualViewport ?? window).removeEventListener('resize', this._onResize);
     this._menuBtn?.removeEventListener('click', this._onMenuBtn);
     this._actionSheet?.removeEventListener('click', this._onSheetBackdrop);
+    this._archiveBtn?.removeEventListener('pointerdown', this._onArchivePD);
+    this._archiveBtn?.removeEventListener('click', this._onActionArchive);
     this.shadowRoot.querySelector('#action-move-btn')?.removeEventListener('click', this._onActionMove);
     this.shadowRoot.querySelector('#action-create-btn')?.removeEventListener('click', this._onActionCreate);
     this.shadowRoot.querySelector('#move-back')?.removeEventListener('click', this._onMoveBack);
@@ -924,7 +947,7 @@ class GoalDialog extends AppElement {
     const toSection = this._moveSectionGrp?.querySelector('input:checked')?.value;
     const same = toYear === this._fromYear && toSection === this._fromSection;
     if (this._moveMoveBtn) this._moveMoveBtn.disabled = same;
-    if (this._moveCopyBtn) this._moveCopyBtn.disabled = same;
+    if (this._moveCopyBtn) this._moveCopyBtn.disabled = false;
   }
 
   _commitMove(copy) {

@@ -34,6 +34,8 @@ defineStrings({
   'home.toast-goal-deleted': 'Goal deleted',
   'home.toast-goal-moved':         'Goal moved to {section}',
   'home.toast-goal-copied':        'Goal copied to {section}',
+  'home.toast-goal-archived':      'Goal archived',
+  'home.toast-goal-unarchived':    'Goal unarchived',
   'home.toast-item-created':       'Added to {name}',
   'home.toast-item-created-many':  'Added to {n} lists',
 
@@ -41,6 +43,8 @@ defineStrings({
   'goal-dialog.tags-placeholder':        'Add tag…',
 
   'goal-dialog.more-actions':            'More actions',
+  'goal-dialog.archive':                 'Archive',
+  'goal-dialog.unarchive':               'Unarchive',
   'goal-dialog.move-to-year':            'Move to year',
   'goal-dialog.create-list-item':        'Create list item',
   'goal-dialog.move-year-label':         'Year',
@@ -142,6 +146,7 @@ defineStrings({
   'item-dialog.status-open':      'Open',
   'item-dialog.status-paused':    'Paused',
   'item-dialog.status-done':      'Done',
+  'item-dialog.status-closed':    'Closed',
   'item-dialog.note-placeholder': 'Note',
   'item-dialog.copy-note': 'Copy note',
   'item-dialog.url-placeholder':  'Link (https://…)',
@@ -217,6 +222,7 @@ defineStrings({
   'home-page.filter-done':            'Done',
   'home-page.filter-ongoing':         'Ongoing',
   'home-page.filter-not-started':     'Not started',
+  'home-page.filter-archived':        'Archived',
   'home-page.filter-clear':           'Clear filters',
   'home-page.filter-empty':           'No goals match',
   'home-page.filter-count':           '{count} goals match',

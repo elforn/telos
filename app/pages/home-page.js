@@ -342,6 +342,7 @@ class HomePage extends AppElement {
               <button class="filter-pill" id="fstate-done" aria-pressed="false">${t('home-page.filter-done')}</button>
               <button class="filter-pill" id="fstate-ongoing" aria-pressed="false">${t('home-page.filter-ongoing')}</button>
               <button class="filter-pill" id="fstate-not-started" aria-pressed="false">${t('home-page.filter-not-started')}</button>
+              <button class="filter-pill" id="fstate-archived" aria-pressed="false">${t('home-page.filter-archived')}</button>
             </div>
             <div class="filter-row" id="filter-tag-row" hidden></div>
           </div>
@@ -473,9 +474,8 @@ class HomePage extends AppElement {
     this._onFilterState = e => {
       const btn = e.target.closest('.filter-pill');
       if (!btn) return;
-      const id = btn.id;
-      const stateMap = { 'fstate-done': 'done', 'fstate-ongoing': 'ongoing', 'fstate-not-started': 'not-started' };
-      const state = stateMap[id];
+      const stateMap = { 'fstate-done': 'done', 'fstate-ongoing': 'ongoing', 'fstate-not-started': 'not-started', 'fstate-archived': 'archived' };
+      const state = stateMap[btn.id];
       if (!state) return;
       if (this._filter.states.has(state)) this._filter.states.delete(state);
       else this._filter.states.add(state);
@@ -531,7 +531,7 @@ class HomePage extends AppElement {
       ];
       this._rebuildTagChips(allGoals);
       this._syncFilterUI();
-      this._applyGoalFilter();
+      if (!this._filterSuppressed) this._applyGoalFilter();
     };
     subscribe('goals', this._onGoals);
 
@@ -793,12 +793,34 @@ class HomePage extends AppElement {
     };
     this.shadowRoot.addEventListener('goal-notes-changed', this._onGoalNotesChanged);
 
+    this._onGoalArchivedChanged = e => {
+      if (!this._editingGoal) return;
+      const { archived } = e.detail;
+      if (archived) {
+        this._filterSuppressed = true;
+        clearTimeout(this._filterSuppressTimer);
+      } else if (this._filterSuppressed) {
+        this._filterSuppressed = false;
+        clearTimeout(this._filterSuppressTimer);
+      }
+      this._setArchived(this._editingSection, this._editingGoal.id, archived);
+      toast(t(archived ? 'home.toast-goal-archived' : 'home.toast-goal-unarchived'), 'success');
+    };
+    this.shadowRoot.addEventListener('goal-archived-changed', this._onGoalArchivedChanged);
+
     this._onGoalClosed = () => {
       const snap = this._editSnapshot;
       this._editSnapshot = null;
       if (snap && JSON.stringify(getState().goals) !== JSON.stringify(snap)) {
         toast(t('home.toast-goal-saved'), 'success',
           { action: { label: t('undo.button'), onClick: () => setState('goals', snap) } });
+      }
+      if (this._filterSuppressed) {
+        clearTimeout(this._filterSuppressTimer);
+        this._filterSuppressTimer = setTimeout(() => {
+          this._filterSuppressed = false;
+          this._applyGoalFilter();
+        }, 700);
       }
     };
     this.shadowRoot.addEventListener('goal-closed', this._onGoalClosed);
@@ -896,6 +918,7 @@ class HomePage extends AppElement {
   }
 
   unsubscribe() {
+    clearTimeout(this._filterSuppressTimer);
     unsubscribe('goals', this._onGoals);
     unsubscribe('accentColors', this._onAccentColors);
 
@@ -933,8 +956,9 @@ class HomePage extends AppElement {
     this.shadowRoot.removeEventListener('year-export-confirm', this._onYearExportConfirm);
     this.shadowRoot.removeEventListener('goal-tags-changed',   this._onGoalTagsChanged);
     this.shadowRoot.removeEventListener('goal-title-changed', this._onGoalTitleChanged);
-    this.shadowRoot.removeEventListener('goal-notes-changed', this._onGoalNotesChanged);
-    this.shadowRoot.removeEventListener('goal-closed',        this._onGoalClosed);
+    this.shadowRoot.removeEventListener('goal-notes-changed',     this._onGoalNotesChanged);
+    this.shadowRoot.removeEventListener('goal-archived-changed', this._onGoalArchivedChanged);
+    this.shadowRoot.removeEventListener('goal-closed',            this._onGoalClosed);
     this.shadowRoot.removeEventListener('goal-created',       this._onGoalCreated);
     this.shadowRoot.removeEventListener('goal-drag-start',  this._onGoalDragStart);
     this.shadowRoot.removeEventListener('goal-reorder-key', this._onGoalReorderKey);
@@ -1006,6 +1030,10 @@ class HomePage extends AppElement {
     this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, percentage } : g));
   }
 
+  _setArchived(section, id, archived) {
+    this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, archived } : g));
+  }
+
   _deleteGoal(section, id) {
     this._mutateSection(section, list => list.filter(g => g.id !== id));
   }
@@ -1049,7 +1077,7 @@ class HomePage extends AppElement {
     if (!this._filterBar) return;
     if (this._filterSearch) this._filterSearch.value = this._filter.query;
     const active = this._isFilterActive();
-    const stateMap = { 'fstate-done': 'done', 'fstate-ongoing': 'ongoing', 'fstate-not-started': 'not-started' };
+    const stateMap = { 'fstate-done': 'done', 'fstate-ongoing': 'ongoing', 'fstate-not-started': 'not-started', 'fstate-archived': 'archived' };
     for (const [id, key] of Object.entries(stateMap)) {
       const btn = this.shadowRoot.querySelector(`#${id}`);
       if (btn) {
@@ -1121,14 +1149,24 @@ class HomePage extends AppElement {
         const goal = el._goal;
         if (!goal) { el.hidden = false; sectionVisible = true; return; }
         let show = true;
-        if (q) {
-          const hay = `${goal.title ?? ''} ${goal.notes ?? ''}`.toLowerCase();
-          if (!hay.includes(q)) show = false;
+        if (goal.archived) {
+          // Archived goals: only shown when 'archived' state pill is active
+          if (!states.has('archived')) show = false;
+        } else if (states.size) {
+          // Non-archived goals with state filter: check progress-based states (OR logic)
+          const progressStates = [...states].filter(s => s !== 'archived');
+          if (progressStates.length > 0) {
+            const pct = goal.percentage ?? 0;
+            const gstate = pct === 100 ? 'done' : pct === 0 ? 'not-started' : 'ongoing';
+            if (!progressStates.includes(gstate)) show = false;
+          } else {
+            // Only 'archived' was selected — non-archived goals don't match
+            show = false;
+          }
         }
-        if (show && states.size) {
-          const pct = goal.percentage ?? 0;
-          const gstate = pct === 100 ? 'done' : pct === 0 ? 'not-started' : 'ongoing';
-          if (!states.has(gstate)) show = false;
+        if (show && q) {
+          const hay = `${goal.title ?? ''} ${goal.notes ?? ''} ${(goal.tags ?? []).join(' ')}`.toLowerCase();
+          if (!hay.includes(q)) show = false;
         }
         if (show && tags.size) {
           const gtags = goal.tags ?? [];
