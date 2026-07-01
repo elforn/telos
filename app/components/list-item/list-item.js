@@ -202,6 +202,15 @@ class ListItem extends Gestures(AppElement) {
           color: var(--color-success);
         }
 
+        .badge[data-status="closed"] {
+          background: var(--color-danger-light);
+          color: var(--color-danger);
+        }
+
+        .row[data-status="closed"] .title {
+          color: var(--color-text-muted);
+        }
+
         /* ── Selection mode ─────────────────────────────────────────────── */
 
         :host(.selected) .row {
@@ -308,10 +317,14 @@ class ListItem extends Gestures(AppElement) {
     };
     this._row.addEventListener('keydown', this._onKeyDown);
 
-    const STATUS_CYCLE = { open: 'done', done: 'paused', paused: 'open' };
+    const STATUS_CYCLE = { open: 'done', done: 'paused', paused: 'closed', closed: 'open' };
     this._onBadgePointerUp = e => {
       e.stopPropagation();
       e.preventDefault();
+      // Clean up any gesture tracking the host started on our pointerdown
+      clearTimeout(this._longPressTimer);
+      this._gestureRemoveInflight?.();
+      this._gesture = null;
       const next = STATUS_CYCLE[this._item?.status ?? 'open'];
       this.dispatchEvent(new CustomEvent('item-status-cycle', {
         bubbles: true, composed: true, detail: { item: this._item, next },
@@ -319,7 +332,6 @@ class ListItem extends Gestures(AppElement) {
       if (next === 'done') this._celebrate();
     };
     this._onBadgeKey = e => { e.stopPropagation(); if (e.detail === 0) this._onBadgePointerUp(e); };
-    this._badge.addEventListener('pointerdown', this._stopPointerDown);
     this._badge.addEventListener('pointerup', this._onBadgePointerUp);
     this._badge.addEventListener('click', this._onBadgeKey);
 
@@ -355,7 +367,6 @@ class ListItem extends Gestures(AppElement) {
     this._deleteEl?.removeEventListener('pointerup', this._onDeletePointerUp);
     this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
     this._row?.removeEventListener('keydown', this._onKeyDown);
-    this._badge?.removeEventListener('pointerdown', this._stopPointerDown);
     this._badge?.removeEventListener('pointerup', this._onBadgePointerUp);
     this._badge?.removeEventListener('click', this._onBadgeKey);
     this._dragBtn?.removeEventListener('pointerdown', this._onDragBtnDown);
