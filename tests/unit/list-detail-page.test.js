@@ -559,6 +559,26 @@ describe('list-detail-page — item-move (copy)', () => {
       expect(getState().lists.find(l => l.id === 'l3').items).toHaveLength(1);
     });
   });
+
+  it('copying to same list duplicates the item with a new id', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-move', {
+      bubbles: true, composed: true,
+      detail: { title: ITEM.title, status: ITEM.status, note: undefined, url: undefined, tags: ITEM.tags, targetListIds: ['l1'], copy: true },
+    }));
+
+    await vi.waitFor(() => expect(getState().lists[0].items).toHaveLength(2));
+    const [original, clone] = getState().lists[0].items;
+    expect(original.id).toBe('i1');
+    expect(clone.id).not.toBe('i1');
+    expect(clone.title).toBe(ITEM.title);
+  });
 });
 
 // ── item-promote ──────────────────────────────────────────────────────────────
@@ -1326,6 +1346,7 @@ describe('list-detail-page — _applyFilter', () => {
   const ITEM_OPEN   = { id: 'i1', title: 'Open task',   status: 'open',   tags: ['work'],   inGoals: [] };
   const ITEM_DONE   = { id: 'i2', title: 'Done task',   status: 'done',   tags: ['health'], inGoals: [] };
   const ITEM_PAUSED = { id: 'i3', title: 'Paused task', status: 'paused', tags: ['work'],   inGoals: [] };
+  const ITEM_CLOSED = { id: 'i4', title: 'Closed task', status: 'closed', tags: [],         inGoals: [] };
 
   it('text query hides items whose title does not match', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_OPEN, ITEM_DONE] }] } });
@@ -1379,6 +1400,32 @@ describe('list-detail-page — _applyFilter', () => {
     expect(items.find(i => i._item.id === 'i1').hidden).toBe(true);  // work tag only
   });
 
+  it('closed items are hidden by default (no status filter)', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_OPEN, ITEM_CLOSED] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+
+    el._filter = { query: '', statuses: new Set(), tags: new Set() };
+    el._applyFilter();
+
+    const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
+    expect(items.find(i => i._item.status === 'open').hidden).toBe(false);
+    expect(items.find(i => i._item.status === 'closed').hidden).toBe(true);
+  });
+
+  it('closed filter pill reveals closed items', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_OPEN, ITEM_CLOSED] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+
+    el._filter = { query: '', statuses: new Set(['closed']), tags: new Set() };
+    el._applyFilter();
+
+    const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
+    expect(items.find(i => i._item.status === 'closed').hidden).toBe(false);
+    expect(items.find(i => i._item.status === 'open').hidden).toBe(true);
+  });
+
   it('combines query and status filter (AND logic)', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_OPEN, ITEM_DONE, ITEM_PAUSED] }] } });
     const el = mount();
@@ -1391,6 +1438,38 @@ describe('list-detail-page — _applyFilter', () => {
     expect(items.find(i => i._item.status === 'open').hidden).toBe(false);
     expect(items.find(i => i._item.status === 'done').hidden).toBe(true);
     expect(items.find(i => i._item.status === 'paused').hidden).toBe(true);
+  });
+});
+
+// ── list-detail-page — inbound ?q= filter ────────────────────────────────────
+
+describe('list-detail-page — inbound ?q= filter', () => {
+  afterEach(() => { history.pushState({}, '', location.pathname); });
+
+  it('?q= param pre-fills the query filter and hides non-matching items on mount', async () => {
+    const items = [
+      { id: 'i1', title: 'Flowers',    status: 'open', tags: [], inGoals: [] },
+      { id: 'i2', title: 'Chocolates', status: 'open', tags: [], inGoals: [] },
+    ];
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items }] } });
+    history.pushState({}, '', '?q=flowers');
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+    const listItems = [...el.shadowRoot.querySelectorAll('list-item')];
+    expect(listItems.find(i => i._item.title === 'Flowers').hidden).toBe(false);
+    expect(listItems.find(i => i._item.title === 'Chocolates').hidden).toBe(true);
+  });
+
+  it('no ?q= param shows all items normally', async () => {
+    const items = [
+      { id: 'i1', title: 'Flowers',    status: 'open', tags: [], inGoals: [] },
+      { id: 'i2', title: 'Chocolates', status: 'open', tags: [], inGoals: [] },
+    ];
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+    const listItems = [...el.shadowRoot.querySelectorAll('list-item')];
+    expect(listItems.every(i => !i.hidden)).toBe(true);
   });
 });
 

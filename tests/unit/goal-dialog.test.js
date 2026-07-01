@@ -410,13 +410,20 @@ describe('goal-dialog — move view', () => {
     expect(checked?.value).toBe('wow');
   });
 
-  it('Move and Copy buttons are disabled when same year+section selected', () => {
+  it('Move button is disabled when same year+section selected', () => {
     const el = mount();
     el.currentYear = 2026;
     el.open(goal, { year: '2026', section: 'milestones' });
     el.shadowRoot.querySelector('#action-move-btn').click();
     expect(el.shadowRoot.querySelector('#move-btn').disabled).toBe(true);
-    expect(el.shadowRoot.querySelector('#copy-btn').disabled).toBe(true);
+  });
+
+  it('Copy button is enabled when same year+section selected (duplicate)', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    expect(el.shadowRoot.querySelector('#copy-btn').disabled).toBe(false);
   });
 
   it('Move and Copy buttons enable when a different year is selected', () => {
@@ -659,6 +666,83 @@ describe('goal-dialog — blur-save announce', () => {
     desc.value = 'New notes';
     desc.dispatchEvent(new Event('blur'));
     expect(el.shadowRoot.querySelector('#save-status').textContent).toBe('Saved');
+  });
+});
+
+describe('goal-dialog — archive button', () => {
+  const goal = { id: '1', title: 'Run a 5k' };
+
+  it('archive button is hidden for new goals', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#archive').hidden).toBe(true);
+  });
+
+  it('archive button is visible for existing goals', () => {
+    const el = mount();
+    el.open(goal, { year: '2026', section: 'milestones' });
+    expect(el.shadowRoot.querySelector('#archive').hidden).toBe(false);
+  });
+
+  it('shows "Archive" text and aria-pressed=false for non-archived goal', () => {
+    const el = mount();
+    el.open(goal, { year: '2026', section: 'milestones' });
+    const btn = el.shadowRoot.querySelector('#archive');
+    expect(btn.textContent).toBe('Archive');
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('shows "Unarchive" text and aria-pressed=true for archived goal', () => {
+    const el = mount();
+    el.open({ ...goal, archived: true }, { year: '2026', section: 'milestones' });
+    const btn = el.shadowRoot.querySelector('#archive');
+    expect(btn.textContent).toBe('Unarchive');
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('clicking Archive flips text to Unarchive without closing the dialog', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#archive').click();
+    expect(el.shadowRoot.querySelector('#archive').textContent).toBe('Unarchive');
+    expect(modal.close).not.toHaveBeenCalled();
+  });
+
+  it('clicking Archive sets aria-pressed to true', () => {
+    const el = mount();
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#archive').click();
+    expect(el.shadowRoot.querySelector('#archive').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('clicking Archive again flips text back to Archive', () => {
+    const el = mount();
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#archive').click();
+    el.shadowRoot.querySelector('#archive').click();
+    expect(el.shadowRoot.querySelector('#archive').textContent).toBe('Archive');
+    expect(el.shadowRoot.querySelector('#archive').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('clicking Archive dispatches goal-archived-changed with archived:true', () => {
+    const el = mount();
+    el.open(goal, { year: '2026', section: 'milestones' });
+    const events = [];
+    el.addEventListener('goal-archived-changed', e => events.push(e));
+    el.shadowRoot.querySelector('#archive').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.archived).toBe(true);
+  });
+
+  it('clicking Unarchive dispatches goal-archived-changed with archived:false', () => {
+    const el = mount();
+    el.open({ ...goal, archived: true }, { year: '2026', section: 'milestones' });
+    const events = [];
+    el.addEventListener('goal-archived-changed', e => events.push(e));
+    el.shadowRoot.querySelector('#archive').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.archived).toBe(false);
   });
 });
 

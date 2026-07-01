@@ -502,6 +502,65 @@ describe('home-page — _applyGoalFilter', () => {
     expect(items.find(i => i._goal.title === 'Finance goal').hidden).toBe(true);
   });
 
+  it('archived goals are hidden by default (no showArchived flag)', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'Active goal',   percentage: 0, tags: [] },
+      { id: 'c2', title: 'Archived goal', percentage: 0, tags: [], archived: true },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
+    );
+
+    el._filter = { query: '', states: new Set(), tags: new Set() };
+    el._applyGoalFilter();
+
+    const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
+    expect(items.find(i => i._goal.title === 'Active goal').hidden).toBe(false);
+    expect(items.find(i => i._goal.title === 'Archived goal').hidden).toBe(true);
+  });
+
+  it('archived state pill reveals archived goals and hides non-archived', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'Active goal',   percentage: 0, tags: [] },
+      { id: 'c2', title: 'Archived goal', percentage: 0, tags: [], archived: true },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
+    );
+
+    el._filter = { query: '', states: new Set(['archived']), tags: new Set() };
+    el._applyGoalFilter();
+
+    const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
+    expect(items.find(i => i._goal.title === 'Archived goal').hidden).toBe(false);
+    expect(items.find(i => i._goal.title === 'Active goal').hidden).toBe(true);
+  });
+
+  it('archived + done pills are OR: shows archived goals and done non-archived goals', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'Done goal',     percentage: 100, tags: [] },
+      { id: 'c2', title: 'Ongoing goal',  percentage: 50,  tags: [] },
+      { id: 'c3', title: 'Archived goal', percentage: 0,   tags: [], archived: true },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
+    );
+
+    el._filter = { query: '', states: new Set(['done', 'archived']), tags: new Set() };
+    el._applyGoalFilter();
+
+    const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
+    expect(items.find(i => i._goal.title === 'Done goal').hidden).toBe(false);
+    expect(items.find(i => i._goal.title === 'Ongoing goal').hidden).toBe(true);
+    expect(items.find(i => i._goal.title === 'Archived goal').hidden).toBe(false);
+  });
+
   it('combines query and tag filter (AND logic)', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
