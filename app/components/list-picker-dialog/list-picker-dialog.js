@@ -12,6 +12,10 @@ class ListPickerDialog extends AppElement {
   set mode(val) { this._mode = val ?? null; }
   get mode()    { return this._mode ?? null; }
 
+  // when set, Move is disabled if only the source list is selected (copy = duplicate)
+  set sourceListId(val) { this._sourceListId = val ?? null; }
+  get sourceListId()    { return this._sourceListId ?? null; }
+
   // ── Public API ───────────────────────────────────────────────────────────────
 
   show() {
@@ -406,7 +410,8 @@ class ListPickerDialog extends AppElement {
     const count      = this._selectedIds.size;
     const hasNewList = (this._newListInput?.value.trim().length ?? 0) > 0;
     const has        = count > 0 || hasNewList;
-    this._moveBtn.disabled = !has;
+    const sourceSelected = this._sourceListId && this._selectedIds.has(this._sourceListId) && !hasNewList;
+    this._moveBtn.disabled = !has || !!sourceSelected;
     this._copyBtn.disabled = !has;
     this._moveBtn.hidden = this._mode === 'copy';
     this._copyBtn.hidden = this._mode === 'move';

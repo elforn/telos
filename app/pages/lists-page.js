@@ -323,7 +323,9 @@ class ListsPage extends AppElement {
     this.shadowRoot.querySelector('#add-row').addEventListener('click', this._onAddRow);
 
     this._onListTap = e => {
-      navigate(`${BASE_PATH}lists/${e.detail.list.id}`);
+      const q = this._filter?.query?.trim();
+      const qs = q ? `?q=${encodeURIComponent(q)}` : '';
+      navigate(`${BASE_PATH}lists/${e.detail.list.id}${qs}`);
     };
     this._container.addEventListener('list-tap', this._onListTap);
 

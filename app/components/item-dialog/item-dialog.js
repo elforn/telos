@@ -6,7 +6,7 @@ import '../list-picker-dialog/list-picker-dialog.js';
 import { icons } from '../../icons.js';
 import { tagColor } from '../../utils/tag-color.js';
 
-const STATUSES = ['open', 'paused', 'done'];
+const STATUSES = ['open', 'paused', 'done', 'closed'];
 const SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
 const DRAFT_KEY = 'telos:draft.new-item';
 
@@ -27,6 +27,9 @@ class ItemDialog extends AppElement {
 
   set availableLists(val) { this._availableLists = val ?? []; }
   get availableLists() { return this._availableLists ?? []; }
+
+  set sourceListId(val) { this._sourceListId = val ?? null; }
+  get sourceListId() { return this._sourceListId ?? null; }
 
   set currentYear(val) { this._currentYear = val; }
   get currentYear() { return this._currentYear ?? new Date().getFullYear(); }
@@ -1010,6 +1013,7 @@ class ItemDialog extends AppElement {
     this._onActionMove = () => {
       this._actionSheet.close();
       this._listPickerDialog.lists = this.availableLists;
+      this._listPickerDialog.sourceListId = this.sourceListId;
       this._listPickerDialog.show();
     };
     this.shadowRoot.querySelector('#action-move-btn').addEventListener('click', this._onActionMove);

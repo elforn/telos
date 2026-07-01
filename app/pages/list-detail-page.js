@@ -775,6 +775,7 @@ class ListDetailPage extends AppElement {
               <button class="filter-pill" id="fstatus-open" aria-pressed="false">${t('item-dialog.status-open')}</button>
               <button class="filter-pill" id="fstatus-paused" aria-pressed="false">${t('item-dialog.status-paused')}</button>
               <button class="filter-pill" id="fstatus-done" aria-pressed="false">${t('item-dialog.status-done')}</button>
+              <button class="filter-pill" id="fstatus-closed" aria-pressed="false">${t('item-dialog.status-closed')}</button>
             </div>
             <div class="filter-row" id="filter-tag-row" hidden></div>
           </div>
@@ -837,6 +838,7 @@ class ListDetailPage extends AppElement {
             <button class="status-pill" id="bulk-status-open">${t('item-dialog.status-open')}</button>
             <button class="status-pill" id="bulk-status-paused">${t('item-dialog.status-paused')}</button>
             <button class="status-pill" id="bulk-status-done">${t('item-dialog.status-done')}</button>
+            <button class="status-pill" id="bulk-status-closed">${t('item-dialog.status-closed')}</button>
           </div>
         </div>
       </dialog>
@@ -1001,6 +1003,14 @@ class ListDetailPage extends AppElement {
 
     this._onItemStatusCycle = e => {
       const { item, next } = e.detail;
+      if (next === 'closed') {
+        this._filterSuppressed = true;
+        clearTimeout(this._filterSuppressTimer);
+        this._filterSuppressTimer = setTimeout(() => {
+          this._filterSuppressed = false;
+          this._applyFilter();
+        }, 700);
+      }
       this._editItem(item.id, { title: item.title, status: next });
     };
     this._itemList.addEventListener('item-status-cycle', this._onItemStatusCycle);
@@ -1018,6 +1028,13 @@ class ListDetailPage extends AppElement {
       if (snap && JSON.stringify(getState().lists) !== JSON.stringify(snap)) {
         toast(t('lists.toast-item-saved'), 'success',
           { action: { label: t('undo.button'), onClick: () => setState('lists', snap) } });
+      }
+      if (this._filterSuppressed) {
+        clearTimeout(this._filterSuppressTimer);
+        this._filterSuppressTimer = setTimeout(() => {
+          this._filterSuppressed = false;
+          this._applyFilter();
+        }, 700);
       }
     };
     this._dialog.addEventListener('item-closed', this._onItemClosed);
@@ -1058,8 +1075,19 @@ class ListDetailPage extends AppElement {
 
     this._onItemStatusChanged = e => {
       if (!this._editingItem) return;
+      const { status } = e.detail;
+      // Suppress the filter immediately so the badge label updates without hiding
+      // the item while the dialog is still open. The countdown starts on dialog close.
+      if (status === 'closed') {
+        this._filterSuppressed = true;
+        clearTimeout(this._filterSuppressTimer);
+      } else if (this._filterSuppressed) {
+        // Changed away from 'closed' before closing — release suppression
+        this._filterSuppressed = false;
+        clearTimeout(this._filterSuppressTimer);
+      }
       this._mutateItems(items => items.map(i =>
-        i.id === this._editingItem.id ? { ...i, status: e.detail.status } : i
+        i.id === this._editingItem.id ? { ...i, status } : i
       ));
     };
     this._dialog.addEventListener('item-status-changed', this._onItemStatusChanged);
@@ -1086,7 +1114,10 @@ class ListDetailPage extends AppElement {
       const updatedLists = currentLists.map(l => {
         if (l.id === this._listId) {
           const items = (l.items ?? []).map(i => i.id === item.id ? updatedItem : i);
-          return { ...l, items: copy ? items : items.filter(i => i.id !== item.id) };
+          const kept = copy ? items : items.filter(i => i.id !== item.id);
+          const selfCopy = copy && targetListIds.includes(l.id)
+            ? [{ ...updatedItem, id: crypto.randomUUID() }] : [];
+          return { ...l, items: [...kept, ...selfCopy] };
         }
         if (targetListIds.includes(l.id)) {
           return { ...l, items: [...(l.items ?? []), { ...updatedItem, id: crypto.randomUUID() }] };
@@ -1243,9 +1274,11 @@ class ListDetailPage extends AppElement {
     this._onBulkStatusOpen   = () => this._applyBulkStatus('open');
     this._onBulkStatusPaused = () => this._applyBulkStatus('paused');
     this._onBulkStatusDone   = () => this._applyBulkStatus('done');
+    this._onBulkStatusClosed = () => this._applyBulkStatus('closed');
     this.shadowRoot.querySelector('#bulk-status-open').addEventListener('click', this._onBulkStatusOpen);
     this.shadowRoot.querySelector('#bulk-status-paused').addEventListener('click', this._onBulkStatusPaused);
     this.shadowRoot.querySelector('#bulk-status-done').addEventListener('click', this._onBulkStatusDone);
+    this.shadowRoot.querySelector('#bulk-status-closed').addEventListener('click', this._onBulkStatusClosed);
 
     this._onBulkMore = () => this._bulkMoreSheet.showModal();
     this._onBulkMoreBackdrop = e => { if (e.target === this._bulkMoreSheet) this._bulkMoreSheet.close(); };
@@ -1312,9 +1345,10 @@ class ListDetailPage extends AppElement {
 
       const updatedLists = currentLists.map(l => {
         if (l.id === this._listId) {
-          return { ...l, items: copy
-            ? (l.items ?? [])
-            : (l.items ?? []).filter(i => !ids.includes(i.id)) };
+          const kept = copy ? (l.items ?? []) : (l.items ?? []).filter(i => !ids.includes(i.id));
+          const selfCopy = copy && targetListIds.includes(l.id)
+            ? sourceItems.map(i => ({ ...i, id: crypto.randomUUID() })) : [];
+          return { ...l, items: [...kept, ...selfCopy] };
         }
         if (targetListIds.includes(l.id)) {
           const clones = sourceItems.map(i => ({ ...i, id: crypto.randomUUID() }));
@@ -1411,6 +1445,12 @@ class ListDetailPage extends AppElement {
     this._panelExpanded = false;
     this._barExpanded = false;
     this._loadFilter();
+    const inboundQ = new URLSearchParams(location.search).get('q');
+    if (inboundQ) {
+      this._filter.query = inboundQ;
+      this._barExpanded = true;
+      this._saveFilter();
+    }
 
     this._onFilterTagChip = e => {
       const tag = e.currentTarget.dataset.tag;
@@ -1451,7 +1491,7 @@ class ListDetailPage extends AppElement {
     this._onFilterStatus = e => {
       const btn = e.target.closest('.filter-pill');
       if (!btn) return;
-      const statusMap = { 'fstatus-open': 'open', 'fstatus-paused': 'paused', 'fstatus-done': 'done' };
+      const statusMap = { 'fstatus-open': 'open', 'fstatus-paused': 'paused', 'fstatus-done': 'done', 'fstatus-closed': 'closed' };
       const s = statusMap[btn.id];
       if (!s) return;
       if (this._filter.statuses.has(s)) this._filter.statuses.delete(s);
@@ -1489,7 +1529,7 @@ class ListDetailPage extends AppElement {
       this._renderItems(list.items ?? []);
       this._rebuildTagChips(list.items ?? []);
       this._syncFilterUI();
-      this._applyFilter();
+      if (!this._filterSuppressed) this._applyFilter();
     };
     subscribe('lists', this._onLists);
 
@@ -1514,6 +1554,7 @@ class ListDetailPage extends AppElement {
   }
 
   unsubscribe() {
+    clearTimeout(this._filterSuppressTimer);
     this.shadowRoot?.querySelector('#back-btn')?.removeEventListener('click', this._onBack);
     this.shadowRoot?.querySelector('#menu-btn')?.removeEventListener('click', this._onMenuBtn);
     this._menuDialog?.removeEventListener('close', this._onMenuClose);
@@ -1538,6 +1579,7 @@ class ListDetailPage extends AppElement {
     this.shadowRoot?.querySelector('#bulk-status-open')?.removeEventListener('click', this._onBulkStatusOpen);
     this.shadowRoot?.querySelector('#bulk-status-paused')?.removeEventListener('click', this._onBulkStatusPaused);
     this.shadowRoot?.querySelector('#bulk-status-done')?.removeEventListener('click', this._onBulkStatusDone);
+    this.shadowRoot?.querySelector('#bulk-status-closed')?.removeEventListener('click', this._onBulkStatusClosed);
     this.shadowRoot?.querySelector('#bulk-more-btn')?.removeEventListener('click', this._onBulkMore);
     this._bulkMoreSheet?.removeEventListener('click', this._onBulkMoreBackdrop);
     this.shadowRoot?.querySelector('#bulk-move-btn')?.removeEventListener('click', this._onBulkMove);
@@ -1624,7 +1666,8 @@ class ListDetailPage extends AppElement {
 
   _prepareDialog(item = null) {
     const state = getState();
-    this._dialog.availableLists = (state.lists ?? []).filter(l => l.id !== this._listId);
+    this._dialog.availableLists = state.lists ?? [];
+    this._dialog.sourceListId   = this._listId;
     this._dialog.currentYear    = new Date().getFullYear();
     this._dialog.existingTags   = this._collectAllTags(state);
 
@@ -1798,7 +1841,7 @@ class ListDetailPage extends AppElement {
     if (!this._filterBar) return;
     if (this._filterSearch) this._filterSearch.value = this._filter.query;
     const active = this._isFilterActive();
-    for (const s of ['open', 'paused', 'done']) {
+    for (const s of ['open', 'paused', 'done', 'closed']) {
       const btn = this.shadowRoot.querySelector(`#fstatus-${s}`);
       if (btn) {
         const on = this._filter.statuses.has(s);
@@ -1861,10 +1904,14 @@ class ListDetailPage extends AppElement {
       if (!item) { el.hidden = false; return; }
       let show = true;
       if (q) {
-        const hay = `${item.title ?? ''} ${item.note ?? ''}`.toLowerCase();
+        const hay = `${item.title ?? ''} ${item.note ?? ''} ${(item.tags ?? []).join(' ')}`.toLowerCase();
         if (!hay.includes(q)) show = false;
       }
-      if (show && statuses.size && !statuses.has(item.status)) show = false;
+      if (statuses.size) {
+        if (!statuses.has(item.status)) show = false;
+      } else if (item.status === 'closed') {
+        show = false;
+      }
       if (show && tags.size) {
         const itags = item.tags ?? [];
         if (![...tags].some(tag => itags.includes(tag))) show = false;
@@ -1891,8 +1938,9 @@ class ListDetailPage extends AppElement {
   }
 
   _openBulkPicker() {
-    this._bulkPickerDialog.lists = (getState().lists ?? []).filter(l => l.id !== this._listId);
-    this._bulkPickerDialog.mode  = null;
+    this._bulkPickerDialog.lists        = getState().lists ?? [];
+    this._bulkPickerDialog.sourceListId = this._listId;
+    this._bulkPickerDialog.mode         = null;
     this._bulkPickerDialog.show();
   }
 
