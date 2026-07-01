@@ -5,7 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [1.9.3] — 2026-07-01
+
+### Added
+- Archive / Unarchive goals — a button in the goal edit dialog immediately archives or unarchives a goal without closing the dialog; the keyboard stays open on mobile while toggling
+- Archived goals are hidden by default and revealed by the new "Archived" filter pill on the Goals page
+- A subtle dot appears on archived goal items when the Archived filter is active, so you can see their archived state at a glance
+- Duplicate goals — selecting the same year and section in the goal move picker copies the goal in place; Move is disabled for same-destination to make the intent clear
+- Duplicate list items — selecting the current list in the item or bulk move picker copies the item(s) in place; Move is disabled when the source list is selected
+- Filter carry-over from Lists page — tapping a list while a search is active passes the query to the list detail page, so only matching items are shown on arrival
+- Text filter on Goals and List items now matches tags in addition to title and notes — searching for a tag name surfaces all items that carry it
+
+### Fixed
+- Swiping on the status badge no longer triggers a status change — a swipe slides the row as intended; tapping the badge still cycles the status
+- The current list was not appearing in the item move / copy picker — it is now included so same-list duplication works
 
 ---
 
