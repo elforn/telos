@@ -41,6 +41,11 @@ describe('build — default (BASE_PATH=/)', () => {
     }
   });
 
+  it('produces 404.html identical to index.html (deep-link fallback on static hosts)', () => {
+    expect(existsSync(join(DIST, '404.html'))).toBe(true);
+    expect(readDist('404.html')).toBe(readDist('index.html'));
+  });
+
   it('version.json contains version string and ISO buildTime', () => {
     const v = JSON.parse(readDist('version.json'));
     expect(v.version).toBe(version);
