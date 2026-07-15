@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.9.4] — 2026-07-16
+
+### Changed
+- Deleting a list now names it in the undo toast — "“Groceries” deleted" instead of "List deleted" (en, fr, ca)
+- Goals created by promoting a list item now store progress in the same shape as every other goal; a one-time migration cleans up previously promoted goals (no visible change — they keep showing 0% until you set progress)
+
+### Fixed
+- CLAUDE.md data model documentation matched a planned design rather than the code — it now describes the actual goal shape, the `closed` item status, list `showStatus`, the tag-visibility store keys, and the fact that theme and locale live in localStorage by design
+
+---
+
 ## [1.9.3] — 2026-07-01
 
 ### Added
