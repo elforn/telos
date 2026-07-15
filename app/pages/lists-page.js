@@ -440,7 +440,7 @@ class ListsPage extends AppElement {
       if (!value) return;
       const { snapshot, listName } = value;
       setRuntimeState('pendingListUndo', null);
-      toast(t('lists.toast-list-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
+      toast(t('lists.toast-list-deleted', { name: listName }), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
     };
     subscribe('pendingListUndo', this._onPendingListUndo);
   }

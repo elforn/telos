@@ -202,7 +202,7 @@ defineStrings({
   'list-item.drag':      'Arrossega per reordenar',
 
   'lists.toast-list-saved':   'Llista desada',
-  'lists.toast-list-deleted': 'Llista eliminada',
+  'lists.toast-list-deleted': '«{name}» eliminada',
   'lists.toast-item-saved':   'Item desat',
   'lists.toast-item-deleted': 'Item eliminat',
 

@@ -195,7 +195,7 @@ defineStrings({
   'list-item.drag':      'Drag to reorder',
 
   'lists.toast-list-saved':   'List saved',
-  'lists.toast-list-deleted': 'List deleted',
+  'lists.toast-list-deleted': '“{name}” deleted',
   'lists.toast-item-saved':   'Item saved',
   'lists.toast-item-deleted': 'Item deleted',
 

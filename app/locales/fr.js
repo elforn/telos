@@ -202,7 +202,7 @@ defineStrings({
   'list-item.drag':      'Glisser pour réordonner',
 
   'lists.toast-list-saved':   'Liste enregistrée',
-  'lists.toast-list-deleted': 'Liste supprimée',
+  'lists.toast-list-deleted': '« {name} » supprimée',
   'lists.toast-item-saved':   'Élément enregistré',
   'lists.toast-item-deleted': 'Élément supprimé',
 

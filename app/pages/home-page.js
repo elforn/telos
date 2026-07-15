@@ -1022,10 +1022,6 @@ class HomePage extends AppElement {
     this._mutateSection(section, list => [...list, goal]);
   }
 
-  _editGoal(section, id, title, notes, tags) {
-    this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, title, notes, tags } : g));
-  }
-
   _setProgress(section, id, percentage) {
     this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, percentage } : g));
   }

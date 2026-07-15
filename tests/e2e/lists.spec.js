@@ -805,7 +805,7 @@ test.describe('Lists — undo', () => {
         ?.querySelector('#list-container')?.querySelectorAll('lists-page-item').length ?? 0) === 0
     );
     // Undo toast should be visible with the undo button
-    await expect(page.locator('.socle-toast-info')).toContainText('List deleted');
+    await expect(page.locator('.socle-toast-info')).toContainText('“Undo me” deleted');
     await page.locator('.socle-toast-btn').click();
     // List is restored
     await page.waitForFunction(() =>

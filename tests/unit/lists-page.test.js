@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { boot, setState, getState, reset } from '../../_lib/core/store/store.js';
+import { boot, setState, getState, setRuntimeState, reset } from '../../_lib/core/store/store.js';
 import '../../app/strings.js';
 import '../../app/pages/lists-page.js';
 import '../../app/components/list-dialog/list-dialog.js';
 import { COLOR_PALETTE } from '../../app/components/lists-page-item/lists-page-item.js';
+import { _resetToast } from '../../_lib/modules/toast/toast.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
@@ -260,5 +261,26 @@ describe('lists-page — color cycling', () => {
       bubbles: true, composed: true, detail: { list: la },
     }));
     expect(getState().lists.find(l => l.id === 'lb')).not.toHaveProperty('color');
+  });
+});
+
+describe('lists-page — pending list undo toast', () => {
+  it('shows the deleted list name in the toast and restores the snapshot on undo', async () => {
+    _resetToast(); // drop the container cached from earlier tests (detached by afterEach)
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    const snapshot = [{ id: 'l1', name: 'Groceries', items: [] }];
+    mount();
+
+    setRuntimeState('pendingListUndo', { snapshot, listName: 'Groceries' });
+
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-info');
+      expect(toastEl?.textContent).toContain('“Groceries” deleted');
+    });
+
+    document.querySelector('#toast-container .socle-toast-btn').click();
+    expect(getState().lists).toEqual(snapshot);
+    // handoff consumed so the toast doesn't re-fire on next mount
+    expect(getState().pendingListUndo).toBeNull();
   });
 });
