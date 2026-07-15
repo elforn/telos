@@ -55,3 +55,13 @@ Description rules:
    - Run `git commit`
 4. Do **not** push — the developer decides when to push
 5. Report: how many commits were made, what each covers, and anything that was left unstaged and why
+
+## Release commits (version bumps)
+
+When the commit bumps the version in `package.json` (a `chore(release)` commit):
+
+1. Commit the bump (CHANGELOG.md + package.json + package-lock.json)
+2. Tag it: `git tag v<version>` (e.g. `git tag v1.9.4`)
+3. When the release is pushed, push the tag with it: `git push origin main v<version>`
+
+Every released version gets a tag — tags are the "what shipped when" record and the rollback anchors.
