@@ -5,6 +5,7 @@ import './locales/fr.js';
 import './locales/ca.js';
 import './init-locale.js';
 import { boot, getState, setState } from '../_lib/core/store/store.js';
+import { migrateGoals } from './utils/migrate-goals.js';
 import '../_lib/core/router/app-router.js';
 import '../_lib/core/sw-manager/sw-manager.js';
 import '../_lib/core/components/update-banner/update-banner.js';
@@ -27,24 +28,12 @@ if ('serviceWorker' in navigator) {
 
 await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, lists: [], goalsTagsVisible: {}, listsTagsVisible: {} } });
 
-// Migrate goals.description → goals.notes (one-time, safe to run repeatedly)
-(function migrateGoalDescriptionToNotes() {
+// One-time goal shape migration (description → notes, dead `tracking` cleanup)
+{
   const goals = getState().goals ?? {};
-  let changed = false;
-  const migrated = Object.fromEntries(Object.entries(goals).map(([year, yg]) => {
-    const sections = Object.fromEntries(Object.entries(yg).map(([section, list]) => [
-      section,
-      list.map(g => {
-        if (!('description' in g)) return g;
-        changed = true;
-        const { description, ...rest } = g;
-        return { ...rest, notes: description || undefined };
-      }),
-    ]));
-    return [year, sections];
-  }));
-  if (changed) setState('goals', migrated);
-})();
+  const migrated = migrateGoals(goals);
+  if (migrated !== goals) setState('goals', migrated);
+}
 
 console.log('Telos', __APP_VERSION__);
 
