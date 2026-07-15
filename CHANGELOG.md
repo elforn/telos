@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.9.5] — 2026-07-16
+
+### Added
+- Deep links now load the app on GitHub Pages — visiting a URL like `/lists/…` directly (first visit, or after a repair) no longer shows GitHub's 404 page
+- The version line in settings now shows the build hash (e.g. "Version 1.9.5 (4efb0fa4)")
+
+### Changed
+- Deploys are now gated on the full test suite — a push with failing tests never reaches the live app
+- Releases are tagged (`v1.9.5`, …) from now on
+- Unit test suite runs roughly twice as fast (shared test workers)
+
+---
+
 ## [1.9.4] — 2026-07-16
 
 ### Changed
