@@ -32,9 +32,11 @@ All state lives in a **simple store** (setState/getState — no event log, no re
 
 - **`goals`** — `{ [year]: { capstone: Goal[], milestones: Goal[], wow: Goal[], focus: Goal[] } }`. Each `Goal` has a fixed schema:
   ```
-  { id, title, description?, tags: string[], tracking }
+  { id, title, notes?, tags: string[], archived?: boolean, percentage: number }
   ```
-  `tracking` is one of three types:
+  `percentage` is the progress value, 0–100. The field is `notes`, never `description` (renamed in 1.8.0; a boot migration in `app/main.js` handles old data). `archived` goals are hidden unless the Archived filter pill is active.
+
+  **Planned — not yet implemented:** a `tracking` union replacing flat `percentage`. Code currently uses flat `percentage` everywhere. When built, `tracking` will be one of three types:
   - `{ type: 'percentage', value: number }` — value 0–100; Default for all new goals.
   - `{ type: 'weekly', target: number, entries: string[] }` — target = times/week (e.g. 3). "Every day" is a UI preset for target=7. `entries` = unique ISO date strings (YYYY-MM-DD), one per calendar day max; past dates allowed.
   - `{ type: 'monthly', target: number, entries: string[] }` — target = times/month. Same `entries` shape as weekly, different aggregation window.
@@ -42,16 +44,20 @@ All state lives in a **simple store** (setState/getState — no event log, no re
   For `weekly` and `monthly`: success per period = `min(entries_in_period / target, 1)`. Both use a weighted running average across periods (more recent periods weighted higher).
 
 - **`images`** — `{ [year]: blobId }`. Blobs stored via `attachBlob`/`getBlob`.
-- **`lists`** — `List[]` where each `List` is `{ id, name, color?: string, items: ListItem[] }`. Lists are **trans-year** — never scoped to a specific year. `color` is an optional hex string for visual differentiation.
+- **`lists`** — `List[]` where each `List` is `{ id, name, color?: string, showStatus?: boolean, items: ListItem[] }`. Lists are **trans-year** — never scoped to a specific year. `color` is an optional hex string for visual differentiation. `showStatus` (default `true`) controls whether item status badges are shown in the list detail view.
 - **`ListItem`** — fixed schema (no progress tracking — only goals are tracked):
   ```
-  { id, title, note?, url?, dueDate?, status: 'open' | 'paused' | 'done', tags: string[], inGoals: Array<{ year: string, section: string, goalId: string }> }
+  { id, title, note?, url?, dueDate?, status: 'open' | 'paused' | 'done' | 'closed', tags: string[], inGoals: Array<{ year: string, section: string, goalId: string }> }
   ```
+  - `closed` means dropped/abandoned: closed items are hidden by default and appear only when the Closed filter pill is active (see `_applyFilter` in `list-detail-page.js`).
   - `inGoals` is an empty array when not linked; each entry records where the item was promoted. A single item can be promoted into goals across multiple years/sections.
   - Progress is **not** synced between list items and goal copies — each goal tracks independently.
-- **`theme`** — `'light' | 'dark' | 'system'` (default `'system'`). Controls colour scheme; `'system'` follows `prefers-color-scheme`.
 - **`accentColors`** — `{ [year]: string }`. Hex colour per year. On year change, writes to `--color-accent` on `:root` (or resets to the default `#5BADE0`).
-- **`reflections`** — `{ [year]: { annual?, Q1?, Q2?, Q3?, Q4? } }`. Each entry: `{ note: string, stars: number }` (1–5 stars).
+- **`goalsTagsVisible`** — `{ [year]: boolean }`. Whether tag chips are shown on goal items for that year.
+- **`listsTagsVisible`** — `{ [listId]: boolean }`. Whether tag chips are shown on items of that list.
+- **`reflections`** — **planned, not implemented** (merge-strategy already handles the key). Will be `{ [year]: { annual?, Q1?, Q2?, Q3?, Q4? } }`, each entry `{ note: string, stars: number }` (1–5 stars).
+
+**Not store keys:** `theme` (`'light' | 'dark' | 'system'`) and locale live in **localStorage by design** (`_lib/core/theme/theme.js`, `_lib/core/strings.js`) — device-local preferences deliberately excluded from export/import. Never move them into the store.
 
 ### Constraints
 - Local only: no accounts, no cloud sync. Export/import via the sync module is the only data-transfer mechanism.
@@ -62,8 +68,8 @@ All state lives in a **simple store** (setState/getState — no event log, no re
 - **No progress sync between lists and goals.** When a list item is promoted to a goal, progress tracks independently on each side — do not attempt to keep them in sync.
 - **List items have no tracking.** Only goals track progress. Do not add a `tracking` field to `ListItem`.
 - **List item schema is fixed.** All items share the same field set regardless of which list they belong to — do not make the schema per-list-configurable.
-- **`theme`, `accentColors`, `reflections` are top-level store keys.** Never nest them inside `goals[year]`.
-- **Item status values are `open | paused | done`.** The old names `active`, `in-goals`, and `completed` are invalid.
+- **`accentColors` is a top-level store key.** Never nest it inside `goals[year]`. `theme` and locale are NOT store keys — they live in localStorage by design.
+- **Item status values are `open | paused | done | closed`.** The old names `active`, `in-goals`, and `completed` are invalid.
 - **`in-goals` is not a valid item status.** Use `inGoals.length > 0` to detect linked items in the UI.
 - **Frequency goals use `entries: string[]` of unique ISO dates.** One entry per calendar day maximum — do not allow duplicate dates. Past dates are allowed.
 - **"Every day" is not a goal type.** It is `weekly` with `target=7`, offered as a UI preset. Do not add a `daily` type to the schema.
@@ -170,13 +176,16 @@ customElements.define('my-widget', MyWidget);
 ## Store
 
 ```js
-import { dispatch, subscribe, unsubscribe, setState, getState } from '../../_lib/core/store/store.js';
+import { setState, getState, setRuntimeState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
 
-// Write a domain event (persisted to IDB, runs reducer, notifies subscribers)
-dispatch('GOAL_ADDED', { id, title });
+// Read current state
+const lists = getState().lists ?? [];
+
+// Write a top-level key (persisted to IDB, notifies subscribers)
+setState('lists', lists.map(l => l.id === id ? { ...l, name } : l));
 
 // Ephemeral runtime state (not persisted, notifies subscribers)
-setState('updateAvailable', true);
+setRuntimeState('pendingListUndo', { snapshot, listName });
 
 // Subscribe — called immediately with current value, then on every change
 subscribe('goals', this._onGoals = goals => this._renderGoals(goals));
