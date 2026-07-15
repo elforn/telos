@@ -52,6 +52,12 @@ describe('build — default (BASE_PATH=/)', () => {
     expect(() => new Date(v.buildTime).toISOString()).not.toThrow();
   });
 
+  it('version.json buildHash matches the sw.js cache hash', () => {
+    const v = JSON.parse(readDist('version.json'));
+    expect(v.buildHash).toMatch(/^[a-f0-9]{8}$/);
+    expect(readDist('sw.js')).toContain(`'${version}-${v.buildHash}'`);
+  });
+
   it('replaces __APP_VERSION__ token in main.js output', () => {
     const content = readDist(mainFilename());
     expect(content).not.toContain('__APP_VERSION__');
