@@ -9,5 +9,9 @@ export default defineConfig({
     include: ['tests/unit/**/*.test.js', '_lib/**/*.test.js'],
     environment: 'node',
     setupFiles: ['./_lib/core/test-setup.js'],
+    // Reuse workers across files — per-file worker setup (fake-indexeddb +
+    // happy-dom) dominates suite time. Safe because files reset shared state
+    // (store reset(), _resetToast(), strings reset()).
+    isolate: false,
   },
 });
