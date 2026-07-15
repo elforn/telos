@@ -164,8 +164,8 @@ test.describe('Item status cycle', () => {
     expect(await getItemStatus(page)).toBe('paused');
   });
 
-  test('tapping status badge on a paused item sets status to "open"', async ({ page }) => {
-    // open → done → paused → open
+  test('tapping status badge on a paused item sets status to "closed"', async ({ page }) => {
+    // open → done → paused → closed
     await clickStatusBadge(page);
     await page.waitForFunction(() =>
       document.querySelector('app-router')?.shadowRoot
@@ -184,14 +184,14 @@ test.describe('Item status cycle', () => {
     await page.waitForFunction(() =>
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('#item-list list-item')?._item?.status === 'open'
+        ?.querySelector('#item-list list-item')?._item?.status === 'closed'
     );
 
-    expect(await getItemStatus(page)).toBe('open');
+    expect(await getItemStatus(page)).toBe('closed');
   });
 
-  test('full cycle open → done → paused → open completes in 3 taps', async ({ page }) => {
-    for (const expected of ['done', 'paused', 'open']) {
+  test('full cycle open → done → paused → closed → open completes in 4 taps', async ({ page }) => {
+    for (const expected of ['done', 'paused', 'closed', 'open']) {
       await clickStatusBadge(page);
       await page.waitForFunction(s =>
         document.querySelector('app-router')?.shadowRoot

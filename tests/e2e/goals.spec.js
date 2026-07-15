@@ -256,7 +256,7 @@ test.describe('Goal progress via hold-drag', () => {
       return bar.getBoundingClientRect().toJSON();
     });
 
-    const startX  = barBox.x + 10;
+    const startX  = barBox.x + barBox.width * 0.25; // clear of the drag handle at the bar start
     const midY    = barBox.y + barBox.height / 2;
     const targetX = barBox.x + barBox.width * 0.6;
 
