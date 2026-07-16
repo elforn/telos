@@ -829,9 +829,14 @@ class HomePage extends AppElement {
     this._onGoalCreated = e => {
       const { title, notes, tags } = e.detail;
       const snapshot = getState().goals;
-      this._addGoal(this._editingSection, title, notes, tags);
-      toast(t('home.toast-goal-saved'), 'success',
-        { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
+      const goal = this._addGoal(this._editingSection, title, notes, tags);
+      if (this._goalFilterActive() && !this._goalMatchesFilter(goal)) {
+        toast(t('home.toast-goal-hidden'), 'info',
+          { action: { label: t('filter.toast-show'), onClick: () => this._onFilterClear() } });
+      } else {
+        toast(t('home.toast-goal-saved'), 'success',
+          { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
+      }
     };
     this.shadowRoot.addEventListener('goal-created', this._onGoalCreated);
 
@@ -1021,6 +1026,7 @@ class HomePage extends AppElement {
   _addGoal(section, title, notes, tags) {
     const goal = { id: crypto.randomUUID(), title, notes, tags: tags ?? [], percentage: 0 };
     this._mutateSection(section, list => [...list, goal]);
+    return goal;
   }
 
   _setProgress(section, id, percentage) {
@@ -1125,10 +1131,42 @@ class HomePage extends AppElement {
     }
   }
 
-  _applyGoalFilter() {
+  _goalFilterActive() {
+    const { query, states, tags } = this._filter;
+    return !!(query.toLowerCase().trim() || states.size || tags.size);
+  }
+
+  _goalMatchesFilter(goal) {
     const { query, states, tags } = this._filter;
     const q = query.toLowerCase().trim();
-    const active = !!(q || states.size || tags.size);
+    if (goal.archived) {
+      // Archived goals: only shown when 'archived' state pill is active
+      if (!states.has('archived')) return false;
+    } else if (states.size) {
+      // Non-archived goals with state filter: check progress-based states (OR logic)
+      const progressStates = [...states].filter(s => s !== 'archived');
+      if (progressStates.length > 0) {
+        const pct = goal.percentage ?? 0;
+        const gstate = pct === 100 ? 'done' : pct === 0 ? 'not-started' : 'ongoing';
+        if (!progressStates.includes(gstate)) return false;
+      } else {
+        // Only 'archived' was selected — non-archived goals don't match
+        return false;
+      }
+    }
+    if (q) {
+      const hay = `${goal.title ?? ''} ${goal.notes ?? ''} ${(goal.tags ?? []).join(' ')}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (tags.size) {
+      const gtags = goal.tags ?? [];
+      if (![...tags].some(tag => gtags.includes(tag))) return false;
+    }
+    return true;
+  }
+
+  _applyGoalFilter() {
+    const active = this._goalFilterActive();
     let anyVisible = false;
     let visibleCount = 0;
 
@@ -1145,30 +1183,7 @@ class HomePage extends AppElement {
       list.querySelectorAll('goal-item').forEach(el => {
         const goal = el._goal;
         if (!goal) { el.hidden = false; sectionVisible = true; return; }
-        let show = true;
-        if (goal.archived) {
-          // Archived goals: only shown when 'archived' state pill is active
-          if (!states.has('archived')) show = false;
-        } else if (states.size) {
-          // Non-archived goals with state filter: check progress-based states (OR logic)
-          const progressStates = [...states].filter(s => s !== 'archived');
-          if (progressStates.length > 0) {
-            const pct = goal.percentage ?? 0;
-            const gstate = pct === 100 ? 'done' : pct === 0 ? 'not-started' : 'ongoing';
-            if (!progressStates.includes(gstate)) show = false;
-          } else {
-            // Only 'archived' was selected — non-archived goals don't match
-            show = false;
-          }
-        }
-        if (show && q) {
-          const hay = `${goal.title ?? ''} ${goal.notes ?? ''} ${(goal.tags ?? []).join(' ')}`.toLowerCase();
-          if (!hay.includes(q)) show = false;
-        }
-        if (show && tags.size) {
-          const gtags = goal.tags ?? [];
-          if (![...tags].some(tag => gtags.includes(tag))) show = false;
-        }
+        const show = this._goalMatchesFilter(goal);
         el.hidden = !show;
         if (show) { anyVisible = true; sectionVisible = true; visibleCount++; }
       });

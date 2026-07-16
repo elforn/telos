@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { boot, setState, getState, reset } from '../../_lib/core/store/store.js';
 import '../../app/strings.js';
 import '../../app/pages/list-detail-page.js';
+import { _resetToast } from '../../_lib/modules/toast/toast.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
@@ -1523,3 +1524,55 @@ describe('list-detail-page — listsTagsVisible toggle', () => {
 // - IDB persistence of toggle preference across page reload
 // - Menu dialog open/close (native <dialog> showModal() not available in happy-dom)
 // - list-delete-btn second click navigates back to /lists (navigation tested in E2E)
+
+describe('list-detail-page — create with active filter', () => {
+  it('shows a hidden-by-filter toast on close whose Show action reveals the new item', async () => {
+    _resetToast();
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#add-row')).not.toBeNull());
+    el._filter = { query: '', statuses: new Set(['done']), tags: new Set() };
+    el.shadowRoot.querySelector('#add-row').click();
+    el.shadowRoot.dispatchEvent(new CustomEvent('item-created', {
+      bubbles: true, composed: true, detail: { id: 'n1', title: 'Invisible item', status: 'open' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].items).toHaveLength(1));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-closed', {
+      bubbles: true, composed: true,
+    }));
+
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-info');
+      expect(toastEl?.textContent).toContain('hidden by the current filter');
+    });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#item-list list-item')?.hidden).toBe(true)
+    );
+
+    document.querySelector('#toast-container .socle-toast-btn').click();
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#item-list list-item')?.hidden).toBe(false)
+    );
+  });
+
+  it('keeps the saved toast when the new item matches the active filter', async () => {
+    _resetToast();
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#add-row')).not.toBeNull());
+    el._filter = { query: '', statuses: new Set(['open']), tags: new Set() };
+    el.shadowRoot.querySelector('#add-row').click();
+    el.shadowRoot.dispatchEvent(new CustomEvent('item-created', {
+      bubbles: true, composed: true, detail: { id: 'n2', title: 'Visible item', status: 'open' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].items).toHaveLength(1));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-closed', {
+      bubbles: true, composed: true,
+    }));
+
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-success');
+      expect(toastEl?.textContent).toContain('Item saved');
+    });
+  });
+});

@@ -6,6 +6,7 @@ import '../../app/pages/home-page.js';
 import '../../app/components/goal-item/goal-item.js';
 import '../../app/components/year-header/year-header.js';
 import '../../app/components/goal-dialog/goal-dialog.js';
+import { _resetToast } from '../../_lib/modules/toast/toast.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
@@ -580,5 +581,48 @@ describe('home-page — _applyGoalFilter', () => {
     expect(items.find(i => i._goal.title === 'Run daily').hidden).toBe(false);
     expect(items.find(i => i._goal.title === 'Run finances').hidden).toBe(true);
     expect(items.find(i => i._goal.title === 'Piano').hidden).toBe(true);
+  });
+});
+
+describe('home-page — create with active filter', () => {
+  it('shows a hidden-by-filter toast whose Show action reveals the new goal', async () => {
+    _resetToast();
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    el._filter = { query: '', states: new Set(['done']), tags: new Set() };
+    el.shadowRoot.querySelector('#add-capstone').click();
+    el.shadowRoot.dispatchEvent(new CustomEvent('goal-created', {
+      bubbles: true, composed: true, detail: { title: 'Invisible goal' },
+    }));
+
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-info');
+      expect(toastEl?.textContent).toContain('hidden by the current filter');
+    });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list goal-item')?.hidden).toBe(true)
+    );
+
+    document.querySelector('#toast-container .socle-toast-btn').click();
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list goal-item')?.hidden).toBe(false)
+    );
+  });
+
+  it('keeps the saved toast when the new goal matches the active filter', async () => {
+    _resetToast();
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    el._filter = { query: '', states: new Set(['not-started']), tags: new Set() };
+    el.shadowRoot.querySelector('#add-capstone').click();
+    el.shadowRoot.dispatchEvent(new CustomEvent('goal-created', {
+      bubbles: true, composed: true, detail: { title: 'Visible goal' },
+    }));
+
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-success');
+      expect(toastEl?.textContent).toContain('Goal saved');
+    });
+    expect(el.shadowRoot.querySelector('#capstone-list goal-item')?.hidden).toBe(false);
   });
 });

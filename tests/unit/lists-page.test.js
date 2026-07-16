@@ -284,3 +284,28 @@ describe('lists-page — pending list undo toast', () => {
     expect(getState().pendingListUndo).toBeNull();
   });
 });
+
+describe('lists-page — create with active filter', () => {
+  it('shows a hidden-by-filter toast whose Show action reveals the new list', async () => {
+    _resetToast();
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    const el = mount();
+    el._filter = { query: '', emptyFilter: 'not-empty' }; // a new list is empty → hidden
+    el.shadowRoot.dispatchEvent(new CustomEvent('list-created', {
+      bubbles: true, composed: true, detail: { name: 'Fresh list' },
+    }));
+
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-info');
+      expect(toastEl?.textContent).toContain('hidden by the current filter');
+    });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#list-container lists-page-item')?.hidden).toBe(true)
+    );
+
+    document.querySelector('#toast-container .socle-toast-btn').click();
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#list-container lists-page-item')?.hidden).toBe(false)
+    );
+  });
+});

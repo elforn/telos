@@ -973,6 +973,7 @@ class ListDetailPage extends AppElement {
 
     this._onAddRow = () => {
       this._editingItem = null;
+      this._createdItemId = null;
       this._itemEditSnapshot = getState().lists;
       this._prepareDialog(null);
       this._dialog.open(null);
@@ -983,6 +984,7 @@ class ListDetailPage extends AppElement {
       if (this._selectionMode) return;
       const cleanItem = this._prepareDialog(e.detail.item);
       this._editingItem = cleanItem;
+      this._createdItemId = null;
       this._itemEditSnapshot = getState().lists;
       this._dialog.open(cleanItem);
     };
@@ -1020,15 +1022,27 @@ class ListDetailPage extends AppElement {
       const { id, title, status, note, url, tags } = e.detail;
       this._addItem({ id, title, status, note, url, tags });
       this._editingItem = { id, title, status, note, url, tags, inGoals: [] };
+      this._createdItemId = id;
     };
     this.shadowRoot.addEventListener('item-created', this._onItemCreated);
 
     this._onItemClosed = () => {
       const snap = this._itemEditSnapshot;
       this._itemEditSnapshot = null;
+      const createdId = this._createdItemId;
+      this._createdItemId = null;
       if (snap && JSON.stringify(getState().lists) !== JSON.stringify(snap)) {
-        toast(t('lists.toast-item-saved'), 'success',
-          { action: { label: t('undo.button'), onClick: () => setState('lists', snap) } });
+        // Re-check against current state — the item may have been edited since creation
+        const created = createdId
+          ? ((getState().lists ?? []).find(l => l.id === this._listId)?.items ?? []).find(i => i.id === createdId)
+          : null;
+        if (created && this._itemFilterActive() && !this._itemMatchesFilter(created)) {
+          toast(t('lists.toast-item-hidden'), 'info',
+            { action: { label: t('filter.toast-show'), onClick: () => this._onFilterClear() } });
+        } else {
+          toast(t('lists.toast-item-saved'), 'success',
+            { action: { label: t('undo.button'), onClick: () => setState('lists', snap) } });
+        }
       }
       if (this._filterSuppressed) {
         clearTimeout(this._filterSuppressTimer);
@@ -1893,30 +1907,39 @@ class ListDetailPage extends AppElement {
     }
   }
 
-  _applyFilter() {
+  _itemFilterActive() {
+    const { query, statuses, tags } = this._filter;
+    return !!(query.toLowerCase().trim() || statuses.size || tags.size);
+  }
+
+  _itemMatchesFilter(item) {
     const { query, statuses, tags } = this._filter;
     const q = query.toLowerCase().trim();
-    const active = !!(q || statuses.size || tags.size);
+    if (q) {
+      const hay = `${item.title ?? ''} ${item.note ?? ''} ${(item.tags ?? []).join(' ')}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (statuses.size) {
+      if (!statuses.has(item.status)) return false;
+    } else if (item.status === 'closed') {
+      return false;
+    }
+    if (tags.size) {
+      const itags = item.tags ?? [];
+      if (![...tags].some(tag => itags.includes(tag))) return false;
+    }
+    return true;
+  }
+
+  _applyFilter() {
+    const active = this._itemFilterActive();
     let anyVisible = false;
     let visibleCount = 0;
 
     this._itemList?.querySelectorAll('list-item').forEach(el => {
       const item = el._item;
       if (!item) { el.hidden = false; return; }
-      let show = true;
-      if (q) {
-        const hay = `${item.title ?? ''} ${item.note ?? ''} ${(item.tags ?? []).join(' ')}`.toLowerCase();
-        if (!hay.includes(q)) show = false;
-      }
-      if (statuses.size) {
-        if (!statuses.has(item.status)) show = false;
-      } else if (item.status === 'closed') {
-        show = false;
-      }
-      if (show && tags.size) {
-        const itags = item.tags ?? [];
-        if (![...tags].some(tag => itags.includes(tag))) show = false;
-      }
+      const show = this._itemMatchesFilter(item);
       el.hidden = !show;
       if (show) { anyVisible = true; visibleCount++; }
     });

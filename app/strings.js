@@ -31,6 +31,7 @@ defineStrings({
   'goal-item.drag':            'Drag to reorder',
 
   'home.toast-goal-saved':   'Goal saved',
+  'home.toast-goal-hidden':  'Goal added — hidden by the current filter',
   'home.toast-goal-deleted': 'Goal deleted',
   'home.toast-goal-moved':         'Goal moved to {section}',
   'home.toast-goal-copied':        'Goal copied to {section}',
@@ -195,8 +196,10 @@ defineStrings({
   'list-item.drag':      'Drag to reorder',
 
   'lists.toast-list-saved':   'List saved',
+  'lists.toast-list-hidden':  'List added — hidden by the current filter',
   'lists.toast-list-deleted': '“{name}” deleted',
   'lists.toast-item-saved':   'Item saved',
+  'lists.toast-item-hidden':  'Item added — hidden by the current filter',
   'lists.toast-item-deleted': 'Item deleted',
 
   'list-detail.filter-toggle':        'Filter',
@@ -256,6 +259,7 @@ defineStrings({
   'export.copied':         'Copied to clipboard',
 
   'undo.button':  'Undo',
+  'filter.toast-show': 'Show',
   'toast.close':  'Close',
   'tag.remove':   'Remove {tag}',
 });

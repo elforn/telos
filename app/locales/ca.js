@@ -32,6 +32,7 @@ defineStrings({
   'goal-item.drag':              'Arrossega per reordenar',
 
   'home.toast-goal-saved':       'Objectiu desat',
+  'home.toast-goal-hidden':      'Objectiu afegit — amagat pel filtre actiu',
   'home.toast-goal-deleted':     'Objectiu eliminat',
   'home.toast-goal-moved':       'Objectiu mogut a {section}',
   'home.toast-goal-copied':      'Objectiu copiat a {section}',
@@ -202,8 +203,10 @@ defineStrings({
   'list-item.drag':      'Arrossega per reordenar',
 
   'lists.toast-list-saved':   'Llista desada',
+  'lists.toast-list-hidden':  'Llista afegida — amagada pel filtre actiu',
   'lists.toast-list-deleted': '«{name}» eliminada',
   'lists.toast-item-saved':   'Item desat',
+  'lists.toast-item-hidden':  'Item afegit — amagat pel filtre actiu',
   'lists.toast-item-deleted': 'Item eliminat',
 
   'list-detail.filter-toggle':     'Filtra',
@@ -254,6 +257,7 @@ defineStrings({
   'export.copied':         'Copiat al porta-retalls',
 
   'undo.button':  'Desfés',
+  'filter.toast-show': 'Mostra',
   'toast.close':  'Tanca',
   'tag.remove':   'Elimina {tag}',
   'dialog.saved-sr': 'Desat',

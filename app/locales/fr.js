@@ -32,6 +32,7 @@ defineStrings({
   'goal-item.drag':              'Glisser pour réordonner',
 
   'home.toast-goal-saved':       'Objectif enregistré',
+  'home.toast-goal-hidden':      'Objectif ajouté — masqué par le filtre actif',
   'home.toast-goal-deleted':     'Objectif supprimé',
   'home.toast-goal-moved':       'Objectif déplacé vers {section}',
   'home.toast-goal-copied':      'Objectif copié vers {section}',
@@ -202,8 +203,10 @@ defineStrings({
   'list-item.drag':      'Glisser pour réordonner',
 
   'lists.toast-list-saved':   'Liste enregistrée',
+  'lists.toast-list-hidden':  'Liste ajoutée — masquée par le filtre actif',
   'lists.toast-list-deleted': '« {name} » supprimée',
   'lists.toast-item-saved':   'Élément enregistré',
+  'lists.toast-item-hidden':  'Élément ajouté — masqué par le filtre actif',
   'lists.toast-item-deleted': 'Élément supprimé',
 
   'list-detail.filter-toggle':     'Filtrer',
@@ -254,6 +257,7 @@ defineStrings({
   'export.copied':         'Copié dans le presse-papiers',
 
   'undo.button':  'Annuler',
+  'filter.toast-show': 'Afficher',
   'toast.close':  'Fermer',
   'tag.remove':   'Retirer {tag}',
   'dialog.saved-sr': 'Enregistré',

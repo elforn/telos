@@ -333,9 +333,14 @@ class ListsPage extends AppElement {
     this._onListCreated = e => {
       const { name, color } = e.detail;
       const snapshot = getState().lists ?? [];
-      this._create(name, color);
-      toast(t('lists.toast-list-saved'), 'success',
-        { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
+      const list = this._create(name, color);
+      if (this._listFilterActive() && !this._listMatchesFilter(list)) {
+        toast(t('lists.toast-list-hidden'), 'info',
+          { action: { label: t('filter.toast-show'), onClick: () => this._onFilterClear() } });
+      } else {
+        toast(t('lists.toast-list-saved'), 'success',
+          { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
+      }
     };
     this.listen(this.shadowRoot, 'list-created', this._onListCreated);
 
@@ -554,6 +559,7 @@ class ListsPage extends AppElement {
     const list = { id: crypto.randomUUID(), name, items: [] };
     if (color) list.color = color;
     setState('lists', [...(getState().lists ?? []), list]);
+    return list;
   }
 
   // ── Drag helpers ──────────────────────────────────────────────────────────
@@ -658,29 +664,37 @@ class ListsPage extends AppElement {
     }
   }
 
-  _applyFilter() {
+  _listFilterActive() {
+    return !!(this._filter.query.toLowerCase().trim() || this._filter.emptyFilter);
+  }
+
+  _listMatchesFilter(list) {
     const q           = this._filter.query.toLowerCase().trim();
     const emptyFilter = this._filter.emptyFilter;
-    const active      = !!(q || emptyFilter);
-    let anyVisible    = false;
-    let visibleCount  = 0;
+    if (q) {
+      const nameMatch = list.name.toLowerCase().includes(q);
+      const itemMatch = (list.items ?? []).some(item =>
+        (item.title  ?? '').toLowerCase().includes(q) ||
+        (item.note   ?? '').toLowerCase().includes(q) ||
+        (item.status ?? '').includes(q) ||
+        (item.tags   ?? []).some(tag => tag.toLowerCase().includes(q))
+      );
+      if (!nameMatch && !itemMatch) return false;
+    }
+    if (emptyFilter === 'empty'     && (list.items ?? []).length !== 0) return false;
+    if (emptyFilter === 'not-empty' && (list.items ?? []).length === 0) return false;
+    return true;
+  }
+
+  _applyFilter() {
+    const active     = this._listFilterActive();
+    let anyVisible   = false;
+    let visibleCount = 0;
 
     this._container?.querySelectorAll('lists-page-item').forEach(el => {
       const list = el._list;
       if (!list) { el.hidden = false; return; }
-      let show = true;
-      if (q) {
-        const nameMatch = list.name.toLowerCase().includes(q);
-        const itemMatch = (list.items ?? []).some(item =>
-          (item.title  ?? '').toLowerCase().includes(q) ||
-          (item.note   ?? '').toLowerCase().includes(q) ||
-          (item.status ?? '').includes(q) ||
-          (item.tags   ?? []).some(tag => tag.toLowerCase().includes(q))
-        );
-        show = nameMatch || itemMatch;
-      }
-      if (show && emptyFilter === 'empty')     show = (list.items ?? []).length === 0;
-      if (show && emptyFilter === 'not-empty') show = (list.items ?? []).length > 0;
+      const show = this._listMatchesFilter(list);
       el.hidden = !show;
       if (show) { anyVisible = true; visibleCount++; }
     });
