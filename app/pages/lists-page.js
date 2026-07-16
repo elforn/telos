@@ -336,7 +336,7 @@ class ListsPage extends AppElement {
       const list = this._create(name, color);
       if (this._listFilterActive() && !this._listMatchesFilter(list)) {
         toast(t('lists.toast-list-hidden'), 'info',
-          { action: { label: t('filter.toast-show'), onClick: () => this._onFilterClear() } });
+          { action: { label: t('filter.toast-show'), onClick: () => this._revealCreatedList(list.id) } });
       } else {
         toast(t('lists.toast-list-saved'), 'success',
           { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
@@ -662,6 +662,13 @@ class ListsPage extends AppElement {
       this._notEmptyBtn.classList.toggle('active', ef === 'not-empty');
       this._notEmptyBtn.setAttribute('aria-pressed', String(ef === 'not-empty'));
     }
+  }
+
+  _revealCreatedList(id) {
+    this._onFilterClear();
+    const el = [...(this._container?.querySelectorAll('lists-page-item') ?? [])]
+      .find(l => l.dataset.id === id);
+    el?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
 
   _listFilterActive() {

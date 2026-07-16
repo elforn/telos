@@ -1038,7 +1038,7 @@ class ListDetailPage extends AppElement {
           : null;
         if (created && this._itemFilterActive() && !this._itemMatchesFilter(created)) {
           toast(t('lists.toast-item-hidden'), 'info',
-            { action: { label: t('filter.toast-show'), onClick: () => this._onFilterClear() } });
+            { action: { label: t('filter.toast-show'), onClick: () => this._revealCreatedItem(created.id) } });
         } else {
           toast(t('lists.toast-item-saved'), 'success',
             { action: { label: t('undo.button'), onClick: () => setState('lists', snap) } });
@@ -1905,6 +1905,13 @@ class ListDetailPage extends AppElement {
       btn.addEventListener('click', this._onFilterTagChip);
       this._filterTagRow.appendChild(btn);
     }
+  }
+
+  _revealCreatedItem(id) {
+    this._onFilterClear();
+    const el = [...(this._itemList?.querySelectorAll('list-item') ?? [])]
+      .find(i => i._item?.id === id);
+    el?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
 
   _itemFilterActive() {

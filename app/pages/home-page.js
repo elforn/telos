@@ -832,7 +832,7 @@ class HomePage extends AppElement {
       const goal = this._addGoal(this._editingSection, title, notes, tags);
       if (this._goalFilterActive() && !this._goalMatchesFilter(goal)) {
         toast(t('home.toast-goal-hidden'), 'info',
-          { action: { label: t('filter.toast-show'), onClick: () => this._onFilterClear() } });
+          { action: { label: t('filter.toast-show'), onClick: () => this._revealCreatedGoal(goal.id) } });
       } else {
         toast(t('home.toast-goal-saved'), 'success',
           { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
@@ -1129,6 +1129,14 @@ class HomePage extends AppElement {
       btn.addEventListener('click', this._onGoalFilterTagChip);
       this._filterTagRow.appendChild(btn);
     }
+  }
+
+  _revealCreatedGoal(id) {
+    this._onFilterClear();
+    const el = [this._capstoneList, this._milestoneList, this._wowList, this._focusList]
+      .flatMap(list => [...(list?.querySelectorAll('goal-item') ?? [])])
+      .find(g => g._goal?.id === id);
+    el?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
 
   _goalFilterActive() {

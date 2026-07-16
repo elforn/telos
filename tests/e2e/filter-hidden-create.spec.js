@@ -61,7 +61,9 @@ test.describe('Create while filter hides the result', () => {
     await waitForPage(page);
   });
 
-  test('goal created under an excluding filter: info toast, Show reveals it', async ({ page }) => {
+  test('goal created under an excluding filter: info toast, Show reveals and scrolls to it', async ({ page }) => {
+    // small viewport so the capstone section can be scrolled out of view
+    await page.setViewportSize({ width: 400, height: 500 });
     await openFilterPanel(page);
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
@@ -81,14 +83,19 @@ test.describe('Create while filter hides the result', () => {
 
     // info toast with the Show action
     await expect(page.locator('.socle-toast-info')).toContainText('hidden by the current filter');
+
+    // scroll the capstone section out of view before tapping Show
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await page.locator('.socle-toast-btn').click();
 
-    // filter cleared, goal visible
+    // filter cleared, goal visible AND scrolled into the viewport
     await page.waitForFunction(() => {
       const item = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('home-page')?.shadowRoot
         ?.querySelector('#capstone-list goal-item');
-      return item && item.hidden === false;
+      if (!item || item.hidden !== false) return false;
+      const r = item.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= window.innerHeight;
     });
     await page.waitForFunction(() =>
       document.querySelector('app-router').shadowRoot
