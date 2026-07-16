@@ -2,6 +2,7 @@ import { AppElement } from '../../_lib/core/app-element.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { BASE_PATH } from '../base-path.js';
 import { setState, getState, setRuntimeState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
+import { syncChildren } from '../../_lib/core/dom/sync-children.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/list-item/list-item.js';
@@ -2020,22 +2021,11 @@ class ListDetailPage extends AppElement {
   // ── Rendering ─────────────────────────────────────────────────────────────
 
   _renderItems(items) {
-    const byId = new Map();
-    this._itemList.querySelectorAll('list-item').forEach(el => {
-      if (el._item?.id) byId.set(el._item.id, el);
-    });
-
-    const ordered = items.map(item => {
-      const el = byId.get(item.id) ?? document.createElement('list-item');
-      byId.delete(item.id);
+    syncChildren(this._itemList, items, 'list-item', (el, item) => {
       el.item          = item;
       el.selectionMode = this._selectionMode;
       el.selected      = this._selectionMode && this._selectedIds.has(item.id);
-      return el;
-    });
-
-    byId.forEach(el => el.remove());
-    ordered.forEach(el => this._itemList.appendChild(el));
+    }, { getElId: el => el._item?.id });
   }
 }
 

@@ -2,6 +2,7 @@ import { AppElement } from '../../_lib/core/app-element.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { BASE_PATH } from '../base-path.js';
 import { setState, getState, setRuntimeState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
+import { syncChildren } from '../../_lib/core/dom/sync-children.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/list-dialog/list-dialog.js';
@@ -705,25 +706,7 @@ class ListsPage extends AppElement {
   // ── Rendering ─────────────────────────────────────────────────────────────
 
   _renderLists(lists) {
-    const byId = new Map();
-    this._container.querySelectorAll('lists-page-item').forEach(el => {
-      if (el.dataset.id) byId.set(el.dataset.id, el);
-    });
-
-    const ordered = lists.map(list => {
-      let el = byId.get(list.id);
-      if (!el) {
-        el = document.createElement('lists-page-item');
-        el.dataset.id = list.id;
-      } else {
-        byId.delete(list.id);
-      }
-      el.list = list;
-      return el;
-    });
-
-    byId.forEach(el => el.remove());
-    ordered.forEach(el => this._container.appendChild(el));
+    syncChildren(this._container, lists, 'lists-page-item', (el, list) => { el.list = list; });
   }
 }
 

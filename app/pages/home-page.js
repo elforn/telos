@@ -2,6 +2,7 @@ import { AppElement } from '../../_lib/core/app-element.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { BASE_PATH } from '../base-path.js';
 import { setState, getState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
+import { syncChildren } from '../../_lib/core/dom/sync-children.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/year-header/year-header.js';
@@ -1187,20 +1188,8 @@ class HomePage extends AppElement {
   // ── Render ────────────────────────────────────────────────────────────────
 
   _renderList(container, items) {
-    const byId = new Map();
-    container.querySelectorAll('goal-item').forEach(el => {
-      if (el._goal?.id) byId.set(el._goal.id, el);
-    });
-
-    const ordered = items.map(goal => {
-      const el = byId.get(goal.id) ?? document.createElement('goal-item');
-      byId.delete(goal.id);
-      el.goal = goal;
-      return el;
-    });
-
-    byId.forEach(el => el.remove());
-    ordered.forEach(el => container.appendChild(el));
+    syncChildren(container, items, 'goal-item', (el, goal) => { el.goal = goal; },
+      { getElId: el => el._goal?.id });
   }
 
   // ── Drag helpers ──────────────────────────────────────────────────────────
