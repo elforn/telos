@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.9.7] — 2026-07-17
+
+### Added
+- Creating a goal, list item, or list that an active filter immediately hides now shows an info toast — "…added — hidden by the current filter" — with a **Show** action that clears the filter and scrolls the new entry into view (en, fr, ca)
+
+---
+
 ## [1.9.6] — 2026-07-16
 
 ### Changed
