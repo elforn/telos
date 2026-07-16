@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.9.6] — 2026-07-16
+
+### Changed
+- Socle updated to 0.11.0
+- The three list renderers (goals, lists, list items) now use the library's `syncChildren` reconciliation helper — behaviour unchanged, ~40 lines of duplicated code removed
+- Lists page pilots the library's auto-cleanup `listen()`/`watch()` helpers — its manual listener teardown shrinks to only the mid-drag case
+
+---
+
 ## [1.9.5] — 2026-07-16
 
 ### Added
