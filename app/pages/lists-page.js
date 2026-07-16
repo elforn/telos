@@ -1,7 +1,7 @@
 import { AppElement } from '../../_lib/core/app-element.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { BASE_PATH } from '../base-path.js';
-import { setState, getState, setRuntimeState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
+import { setState, getState, setRuntimeState } from '../../_lib/core/store/store.js';
 import { syncChildren } from '../../_lib/core/dom/sync-children.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
@@ -321,14 +321,14 @@ class ListsPage extends AppElement {
     this._dialog    = this.shadowRoot.querySelector('#dialog');
 
     this._onAddRow = () => this._dialog.open(null);
-    this.shadowRoot.querySelector('#add-row').addEventListener('click', this._onAddRow);
+    this.listen(this.shadowRoot.querySelector('#add-row'), 'click', this._onAddRow);
 
     this._onListTap = e => {
       const q = this._filter?.query?.trim();
       const qs = q ? `?q=${encodeURIComponent(q)}` : '';
       navigate(`${BASE_PATH}lists/${e.detail.list.id}${qs}`);
     };
-    this._container.addEventListener('list-tap', this._onListTap);
+    this.listen(this._container, 'list-tap', this._onListTap);
 
     this._onListCreated = e => {
       const { name, color } = e.detail;
@@ -337,7 +337,7 @@ class ListsPage extends AppElement {
       toast(t('lists.toast-list-saved'), 'success',
         { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
     };
-    this.shadowRoot.addEventListener('list-created', this._onListCreated);
+    this.listen(this.shadowRoot, 'list-created', this._onListCreated);
 
     this._onListColorCycle = e => {
       const list = e.detail?.list;
@@ -350,7 +350,7 @@ class ListsPage extends AppElement {
         return nextColor ? { ...rest, color: nextColor } : rest;
       }));
     };
-    this._container.addEventListener('list-color-cycle', this._onListColorCycle);
+    this.listen(this._container, 'list-color-cycle', this._onListColorCycle);
 
     this._initDrag();
 
@@ -382,7 +382,7 @@ class ListsPage extends AppElement {
       this._syncFilterUI();
       if (nowOpen) requestAnimationFrame(() => this._filterSearch?.focus());
     };
-    filterBtn.addEventListener('click', this._onFilterBtn);
+    this.listen(filterBtn, 'click', this._onFilterBtn);
 
     this._onFilterSearch = () => {
       this._filter.query = this._filterSearch.value;
@@ -390,14 +390,14 @@ class ListsPage extends AppElement {
       this._applyFilter();
       this._syncFilterUI();
     };
-    this._filterSearch.addEventListener('input', this._onFilterSearch);
+    this.listen(this._filterSearch, 'input', this._onFilterSearch);
 
     this._onFilterExpand = () => {
       this._panelExpanded = !this._panelExpanded;
       this._saveFilter();
       this._syncFilterUI();
     };
-    this._filterExpandBtn.addEventListener('click', this._onFilterExpand);
+    this.listen(this._filterExpandBtn, 'click', this._onFilterExpand);
 
     this._onEmptyBtn = () => {
       this._filter.emptyFilter = this._filter.emptyFilter === 'empty' ? null : 'empty';
@@ -405,7 +405,7 @@ class ListsPage extends AppElement {
       this._syncFilterUI();
       this._applyFilter();
     };
-    this._emptyBtn.addEventListener('click', this._onEmptyBtn);
+    this.listen(this._emptyBtn, 'click', this._onEmptyBtn);
 
     this._onNotEmptyBtn = () => {
       this._filter.emptyFilter = this._filter.emptyFilter === 'not-empty' ? null : 'not-empty';
@@ -413,7 +413,7 @@ class ListsPage extends AppElement {
       this._syncFilterUI();
       this._applyFilter();
     };
-    this._notEmptyBtn.addEventListener('click', this._onNotEmptyBtn);
+    this.listen(this._notEmptyBtn, 'click', this._onNotEmptyBtn);
 
     this._onFilterClear = () => {
       this._filter = { query: '', emptyFilter: null };
@@ -421,7 +421,7 @@ class ListsPage extends AppElement {
       this._syncFilterUI();
       this._applyFilter();
     };
-    this.shadowRoot.querySelector('#filter-clear-btn').addEventListener('click', this._onFilterClear);
+    this.listen(this.shadowRoot.querySelector('#filter-clear-btn'), 'click', this._onFilterClear);
 
     if (this._barExpanded) {
       this._filterBar.hidden = false;
@@ -435,7 +435,7 @@ class ListsPage extends AppElement {
       this._syncFilterUI();
       this._applyFilter();
     };
-    subscribe('lists', this._onLists);
+    this.watch('lists', this._onLists);
 
     this._onPendingListUndo = value => {
       if (!value) return;
@@ -443,7 +443,7 @@ class ListsPage extends AppElement {
       setRuntimeState('pendingListUndo', null);
       toast(t('lists.toast-list-deleted', { name: listName }), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
     };
-    subscribe('pendingListUndo', this._onPendingListUndo);
+    this.watch('pendingListUndo', this._onPendingListUndo);
   }
 
   _initDrag() {
@@ -528,17 +528,13 @@ class ListsPage extends AppElement {
       this._placeList(fromIndex, toIndex);
     };
 
-    this._container.addEventListener('list-drag-start',  this._onListDragStart);
-    this._container.addEventListener('list-reorder-key', this._onListReorderKey);
+    this.listen(this._container, 'list-drag-start',  this._onListDragStart);
+    this.listen(this._container, 'list-reorder-key', this._onListReorderKey);
   }
 
   unsubscribe() {
-    this.shadowRoot.querySelector('#add-row')?.removeEventListener('click', this._onAddRow);
-    this._container?.removeEventListener('list-tap', this._onListTap);
-    this._container?.removeEventListener('list-color-cycle', this._onListColorCycle);
-    this._container?.removeEventListener('list-drag-start',  this._onListDragStart);
-    this._container?.removeEventListener('list-reorder-key', this._onListReorderKey);
-    this.shadowRoot?.removeEventListener('list-created', this._onListCreated);
+    // Static listeners and store subscriptions are auto-removed by listen()/watch().
+    // Only the per-drag dragEl listeners need manual teardown on a mid-drag disconnect.
     if (this._drag) {
       const { dragEl, clone } = this._drag;
       dragEl.removeEventListener('pointermove',   this._onDragMove);
@@ -550,14 +546,6 @@ class ListsPage extends AppElement {
       this._insertLine?.remove();
       this._drag = null;
     }
-    unsubscribe('lists', this._onLists);
-    unsubscribe('pendingListUndo', this._onPendingListUndo);
-    this.shadowRoot?.querySelector('#filter-btn')?.removeEventListener('click', this._onFilterBtn);
-    this._filterSearch?.removeEventListener('input', this._onFilterSearch);
-    this._filterExpandBtn?.removeEventListener('click', this._onFilterExpand);
-    this._emptyBtn?.removeEventListener('click', this._onEmptyBtn);
-    this._notEmptyBtn?.removeEventListener('click', this._onNotEmptyBtn);
-    this.shadowRoot?.querySelector('#filter-clear-btn')?.removeEventListener('click', this._onFilterClear);
   }
 
   // ── Store mutations ───────────────────────────────────────────────────────
