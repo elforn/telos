@@ -429,8 +429,10 @@ describe('list-detail-page — item-reorder-key', () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_A, ITEM_B, ITEM_C] }] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
-    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-reorder-key', {
-      bubbles: true, detail: { item: ITEM_A, direction: 1 },
+    // Reorder.attach locates the dragged element via composedPath(), matching
+    // list-item's real dispatch (on itself) — fire on the item, not the container.
+    el.shadowRoot.querySelectorAll('list-item')[0].dispatchEvent(new CustomEvent('item-reorder-key', {
+      bubbles: true, composed: true, detail: { item: ITEM_A, direction: 1 },
     }));
     await vi.waitFor(() => {
       const ids = getState().lists[0].items.map(i => i.id);
@@ -442,8 +444,8 @@ describe('list-detail-page — item-reorder-key', () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_A, ITEM_B, ITEM_C] }] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
-    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-reorder-key', {
-      bubbles: true, detail: { item: ITEM_C, direction: -1 },
+    el.shadowRoot.querySelectorAll('list-item')[2].dispatchEvent(new CustomEvent('item-reorder-key', {
+      bubbles: true, composed: true, detail: { item: ITEM_C, direction: -1 },
     }));
     await vi.waitFor(() => {
       const ids = getState().lists[0].items.map(i => i.id);
@@ -455,8 +457,8 @@ describe('list-detail-page — item-reorder-key', () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM_A, ITEM_B] }] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
-    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-reorder-key', {
-      bubbles: true, detail: { item: ITEM_A, direction: -1 },
+    el.shadowRoot.querySelectorAll('list-item')[0].dispatchEvent(new CustomEvent('item-reorder-key', {
+      bubbles: true, composed: true, detail: { item: ITEM_A, direction: -1 },
     }));
     const ids = getState().lists[0].items.map(i => i.id);
     expect(ids).toEqual(['a', 'b']);

@@ -1,8 +1,9 @@
 import { AppElement } from '../../_lib/core/app-element.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { BASE_PATH } from '../base-path.js';
-import { setState, getState, setRuntimeState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
+import { setState, getState, setRuntimeState } from '../../_lib/core/store/store.js';
 import { syncChildren } from '../../_lib/core/dom/sync-children.js';
+import { Reorder } from '../../_lib/modules/reorder/reorder.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/list-item/list-item.js';
@@ -887,30 +888,28 @@ class ListDetailPage extends AppElement {
     this._listDialog  = this.shadowRoot.querySelector('#list-dialog');
     this._menuDialog  = this.shadowRoot.querySelector('#menu');
     this._editingItem = null;
-    this._drag        = null;
-    this._insertLine  = null;
     this._selectionMode = false;
     this._selectedIds   = new Set();
 
     this._showStatus = true; // updated from store on first _onLists call
 
     this._onBack = () => navigate(`${BASE_PATH}lists`);
-    this.shadowRoot.querySelector('#back-btn').addEventListener('click', this._onBack);
+    this.listen(this.shadowRoot.querySelector('#back-btn'), 'click', this._onBack);
 
     const menuBtn = this.shadowRoot.querySelector('#menu-btn');
     this._onMenuBtn = () => {
       this._menuDialog.showModal();
       menuBtn.setAttribute('aria-expanded', 'true');
     };
-    menuBtn.addEventListener('click', this._onMenuBtn);
+    this.listen(menuBtn, 'click', this._onMenuBtn);
 
     this._onMenuClose = () => {
       menuBtn.setAttribute('aria-expanded', 'false');
     };
-    this._menuDialog.addEventListener('close', this._onMenuClose);
+    this.listen(this._menuDialog, 'close', this._onMenuClose);
 
     this._onBackdrop = e => { if (e.target === this._menuDialog) this._menuDialog.close(); };
-    this._menuDialog.addEventListener('click', this._onBackdrop);
+    this.listen(this._menuDialog, 'click', this._onBackdrop);
 
     // ── Name edit button ──────────────────────────────────────────────────────
     this._onNameEdit = () => {
@@ -920,7 +919,7 @@ class ListDetailPage extends AppElement {
         this._listDialog.open(list);
       }
     };
-    this.shadowRoot.querySelector('#name-edit-btn').addEventListener('click', this._onNameEdit);
+    this.listen(this.shadowRoot.querySelector('#name-edit-btn'), 'click', this._onNameEdit);
 
     // ── List dialog (edit name / color) ───────────────────────────────────────
     this._onListNameChanged = e => {
@@ -928,7 +927,7 @@ class ListDetailPage extends AppElement {
         l.id !== this._listId ? l : { ...l, name: e.detail.name }
       ));
     };
-    this._listDialog.addEventListener('list-name-changed', this._onListNameChanged);
+    this.listen(this._listDialog, 'list-name-changed', this._onListNameChanged);
 
     this._onListColorChanged = e => {
       setState('lists', (getState().lists ?? []).map(l => {
@@ -937,7 +936,7 @@ class ListDetailPage extends AppElement {
         return e.detail.color ? { ...rest, color: e.detail.color } : rest;
       }));
     };
-    this._listDialog.addEventListener('list-color-changed', this._onListColorChanged);
+    this.listen(this._listDialog, 'list-color-changed', this._onListColorChanged);
 
     this._onListClosed = () => {
       const snap = this._listEditSnapshot;
@@ -947,14 +946,14 @@ class ListDetailPage extends AppElement {
           { action: { label: t('undo.button'), onClick: () => setState('lists', snap) } });
       }
     };
-    this._listDialog.addEventListener('list-closed', this._onListClosed);
+    this.listen(this._listDialog, 'list-closed', this._onListClosed);
 
     this._onListDialogDelete = () => this._deleteCurrentList();
-    this._listDialog.addEventListener('list-delete', this._onListDialogDelete);
+    this.listen(this._listDialog, 'list-delete', this._onListDialogDelete);
 
     // ── Delete list (menu) ────────────────────────────────────────────────────
     this._onListDeleteBtn = () => { this._menuDialog.close(); this._deleteCurrentList(); };
-    this.shadowRoot.querySelector('#list-delete-btn').addEventListener('click', this._onListDeleteBtn);
+    this.listen(this.shadowRoot.querySelector('#list-delete-btn'), 'click', this._onListDeleteBtn);
 
     this._onStatusShow = () => {
       if (this._showStatus) return;
@@ -968,8 +967,8 @@ class ListDetailPage extends AppElement {
         l.id === this._listId ? { ...l, showStatus: false } : l
       ));
     };
-    this.shadowRoot.querySelector('#status-show-btn').addEventListener('click', this._onStatusShow);
-    this.shadowRoot.querySelector('#status-hide-btn').addEventListener('click', this._onStatusHide);
+    this.listen(this.shadowRoot.querySelector('#status-show-btn'), 'click', this._onStatusShow);
+    this.listen(this.shadowRoot.querySelector('#status-hide-btn'), 'click', this._onStatusHide);
 
     this._onAddRow = () => {
       this._editingItem = null;
@@ -978,7 +977,7 @@ class ListDetailPage extends AppElement {
       this._prepareDialog(null);
       this._dialog.open(null);
     };
-    this.shadowRoot.querySelector('#add-row').addEventListener('click', this._onAddRow);
+    this.listen(this.shadowRoot.querySelector('#add-row'), 'click', this._onAddRow);
 
     this._onItemTap = e => {
       if (this._selectionMode) return;
@@ -988,21 +987,21 @@ class ListDetailPage extends AppElement {
       this._itemEditSnapshot = getState().lists;
       this._dialog.open(cleanItem);
     };
-    this._itemList.addEventListener('item-tap', this._onItemTap);
+    this.listen(this._itemList, 'item-tap', this._onItemTap);
 
     this._onItemDelete = e => {
       const snapshot = getState().lists;
       this._deleteItem(e.detail.item.id);
       toast(t('lists.toast-item-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
     };
-    this._itemList.addEventListener('item-delete', this._onItemDelete);
+    this.listen(this._itemList, 'item-delete', this._onItemDelete);
 
     this._onItemDoneToggle = e => {
       const item = e.detail.item;
       const newStatus = item.status === 'done' ? 'open' : 'done';
       this._editItem(item.id, { title: item.title, status: newStatus });
     };
-    this._itemList.addEventListener('item-done-toggle', this._onItemDoneToggle);
+    this.listen(this._itemList, 'item-done-toggle', this._onItemDoneToggle);
 
     this._onItemStatusCycle = e => {
       const { item, next } = e.detail;
@@ -1016,7 +1015,7 @@ class ListDetailPage extends AppElement {
       }
       this._editItem(item.id, { title: item.title, status: next });
     };
-    this._itemList.addEventListener('item-status-cycle', this._onItemStatusCycle);
+    this.listen(this._itemList, 'item-status-cycle', this._onItemStatusCycle);
 
     this._onItemCreated = e => {
       const { id, title, status, note, url, tags } = e.detail;
@@ -1024,7 +1023,7 @@ class ListDetailPage extends AppElement {
       this._editingItem = { id, title, status, note, url, tags, inGoals: [] };
       this._createdItemId = id;
     };
-    this.shadowRoot.addEventListener('item-created', this._onItemCreated);
+    this.listen(this.shadowRoot, 'item-created', this._onItemCreated);
 
     this._onItemClosed = () => {
       const snap = this._itemEditSnapshot;
@@ -1052,7 +1051,7 @@ class ListDetailPage extends AppElement {
         }, 700);
       }
     };
-    this._dialog.addEventListener('item-closed', this._onItemClosed);
+    this.listen(this._dialog, 'item-closed', this._onItemClosed);
 
     this._onDialogDelete = () => {
       if (this._editingItem) {
@@ -1062,7 +1061,7 @@ class ListDetailPage extends AppElement {
         toast(t('lists.toast-item-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
       }
     };
-    this._dialog.addEventListener('item-delete', this._onDialogDelete);
+    this.listen(this._dialog, 'item-delete', this._onDialogDelete);
 
     this._onItemTitleChanged = e => {
       if (!this._editingItem) return;
@@ -1070,7 +1069,7 @@ class ListDetailPage extends AppElement {
         i.id === this._editingItem.id ? { ...i, title: e.detail.title } : i
       ));
     };
-    this._dialog.addEventListener('item-title-changed', this._onItemTitleChanged);
+    this.listen(this._dialog, 'item-title-changed', this._onItemTitleChanged);
 
     this._onItemNoteChanged = e => {
       if (!this._editingItem) return;
@@ -1078,7 +1077,7 @@ class ListDetailPage extends AppElement {
         i.id === this._editingItem.id ? { ...i, note: e.detail.note } : i
       ));
     };
-    this._dialog.addEventListener('item-note-changed', this._onItemNoteChanged);
+    this.listen(this._dialog, 'item-note-changed', this._onItemNoteChanged);
 
     this._onItemUrlChanged = e => {
       if (!this._editingItem) return;
@@ -1086,7 +1085,7 @@ class ListDetailPage extends AppElement {
         i.id === this._editingItem.id ? { ...i, url: e.detail.url } : i
       ));
     };
-    this._dialog.addEventListener('item-url-changed', this._onItemUrlChanged);
+    this.listen(this._dialog, 'item-url-changed', this._onItemUrlChanged);
 
     this._onItemStatusChanged = e => {
       if (!this._editingItem) return;
@@ -1105,7 +1104,7 @@ class ListDetailPage extends AppElement {
         i.id === this._editingItem.id ? { ...i, status } : i
       ));
     };
-    this._dialog.addEventListener('item-status-changed', this._onItemStatusChanged);
+    this.listen(this._dialog, 'item-status-changed', this._onItemStatusChanged);
 
     this._onItemTagsChanged = e => {
       if (!this._editingItem) return;
@@ -1113,7 +1112,7 @@ class ListDetailPage extends AppElement {
         i.id === this._editingItem.id ? { ...i, tags: e.detail.tags } : i
       ));
     };
-    this._dialog.addEventListener('item-tags-changed', this._onItemTagsChanged);
+    this.listen(this._dialog, 'item-tags-changed', this._onItemTagsChanged);
 
     this._onItemMove = e => {
       if (!this._editingItem) return;
@@ -1150,7 +1149,7 @@ class ListDetailPage extends AppElement {
         : (n === 1 ? t('item-dialog.move-toast', { name: targetNames[0] }) : t('item-dialog.move-toast-many', { n }));
       toast(msg, 'success');
     };
-    this._dialog.addEventListener('item-move', this._onItemMove);
+    this.listen(this._dialog, 'item-move', this._onItemMove);
 
     this._onItemPromote = e => {
       if (!this._editingItem) return;
@@ -1180,91 +1179,22 @@ class ListDetailPage extends AppElement {
       const sectionLabel = t(`item-dialog.goal-section-${section}`);
       toast(t('item-dialog.promote-toast', { year: yearStr, section: sectionLabel }), 'success');
     };
-    this._dialog.addEventListener('item-promote', this._onItemPromote);
+    this.listen(this._dialog, 'item-promote', this._onItemPromote);
 
     // ── Drag-to-reorder ───────────────────────────────────────────────────────
+    // list-item itself withholds item-drag-start while selectionMode is set
+    // (kept in sync synchronously by _syncSelectionUI), so no page-level guard needed.
 
-    this._onItemDragStart = e => {
-      if (this._selectionMode) return;
-      const { item, element: dragEl, startX, startY } = e.detail;
-      const items     = [...this._itemList.querySelectorAll('list-item')];
-      const fromIndex = items.indexOf(dragEl);
-      const rect      = dragEl.getBoundingClientRect();
-
-      dragEl.style.opacity = '0.4';
-
-      const clone = this._createDragClone(rect, item.title);
-      clone.style.left = `${rect.left}px`;
-      clone.style.top  = `${rect.top}px`;
-      document.body.appendChild(clone);
-
-      if (!this._insertLine) {
-        this._insertLine = document.createElement('div');
-        this._insertLine.style.cssText = 'height:2px;border-radius:1px;margin-block:calc(var(--space-2)/2);pointer-events:none;background:var(--color-accent)';
-      }
-
-      this._drag = { item, fromIndex, dragEl, clone,
-        offsetX: startX - rect.left, offsetY: startY - rect.top,
-        targetIndex: fromIndex, scrollSpeed: 0, scrollRaf: null };
-
-      const scrollLoop = () => {
-        if (!this._drag) return;
-        if (this._drag.scrollSpeed !== 0) window.scrollBy(0, this._drag.scrollSpeed);
-        this._drag.scrollRaf = requestAnimationFrame(scrollLoop);
-      };
-      this._drag.scrollRaf = requestAnimationFrame(scrollLoop);
-
-      dragEl.addEventListener('pointermove',   this._onDragMove);
-      dragEl.addEventListener('pointerup',     this._onDragEnd);
-      dragEl.addEventListener('pointercancel', this._onDragEnd);
-    };
-
-    this._onDragMove = e => {
-      if (!this._drag) return;
-      const { dragEl, clone, offsetX, offsetY } = this._drag;
-      clone.style.left = `${e.clientX - offsetX}px`;
-      clone.style.top  = `${e.clientY - offsetY}px`;
-
-      const SCROLL_ZONE = 100;
-      const MAX_SPEED   = 14;
-      const vh = window.innerHeight;
-      if (e.clientY < SCROLL_ZONE)
-        this._drag.scrollSpeed = -MAX_SPEED * (1 - e.clientY / SCROLL_ZONE);
-      else if (e.clientY > vh - SCROLL_ZONE)
-        this._drag.scrollSpeed =  MAX_SPEED * (1 - (vh - e.clientY) / SCROLL_ZONE);
-      else
-        this._drag.scrollSpeed = 0;
-
-      const idx = this._insertIndexAt(this._itemList, e.clientY, dragEl);
-      this._drag.targetIndex = idx;
-      this._updateInsertLine(this._itemList, idx, dragEl);
-    };
-
-    this._onDragEnd = () => {
-      if (!this._drag) return;
-      const { fromIndex, dragEl, clone, targetIndex } = this._drag;
-      dragEl.removeEventListener('pointermove',   this._onDragMove);
-      dragEl.removeEventListener('pointerup',     this._onDragEnd);
-      dragEl.removeEventListener('pointercancel', this._onDragEnd);
-      dragEl.style.opacity = '';
-      cancelAnimationFrame(this._drag.scrollRaf);
-      clone.remove();
-      this._insertLine?.remove();
-      this._drag = null;
-      this._placeItem(fromIndex, targetIndex);
-    };
-
-    this._onItemReorderKey = e => {
-      const { item, direction } = e.detail;
-      const items = [...this._itemList.querySelectorAll('list-item')];
-      const fromIndex = items.findIndex(el => el._item?.id === item.id);
-      if (fromIndex === -1) return;
-      const toIndex = direction === -1 ? Math.max(0, fromIndex - 1) : fromIndex + 2;
-      this._placeItem(fromIndex, toIndex);
-    };
+    this._detachReorder = Reorder.attach(this._itemList, {
+      itemSelector:    'list-item',
+      dragStartEvent:  'item-drag-start',
+      reorderKeyEvent: 'item-reorder-key',
+      cloneLabel:      d => d.item.title,
+      onMove:          (from, to) => this._placeItem(from, to),
+    });
 
     this._onBulkClose = () => this._exitSelectionMode();
-    this.shadowRoot.querySelector('#bulk-close-btn').addEventListener('click', this._onBulkClose);
+    this.listen(this.shadowRoot.querySelector('#bulk-close-btn'), 'click', this._onBulkClose);
 
     this._bulkCountEl      = this.shadowRoot.querySelector('#bulk-count');
     this._bulkPickerDialog = this.shadowRoot.querySelector('#bulk-picker');
@@ -1278,27 +1208,27 @@ class ListDetailPage extends AppElement {
       this._exitSelectionMode();
       toast(t('list-detail.bulk-delete-toast', { n: ids.length }), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
     };
-    this.shadowRoot.querySelector('#bulk-delete-btn').addEventListener('click', this._onBulkDelete);
+    this.listen(this.shadowRoot.querySelector('#bulk-delete-btn'), 'click', this._onBulkDelete);
 
     this._onBulkStatus = () => this._bulkStatusSheet.showModal();
-    this.shadowRoot.querySelector('#bulk-status-btn').addEventListener('click', this._onBulkStatus);
+    this.listen(this.shadowRoot.querySelector('#bulk-status-btn'), 'click', this._onBulkStatus);
 
     this._onBulkStatusBackdrop = e => { if (e.target === this._bulkStatusSheet) this._bulkStatusSheet.close(); };
-    this._bulkStatusSheet.addEventListener('click', this._onBulkStatusBackdrop);
+    this.listen(this._bulkStatusSheet, 'click', this._onBulkStatusBackdrop);
 
     this._onBulkStatusOpen   = () => this._applyBulkStatus('open');
     this._onBulkStatusPaused = () => this._applyBulkStatus('paused');
     this._onBulkStatusDone   = () => this._applyBulkStatus('done');
     this._onBulkStatusClosed = () => this._applyBulkStatus('closed');
-    this.shadowRoot.querySelector('#bulk-status-open').addEventListener('click', this._onBulkStatusOpen);
-    this.shadowRoot.querySelector('#bulk-status-paused').addEventListener('click', this._onBulkStatusPaused);
-    this.shadowRoot.querySelector('#bulk-status-done').addEventListener('click', this._onBulkStatusDone);
-    this.shadowRoot.querySelector('#bulk-status-closed').addEventListener('click', this._onBulkStatusClosed);
+    this.listen(this.shadowRoot.querySelector('#bulk-status-open'), 'click', this._onBulkStatusOpen);
+    this.listen(this.shadowRoot.querySelector('#bulk-status-paused'), 'click', this._onBulkStatusPaused);
+    this.listen(this.shadowRoot.querySelector('#bulk-status-done'), 'click', this._onBulkStatusDone);
+    this.listen(this.shadowRoot.querySelector('#bulk-status-closed'), 'click', this._onBulkStatusClosed);
 
     this._onBulkMore = () => this._bulkMoreSheet.showModal();
     this._onBulkMoreBackdrop = e => { if (e.target === this._bulkMoreSheet) this._bulkMoreSheet.close(); };
-    this.shadowRoot.querySelector('#bulk-more-btn').addEventListener('click', this._onBulkMore);
-    this._bulkMoreSheet.addEventListener('click', this._onBulkMoreBackdrop);
+    this.listen(this.shadowRoot.querySelector('#bulk-more-btn'), 'click', this._onBulkMore);
+    this.listen(this._bulkMoreSheet, 'click', this._onBulkMoreBackdrop);
 
     this._exportSheet = this.shadowRoot.querySelector('#export-sheet');
     this._exportMode  = EXPORT_MODE_LIST;
@@ -1308,14 +1238,14 @@ class ListDetailPage extends AppElement {
       this._exportMode = EXPORT_MODE_LIST;
       this._exportSheet.show();
     };
-    this.shadowRoot.querySelector('#export-menu-btn').addEventListener('click', this._onExportMenuBtn);
+    this.listen(this.shadowRoot.querySelector('#export-menu-btn'), 'click', this._onExportMenuBtn);
 
     this._onBulkExportBtn = () => {
       this._bulkMoreSheet.close();
       this._exportMode = EXPORT_MODE_SELECTION;
       this._exportSheet.show();
     };
-    this.shadowRoot.querySelector('#bulk-export-btn').addEventListener('click', this._onBulkExportBtn);
+    this.listen(this.shadowRoot.querySelector('#bulk-export-btn'), 'click', this._onBulkExportBtn);
 
     this._onExportConfirm = e => {
       const { metadata, notes } = e.detail;
@@ -1335,17 +1265,17 @@ class ListDetailPage extends AppElement {
       navigator.clipboard.writeText(md).catch(() => {});
       toast(t('export.copied'), 'success');
     };
-    this._exportSheet.addEventListener('extract-confirm', this._onExportConfirm);
+    this.listen(this._exportSheet, 'extract-confirm', this._onExportConfirm);
 
     this._onItemExportRequest = e => {
       this._exportItem = e.detail.item;
       this._exportMode = EXPORT_MODE_ITEM;
       this._exportSheet.show();
     };
-    this.shadowRoot.addEventListener('item-export-request', this._onItemExportRequest);
+    this.listen(this.shadowRoot, 'item-export-request', this._onItemExportRequest);
 
     this._onBulkMove = () => this._openBulkPicker();
-    this.shadowRoot.querySelector('#bulk-move-btn').addEventListener('click', this._onBulkMove);
+    this.listen(this.shadowRoot.querySelector('#bulk-move-btn'), 'click', this._onBulkMove);
 
     this._onBulkListPick = e => {
       const { targetListIds, newListName, copy } = e.detail;
@@ -1384,12 +1314,12 @@ class ListDetailPage extends AppElement {
       toast(msg, 'success');
       if (!copy) this._exitSelectionMode();
     };
-    this._bulkPickerDialog.addEventListener('list-pick', this._onBulkListPick);
+    this.listen(this._bulkPickerDialog, 'list-pick', this._onBulkListPick);
 
     this._onItemLongPress = e => {
       if (!this._selectionMode) this._enterSelectionMode(e.detail.item.id);
     };
-    this._itemList.addEventListener('item-long-press', this._onItemLongPress);
+    this.listen(this._itemList, 'item-long-press', this._onItemLongPress);
 
     this._onItemSelectToggle = e => {
       const id = e.detail.item.id;
@@ -1398,10 +1328,7 @@ class ListDetailPage extends AppElement {
       if (this._selectedIds.size === 0) { this._exitSelectionMode(); return; }
       this._syncSelectionUI();
     };
-    this._itemList.addEventListener('item-select-toggle', this._onItemSelectToggle);
-
-    this._itemList.addEventListener('item-drag-start',  this._onItemDragStart);
-    this._itemList.addEventListener('item-reorder-key', this._onItemReorderKey);
+    this.listen(this._itemList, 'item-select-toggle', this._onItemSelectToggle);
 
     // ── Import from text ──────────────────────────────────────────────────────
 
@@ -1419,19 +1346,19 @@ class ListDetailPage extends AppElement {
       this._importDialog.showModal();
       requestAnimationFrame(() => this._importTextarea.focus());
     };
-    this.shadowRoot.querySelector('#import-menu-btn').addEventListener('click', this._onImportMenuBtn);
+    this.listen(this.shadowRoot.querySelector('#import-menu-btn'), 'click', this._onImportMenuBtn);
 
     this._onImportTextarea = () => {
       this._importParsed = this._parseImportText(this._importTextarea.value);
       this._updateImportUI();
     };
-    this._importTextarea.addEventListener('input', this._onImportTextarea);
+    this.listen(this._importTextarea, 'input', this._onImportTextarea);
 
     this._onImportCancel = () => this._importDialog.close();
-    this.shadowRoot.querySelector('#import-cancel-btn').addEventListener('click', this._onImportCancel);
+    this.listen(this.shadowRoot.querySelector('#import-cancel-btn'), 'click', this._onImportCancel);
 
     this._onImportBackdrop = e => { if (e.target === this._importDialog) this._importDialog.close(); };
-    this._importDialog.addEventListener('click', this._onImportBackdrop);
+    this.listen(this._importDialog, 'click', this._onImportBackdrop);
 
     this._onImportCta = () => {
       if (!this._importParsed.length) return;
@@ -1443,7 +1370,7 @@ class ListDetailPage extends AppElement {
         action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) },
       });
     };
-    this._importCtaBtn.addEventListener('click', this._onImportCta);
+    this.listen(this._importCtaBtn, 'click', this._onImportCta);
 
     // ── Filter bar ────────────────────────────────────────────────────────────
 
@@ -1486,14 +1413,14 @@ class ListDetailPage extends AppElement {
       this._syncFilterUI();
       if (nowOpen) requestAnimationFrame(() => this._filterSearch?.focus());
     };
-    this._filterBtnEl.addEventListener('click', this._onFilterBtn);
+    this.listen(this._filterBtnEl, 'click', this._onFilterBtn);
 
     this._onFilterExpand = () => {
       this._panelExpanded = !this._panelExpanded;
       this._saveFilter();
       this._syncFilterUI();
     };
-    this._filterExpandBtn.addEventListener('click', this._onFilterExpand);
+    this.listen(this._filterExpandBtn, 'click', this._onFilterExpand);
 
     this._onFilterSearch = () => {
       this._filter.query = this._filterSearch.value;
@@ -1501,7 +1428,7 @@ class ListDetailPage extends AppElement {
       this._syncFilterUI();
       this._applyFilter();
     };
-    this._filterSearch.addEventListener('input', this._onFilterSearch);
+    this.listen(this._filterSearch, 'input', this._onFilterSearch);
 
     this._onFilterStatus = e => {
       const btn = e.target.closest('.filter-pill');
@@ -1515,7 +1442,7 @@ class ListDetailPage extends AppElement {
       this._syncFilterUI();
       this._applyFilter();
     };
-    this.shadowRoot.querySelector('#filter-status-row').addEventListener('click', this._onFilterStatus);
+    this.listen(this.shadowRoot.querySelector('#filter-status-row'), 'click', this._onFilterStatus);
 
     this._onFilterClear = () => {
       this._filter = { query: '', statuses: new Set(), tags: new Set() };
@@ -1524,7 +1451,7 @@ class ListDetailPage extends AppElement {
       this._syncFilterUI();
       this._applyFilter();
     };
-    this.shadowRoot.querySelector('#filter-clear-btn').addEventListener('click', this._onFilterClear);
+    this.listen(this.shadowRoot.querySelector('#filter-clear-btn'), 'click', this._onFilterClear);
 
     if (this._barExpanded) {
       this._filterBar.hidden = false;
@@ -1546,7 +1473,7 @@ class ListDetailPage extends AppElement {
       this._syncFilterUI();
       if (!this._filterSuppressed) this._applyFilter();
     };
-    subscribe('lists', this._onLists);
+    this.watch('lists', this._onLists);
 
     this._onListsTagsVisible = tagsVisible => {
       const visible = tagsVisible?.[this._listId] === true;
@@ -1554,7 +1481,7 @@ class ListDetailPage extends AppElement {
       this.shadowRoot?.querySelector('#tags-show-btn')?.classList.toggle('active', visible);
       this.shadowRoot?.querySelector('#tags-hide-btn')?.classList.toggle('active', !visible);
     };
-    subscribe('listsTagsVisible', this._onListsTagsVisible);
+    this.watch('listsTagsVisible', this._onListsTagsVisible);
 
     this._onTagsShowBtn = () => {
       setState('listsTagsVisible', { ...getState().listsTagsVisible, [this._listId]: true });
@@ -1564,84 +1491,14 @@ class ListDetailPage extends AppElement {
       setState('listsTagsVisible', { ...getState().listsTagsVisible, [this._listId]: false });
       this._menuDialog.close();
     };
-    this.shadowRoot.querySelector('#tags-show-btn').addEventListener('click', this._onTagsShowBtn);
-    this.shadowRoot.querySelector('#tags-hide-btn').addEventListener('click', this._onTagsHideBtn);
+    this.listen(this.shadowRoot.querySelector('#tags-show-btn'), 'click', this._onTagsShowBtn);
+    this.listen(this.shadowRoot.querySelector('#tags-hide-btn'), 'click', this._onTagsHideBtn);
   }
 
   unsubscribe() {
+    // Static listeners and store subscriptions are auto-removed by listen()/watch().
     clearTimeout(this._filterSuppressTimer);
-    this.shadowRoot?.querySelector('#back-btn')?.removeEventListener('click', this._onBack);
-    this.shadowRoot?.querySelector('#menu-btn')?.removeEventListener('click', this._onMenuBtn);
-    this._menuDialog?.removeEventListener('close', this._onMenuClose);
-    this._menuDialog?.removeEventListener('click', this._onBackdrop);
-    this.shadowRoot?.querySelector('#name-edit-btn')?.removeEventListener('click', this._onNameEdit);
-    this._listDialog?.removeEventListener('list-name-changed', this._onListNameChanged);
-    this._listDialog?.removeEventListener('list-color-changed', this._onListColorChanged);
-    this._listDialog?.removeEventListener('list-closed', this._onListClosed);
-    this._listDialog?.removeEventListener('list-delete', this._onListDialogDelete);
-    this.shadowRoot?.querySelector('#list-delete-btn')?.removeEventListener('click', this._onListDeleteBtn);
-    this.shadowRoot?.querySelector('#status-show-btn')?.removeEventListener('click', this._onStatusShow);
-    this.shadowRoot?.querySelector('#status-hide-btn')?.removeEventListener('click', this._onStatusHide);
-    this.shadowRoot?.querySelector('#add-row')?.removeEventListener('click', this._onAddRow);
-    this._itemList?.removeEventListener('item-tap', this._onItemTap);
-    this._itemList?.removeEventListener('item-delete', this._onItemDelete);
-    this._itemList?.removeEventListener('item-done-toggle', this._onItemDoneToggle);
-    this._itemList?.removeEventListener('item-status-cycle', this._onItemStatusCycle);
-    this.shadowRoot?.querySelector('#bulk-close-btn')?.removeEventListener('click', this._onBulkClose);
-    this.shadowRoot?.querySelector('#bulk-delete-btn')?.removeEventListener('click', this._onBulkDelete);
-    this.shadowRoot?.querySelector('#bulk-status-btn')?.removeEventListener('click', this._onBulkStatus);
-    this._bulkStatusSheet?.removeEventListener('click', this._onBulkStatusBackdrop);
-    this.shadowRoot?.querySelector('#bulk-status-open')?.removeEventListener('click', this._onBulkStatusOpen);
-    this.shadowRoot?.querySelector('#bulk-status-paused')?.removeEventListener('click', this._onBulkStatusPaused);
-    this.shadowRoot?.querySelector('#bulk-status-done')?.removeEventListener('click', this._onBulkStatusDone);
-    this.shadowRoot?.querySelector('#bulk-status-closed')?.removeEventListener('click', this._onBulkStatusClosed);
-    this.shadowRoot?.querySelector('#bulk-more-btn')?.removeEventListener('click', this._onBulkMore);
-    this._bulkMoreSheet?.removeEventListener('click', this._onBulkMoreBackdrop);
-    this.shadowRoot?.querySelector('#bulk-move-btn')?.removeEventListener('click', this._onBulkMove);
-    this._bulkPickerDialog?.removeEventListener('list-pick', this._onBulkListPick);
-    this._itemList?.removeEventListener('item-long-press',     this._onItemLongPress);
-    this._itemList?.removeEventListener('item-select-toggle',  this._onItemSelectToggle);
-    this._itemList?.removeEventListener('item-drag-start',  this._onItemDragStart);
-    this._itemList?.removeEventListener('item-reorder-key', this._onItemReorderKey);
-    this.shadowRoot?.removeEventListener('item-created', this._onItemCreated);
-    this._dialog?.removeEventListener('item-closed', this._onItemClosed);
-    this._dialog?.removeEventListener('item-delete', this._onDialogDelete);
-    this._dialog?.removeEventListener('item-title-changed', this._onItemTitleChanged);
-    this._dialog?.removeEventListener('item-note-changed',  this._onItemNoteChanged);
-    this._dialog?.removeEventListener('item-url-changed',   this._onItemUrlChanged);
-    this._dialog?.removeEventListener('item-status-changed', this._onItemStatusChanged);
-    this._dialog?.removeEventListener('item-tags-changed',   this._onItemTagsChanged);
-    this._dialog?.removeEventListener('item-move',   this._onItemMove);
-    this._dialog?.removeEventListener('item-promote', this._onItemPromote);
-    if (this._drag) {
-      const { dragEl, clone } = this._drag;
-      dragEl.removeEventListener('pointermove',   this._onDragMove);
-      dragEl.removeEventListener('pointerup',     this._onDragEnd);
-      dragEl.removeEventListener('pointercancel', this._onDragEnd);
-      dragEl.style.opacity = '';
-      cancelAnimationFrame(this._drag.scrollRaf);
-      clone.remove();
-      this._insertLine?.remove();
-      this._drag = null;
-    }
-    unsubscribe('lists', this._onLists);
-    unsubscribe('listsTagsVisible', this._onListsTagsVisible);
-    this.shadowRoot?.querySelector('#tags-show-btn')?.removeEventListener('click', this._onTagsShowBtn);
-    this.shadowRoot?.querySelector('#tags-hide-btn')?.removeEventListener('click', this._onTagsHideBtn);
-    this.shadowRoot?.querySelector('#export-menu-btn')?.removeEventListener('click', this._onExportMenuBtn);
-    this.shadowRoot?.querySelector('#bulk-export-btn')?.removeEventListener('click', this._onBulkExportBtn);
-    this._exportSheet?.removeEventListener('extract-confirm', this._onExportConfirm);
-    this.shadowRoot?.removeEventListener('item-export-request', this._onItemExportRequest);
-    this.shadowRoot?.querySelector('#import-menu-btn')?.removeEventListener('click', this._onImportMenuBtn);
-    this._importTextarea?.removeEventListener('input', this._onImportTextarea);
-    this.shadowRoot?.querySelector('#import-cancel-btn')?.removeEventListener('click', this._onImportCancel);
-    this._importDialog?.removeEventListener('click', this._onImportBackdrop);
-    this._importCtaBtn?.removeEventListener('click', this._onImportCta);
-    this._filterBtnEl?.removeEventListener('click', this._onFilterBtn);
-    this._filterExpandBtn?.removeEventListener('click', this._onFilterExpand);
-    this._filterSearch?.removeEventListener('input', this._onFilterSearch);
-    this.shadowRoot?.querySelector('#filter-status-row')?.removeEventListener('click', this._onFilterStatus);
-    this.shadowRoot?.querySelector('#filter-clear-btn')?.removeEventListener('click', this._onFilterClear);
+    this._detachReorder?.();
   }
 
   // ── Selection mode ────────────────────────────────────────────────────────
@@ -1750,51 +1607,6 @@ class ListDetailPage extends AppElement {
     setState('lists', snapshot.filter(l => l.id !== this._listId));
     setRuntimeState('pendingListUndo', { snapshot, listName });
     navigate(`${BASE_PATH}lists`);
-  }
-
-  // ── Drag helpers ──────────────────────────────────────────────────────────
-
-  _insertIndexAt(list, y, ghostEl) {
-    const items = [...list.querySelectorAll('list-item')];
-    for (const item of items.filter(el => el !== ghostEl)) {
-      const r = item.getBoundingClientRect();
-      if (y < r.top + r.height / 2) return items.indexOf(item);
-    }
-    return items.length;
-  }
-
-  _updateInsertLine(list, targetIndex, ghostEl) {
-    const items = [...list.querySelectorAll('list-item')];
-    if (targetIndex >= items.length) list.appendChild(this._insertLine);
-    else list.insertBefore(this._insertLine, items[targetIndex]);
-  }
-
-  _createDragClone(rect, title) {
-    const clone = document.createElement('div');
-    clone.setAttribute('aria-hidden', 'true');
-    clone.style.cssText = [
-      'position:fixed',
-      `width:${rect.width}px`,
-      `height:${rect.height}px`,
-      'background:var(--color-surface)',
-      'border:0.5px solid var(--color-border)',
-      'border-radius:var(--radius-md)',
-      'box-shadow:var(--shadow-drag)',
-      'display:flex',
-      'align-items:center',
-      'padding:0 var(--space-3)',
-      'pointer-events:none',
-      'z-index:9999',
-      'overflow:hidden',
-      'white-space:nowrap',
-      'text-overflow:ellipsis',
-      'font-family:var(--font-family)',
-      'font-size:var(--font-size-body)',
-      'font-weight:var(--font-weight-medium)',
-      'color:var(--color-text-primary)',
-    ].join(';');
-    clone.textContent = title;
-    return clone;
   }
 
   _placeItem(fromIndex, toIndex) {
