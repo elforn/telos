@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.10.0] — 2026-07-17
+
+### Changed
+- Socle updated to 0.12.0 (adds the `reorder` module and a toast rendering fix)
+- Drag-to-reorder on goals, lists, and list items now runs on the shared Socle `Reorder` module instead of three hand-rolled copies — same ghost clone, insert line, edge auto-scroll, and keyboard reorder behavior
+- Toasts now render above any open dialog (a manual popover), fixing Undo/action buttons being unclickable behind a sheet, and toasts appearing hidden behind a dialog opened right after
+
+### Fixed
+- Deleting a list, item, or goal during a rapid create-then-open-next-dialog sequence could show the confirmation toast behind the newly opened sheet, making it invisible until the sheet closed
+
+---
+
 ## [1.9.7] — 2026-07-17
 
 ### Added
