@@ -1,8 +1,9 @@
 import { AppElement } from '../../_lib/core/app-element.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { BASE_PATH } from '../base-path.js';
-import { setState, getState, subscribe, unsubscribe } from '../../_lib/core/store/store.js';
+import { setState, getState } from '../../_lib/core/store/store.js';
 import { syncChildren } from '../../_lib/core/dom/sync-children.js';
+import { Reorder } from '../../_lib/modules/reorder/reorder.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/year-header/year-header.js';
@@ -401,8 +402,6 @@ class HomePage extends AppElement {
     this._dialog = this.shadowRoot.querySelector('#dialog');
     this._editingSection = 'capstone';
     this._editingGoal    = null;
-    this._drag           = null;
-    this._insertLine     = null;
 
     this._capstoneSection  = this.shadowRoot.querySelector('#capstone-section');
     this._milestoneSection = this.shadowRoot.querySelector('#milestone-section');
@@ -418,7 +417,7 @@ class HomePage extends AppElement {
     this._header.year = this._year;
 
     this._onYearNavigate = e => navigate(`${BASE_PATH}${e.detail.year}`);
-    this._header.addEventListener('year-navigate', this._onYearNavigate);
+    this.listen(this._header, 'year-navigate', this._onYearNavigate);
 
     // ── Filter bar ────────────────────────────────────────────────────────────
 
@@ -455,14 +454,14 @@ class HomePage extends AppElement {
       this._syncFilterUI();
       if (nowOpen) requestAnimationFrame(() => this._filterSearch?.focus());
     };
-    this._header.addEventListener('filter-click', this._onFilterClick);
+    this.listen(this._header, 'filter-click', this._onFilterClick);
 
     this._onFilterExpand = () => {
       this._panelExpanded = !this._panelExpanded;
       this._saveFilter();
       this._syncFilterUI();
     };
-    this._filterExpandBtn.addEventListener('click', this._onFilterExpand);
+    this.listen(this._filterExpandBtn, 'click', this._onFilterExpand);
 
     this._onFilterSearch = () => {
       this._filter.query = this._filterSearch.value;
@@ -470,7 +469,7 @@ class HomePage extends AppElement {
       this._syncFilterUI();
       this._applyGoalFilter();
     };
-    this._filterSearch.addEventListener('input', this._onFilterSearch);
+    this.listen(this._filterSearch, 'input', this._onFilterSearch);
 
     this._onFilterState = e => {
       const btn = e.target.closest('.filter-pill');
@@ -484,7 +483,7 @@ class HomePage extends AppElement {
       this._syncFilterUI();
       this._applyGoalFilter();
     };
-    this.shadowRoot.querySelector('#filter-states-row').addEventListener('click', this._onFilterState);
+    this.listen(this.shadowRoot.querySelector('#filter-states-row'), 'click', this._onFilterState);
 
     this._onFilterClear = () => {
       this._filter = { query: '', states: new Set(), tags: new Set() };
@@ -493,7 +492,7 @@ class HomePage extends AppElement {
       this._syncFilterUI();
       this._applyGoalFilter();
     };
-    this.shadowRoot.querySelector('#filter-clear-btn').addEventListener('click', this._onFilterClear);
+    this.listen(this.shadowRoot.querySelector('#filter-clear-btn'), 'click', this._onFilterClear);
 
     if (this._barExpanded) {
       this._filterBar.hidden = false;
@@ -504,7 +503,7 @@ class HomePage extends AppElement {
     // ── Store subscription ────────────────────────────────────────────────────
 
     this._onAccentColors = colors => this._applyAccent(colors?.[String(this._year)]);
-    subscribe('accentColors', this._onAccentColors);
+    this.watch('accentColors', this._onAccentColors);
 
     this._onGoals = goals => {
       const year = String(this._year);
@@ -534,7 +533,7 @@ class HomePage extends AppElement {
       this._syncFilterUI();
       if (!this._filterSuppressed) this._applyGoalFilter();
     };
-    subscribe('goals', this._onGoals);
+    this.watch('goals', this._onGoals);
 
     // ── Add-line / fold ───────────────────────────────────────────────────────
 
@@ -555,112 +554,30 @@ class HomePage extends AppElement {
     this._onFoldWow          = makeFold(this._wowSection);
     this._onFoldFocus        = makeFold(this._focusSection);
 
-    this.shadowRoot.querySelector('#add-line-capstone').addEventListener('click',  this._onAddLineCapstone);
-    this.shadowRoot.querySelector('#add-line-milestone').addEventListener('click', this._onAddLineMilestone);
-    this.shadowRoot.querySelector('#add-line-wow').addEventListener('click',       this._onAddLineWow);
-    this.shadowRoot.querySelector('#add-line-focus').addEventListener('click',     this._onAddLineFocus);
-    this.shadowRoot.querySelector('#fold-capstone').addEventListener('click',      this._onFoldCapstone);
-    this.shadowRoot.querySelector('#fold-milestone').addEventListener('click',     this._onFoldMilestone);
-    this.shadowRoot.querySelector('#fold-wow').addEventListener('click',           this._onFoldWow);
-    this.shadowRoot.querySelector('#fold-focus').addEventListener('click',         this._onFoldFocus);
+    this.listen(this.shadowRoot.querySelector('#add-line-capstone'), 'click',  this._onAddLineCapstone);
+    this.listen(this.shadowRoot.querySelector('#add-line-milestone'), 'click', this._onAddLineMilestone);
+    this.listen(this.shadowRoot.querySelector('#add-line-wow'), 'click',       this._onAddLineWow);
+    this.listen(this.shadowRoot.querySelector('#add-line-focus'), 'click',     this._onAddLineFocus);
+    this.listen(this.shadowRoot.querySelector('#fold-capstone'), 'click',      this._onFoldCapstone);
+    this.listen(this.shadowRoot.querySelector('#fold-milestone'), 'click',     this._onFoldMilestone);
+    this.listen(this.shadowRoot.querySelector('#fold-wow'), 'click',           this._onFoldWow);
+    this.listen(this.shadowRoot.querySelector('#fold-focus'), 'click',         this._onFoldFocus);
 
     // ── Drag-to-reorder ───────────────────────────────────────────────────────
 
-    this._onGoalDragStart = e => {
-      const { goal, element: dragEl, startX, startY } = e.detail;
-      const fromSection = this._sectionOf(dragEl);
-      if (!fromSection) return;
-
-      const items     = [...this._listForSection(fromSection).querySelectorAll('goal-item')];
-      const fromIndex = items.indexOf(dragEl);
-      const rect      = dragEl.getBoundingClientRect();
-
-      dragEl.style.opacity = '0.4';
-
-      const clone = this._createDragClone(rect, goal.title);
-      clone.style.left = `${rect.left}px`;
-      clone.style.top  = `${rect.top}px`;
-      document.body.appendChild(clone);
-
-      if (!this._insertLine) {
-        this._insertLine = document.createElement('div');
-        this._insertLine.style.cssText = 'height:2px;border-radius:1px;margin-block:calc(var(--space-2)/2);pointer-events:none;background:var(--color-accent)';
-      }
-
-      this._drag = {
-        goal, fromSection, fromIndex, dragEl, clone,
-        offsetX: startX - rect.left, offsetY: startY - rect.top,
-        targetSection: fromSection, targetIndex: fromIndex,
-        scrollSpeed: 0, scrollRaf: null,
-      };
-
-      const scrollLoop = () => {
-        if (!this._drag) return;
-        if (this._drag.scrollSpeed !== 0) window.scrollBy(0, this._drag.scrollSpeed);
-        this._drag.scrollRaf = requestAnimationFrame(scrollLoop);
-      };
-      this._drag.scrollRaf = requestAnimationFrame(scrollLoop);
-
-      dragEl.addEventListener('pointermove',   this._onDragMove);
-      dragEl.addEventListener('pointerup',     this._onDragEnd);
-      dragEl.addEventListener('pointercancel', this._onDragEnd);
-    };
-
-    this._onDragMove = e => {
-      if (!this._drag) return;
-      const { dragEl, clone, offsetX, offsetY } = this._drag;
-
-      clone.style.left = `${e.clientX - offsetX}px`;
-      clone.style.top  = `${e.clientY - offsetY}px`;
-
-      const targetSection = this._sectionAtY(e.clientY) ?? this._drag.targetSection;
-      this._drag.targetSection = targetSection;
-
-      const SCROLL_ZONE = 100;
-      const MAX_SPEED   = 14;
-      const vh = window.innerHeight;
-      if (e.clientY < SCROLL_ZONE)
-        this._drag.scrollSpeed = -MAX_SPEED * (1 - e.clientY / SCROLL_ZONE);
-      else if (e.clientY > vh - SCROLL_ZONE)
-        this._drag.scrollSpeed =  MAX_SPEED * (1 - (vh - e.clientY) / SCROLL_ZONE);
-      else
-        this._drag.scrollSpeed = 0;
-
-      const list = this._listForSection(targetSection);
-      const idx  = this._insertIndexAt(list, e.clientY, dragEl);
-      this._drag.targetIndex = idx;
-      this._updateInsertLine(list, idx, dragEl);
-    };
-
-    this._onDragEnd = () => {
-      if (!this._drag) return;
-      const { fromSection, fromIndex, dragEl, clone, targetSection, targetIndex } = this._drag;
-
-      dragEl.removeEventListener('pointermove',   this._onDragMove);
-      dragEl.removeEventListener('pointerup',     this._onDragEnd);
-      dragEl.removeEventListener('pointercancel', this._onDragEnd);
-      dragEl.style.opacity = '';
-      cancelAnimationFrame(this._drag.scrollRaf);
-      clone.remove();
-      this._insertLine?.remove();
-      this._drag = null;
-
-      this._placeGoal(fromSection, fromIndex, targetSection, targetIndex);
-    };
-
-    this._onGoalReorderKey = e => {
-      const { goal, direction } = e.detail;
-      const section = this._sectionOf(e.target);
-      if (!section) return;
-      const items = [...this._listForSection(section).querySelectorAll('goal-item')];
-      const fromIndex = items.findIndex(el => el._goal?.id === goal.id);
-      if (fromIndex === -1) return;
-      const toIndex = direction === -1 ? Math.max(0, fromIndex - 1) : fromIndex + 2;
-      this._placeGoal(section, fromIndex, section, toIndex);
-    };
-
-    this.shadowRoot.addEventListener('goal-drag-start',  this._onGoalDragStart);
-    this.shadowRoot.addEventListener('goal-reorder-key', this._onGoalReorderKey);
+    this._detachReorder = Reorder.attach(this.shadowRoot, {
+      itemSelector:    'goal-item',
+      dragStartEvent:  'goal-drag-start',
+      reorderKeyEvent: 'goal-reorder-key',
+      cloneLabel:      d => d.goal.title,
+      sections: [
+        { name: 'capstone',   sectionEl: this._capstoneSection,  listEl: this._capstoneList },
+        { name: 'milestones', sectionEl: this._milestoneSection, listEl: this._milestoneList },
+        { name: 'wow',        sectionEl: this._wowSection,       listEl: this._wowList },
+        { name: 'focus',      sectionEl: this._focusSection,     listEl: this._focusList },
+      ],
+      onMoveSection: (fromSection, from, toSection, to) => this._placeGoal(fromSection, from, toSection, to),
+    });
 
     // ── Capstone events ───────────────────────────────────────────────────────
 
@@ -669,22 +586,22 @@ class HomePage extends AppElement {
       this._editingGoal    = e.detail.goal;
       this._openGoalDialog(e.detail.goal, { year: String(this._year), section: 'capstone' });
     };
-    this._capstoneList.addEventListener('goal-tap', this._onCapstoneGoalTap);
+    this.listen(this._capstoneList, 'goal-tap', this._onCapstoneGoalTap);
 
     this._onCapstoneProgress = e => {
       this._setProgress('capstone', e.detail.goal.id, e.detail.percentage);
     };
-    this._capstoneList.addEventListener('goal-progress', this._onCapstoneProgress);
+    this.listen(this._capstoneList, 'goal-progress', this._onCapstoneProgress);
 
     this._onCapstoneDelete = e => this._deleteGoalWithUndo('capstone', e.detail.goal.id);
-    this._capstoneList.addEventListener('goal-delete', this._onCapstoneDelete);
+    this.listen(this._capstoneList, 'goal-delete', this._onCapstoneDelete);
 
     this._onAddCapstone = () => {
       this._editingSection = 'capstone';
       this._editingGoal    = null;
       this._openGoalDialog(null);
     };
-    this.shadowRoot.querySelector('#add-capstone').addEventListener('click', this._onAddCapstone);
+    this.listen(this.shadowRoot.querySelector('#add-capstone'), 'click', this._onAddCapstone);
 
     // ── Milestone events ──────────────────────────────────────────────────────
 
@@ -693,22 +610,22 @@ class HomePage extends AppElement {
       this._editingGoal    = e.detail.goal;
       this._openGoalDialog(e.detail.goal, { year: String(this._year), section: 'milestones' });
     };
-    this._milestoneList.addEventListener('goal-tap', this._onMilestoneGoalTap);
+    this.listen(this._milestoneList, 'goal-tap', this._onMilestoneGoalTap);
 
     this._onMilestoneProgress = e => {
       this._setProgress('milestones', e.detail.goal.id, e.detail.percentage);
     };
-    this._milestoneList.addEventListener('goal-progress', this._onMilestoneProgress);
+    this.listen(this._milestoneList, 'goal-progress', this._onMilestoneProgress);
 
     this._onMilestoneDelete = e => this._deleteGoalWithUndo('milestones', e.detail.goal.id);
-    this._milestoneList.addEventListener('goal-delete', this._onMilestoneDelete);
+    this.listen(this._milestoneList, 'goal-delete', this._onMilestoneDelete);
 
     this._onAddMilestone = () => {
       this._editingSection = 'milestones';
       this._editingGoal    = null;
       this._openGoalDialog(null);
     };
-    this.shadowRoot.querySelector('#add-milestone').addEventListener('click', this._onAddMilestone);
+    this.listen(this.shadowRoot.querySelector('#add-milestone'), 'click', this._onAddMilestone);
 
     // ── Wow events ────────────────────────────────────────────────────────────
 
@@ -717,22 +634,22 @@ class HomePage extends AppElement {
       this._editingGoal    = e.detail.goal;
       this._openGoalDialog(e.detail.goal, { year: String(this._year), section: 'wow' });
     };
-    this._wowList.addEventListener('goal-tap', this._onWowGoalTap);
+    this.listen(this._wowList, 'goal-tap', this._onWowGoalTap);
 
     this._onWowProgress = e => {
       this._setProgress('wow', e.detail.goal.id, e.detail.percentage);
     };
-    this._wowList.addEventListener('goal-progress', this._onWowProgress);
+    this.listen(this._wowList, 'goal-progress', this._onWowProgress);
 
     this._onWowDelete = e => this._deleteGoalWithUndo('wow', e.detail.goal.id);
-    this._wowList.addEventListener('goal-delete', this._onWowDelete);
+    this.listen(this._wowList, 'goal-delete', this._onWowDelete);
 
     this._onAddWow = () => {
       this._editingSection = 'wow';
       this._editingGoal    = null;
       this._openGoalDialog(null);
     };
-    this.shadowRoot.querySelector('#add-wow').addEventListener('click', this._onAddWow);
+    this.listen(this.shadowRoot.querySelector('#add-wow'), 'click', this._onAddWow);
 
     // ── Forward Focus events ──────────────────────────────────────────────────
 
@@ -741,22 +658,22 @@ class HomePage extends AppElement {
       this._editingGoal    = e.detail.goal;
       this._openGoalDialog(e.detail.goal, { year: String(this._year), section: 'focus' });
     };
-    this._focusList.addEventListener('goal-tap', this._onFocusGoalTap);
+    this.listen(this._focusList, 'goal-tap', this._onFocusGoalTap);
 
     this._onFocusProgress = e => {
       this._setProgress('focus', e.detail.goal.id, e.detail.percentage);
     };
-    this._focusList.addEventListener('goal-progress', this._onFocusProgress);
+    this.listen(this._focusList, 'goal-progress', this._onFocusProgress);
 
     this._onFocusDelete = e => this._deleteGoalWithUndo('focus', e.detail.goal.id);
-    this._focusList.addEventListener('goal-delete', this._onFocusDelete);
+    this.listen(this._focusList, 'goal-delete', this._onFocusDelete);
 
     this._onAddFocus = () => {
       this._editingSection = 'focus';
       this._editingGoal    = null;
       this._openGoalDialog(null);
     };
-    this.shadowRoot.querySelector('#add-focus').addEventListener('click', this._onAddFocus);
+    this.listen(this.shadowRoot.querySelector('#add-focus'), 'click', this._onAddFocus);
 
     // ── Year export ───────────────────────────────────────────────────────────
 
@@ -766,7 +683,7 @@ class HomePage extends AppElement {
       navigator.clipboard.writeText(md).catch(() => {});
       toast(t('export.copied'), 'success');
     };
-    this.shadowRoot.addEventListener('year-export-confirm', this._onYearExportConfirm);
+    this.listen(this.shadowRoot, 'year-export-confirm', this._onYearExportConfirm);
 
     // ── Dialog events ─────────────────────────────────────────────────────────
 
@@ -776,7 +693,7 @@ class HomePage extends AppElement {
         list.map(g => g.id === this._editingGoal.id ? { ...g, tags: e.detail.tags } : g)
       );
     };
-    this.shadowRoot.addEventListener('goal-tags-changed', this._onGoalTagsChanged);
+    this.listen(this.shadowRoot, 'goal-tags-changed', this._onGoalTagsChanged);
 
     this._onGoalTitleChanged = e => {
       if (!this._editingGoal) return;
@@ -784,7 +701,7 @@ class HomePage extends AppElement {
         list.map(g => g.id === this._editingGoal.id ? { ...g, title: e.detail.title } : g)
       );
     };
-    this.shadowRoot.addEventListener('goal-title-changed', this._onGoalTitleChanged);
+    this.listen(this.shadowRoot, 'goal-title-changed', this._onGoalTitleChanged);
 
     this._onGoalNotesChanged = e => {
       if (!this._editingGoal) return;
@@ -792,7 +709,7 @@ class HomePage extends AppElement {
         list.map(g => g.id === this._editingGoal.id ? { ...g, notes: e.detail.notes } : g)
       );
     };
-    this.shadowRoot.addEventListener('goal-notes-changed', this._onGoalNotesChanged);
+    this.listen(this.shadowRoot, 'goal-notes-changed', this._onGoalNotesChanged);
 
     this._onGoalArchivedChanged = e => {
       if (!this._editingGoal) return;
@@ -807,7 +724,7 @@ class HomePage extends AppElement {
       this._setArchived(this._editingSection, this._editingGoal.id, archived);
       toast(t(archived ? 'home.toast-goal-archived' : 'home.toast-goal-unarchived'), 'success');
     };
-    this.shadowRoot.addEventListener('goal-archived-changed', this._onGoalArchivedChanged);
+    this.listen(this.shadowRoot, 'goal-archived-changed', this._onGoalArchivedChanged);
 
     this._onGoalClosed = () => {
       const snap = this._editSnapshot;
@@ -824,7 +741,7 @@ class HomePage extends AppElement {
         }, 700);
       }
     };
-    this.shadowRoot.addEventListener('goal-closed', this._onGoalClosed);
+    this.listen(this.shadowRoot, 'goal-closed', this._onGoalClosed);
 
     this._onGoalCreated = e => {
       const { title, notes, tags } = e.detail;
@@ -838,7 +755,7 @@ class HomePage extends AppElement {
           { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
       }
     };
-    this.shadowRoot.addEventListener('goal-created', this._onGoalCreated);
+    this.listen(this.shadowRoot, 'goal-created', this._onGoalCreated);
 
     this._onDialogDelete = () => {
       if (this._editingGoal) {
@@ -847,7 +764,7 @@ class HomePage extends AppElement {
         toast(t('home.toast-goal-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
       }
     };
-    this._dialog.addEventListener('goal-delete', this._onDialogDelete);
+    this.listen(this._dialog, 'goal-delete', this._onDialogDelete);
 
     // ── Goal move / copy to year+section ──────────────────────────────────────
 
@@ -872,7 +789,7 @@ class HomePage extends AppElement {
       const label = t(`goal-dialog.move-section-${toSection}`);
       toast(t(copy ? 'home.toast-goal-copied' : 'home.toast-goal-moved', { section: label }), 'success');
     };
-    this._dialog.addEventListener('goal-move', this._onGoalMove);
+    this.listen(this._dialog, 'goal-move', this._onGoalMove);
 
     // ── Goal create list item ─────────────────────────────────────────────────
 
@@ -920,74 +837,13 @@ class HomePage extends AppElement {
         'success'
       );
     };
-    this._dialog.addEventListener('goal-create-item', this._onGoalCreateItem);
+    this.listen(this._dialog, 'goal-create-item', this._onGoalCreateItem);
   }
 
   unsubscribe() {
+    // Static listeners and store subscriptions are auto-removed by listen()/watch().
     clearTimeout(this._filterSuppressTimer);
-    unsubscribe('goals', this._onGoals);
-    unsubscribe('accentColors', this._onAccentColors);
-
-    this._header?.removeEventListener('year-navigate', this._onYearNavigate);
-
-    this._capstoneList?.removeEventListener('goal-tap',      this._onCapstoneGoalTap);
-    this._capstoneList?.removeEventListener('goal-progress', this._onCapstoneProgress);
-    this._capstoneList?.removeEventListener('goal-delete',   this._onCapstoneDelete);
-    this.shadowRoot.querySelector('#add-capstone')?.removeEventListener('click', this._onAddCapstone);
-
-    this._milestoneList?.removeEventListener('goal-tap',      this._onMilestoneGoalTap);
-    this._milestoneList?.removeEventListener('goal-progress', this._onMilestoneProgress);
-    this._milestoneList?.removeEventListener('goal-delete',   this._onMilestoneDelete);
-    this.shadowRoot.querySelector('#add-milestone')?.removeEventListener('click', this._onAddMilestone);
-
-    this._wowList?.removeEventListener('goal-tap',      this._onWowGoalTap);
-    this._wowList?.removeEventListener('goal-progress', this._onWowProgress);
-    this._wowList?.removeEventListener('goal-delete',   this._onWowDelete);
-    this.shadowRoot.querySelector('#add-wow')?.removeEventListener('click', this._onAddWow);
-
-    this._focusList?.removeEventListener('goal-tap',      this._onFocusGoalTap);
-    this._focusList?.removeEventListener('goal-progress', this._onFocusProgress);
-    this._focusList?.removeEventListener('goal-delete',   this._onFocusDelete);
-    this.shadowRoot.querySelector('#add-focus')?.removeEventListener('click', this._onAddFocus);
-
-    this.shadowRoot.querySelector('#add-line-capstone')?.removeEventListener('click',  this._onAddLineCapstone);
-    this.shadowRoot.querySelector('#add-line-milestone')?.removeEventListener('click', this._onAddLineMilestone);
-    this.shadowRoot.querySelector('#add-line-wow')?.removeEventListener('click',       this._onAddLineWow);
-    this.shadowRoot.querySelector('#add-line-focus')?.removeEventListener('click',     this._onAddLineFocus);
-    this.shadowRoot.querySelector('#fold-capstone')?.removeEventListener('click',      this._onFoldCapstone);
-    this.shadowRoot.querySelector('#fold-milestone')?.removeEventListener('click',     this._onFoldMilestone);
-    this.shadowRoot.querySelector('#fold-wow')?.removeEventListener('click',           this._onFoldWow);
-    this.shadowRoot.querySelector('#fold-focus')?.removeEventListener('click',         this._onFoldFocus);
-
-    this.shadowRoot.removeEventListener('year-export-confirm', this._onYearExportConfirm);
-    this.shadowRoot.removeEventListener('goal-tags-changed',   this._onGoalTagsChanged);
-    this.shadowRoot.removeEventListener('goal-title-changed', this._onGoalTitleChanged);
-    this.shadowRoot.removeEventListener('goal-notes-changed',     this._onGoalNotesChanged);
-    this.shadowRoot.removeEventListener('goal-archived-changed', this._onGoalArchivedChanged);
-    this.shadowRoot.removeEventListener('goal-closed',            this._onGoalClosed);
-    this.shadowRoot.removeEventListener('goal-created',       this._onGoalCreated);
-    this.shadowRoot.removeEventListener('goal-drag-start',  this._onGoalDragStart);
-    this.shadowRoot.removeEventListener('goal-reorder-key', this._onGoalReorderKey);
-    this._dialog?.removeEventListener('goal-delete',       this._onDialogDelete);
-    this._dialog?.removeEventListener('goal-move',         this._onGoalMove);
-    this._dialog?.removeEventListener('goal-create-item',  this._onGoalCreateItem);
-    this._header?.removeEventListener('filter-click', this._onFilterClick);
-    this._filterExpandBtn?.removeEventListener('click', this._onFilterExpand);
-    this._filterSearch?.removeEventListener('input', this._onFilterSearch);
-    this.shadowRoot?.querySelector('#filter-states-row')?.removeEventListener('click', this._onFilterState);
-    this.shadowRoot?.querySelector('#filter-clear-btn')?.removeEventListener('click', this._onFilterClear);
-
-    if (this._drag) {
-      const { dragEl, clone } = this._drag;
-      dragEl.removeEventListener('pointermove',   this._onDragMove);
-      dragEl.removeEventListener('pointerup',     this._onDragEnd);
-      dragEl.removeEventListener('pointercancel', this._onDragEnd);
-      dragEl.style.opacity = '';
-      cancelAnimationFrame(this._drag.scrollRaf);
-      clone.remove();
-      this._insertLine?.remove();
-      this._drag = null;
-    }
+    this._detachReorder?.();
   }
 
   // ── Accent colour ─────────────────────────────────────────────────────────
@@ -1213,84 +1069,6 @@ class HomePage extends AppElement {
   _renderList(container, items) {
     syncChildren(container, items, 'goal-item', (el, goal) => { el.goal = goal; },
       { getElId: el => el._goal?.id });
-  }
-
-  // ── Drag helpers ──────────────────────────────────────────────────────────
-
-  _sectionOf(el) {
-    if (this._capstoneList.contains(el))  return 'capstone';
-    if (this._milestoneList.contains(el)) return 'milestones';
-    if (this._wowList.contains(el))       return 'wow';
-    if (this._focusList.contains(el))     return 'focus';
-    return null;
-  }
-
-  _sectionAtY(y) {
-    for (const [name, el] of [
-      ['capstone',   this._capstoneSection],
-      ['milestones', this._milestoneSection],
-      ['wow',        this._wowSection],
-      ['focus',      this._focusSection],
-    ]) {
-      const r = el.getBoundingClientRect();
-      if (y >= r.top && y <= r.bottom) return name;
-    }
-    return null;
-  }
-
-  _listForSection(section) {
-    return { capstone: this._capstoneList, milestones: this._milestoneList, wow: this._wowList, focus: this._focusList }[section];
-  }
-
-  _sectionElOf(section) {
-    return { capstone: this._capstoneSection, milestones: this._milestoneSection, wow: this._wowSection, focus: this._focusSection }[section];
-  }
-
-  _insertIndexAt(list, y, ghostEl) {
-    const items    = [...list.querySelectorAll('goal-item')];
-    const nonGhost = items.filter(el => el !== ghostEl);
-    for (const item of nonGhost) {
-      const r = item.getBoundingClientRect();
-      if (y < r.top + r.height / 2) return items.indexOf(item);
-    }
-    return items.length;
-  }
-
-  _updateInsertLine(list, targetIndex, ghostEl) {
-    const items = [...list.querySelectorAll('goal-item')];
-    if (targetIndex >= items.length) {
-      list.appendChild(this._insertLine);
-    } else {
-      list.insertBefore(this._insertLine, items[targetIndex]);
-    }
-  }
-
-  _createDragClone(rect, title) {
-    const clone = document.createElement('div');
-    clone.setAttribute('aria-hidden', 'true');
-    clone.style.cssText = [
-      'position:fixed',
-      `width:${rect.width}px`,
-      `height:${rect.height}px`,
-      'background:var(--color-surface)',
-      'border:0.5px solid var(--color-border)',
-      'border-radius:var(--radius-md)',
-      'box-shadow:0 8px 24px rgba(0,0,0,0.18)',
-      'display:flex',
-      'align-items:center',
-      'padding:0 var(--space-3)',
-      'pointer-events:none',
-      'z-index:9999',
-      'overflow:hidden',
-      'white-space:nowrap',
-      'text-overflow:ellipsis',
-      'font-family:var(--font-family)',
-      'font-size:var(--font-size-body)',
-      'font-weight:var(--font-weight-medium)',
-      'color:var(--color-text-primary)',
-    ].join(';');
-    clone.textContent = title;
-    return clone;
   }
 
   _openGoalDialog(goal, opts) {
