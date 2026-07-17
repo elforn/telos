@@ -6,6 +6,7 @@ const DISMISS_DURATION = 200; // fallback when transitionend doesn't fire
 let container = null;
 let stylesInjected = false;
 let activeToast = null;
+let containerOpen = false;
 
 function ensureStyles() {
   if (stylesInjected) return;
@@ -14,6 +15,7 @@ function ensureStyles() {
   s.textContent = `
     #toast-container {
       position: fixed;
+      inset: auto;
       inset-block-end: calc(var(--space-4, 16px) + var(--safe-area-bottom, 0px));
       inset-inline-start: 50%;
       transform: translateX(-50%);
@@ -22,8 +24,14 @@ function ensureStyles() {
       align-items: center;
       gap: var(--space-2, 8px);
       z-index: 9999;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: none;
+      overflow: visible;
       pointer-events: none;
     }
+    #toast-container:not(:popover-open) { display: none; }
     .socle-toast {
       padding: var(--space-2, 8px) var(--space-4, 16px);
       border-radius: var(--radius-full, 9999px);
@@ -88,9 +96,21 @@ function getContainer() {
     container.id = 'toast-container';
     container.setAttribute('aria-live', 'polite');
     container.setAttribute('aria-atomic', 'false');
+    container.setAttribute('popover', 'manual');
     document.body.appendChild(container);
   }
   return container;
+}
+
+// Show (or re-show) the container as a manual popover so it enters the top
+// layer above any open <dialog>. Top-layer order follows show order, so
+// re-showing on every toast keeps it above a dialog that opened after it.
+// Feature-detected — environments without the Popover API (happy-dom) fall
+// back to the plain fixed-position container.
+function raiseContainer(c) {
+  if (typeof c.showPopover !== 'function') return;
+  if (containerOpen) { try { c.hidePopover(); } catch { /* already hidden */ } }
+  try { c.showPopover(); containerOpen = true; } catch { /* not connected */ }
 }
 
 export function toast(message, type = 'info', { duration, action } = {}) {
@@ -98,6 +118,7 @@ export function toast(message, type = 'info', { duration, action } = {}) {
 
   ensureStyles();
   const c = getContainer();
+  raiseContainer(c);
 
   const hasAction = !!action;
   const persistent = duration === Infinity;
@@ -216,4 +237,5 @@ export function _resetToast() {
   container = null;
   stylesInjected = false;
   activeToast = null;
+  containerOpen = false;
 }

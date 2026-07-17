@@ -56,6 +56,36 @@ describe('toast', () => {
     expect(document.querySelectorAll('#toast-container').length).toBe(1);
   });
 
+  // --- top-layer popover ---
+
+  it('marks the container as a manual popover', () => {
+    toast('Hi');
+    expect(document.querySelector('#toast-container').getAttribute('popover')).toBe('manual');
+  });
+
+  it('shows the popover, re-raising it above later top-layer elements on each toast', () => {
+    const showPopover = vi.fn();
+    const hidePopover = vi.fn();
+    HTMLElement.prototype.showPopover = showPopover;
+    HTMLElement.prototype.hidePopover = hidePopover;
+    try {
+      toast('First');
+      expect(showPopover).toHaveBeenCalledTimes(1);
+      expect(hidePopover).not.toHaveBeenCalled();
+      toast('Second');
+      expect(hidePopover).toHaveBeenCalledTimes(1); // dropped from top layer…
+      expect(showPopover).toHaveBeenCalledTimes(2); // …then re-shown on top
+    } finally {
+      delete HTMLElement.prototype.showPopover;
+      delete HTMLElement.prototype.hidePopover;
+    }
+  });
+
+  it('falls back gracefully when the Popover API is unavailable', () => {
+    expect(() => toast('No popover here')).not.toThrow();
+    expect(document.querySelector('.socle-toast')).toBeTruthy();
+  });
+
   // --- auto-dismiss ---
 
   it('removes the toast after 4000ms by default', () => {
