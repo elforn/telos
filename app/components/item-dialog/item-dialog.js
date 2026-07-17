@@ -8,7 +8,6 @@ import { tagColor } from '../../utils/tag-color.js';
 
 const STATUSES = ['open', 'paused', 'done', 'closed'];
 const SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
-const DRAFT_KEY = 'telos:draft.new-item';
 
 // Events emitted (all bubbles + composed):
 //   item-created        { id, title, status, note, url, tags }
@@ -44,8 +43,7 @@ class ItemDialog extends AppElement {
     this._skipCreate = false;
     this._showView('main');
 
-    const draft = this._isNew ? this._loadDraft() : null;
-    this._titleInput.value = item?.title ?? draft?.title ?? '';
+    this._titleInput.value = item?.title ?? '';
     this._deleteBtn.hidden = !item;
     this._deleteBtn.textContent = t('item-dialog.delete');
 
@@ -53,22 +51,22 @@ class ItemDialog extends AppElement {
     const radio = this.shadowRoot.querySelector(`input[name="status"][value="${status}"]`);
     if (radio) radio.checked = true;
 
-    this._noteInput.value = item?.note ?? draft?.note ?? '';
+    this._noteInput.value = item?.note ?? '';
     this._noteHighlight?.sync();
-    this._urlInput.value = item?.url ?? draft?.url ?? '';
+    this._urlInput.value = item?.url ?? '';
     this._syncUrlOpen();
-    this._showUrlField(!!(item?.url ?? draft?.url));
+    this._showUrlField(!!item?.url);
 
-    this._tags = [...(item?.tags ?? draft?.tags ?? [])];
+    this._tags = [...(item?.tags ?? [])];
     this._tagInput.value = '';
     this._renderTagChips();
     this._updateSuggestions();
 
     this._menuBtn.hidden = this._isNew;
 
-    this._lastValidTitle = item?.title ?? draft?.title ?? '';
-    this._lastValidNote  = item?.note  ?? draft?.note  ?? '';
-    this._lastValidUrl   = item?.url   ?? draft?.url   ?? '';
+    this._lastValidTitle = item?.title ?? '';
+    this._lastValidNote  = item?.note  ?? '';
+    this._lastValidUrl   = item?.url   ?? '';
 
     this._closeBtn.setAttribute('aria-label',
       this._isNew ? t('item-dialog.save-and-close') : t('item-dialog.close'));
@@ -786,8 +784,6 @@ class ItemDialog extends AppElement {
 
     // ── Main view ─────────────────────────────────────────────────────────────
 
-    this._onTitleInput = () => { this._saveDraft(); };
-
     this._onTitleBlur = () => {
       const v = this._titleInput.value.trim();
       if (this._isNew) {
@@ -799,7 +795,6 @@ class ItemDialog extends AppElement {
         this._lastValidTitle = v;
         this._lastValidNote  = note;
         this._lastValidUrl   = url;
-        localStorage.removeItem(DRAFT_KEY);
         this.dispatchEvent(new CustomEvent('item-created', {
           bubbles: true, composed: true,
           detail: { id, title: v, status, note, url, tags },
@@ -820,7 +815,7 @@ class ItemDialog extends AppElement {
       this._announceSaved();
     };
 
-    this._onNoteInput = () => { this._syncNoteHeight(); this._saveDraft(); };
+    this._onNoteInput = () => { this._syncNoteHeight(); };
 
     this._onNoteBlur = () => {
       if (this._isNew) return;
@@ -847,7 +842,7 @@ class ItemDialog extends AppElement {
       } catch { } // clipboard unavailable — fail silently
     };
 
-    this._onUrlInput = () => { this._syncUrlOpen(); this._saveDraft(); };
+    this._onUrlInput = () => { this._syncUrlOpen(); };
 
     this._onUrlBlur = () => {
       if (this._isNew) return;
@@ -883,21 +878,18 @@ class ItemDialog extends AppElement {
     this._onModalClose = e => {
       e.stopPropagation();
       if (this._isNew) {
-        if (this._skipCreate) {
-          // move/promote already dispatched — just clear draft
-          localStorage.removeItem(DRAFT_KEY);
-        } else {
+        // _skipCreate: move/promote already dispatched item-move/item-promote
+        // directly — don't also create it here.
+        if (!this._skipCreate) {
           const { title, status, note, url, tags } = this._getFormValues();
           if (title) {
             const id = crypto.randomUUID();
             this._isNew = false;
             this._lastValidTitle = title;
-            localStorage.removeItem(DRAFT_KEY);
             this.dispatchEvent(new CustomEvent('item-created', {
               bubbles: true, composed: true, detail: { id, title, status, note, url, tags },
             }));
           }
-          // else: keep draft (note/url preserved for next open)
         }
         this._skipCreate = false;
       } else {
@@ -911,7 +903,7 @@ class ItemDialog extends AppElement {
       if (e.key !== 'Enter') return;
       if (this._isNew) {
         if (!this._titleInput.value.trim()) return; // require title for new items
-        this._titleInput.blur(); // commits item via _onTitleBlur → clears draft → _isNew = false
+        this._titleInput.blur(); // commits item via _onTitleBlur → _isNew = false
         this._modal.close();
       } else {
         this._titleInput.blur(); // triggers _onTitleBlur before close
@@ -961,7 +953,6 @@ class ItemDialog extends AppElement {
       this._tagInput.focus();
     };
 
-    this._titleInput.addEventListener('input',   this._onTitleInput);
     this._titleInput.addEventListener('keydown', this._onKeyDown);
     this._titleInput.addEventListener('blur',    this._onTitleBlur);
     this._noteInput.addEventListener('input', this._onNoteInput);
@@ -1035,10 +1026,7 @@ class ItemDialog extends AppElement {
     this._onListPick = e => {
       const { targetListIds, newListName, copy } = e.detail;
       const { title, status, note, url, tags } = this._getFormValues();
-      if (this._isNew) {
-        this._skipCreate = true;
-        localStorage.removeItem(DRAFT_KEY);
-      }
+      if (this._isNew) this._skipCreate = true;
       this.dispatchEvent(new CustomEvent('item-move', {
         bubbles: true, composed: true,
         detail: { title, status, note, url, tags, targetListIds, newListName, copy },
@@ -1064,7 +1052,6 @@ class ItemDialog extends AppElement {
 
   unsubscribe() {
     this._noteHighlight?.detach();
-    this._titleInput?.removeEventListener('input',   this._onTitleInput);
     this._titleInput?.removeEventListener('keydown', this._onKeyDown);
     this._titleInput?.removeEventListener('blur',    this._onTitleBlur);
     this._noteInput?.removeEventListener('input', this._onNoteInput);
@@ -1167,10 +1154,7 @@ class ItemDialog extends AppElement {
     const section = this._checkedSection();
     if (!year || !section) return;
     const { title, status, note, url, tags } = this._getFormValues();
-    if (this._isNew) {
-      this._skipCreate = true;
-      localStorage.removeItem(DRAFT_KEY);
-    }
+    if (this._isNew) this._skipCreate = true;
     this.dispatchEvent(new CustomEvent('item-promote', {
       bubbles: true, composed: true,
       detail: { title, status, note, url, tags, year, section },
@@ -1186,7 +1170,6 @@ class ItemDialog extends AppElement {
     this._tags.push(tag);
     this._tagInput.value = '';
     this._renderTagChips();
-    this._saveDraft();
     this._updateSuggestions();
     this._dispatchTagsChanged();
   }
@@ -1194,7 +1177,6 @@ class ItemDialog extends AppElement {
   _removeTag(tag) {
     this._tags = this._tags.filter(existing => existing !== tag);
     this._renderTagChips();
-    this._saveDraft();
     this._dispatchTagsChanged();
   }
 
@@ -1279,19 +1261,6 @@ class ItemDialog extends AppElement {
     if (wrap) wrap.style.maxBlockSize = `${maxH}px`;
   }
 
-  _loadDraft() {
-    try { return JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { return null; }
-  }
-
-  _saveDraft() {
-    if (!this._isNew) return;
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      title: this._titleInput.value,
-      note: this._noteInput.value,
-      url: this._urlInput.value,
-      tags: [...this._tags],
-    }));
-  }
 
   _syncUrlOpen() {
     if (this._urlOpen) this._urlOpen.hidden = !this._urlInput.value.trim();

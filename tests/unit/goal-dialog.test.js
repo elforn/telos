@@ -241,65 +241,6 @@ describe('goal-dialog — delete', () => {
   });
 });
 
-// ── draft ─────────────────────────────────────────────────────────────────────
-
-const GOAL_DRAFT_KEY = 'telos:draft.new-goal';
-
-describe('goal-dialog — draft', () => {
-  it('loads draft title when opening a new goal', () => {
-    localStorage.setItem(GOAL_DRAFT_KEY, JSON.stringify({ title: 'Draft goal' }));
-    const el = mount();
-    el.open(null);
-    expect(el.shadowRoot.querySelector('#input').value).toBe('Draft goal');
-  });
-
-  it('does not load draft when opening an existing goal', () => {
-    localStorage.setItem(GOAL_DRAFT_KEY, JSON.stringify({ title: 'Draft goal' }));
-    const el = mount();
-    el.open({ title: 'Real goal' });
-    expect(el.shadowRoot.querySelector('#input').value).toBe('Real goal');
-  });
-
-  it('saves draft on title input', () => {
-    const el = mount();
-    el.open(null);
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = 'Typing a draft';
-    inp.dispatchEvent(new Event('input'));
-    expect(JSON.parse(localStorage.getItem(GOAL_DRAFT_KEY)).title).toBe('Typing a draft');
-  });
-
-  it('does not save draft when editing an existing goal', () => {
-    const el = mount();
-    el.open({ title: 'Existing' });
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = 'Modified';
-    inp.dispatchEvent(new Event('input'));
-    expect(localStorage.getItem(GOAL_DRAFT_KEY)).toBeNull();
-  });
-
-  it('clears draft when modal closes with non-empty title', () => {
-    localStorage.setItem(GOAL_DRAFT_KEY, JSON.stringify({ title: 'Draft goal' }));
-    const el = mount();
-    el.open(null);
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = 'Saved goal';
-    el.shadowRoot.querySelector('#modal').close();
-    expect(localStorage.getItem(GOAL_DRAFT_KEY)).toBeNull();
-  });
-
-  it('preserves draft when modal closes with empty title', () => {
-    const el = mount();
-    el.open(null);
-    const inp = el.shadowRoot.querySelector('#input');
-    inp.value = 'In progress';
-    inp.dispatchEvent(new Event('input'));
-    inp.value = '';
-    el.shadowRoot.querySelector('#modal').close();
-    expect(JSON.parse(localStorage.getItem(GOAL_DRAFT_KEY)).title).toBe('In progress');
-  });
-});
-
 describe('goal-dialog — notes', () => {
   it('notes textarea is always visible', () => {
     const el = mount();
@@ -341,22 +282,6 @@ describe('goal-dialog — notes', () => {
     expect(events[0].detail.notes).toBeUndefined();
   });
 
-  it('saves notes in draft', () => {
-    const el = mount();
-    el.open(null);
-    const desc = el.shadowRoot.querySelector('#desc-input');
-    desc.value = 'Draft desc';
-    desc.dispatchEvent(new Event('input'));
-    const draft = JSON.parse(localStorage.getItem(GOAL_DRAFT_KEY));
-    expect(draft.notes).toBe('Draft desc');
-  });
-
-  it('restores notes from draft when opening new goal', () => {
-    localStorage.setItem(GOAL_DRAFT_KEY, JSON.stringify({ title: 'T', notes: 'Saved desc' }));
-    const el = mount();
-    el.open(null);
-    expect(el.shadowRoot.querySelector('#desc-input').value).toBe('Saved desc');
-  });
 });
 
 describe('goal-dialog — more actions (⋯ menu)', () => {

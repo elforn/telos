@@ -3,8 +3,6 @@ import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import { COLOR_PALETTE } from '../lists-page-item/lists-page-item.js';
 
-const DRAFT_KEY = 'telos:draft.new-list';
-
 // Labels parallel COLOR_PALETTE — update both together when adding/removing colours.
 const SWATCH_LABELS = ['No colour', 'Red', 'Orange', 'Yellow', 'Green', 'Teal', 'Blue', 'Purple'];
 const SWATCHES = COLOR_PALETTE.map((color, i) => ({ color, label: SWATCH_LABELS[i] }));
@@ -12,11 +10,10 @@ const SWATCHES = COLOR_PALETTE.map((color, i) => ({ color, label: SWATCH_LABELS[
 class ListDialog extends AppElement {
   open(list = null) {
     this._isNew = !list;
-    const draft = this._isNew ? this._loadDraft() : null;
-    this._input.value = list?.name ?? draft?.name ?? '';
+    this._input.value = list?.name ?? '';
     this._deleteBtn.hidden = !list;
-    this._selectColor(list?.color ?? draft?.color ?? null);
-    this._lastValidName = list?.name ?? draft?.name ?? '';
+    this._selectColor(list?.color ?? null);
+    this._lastValidName = list?.name ?? '';
     this._closeBtn?.setAttribute('aria-label',
       this._isNew ? t('list-dialog.save-and-close') : t('list-dialog.close'));
     this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
@@ -179,8 +176,6 @@ class ListDialog extends AppElement {
     this._isNew         = false;
     this._lastValidName = '';
 
-    this._onInput = () => { this._saveDraft(); };
-
     this._onNameBlur = () => {
       if (this._isNew) return;
       const v = this._input.value.trim();
@@ -205,13 +200,11 @@ class ListDialog extends AppElement {
       if (this._isNew) {
         const name = this._input.value.trim();
         if (name) {
-          localStorage.removeItem(DRAFT_KEY);
           this.dispatchEvent(new CustomEvent('list-created', {
             bubbles: true, composed: true,
             detail: { name, color: this._selectedColor },
           }));
         }
-        // else: keep draft (color preserved for next open)
       } else {
         this.dispatchEvent(new CustomEvent('list-closed', { bubbles: true, composed: true }));
       }
@@ -232,7 +225,6 @@ class ListDialog extends AppElement {
       const swatch = e.target.closest('.swatch');
       if (!swatch) return;
       this._selectColor(swatch.dataset.color || null);
-      this._saveDraft();
       if (!this._isNew) {
         this.dispatchEvent(new CustomEvent('list-color-changed', {
           bubbles: true, composed: true,
@@ -241,7 +233,6 @@ class ListDialog extends AppElement {
       }
     };
 
-    this._input.addEventListener('input',   this._onInput);
     this._input.addEventListener('keydown', this._onKeyDown);
     this._input.addEventListener('blur',    this._onNameBlur);
     this._deleteBtn.addEventListener('click', this._onDelete);
@@ -253,7 +244,6 @@ class ListDialog extends AppElement {
   }
 
   unsubscribe() {
-    this._input?.removeEventListener('input',   this._onInput);
     this._input?.removeEventListener('keydown', this._onKeyDown);
     this._input?.removeEventListener('blur',    this._onNameBlur);
     this._deleteBtn?.removeEventListener('click', this._onDelete);
@@ -261,18 +251,6 @@ class ListDialog extends AppElement {
     this._colorSwatches?.removeEventListener('pointerdown', this._onSwatchPointerDown);
     this._colorSwatches?.removeEventListener('click', this._onSwatchClick);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
-  }
-
-  _loadDraft() {
-    try { return JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { return null; }
-  }
-
-  _saveDraft() {
-    if (!this._isNew) return;
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      name:  this._input.value,
-      color: this._selectedColor,
-    }));
   }
 
   _selectColor(color) {

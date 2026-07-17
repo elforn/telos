@@ -6,7 +6,6 @@ import '../list-picker-dialog/list-picker-dialog.js';
 import { icons } from '../../icons.js';
 import { tagColor } from '../../utils/tag-color.js';
 
-const DRAFT_KEY = 'telos:draft.new-goal';
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 
 class GoalDialog extends AppElement {
@@ -27,8 +26,7 @@ class GoalDialog extends AppElement {
     this._isNew       = !goal;
     this._fromYear    = year    ?? String(this.currentYear);
     this._fromSection = section ?? 'capstone';
-    const draft = this._isNew ? this._loadDraft() : null;
-    this._input.value = goal?.title ?? draft?.title ?? '';
+    this._input.value = goal?.title ?? '';
     if (this._deleteBtn) this._deleteBtn.hidden = !goal;
     if (this._menuBtn) this._menuBtn.hidden = !goal;
     if (this._archiveBtn) {
@@ -36,16 +34,16 @@ class GoalDialog extends AppElement {
       this._archiveBtn.textContent = goal?.archived ? t('goal-dialog.unarchive') : t('goal-dialog.archive');
       this._archiveBtn.setAttribute('aria-pressed', String(!!goal?.archived));
     }
-    this._descInput.value = goal?.notes ?? draft?.notes ?? '';
+    this._descInput.value = goal?.notes ?? '';
     this._descHighlight?.sync();
 
-    this._tags = [...(goal?.tags ?? draft?.tags ?? [])];
+    this._tags = [...(goal?.tags ?? [])];
     this._tagInput.value = '';
     this._renderTagChips();
     this._updateSuggestions();
 
-    this._lastValidTitle = goal?.title ?? draft?.title ?? '';
-    this._lastValidNotes = goal?.notes ?? draft?.notes ?? '';
+    this._lastValidTitle = goal?.title ?? '';
+    this._lastValidNotes = goal?.notes ?? '';
 
     this._closeBtn.setAttribute('aria-label',
       this._isNew ? t('goal-dialog.save-and-close') : t('goal-dialog.close'));
@@ -608,8 +606,6 @@ class GoalDialog extends AppElement {
 
     // ── Main view ─────────────────────────────────────────────────────────────
 
-    this._onInput = () => { this._saveDraft(); };
-
     this._onTitleBlur = () => {
       if (this._isNew) return;
       const v = this._input.value.trim();
@@ -624,7 +620,6 @@ class GoalDialog extends AppElement {
 
     this._onDescInput = () => {
       this._syncDescHeight();
-      this._saveDraft();
     };
 
     this._onNotesBlur = () => {
@@ -664,7 +659,6 @@ class GoalDialog extends AppElement {
       if (this._isNew) {
         const title = this._input.value.trim();
         if (title) {
-          localStorage.removeItem(DRAFT_KEY);
           const notes = this._descInput.value.trim() || undefined;
           const tags  = this._getTagValues();
           this.dispatchEvent(new CustomEvent('goal-created', {
@@ -723,7 +717,6 @@ class GoalDialog extends AppElement {
       this._tagInput.focus();
     };
 
-    this._input.addEventListener('input',   this._onInput);
     this._input.addEventListener('keydown', this._onKeyDown);
     this._input.addEventListener('blur',    this._onTitleBlur);
     this._descInput.addEventListener('input', this._onDescInput);
@@ -809,7 +802,6 @@ class GoalDialog extends AppElement {
 
   unsubscribe() {
     this._descHighlight?.detach();
-    this._input?.removeEventListener('input',   this._onInput);
     this._input?.removeEventListener('keydown', this._onKeyDown);
     this._input?.removeEventListener('blur',    this._onTitleBlur);
     this._descInput?.removeEventListener('input', this._onDescInput);
@@ -847,7 +839,6 @@ class GoalDialog extends AppElement {
     this._tags.push(tag);
     this._tagInput.value = '';
     this._renderTagChips();
-    this._saveDraft();
     this._updateSuggestions();
     this._dispatchTagsChanged();
   }
@@ -855,7 +846,6 @@ class GoalDialog extends AppElement {
   _removeTag(tag) {
     this._tags = this._tags.filter(t => t !== tag);
     this._renderTagChips();
-    this._saveDraft();
     this._dispatchTagsChanged();
   }
 
@@ -977,19 +967,6 @@ class GoalDialog extends AppElement {
     ta.style.blockSize = `${Math.max(ta.scrollHeight, MIN_H)}px`;
     const wrap = ta.closest('.textarea-wrap');
     if (wrap) wrap.style.maxBlockSize = `${maxH}px`;
-  }
-
-  _loadDraft() {
-    try { return JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { return null; }
-  }
-
-  _saveDraft() {
-    if (!this._isNew) return;
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      title: this._input.value,
-      notes: this._descInput.value,
-      tags:  [...this._tags],
-    }));
   }
 
   _announceSaved() {
