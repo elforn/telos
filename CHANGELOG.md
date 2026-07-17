@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.10.1] — 2026-07-18
+
+### Removed
+- The "resume unsaved text after a crash or accidental close" draft-recovery feature on new goal/list/item dialogs (`localStorage`-backed, per-keystroke). In every normal path — Enter, the close button, a backdrop tap, or (for items) blurring the title field — the typed content is already saved as the real goal/list/item before the draft would ever matter; the only scenario it protected against was a hard page reload while the dialog was still open, which is being addressed separately
+
+### Fixed
+- Removed dead per-dialog listeners that existed solely to write the draft on every keystroke
+
+---
+
 ## [1.10.0] — 2026-07-17
 
 ### Changed
