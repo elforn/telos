@@ -210,6 +210,84 @@ describe('list-dialog — delete', () => {
 });
 
 
+// ── hide-time snapshot ──────────────────────────────────────────────────────────
+
+const SNAPSHOT_KEY = 'telos:snapshot.new-list';
+
+// Simulate the modal actually being shown (the stubbed show() doesn't set it).
+function markOpen(el) {
+  const d = el.shadowRoot.querySelector('#modal').shadowRoot.querySelector('dialog');
+  if (d) d.open = true;
+}
+function hidePage() {
+  window.dispatchEvent(new Event('pagehide'));
+}
+
+describe('list-dialog — hide-time snapshot', () => {
+  it('snapshots a titleless new list with a picked colour on hide', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    hidePage();
+    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    expect(snap.color).toBe('#4A94D4');
+  });
+
+  it('restores a snapshot on the next new open and consumes it', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ name: 'Half typed', color: '#4A94D4', _savedAt: Date.now() }));
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Half typed');
+    expect(el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('true');
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull(); // consumed
+  });
+
+  it('does not restore a snapshot when opening an existing list', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ name: 'Half typed', color: null, _savedAt: Date.now() }));
+    const el = mount();
+    el.open(LIST);
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Gift ideas');
+  });
+
+  it('does not write a snapshot for an empty new list on hide', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('does not snapshot when the dialog is not open', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#input').value = 'Typed';
+    // dialog not marked open → hide is a no-op
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('clears a snapshot when the new list is committed', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    el.shadowRoot.querySelector('#input').value = 'Groceries';
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
+    el.shadowRoot.querySelector('#modal').close(); // commits → clears
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('ignores a stale snapshot older than the max age', () => {
+    const dayAgo = Date.now() - (25 * 60 * 60 * 1000);
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ name: 'Ancient', color: null, _savedAt: dayAgo }));
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#input').value).toBe('');
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull(); // expired + purged
+  });
+});
+
 // ── color picker ──────────────────────────────────────────────────────────────
 
 describe('list-dialog — color picker', () => {

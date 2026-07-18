@@ -5,9 +5,11 @@ import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
 import { icons } from '../../icons.js';
 import { tagColor } from '../../utils/tag-color.js';
+import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 
 const STATUSES = ['open', 'paused', 'done', 'closed'];
 const SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
+const SNAPSHOT_KEY = 'telos:snapshot.new-item';
 
 // Events emitted (all bubbles + composed):
 //   item-created        { id, title, status, note, url, tags }
@@ -73,6 +75,7 @@ class ItemDialog extends AppElement {
     this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
       this._isNew ? t('item-dialog.title-new') : t('item-dialog.title-edit'));
 
+    if (this._isNew) this._snapshot?.restore();
     this._modal.show(item ? this._noteInput : this._titleInput);
     requestAnimationFrame(() => requestAnimationFrame(() => this._syncNoteHeight()));
   }
@@ -795,6 +798,7 @@ class ItemDialog extends AppElement {
         this._lastValidTitle = v;
         this._lastValidNote  = note;
         this._lastValidUrl   = url;
+        this._snapshot?.clear(); // committed — drop any hide-time snapshot
         this.dispatchEvent(new CustomEvent('item-created', {
           bubbles: true, composed: true,
           detail: { id, title: v, status, note, url, tags },
@@ -886,6 +890,7 @@ class ItemDialog extends AppElement {
             const id = crypto.randomUUID();
             this._isNew = false;
             this._lastValidTitle = title;
+            this._snapshot?.clear(); // committed — drop any hide-time snapshot
             this.dispatchEvent(new CustomEvent('item-created', {
               bubbles: true, composed: true, detail: { id, title, status, note, url, tags },
             }));
@@ -1026,7 +1031,7 @@ class ItemDialog extends AppElement {
     this._onListPick = e => {
       const { targetListIds, newListName, copy } = e.detail;
       const { title, status, note, url, tags } = this._getFormValues();
-      if (this._isNew) this._skipCreate = true;
+      if (this._isNew) { this._skipCreate = true; this._snapshot?.clear(); }
       this.dispatchEvent(new CustomEvent('item-move', {
         bubbles: true, composed: true,
         detail: { title, status, note, url, tags, targetListIds, newListName, copy },
@@ -1048,6 +1053,27 @@ class ItemDialog extends AppElement {
 
     this._onAddToGoal = () => this._commitPromote();
     this._addToGoalCta.addEventListener('click', this._onAddToGoal);
+
+    this._snapshot = installDialogSnapshot(this, {
+      key:      SNAPSHOT_KEY,
+      isOpen:   () => !!this._modal.shadowRoot?.querySelector('dialog')?.open,
+      isNew:    () => this._isNew,
+      snapshot: () => {
+        const { title, note, url, tags } = this._getFormValues();
+        return (title || note || url || tags.length) ? { title, note, url, tags } : null;
+      },
+      restore: ({ title, note, url, tags }) => {
+        this._titleInput.value = title ?? '';
+        this._noteInput.value  = note ?? '';
+        this._noteHighlight?.sync();
+        this._urlInput.value = url ?? '';
+        this._syncUrlOpen();
+        this._showUrlField(!!url);
+        this._tags = [...(tags ?? [])];
+        this._renderTagChips();
+        this._updateSuggestions();
+      },
+    });
   }
 
   unsubscribe() {
@@ -1154,7 +1180,7 @@ class ItemDialog extends AppElement {
     const section = this._checkedSection();
     if (!year || !section) return;
     const { title, status, note, url, tags } = this._getFormValues();
-    if (this._isNew) this._skipCreate = true;
+    if (this._isNew) { this._skipCreate = true; this._snapshot?.clear(); }
     this.dispatchEvent(new CustomEvent('item-promote', {
       bubbles: true, composed: true,
       detail: { title, status, note, url, tags, year, section },

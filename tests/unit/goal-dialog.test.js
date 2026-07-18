@@ -241,6 +241,65 @@ describe('goal-dialog — delete', () => {
   });
 });
 
+// ── hide-time snapshot ──────────────────────────────────────────────────────────
+
+const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
+
+function markOpen(el) {
+  const d = el.shadowRoot.querySelector('#modal').shadowRoot.querySelector('dialog');
+  if (d) d.open = true;
+}
+function hidePage() {
+  window.dispatchEvent(new Event('pagehide'));
+}
+
+describe('goal-dialog — hide-time snapshot', () => {
+  it('snapshots a titleless new goal that has notes on hide', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    el.shadowRoot.querySelector('#desc-input').value = 'Some idea';
+    hidePage();
+    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    expect(snap.notes).toBe('Some idea');
+  });
+
+  it('restores title, notes and tags on the next new open and consumes it', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ title: 'T', notes: 'N', tags: ['health'], _savedAt: Date.now() }));
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#input').value).toBe('T');
+    expect(el.shadowRoot.querySelector('#desc-input').value).toBe('N');
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('does not restore a snapshot when opening an existing goal', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ title: 'Snap', _savedAt: Date.now() }));
+    const el = mount();
+    el.open({ title: 'Real goal' });
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Real goal');
+  });
+
+  it('does not write a snapshot for an empty new goal on hide', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('clears a snapshot when the new goal is committed', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    el.shadowRoot.querySelector('#input').value = 'Run a marathon';
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
+    el.shadowRoot.querySelector('#modal').close(); // commits → clears
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+});
+
 describe('goal-dialog — notes', () => {
   it('notes textarea is always visible', () => {
     const el = mount();

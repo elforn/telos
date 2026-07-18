@@ -2,6 +2,9 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import { COLOR_PALETTE } from '../lists-page-item/lists-page-item.js';
+import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
+
+const SNAPSHOT_KEY = 'telos:snapshot.new-list';
 
 // Labels parallel COLOR_PALETTE — update both together when adding/removing colours.
 const SWATCH_LABELS = ['No colour', 'Red', 'Orange', 'Yellow', 'Green', 'Teal', 'Blue', 'Purple'];
@@ -18,6 +21,7 @@ class ListDialog extends AppElement {
       this._isNew ? t('list-dialog.save-and-close') : t('list-dialog.close'));
     this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
       this._isNew ? t('list-dialog.title-new') : t('list-dialog.title-edit'));
+    if (this._isNew) this._snapshot?.restore();
     this._modal.show(this._input);
   }
 
@@ -200,6 +204,7 @@ class ListDialog extends AppElement {
       if (this._isNew) {
         const name = this._input.value.trim();
         if (name) {
+          this._snapshot?.clear(); // committed — drop any hide-time snapshot
           this.dispatchEvent(new CustomEvent('list-created', {
             bubbles: true, composed: true,
             detail: { name, color: this._selectedColor },
@@ -241,6 +246,20 @@ class ListDialog extends AppElement {
     this._colorSwatches.addEventListener('pointerdown', this._onSwatchPointerDown);
     this._colorSwatches.addEventListener('click', this._onSwatchClick);
     this._modal.addEventListener('modal-close', this._onModalClose);
+
+    this._snapshot = installDialogSnapshot(this, {
+      key:      SNAPSHOT_KEY,
+      isOpen:   () => !!this._modal.shadowRoot?.querySelector('dialog')?.open,
+      isNew:    () => this._isNew,
+      snapshot: () => {
+        const name = this._input.value;
+        return (name.trim() || this._selectedColor) ? { name, color: this._selectedColor } : null;
+      },
+      restore: ({ name, color }) => {
+        this._input.value = name ?? '';
+        this._selectColor(color ?? null);
+      },
+    });
   }
 
   unsubscribe() {

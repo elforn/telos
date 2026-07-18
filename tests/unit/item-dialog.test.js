@@ -393,6 +393,70 @@ describe('item-dialog — delete', () => {
 });
 
 
+// ── hide-time snapshot ──────────────────────────────────────────────────────────
+
+const SNAPSHOT_KEY = 'telos:snapshot.new-item';
+
+function markOpen(el) {
+  const d = el.shadowRoot.querySelector('#modal').shadowRoot.querySelector('dialog');
+  if (d) d.open = true;
+}
+function hidePage() {
+  window.dispatchEvent(new Event('pagehide'));
+}
+
+describe('item-dialog — hide-time snapshot', () => {
+  it('snapshots a titleless new item that has a note on hide', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    el.shadowRoot.querySelector('#note-input').value = 'orphan note';
+    hidePage();
+    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    expect(snap.note).toBe('orphan note');
+  });
+
+  it('restores title, note, url and tags on the next new open and consumes it', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
+      title: 'T', note: 'N', url: 'https://x.com', tags: ['a'], _savedAt: Date.now(),
+    }));
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#title-input').value).toBe('T');
+    expect(el.shadowRoot.querySelector('#note-input').value).toBe('N');
+    expect(el.shadowRoot.querySelector('#url-input').value).toBe('https://x.com');
+    expect(el.shadowRoot.querySelector('.url-row').hidden).toBe(false);
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('does not restore a snapshot when opening an existing item', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ title: 'Snap', _savedAt: Date.now() }));
+    const el = mount();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('#title-input').value).toBe('Buy flowers');
+  });
+
+  it('does not write a snapshot for an empty new item on hide', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('clears a snapshot when the new item is committed on close', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    el.shadowRoot.querySelector('#note-input').value = 'note only';
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
+    el.shadowRoot.querySelector('#title-input').value = 'Now titled';
+    el.shadowRoot.querySelector('#modal').close(); // commits → clears
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+});
+
 // ── Move to list ──────────────────────────────────────────────────────────────
 
 // ── create on title blur ──────────────────────────────────────────────────────

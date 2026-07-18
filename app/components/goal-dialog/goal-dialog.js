@@ -5,8 +5,10 @@ import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
 import { icons } from '../../icons.js';
 import { tagColor } from '../../utils/tag-color.js';
+import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
+const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
 
 class GoalDialog extends AppElement {
   // ── Public properties ─────────────────────────────────────────────────────
@@ -51,6 +53,7 @@ class GoalDialog extends AppElement {
       this._isNew ? t('goal-dialog.title-new') : t('goal-dialog.title-edit'));
 
     this._showView('main');
+    if (this._isNew) this._snapshot?.restore();
     this._modal.show(this._input);
     setTimeout(() => {
       const len = this._input.value.length;
@@ -659,6 +662,7 @@ class GoalDialog extends AppElement {
       if (this._isNew) {
         const title = this._input.value.trim();
         if (title) {
+          this._snapshot?.clear(); // committed — drop any hide-time snapshot
           const notes = this._descInput.value.trim() || undefined;
           const tags  = this._getTagValues();
           this.dispatchEvent(new CustomEvent('goal-created', {
@@ -798,6 +802,26 @@ class GoalDialog extends AppElement {
       this._modal.close();
     };
     this._listPickerDialog.addEventListener('list-pick', this._onListPick);
+
+    this._snapshot = installDialogSnapshot(this, {
+      key:      SNAPSHOT_KEY,
+      isOpen:   () => !!this._modal.shadowRoot?.querySelector('dialog')?.open,
+      isNew:    () => this._isNew,
+      snapshot: () => {
+        const title = this._input.value;
+        const notes = this._descInput.value;
+        const tags  = this._getTagValues();
+        return (title.trim() || notes.trim() || tags.length) ? { title, notes, tags } : null;
+      },
+      restore: ({ title, notes, tags }) => {
+        this._input.value = title ?? '';
+        this._descInput.value = notes ?? '';
+        this._descHighlight?.sync();
+        this._tags = [...(tags ?? [])];
+        this._renderTagChips();
+        this._updateSuggestions();
+      },
+    });
   }
 
   unsubscribe() {
