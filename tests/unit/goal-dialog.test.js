@@ -253,8 +253,11 @@ function hidePage() {
   window.dispatchEvent(new Event('pagehide'));
 }
 
+const EXISTING_GOAL = { id: 'g1', title: 'Real goal', percentage: 0 };
+
 describe('goal-dialog — hide-time snapshot', () => {
-  it('snapshots a titleless new goal that has notes on hide', () => {
+  // ── new goal ──
+  it('snapshots a titleless new goal that has notes on hide (id null)', () => {
     const el = mount();
     el.open(null);
     markOpen(el);
@@ -262,21 +265,21 @@ describe('goal-dialog — hide-time snapshot', () => {
     hidePage();
     const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
     expect(snap.notes).toBe('Some idea');
+    expect(snap.id).toBeNull();
   });
 
-  it('restores title, notes and tags on the next new open and consumes it', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ title: 'T', notes: 'N', tags: ['health'], _savedAt: Date.now() }));
+  it('restores title and notes on the next new open', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, title: 'T', notes: 'N', tags: ['health'], _savedAt: Date.now() }));
     const el = mount();
     el.open(null);
     expect(el.shadowRoot.querySelector('#input').value).toBe('T');
     expect(el.shadowRoot.querySelector('#desc-input').value).toBe('N');
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
   });
 
-  it('does not restore a snapshot when opening an existing goal', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ title: 'Snap', _savedAt: Date.now() }));
+  it('does not restore a new snapshot when opening an existing goal', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, title: 'Snap', _savedAt: Date.now() }));
     const el = mount();
-    el.open({ title: 'Real goal' });
+    el.open(EXISTING_GOAL);
     expect(el.shadowRoot.querySelector('#input').value).toBe('Real goal');
   });
 
@@ -288,14 +291,69 @@ describe('goal-dialog — hide-time snapshot', () => {
     expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
   });
 
-  it('clears a snapshot when the new goal is committed', () => {
+  it('clears the snapshot when the new goal is committed', () => {
     const el = mount();
     el.open(null);
     markOpen(el);
     el.shadowRoot.querySelector('#input').value = 'Run a marathon';
     hidePage();
     expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
-    el.shadowRoot.querySelector('#modal').close(); // commits → clears
+    el.shadowRoot.querySelector('#modal').close(); // title present → commits → clears
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('preserves a titleless new goal on close instead of discarding it', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    el.shadowRoot.querySelector('#desc-input').value = 'Idea without a title';
+    el.shadowRoot.querySelector('#modal').close(); // no title → capture
+    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    expect(snap.notes).toBe('Idea without a title');
+  });
+
+  // ── existing goal ──
+  it('snapshots an existing goal with an unsaved title edit on hide, keyed by id', () => {
+    const el = mount();
+    el.open(EXISTING_GOAL);
+    markOpen(el);
+    el.shadowRoot.querySelector('#input').value = 'Real goal (edited)';
+    hidePage();
+    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    expect(snap.id).toBe('g1');
+    expect(snap.title).toBe('Real goal (edited)');
+  });
+
+  it('does not snapshot an existing goal with no unsaved edit on hide', () => {
+    const el = mount();
+    el.open(EXISTING_GOAL);
+    markOpen(el);
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('restores an existing-goal snapshot only when reopening the same goal', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: 'g1', title: 'Pending', notes: '', tags: [], _savedAt: Date.now() }));
+    const el = mount();
+    el.open(EXISTING_GOAL);
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Pending');
+  });
+
+  it('does not restore an existing-goal snapshot when opening a different goal', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: 'g1', title: 'Pending', notes: '', tags: [], _savedAt: Date.now() }));
+    const el = mount();
+    el.open({ id: 'g2', title: 'Another goal', percentage: 0 });
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Another goal');
+  });
+
+  it('clears the snapshot when an edited existing goal is closed', () => {
+    const el = mount();
+    el.open(EXISTING_GOAL);
+    markOpen(el);
+    el.shadowRoot.querySelector('#input').value = 'Edited';
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
+    el.shadowRoot.querySelector('#modal').close(); // existing close → clear
     expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
   });
 });

@@ -224,7 +224,8 @@ function hidePage() {
 }
 
 describe('list-dialog — hide-time snapshot', () => {
-  it('snapshots a titleless new list with a picked colour on hide', () => {
+  // ── new list ──
+  it('snapshots a titleless new list with a picked colour on hide (id null)', () => {
     const el = mount();
     el.open(null);
     markOpen(el);
@@ -232,19 +233,19 @@ describe('list-dialog — hide-time snapshot', () => {
     hidePage();
     const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
     expect(snap.color).toBe('#4A94D4');
+    expect(snap.id).toBeNull();
   });
 
-  it('restores a snapshot on the next new open and consumes it', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ name: 'Half typed', color: '#4A94D4', _savedAt: Date.now() }));
+  it('restores a new-list snapshot on the next new open', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, name: 'Half typed', color: '#4A94D4', _savedAt: Date.now() }));
     const el = mount();
     el.open(null);
     expect(el.shadowRoot.querySelector('#input').value).toBe('Half typed');
     expect(el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('true');
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull(); // consumed
   });
 
-  it('does not restore a snapshot when opening an existing list', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ name: 'Half typed', color: null, _savedAt: Date.now() }));
+  it('does not restore a new snapshot when opening an existing list', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, name: 'Half typed', color: null, _savedAt: Date.now() }));
     const el = mount();
     el.open(LIST);
     expect(el.shadowRoot.querySelector('#input').value).toBe('Gift ideas');
@@ -262,25 +263,79 @@ describe('list-dialog — hide-time snapshot', () => {
     const el = mount();
     el.open(null);
     el.shadowRoot.querySelector('#input').value = 'Typed';
-    // dialog not marked open → hide is a no-op
-    hidePage();
+    hidePage(); // dialog not marked open → no-op
     expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
   });
 
-  it('clears a snapshot when the new list is committed', () => {
+  it('clears the snapshot when the new list is committed', () => {
     const el = mount();
     el.open(null);
     markOpen(el);
     el.shadowRoot.querySelector('#input').value = 'Groceries';
     hidePage();
     expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
-    el.shadowRoot.querySelector('#modal').close(); // commits → clears
+    el.shadowRoot.querySelector('#modal').close(); // name present → commits → clears
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('preserves a titleless new list on close instead of discarding it', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click(); // colour, no name
+    el.shadowRoot.querySelector('#modal').close(); // no name → capture, not discard
+    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    expect(snap.color).toBe('#4A94D4');
+  });
+
+  // ── existing list ──
+  it('snapshots an existing list with an unsaved name edit on hide, keyed by id', () => {
+    const el = mount();
+    el.open(LIST);
+    markOpen(el);
+    el.shadowRoot.querySelector('#input').value = 'Gift ideas (edited)';
+    hidePage();
+    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    expect(snap.id).toBe('l1');
+    expect(snap.name).toBe('Gift ideas (edited)');
+  });
+
+  it('does not snapshot an existing list with no unsaved edit on hide', () => {
+    const el = mount();
+    el.open(LIST);
+    markOpen(el);
+    hidePage(); // name unchanged
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('restores an existing-list snapshot only when reopening the same list', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: 'l1', name: 'Pending edit', color: null, _savedAt: Date.now() }));
+    const el = mount();
+    el.open(LIST); // same id → restore
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Pending edit');
+  });
+
+  it('does not restore an existing-list snapshot when opening a different list', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: 'l1', name: 'Pending edit', color: null, _savedAt: Date.now() }));
+    const el = mount();
+    el.open({ id: 'l2', name: 'Other list' }); // different id → ignore
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Other list');
+  });
+
+  it('clears the snapshot when an edited existing list is closed', () => {
+    const el = mount();
+    el.open(LIST);
+    markOpen(el);
+    el.shadowRoot.querySelector('#input').value = 'Edited';
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
+    el.shadowRoot.querySelector('#modal').close(); // existing close → clear
     expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
   });
 
   it('ignores a stale snapshot older than the max age', () => {
     const dayAgo = Date.now() - (25 * 60 * 60 * 1000);
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ name: 'Ancient', color: null, _savedAt: dayAgo }));
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, name: 'Ancient', color: null, _savedAt: dayAgo }));
     const el = mount();
     el.open(null);
     expect(el.shadowRoot.querySelector('#input').value).toBe('');

@@ -13,6 +13,7 @@ const SWATCHES = COLOR_PALETTE.map((color, i) => ({ color, label: SWATCH_LABELS[
 class ListDialog extends AppElement {
   open(list = null) {
     this._isNew = !list;
+    this._listId = list?.id ?? null;
     this._input.value = list?.name ?? '';
     this._deleteBtn.hidden = !list;
     this._selectColor(list?.color ?? null);
@@ -21,7 +22,7 @@ class ListDialog extends AppElement {
       this._isNew ? t('list-dialog.save-and-close') : t('list-dialog.close'));
     this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
       this._isNew ? t('list-dialog.title-new') : t('list-dialog.title-edit'));
-    if (this._isNew) this._snapshot?.restore();
+    this._snapshot?.restoreFor(list);
     this._modal.show(this._input);
   }
 
@@ -209,8 +210,11 @@ class ListDialog extends AppElement {
             bubbles: true, composed: true,
             detail: { name, color: this._selectedColor },
           }));
+        } else {
+          this._snapshot?.capture(); // can't commit without a name — preserve any colour picked
         }
       } else {
+        this._snapshot?.clear(); // edited record closed — store owns it now
         this.dispatchEvent(new CustomEvent('list-closed', { bubbles: true, composed: true }));
       }
     };
@@ -250,10 +254,14 @@ class ListDialog extends AppElement {
     this._snapshot = installDialogSnapshot(this, {
       key:      SNAPSHOT_KEY,
       isOpen:   () => !!this._modal.shadowRoot?.querySelector('dialog')?.open,
-      isNew:    () => this._isNew,
+      recordId: () => this._listId,
       snapshot: () => {
         const name = this._input.value;
-        return (name.trim() || this._selectedColor) ? { name, color: this._selectedColor } : null;
+        if (this._isNew) {
+          return (name.trim() || this._selectedColor) ? { name, color: this._selectedColor } : null;
+        }
+        // existing: only if the name has an unsaved edit
+        return name !== this._lastValidName ? { name, color: this._selectedColor } : null;
       },
       restore: ({ name, color }) => {
         this._input.value = name ?? '';

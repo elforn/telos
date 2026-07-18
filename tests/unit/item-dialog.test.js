@@ -406,7 +406,8 @@ function hidePage() {
 }
 
 describe('item-dialog — hide-time snapshot', () => {
-  it('snapshots a titleless new item that has a note on hide', () => {
+  // ── new item ──
+  it('snapshots a titleless new item that has a note on hide (id null)', () => {
     const el = mount();
     el.open(null);
     markOpen(el);
@@ -414,11 +415,12 @@ describe('item-dialog — hide-time snapshot', () => {
     hidePage();
     const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
     expect(snap.note).toBe('orphan note');
+    expect(snap.id).toBeNull();
   });
 
-  it('restores title, note, url and tags on the next new open and consumes it', () => {
+  it('restores title, note, url and tags on the next new open', () => {
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
-      title: 'T', note: 'N', url: 'https://x.com', tags: ['a'], _savedAt: Date.now(),
+      id: null, title: 'T', note: 'N', url: 'https://x.com', tags: ['a'], _savedAt: Date.now(),
     }));
     const el = mount();
     el.open(null);
@@ -426,11 +428,10 @@ describe('item-dialog — hide-time snapshot', () => {
     expect(el.shadowRoot.querySelector('#note-input').value).toBe('N');
     expect(el.shadowRoot.querySelector('#url-input').value).toBe('https://x.com');
     expect(el.shadowRoot.querySelector('.url-row').hidden).toBe(false);
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
   });
 
-  it('does not restore a snapshot when opening an existing item', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ title: 'Snap', _savedAt: Date.now() }));
+  it('does not restore a new snapshot when opening an existing item', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, title: 'Snap', _savedAt: Date.now() }));
     const el = mount();
     el.open(ITEM);
     expect(el.shadowRoot.querySelector('#title-input').value).toBe('Buy flowers');
@@ -444,7 +445,7 @@ describe('item-dialog — hide-time snapshot', () => {
     expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
   });
 
-  it('clears a snapshot when the new item is committed on close', () => {
+  it('clears the snapshot when the new item is committed on close', () => {
     const el = mount();
     el.open(null);
     markOpen(el);
@@ -452,7 +453,62 @@ describe('item-dialog — hide-time snapshot', () => {
     hidePage();
     expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
     el.shadowRoot.querySelector('#title-input').value = 'Now titled';
-    el.shadowRoot.querySelector('#modal').close(); // commits → clears
+    el.shadowRoot.querySelector('#modal').close(); // title present → commits → clears
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('preserves a titleless new item on close instead of discarding it', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    el.shadowRoot.querySelector('#note-input').value = 'note without a title';
+    el.shadowRoot.querySelector('#modal').close(); // no title → capture
+    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    expect(snap.note).toBe('note without a title');
+  });
+
+  // ── existing item ──
+  it('snapshots an existing item with an unsaved note edit on hide, keyed by id', () => {
+    const el = mount();
+    el.open(ITEM);
+    markOpen(el);
+    el.shadowRoot.querySelector('#note-input').value = 'reworded note';
+    hidePage();
+    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    expect(snap.id).toBe('i1');
+    expect(snap.note).toBe('reworded note');
+  });
+
+  it('does not snapshot an existing item with no unsaved edit on hide', () => {
+    const el = mount();
+    el.open(ITEM);
+    markOpen(el);
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('restores an existing-item snapshot only when reopening the same item', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: 'i1', title: 'Buy flowers', note: 'pending note', url: '', tags: [], _savedAt: Date.now() }));
+    const el = mount();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('#note-input').value).toBe('pending note');
+  });
+
+  it('does not restore an existing-item snapshot when opening a different item', () => {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: 'i1', title: 'x', note: 'pending note', url: '', tags: [], _savedAt: Date.now() }));
+    const el = mount();
+    el.open({ id: 'i2', title: 'Other item', status: 'open', note: 'kept', url: '', tags: [], inGoals: [] });
+    expect(el.shadowRoot.querySelector('#note-input').value).toBe('kept');
+  });
+
+  it('clears the snapshot when an edited existing item is closed', () => {
+    const el = mount();
+    el.open(ITEM);
+    markOpen(el);
+    el.shadowRoot.querySelector('#note-input').value = 'edited';
+    hidePage();
+    expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
+    el.shadowRoot.querySelector('#modal').close(); // existing close → clear
     expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
   });
 });

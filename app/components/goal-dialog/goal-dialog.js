@@ -53,7 +53,7 @@ class GoalDialog extends AppElement {
       this._isNew ? t('goal-dialog.title-new') : t('goal-dialog.title-edit'));
 
     this._showView('main');
-    if (this._isNew) this._snapshot?.restore();
+    this._snapshot?.restoreFor(goal);
     this._modal.show(this._input);
     setTimeout(() => {
       const len = this._input.value.length;
@@ -668,8 +668,11 @@ class GoalDialog extends AppElement {
           this.dispatchEvent(new CustomEvent('goal-created', {
             bubbles: true, composed: true, detail: { title, notes, tags },
           }));
+        } else {
+          this._snapshot?.capture(); // can't commit without a title — preserve notes/tags
         }
       } else {
+        this._snapshot?.clear(); // edited record closed — store owns it now
         this.dispatchEvent(new CustomEvent('goal-closed', { bubbles: true, composed: true }));
       }
       if (this._actionSheet?.open) this._actionSheet.close();
@@ -806,12 +809,17 @@ class GoalDialog extends AppElement {
     this._snapshot = installDialogSnapshot(this, {
       key:      SNAPSHOT_KEY,
       isOpen:   () => !!this._modal.shadowRoot?.querySelector('dialog')?.open,
-      isNew:    () => this._isNew,
+      recordId: () => this._goal?.id ?? null,
       snapshot: () => {
         const title = this._input.value;
         const notes = this._descInput.value;
-        const tags  = this._getTagValues();
-        return (title.trim() || notes.trim() || tags.length) ? { title, notes, tags } : null;
+        if (this._isNew) {
+          const tags = this._getTagValues();
+          return (title.trim() || notes.trim() || tags.length) ? { title, notes, tags } : null;
+        }
+        // existing: only if a text field has an unsaved edit (tags/status commit immediately)
+        return (title !== this._lastValidTitle || notes !== this._lastValidNotes)
+          ? { title, notes, tags: [...this._tags] } : null;
       },
       restore: ({ title, notes, tags }) => {
         this._input.value = title ?? '';

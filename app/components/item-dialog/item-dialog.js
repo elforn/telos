@@ -75,7 +75,7 @@ class ItemDialog extends AppElement {
     this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
       this._isNew ? t('item-dialog.title-new') : t('item-dialog.title-edit'));
 
-    if (this._isNew) this._snapshot?.restore();
+    this._snapshot?.restoreFor(item);
     this._modal.show(item ? this._noteInput : this._titleInput);
     requestAnimationFrame(() => requestAnimationFrame(() => this._syncNoteHeight()));
   }
@@ -894,10 +894,13 @@ class ItemDialog extends AppElement {
             this.dispatchEvent(new CustomEvent('item-created', {
               bubbles: true, composed: true, detail: { id, title, status, note, url, tags },
             }));
+          } else {
+            this._snapshot?.capture(); // can't commit without a title — preserve note/url/tags
           }
         }
         this._skipCreate = false;
       } else {
+        this._snapshot?.clear(); // edited record closed — store owns it now
         this.dispatchEvent(new CustomEvent('item-closed', { bubbles: true, composed: true }));
       }
       clearTimeout(this._copyResetTimer);
@@ -1057,10 +1060,19 @@ class ItemDialog extends AppElement {
     this._snapshot = installDialogSnapshot(this, {
       key:      SNAPSHOT_KEY,
       isOpen:   () => !!this._modal.shadowRoot?.querySelector('dialog')?.open,
-      isNew:    () => this._isNew,
+      recordId: () => this._item?.id ?? null,
       snapshot: () => {
+        if (this._isNew) {
+          const { title, note, url, tags } = this._getFormValues();
+          return (title || note || url || tags.length) ? { title, note, url, tags } : null;
+        }
+        // existing: only if a text field has an unsaved edit (tags/status commit immediately)
+        const dirty = this._titleInput.value !== this._lastValidTitle
+          || this._noteInput.value !== this._lastValidNote
+          || this._urlInput.value !== this._lastValidUrl;
+        if (!dirty) return null;
         const { title, note, url, tags } = this._getFormValues();
-        return (title || note || url || tags.length) ? { title, note, url, tags } : null;
+        return { title, note, url, tags };
       },
       restore: ({ title, note, url, tags }) => {
         this._titleInput.value = title ?? '';
