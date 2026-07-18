@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.10.2] — 2026-07-18
+
+### Added
+- In-progress input in a new goal/list/item dialog now survives a reload, tab switch, or app backgrounding. When the page is hidden with an unsaved new entry, its content is snapshotted and restored the next time you open that dialog — including entries that have only a note, tag, or colour but no title yet. Editing an existing entry commits the focused field on the way out, as before. Nothing is written while you type; the snapshot happens only at the moment the page is hidden
+
+---
+
 ## [1.10.1] — 2026-07-18
 
 ### Removed
