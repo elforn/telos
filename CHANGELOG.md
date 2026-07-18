@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.10.3] — 2026-07-18
+
+### Added
+- In-progress edits to an **existing** goal, list, or item now also survive a reload, tab switch, or app backgrounding — if you're mid-edit when the page is hidden, reopening that same entry restores your unsaved change. Snapshots are keyed per entry, so one entry's pending edit never leaks into another's
+- Closing a new entry that has content but **no title yet** (just a note, tag, or colour) no longer discards it — it's kept and restored next time you open that dialog, until you either give it a title or clear it
+
+### Changed
+- Once you close an edited entry, it's committed as before and its recovery snapshot is dropped; the snapshot only exists to recover an entry that was still open when the page was interrupted
+
 ## [1.10.2] — 2026-07-18
 
 ### Added
