@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.10.4] — 2026-07-19
+
+### Added
+- Swipe down on a bottom-sheet dialog's handle to dismiss it — your content is saved on the way out, same as any other close. The handle is a full-width grab strip at the top of the sheet so it's easy to catch. (Socle 0.13.1)
+
+### Fixed
+- Swiping a dialog no longer risks triggering the browser's pull-to-refresh; the gesture is contained to the sheet, and pull-to-refresh on the main page is unaffected
+
+### Note
+- The raw menu / bulk-status / import sheets don't yet have the swipe handle — that arrives when they move onto the shared sheet component (planned)
+
+---
+
 ## [1.10.3] — 2026-07-18
 
 ### Added
