@@ -68,13 +68,21 @@ class ModalDialog extends AppElement {
           }
 
           .handle {
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            inline-size: 100%;
+            min-block-size: var(--touch-target);
+            margin-block-end: var(--space-4);
+            touch-action: none;
+          }
+
+          .handle::before {
+            content: '';
             inline-size: 36px;
             block-size: 4px;
             border-radius: var(--radius-full);
             background: var(--color-border);
-            margin: 0 auto var(--space-4);
-            touch-action: none;
           }
         }
 
