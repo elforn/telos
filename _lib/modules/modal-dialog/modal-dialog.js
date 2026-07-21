@@ -72,8 +72,11 @@ class ModalDialog extends AppElement {
             align-items: center;
             justify-content: center;
             inline-size: 100%;
-            min-block-size: var(--touch-target);
-            margin-block-end: var(--space-4);
+            min-block-size: var(--space-8);
+            margin-block-start: calc(-1 * var(--space-4));
+            margin-block-end: calc(-1 * var(--space-4));
+            position: relative;
+            z-index: 1;
             touch-action: none;
           }
 
@@ -123,6 +126,17 @@ class ModalDialog extends AppElement {
     this._onBackdrop = e => { if (!this._justOpened && e.target === this._dialog) this.close(); };
     this._dialog.addEventListener('click', this._onBackdrop);
 
+    // Collapse the footer wrapper when nothing is slotted into it (action sheets / menus),
+    // so it contributes no margin or height. [hidden] collapses to display:none via the
+    // base stylesheet's `[hidden] { display: none !important; }` rule.
+    this._footer = this.shadowRoot.querySelector('.footer');
+    this._footerSlot = this.shadowRoot.querySelector('slot[name="footer"]');
+    this._onFooterSlotChange = () => {
+      this._footer.hidden = this._footerSlot.assignedNodes({ flatten: true }).length === 0;
+    };
+    this._footerSlot.addEventListener('slotchange', this._onFooterSlotChange);
+    this._onFooterSlotChange();
+
     // Swipe-down-to-dismiss on the handle only, so it never competes with scrolling
     // long slotted content. Per-drag move/up/cancel listeners are added on pointerdown
     // and removed on up/cancel — mirroring modules/gestures/ lifecycle management.
@@ -137,6 +151,7 @@ class ModalDialog extends AppElement {
     this._dialog?.removeEventListener('close', this._onClose);
     this._dialog?.removeEventListener('click', this._onBackdrop);
     this._handle?.removeEventListener('pointerdown', this._onHandleDown);
+    this._footerSlot?.removeEventListener('slotchange', this._onFooterSlotChange);
     this._teardownDrag();
   }
 
