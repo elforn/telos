@@ -83,7 +83,8 @@ async function openImportDialog(page) {
   await page.waitForFunction(() => {
     const d = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
-      ?.querySelector('#import-dialog');
+      ?.querySelector('#import-dialog')?.shadowRoot
+      ?.querySelector('dialog');
     return d?.open;
   });
 }
@@ -107,7 +108,8 @@ async function confirmImport(page) {
   await page.waitForFunction(() => {
     const d = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
-      ?.querySelector('#import-dialog');
+      ?.querySelector('#import-dialog')?.shadowRoot
+      ?.querySelector('dialog');
     return !d?.open;
   });
 }
@@ -147,7 +149,8 @@ test.describe('Bulk import — dialog', () => {
     const open = await page.evaluate(() =>
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('#import-dialog')?.open
+        ?.querySelector('#import-dialog')?.shadowRoot
+        ?.querySelector('dialog')?.open
     );
     expect(open).toBe(true);
   });
@@ -196,7 +199,8 @@ test.describe('Bulk import — dialog', () => {
     await page.waitForFunction(() => {
       const d = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('#import-dialog');
+        ?.querySelector('#import-dialog')?.shadowRoot
+        ?.querySelector('dialog');
       return !d?.open;
     });
 

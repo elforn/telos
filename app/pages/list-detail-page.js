@@ -11,14 +11,17 @@ import '../components/item-dialog/item-dialog.js';
 import '../components/list-dialog/list-dialog.js';
 import '../components/add-row/add-row.js';
 import '../components/list-picker-dialog/list-picker-dialog.js';
+import '../../_lib/modules/modal-dialog/modal-dialog.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
 import '../components/export-sheet/export-sheet.js';
 import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdown.js';
+import { installDialogSnapshot } from '../utils/dialog-snapshot.js';
 
 const EXPORT_MODE_LIST      = 'list';
 const EXPORT_MODE_SELECTION = 'selection';
 const EXPORT_MODE_ITEM      = 'item';
+const IMPORT_SNAPSHOT_KEY   = 'telos:snapshot.import-text';
 
 class ListDetailPage extends AppElement {
   template() {
@@ -27,6 +30,9 @@ class ListDetailPage extends AppElement {
         @media (prefers-reduced-motion: reduce) {
           dialog[open], dialog::backdrop { animation: none; }
         }
+
+        /* Consistent modal padding across the app: --space-5 on both axes. */
+        #import-dialog { --space-6: var(--space-5); }
 
         :host {
           display: block;
@@ -223,8 +229,6 @@ class ListDetailPage extends AppElement {
           display: flex;
           align-items: center;
           gap: var(--space-2);
-          padding: var(--space-3) var(--space-5);
-          border-block-start: 1px solid var(--color-border);
         }
 
         .import-footer-end {
@@ -857,23 +861,20 @@ class ListDetailPage extends AppElement {
 
       <list-picker-dialog id="bulk-picker"></list-picker-dialog>
 
-      <dialog id="import-dialog" aria-label="${t('list-detail.import-heading')}">
-        <div class="menu-handle" aria-hidden="true"></div>
-        <div class="menu-section">
-          <p class="menu-section-label">${t('list-detail.import-heading')}</p>
-          <textarea id="import-textarea"
-                    placeholder="${t('list-detail.import-placeholder')}"
-                    rows="6"
-                    enterkeyhint="enter"></textarea>
-        </div>
-        <div class="import-footer">
+      <modal-dialog id="import-dialog" aria-label="${t('list-detail.import-heading')}">
+        <p class="menu-section-label">${t('list-detail.import-heading')}</p>
+        <textarea id="import-textarea"
+                  placeholder="${t('list-detail.import-placeholder')}"
+                  rows="6"
+                  enterkeyhint="enter"></textarea>
+        <div slot="footer" class="import-footer">
           <button type="button" id="import-cancel-btn">${t('list-detail.import-cancel')}</button>
           <div class="import-footer-end">
             <span id="import-count" hidden></span>
             <button type="button" id="import-cta-btn" disabled>${t('list-detail.import-cta')}</button>
           </div>
         </div>
-      </dialog>
+      </modal-dialog>
     `;
   }
 
@@ -1338,13 +1339,30 @@ class ListDetailPage extends AppElement {
     this._importCtaBtn   = this.shadowRoot.querySelector('#import-cta-btn');
     this._importParsed   = [];
 
+    // Draft recovery, scoped per list (mirrors item/goal/list dialogs) — a paste
+    // typed for one list should never resurface when importing into another.
+    this._importSnapshot = installDialogSnapshot(this, {
+      key:      IMPORT_SNAPSHOT_KEY,
+      isOpen:   () => !!this._importDialog.shadowRoot?.querySelector('dialog')?.open,
+      recordId: () => this._listId,
+      snapshot: () => {
+        const text = this._importTextarea.value;
+        return text.trim() ? { text } : null;
+      },
+      restore: ({ text }) => {
+        this._importTextarea.value = text ?? '';
+        this._importParsed = this._parseImportText(this._importTextarea.value);
+        this._updateImportUI();
+      },
+    });
+
     this._onImportMenuBtn = () => {
       this._menuDialog.close();
       this._importTextarea.value = '';
       this._importParsed = [];
       this._updateImportUI();
-      this._importDialog.showModal();
-      requestAnimationFrame(() => this._importTextarea.focus());
+      this._importSnapshot.restoreFor({ id: this._listId });
+      this._importDialog.show(this._importTextarea);
     };
     this.listen(this.shadowRoot.querySelector('#import-menu-btn'), 'click', this._onImportMenuBtn);
 
@@ -1357,14 +1375,21 @@ class ListDetailPage extends AppElement {
     this._onImportCancel = () => this._importDialog.close();
     this.listen(this.shadowRoot.querySelector('#import-cancel-btn'), 'click', this._onImportCancel);
 
-    this._onImportBackdrop = e => { if (e.target === this._importDialog) this._importDialog.close(); };
-    this.listen(this._importDialog, 'click', this._onImportBackdrop);
+    // Any dismissal (Cancel, backdrop, swipe-down) keeps unsaved text as a draft;
+    // a successful import clears the textarea first so nothing is re-captured.
+    this._onImportDialogClose = () => {
+      if (this._importTextarea.value.trim()) this._importSnapshot.capture();
+      else this._importSnapshot.clear();
+    };
+    this.listen(this._importDialog, 'modal-close', this._onImportDialogClose);
 
     this._onImportCta = () => {
       if (!this._importParsed.length) return;
       const snapshot = getState().lists;
       const n = this._importParsed.length;
       this._addItems(this._importParsed);
+      this._importTextarea.value = '';
+      this._importParsed = [];
       this._importDialog.close();
       toast(t('list-detail.import-toast', { n }), 'success', {
         action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) },

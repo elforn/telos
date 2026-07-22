@@ -36,6 +36,14 @@ function mount(listId = 'l1') {
     const exportDialog = exportSheet.shadowRoot?.querySelector('#sheet');
     if (exportDialog) { exportDialog.showModal = vi.fn(); exportDialog.close = vi.fn(); }
   }
+  // Stub import-dialog's modal-dialog so show()/close() are synchronous and close() fires modal-close
+  const importDialog = el.shadowRoot.querySelector('#import-dialog');
+  if (importDialog) {
+    importDialog.show  = vi.fn();
+    importDialog.close = vi.fn(() => {
+      importDialog.dispatchEvent(new CustomEvent('modal-close', { bubbles: true, composed: true }));
+    });
+  }
   return el;
 }
 
@@ -1341,6 +1349,94 @@ describe('list-detail-page — _parseImportText', () => {
   it('returns empty array for blank input', () => {
     expect(el._parseImportText('')).toHaveLength(0);
     expect(el._parseImportText('   \n\n  ')).toHaveLength(0);
+  });
+});
+
+// ── list-detail-page — import draft recovery ─────────────────────────────────
+
+const IMPORT_SNAPSHOT_KEY = 'telos:snapshot.import-text';
+const LIST_2 = { id: 'l2', name: 'Other list', items: [] };
+
+function openImportDialog(el) {
+  el.shadowRoot.querySelector('#import-menu-btn').click();
+}
+
+describe('list-detail-page — import draft recovery', () => {
+  it('keeps unsaved text as a draft when the import dialog is cancelled', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount('l1');
+    openImportDialog(el);
+    el.shadowRoot.querySelector('#import-textarea').value = 'Buy flowers';
+    el.shadowRoot.querySelector('#import-cancel-btn').click();
+
+    const snap = JSON.parse(localStorage.getItem(IMPORT_SNAPSHOT_KEY));
+    expect(snap.id).toBe('l1');
+    expect(snap.text).toBe('Buy flowers');
+  });
+
+  it('keeps unsaved text as a draft on backdrop/swipe dismissal (any modal-close)', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount('l1');
+    openImportDialog(el);
+    el.shadowRoot.querySelector('#import-textarea').value = 'Call the vet';
+    el.shadowRoot.querySelector('#import-dialog').close();
+
+    const snap = JSON.parse(localStorage.getItem(IMPORT_SNAPSHOT_KEY));
+    expect(snap.text).toBe('Call the vet');
+  });
+
+  it('does not save an empty draft, and clears any existing one', async () => {
+    localStorage.setItem(IMPORT_SNAPSHOT_KEY, JSON.stringify({ id: 'l1', text: 'stale', _savedAt: Date.now() }));
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount('l1');
+    openImportDialog(el);
+    el.shadowRoot.querySelector('#import-textarea').value = '   ';
+    el.shadowRoot.querySelector('#import-cancel-btn').click();
+
+    expect(localStorage.getItem(IMPORT_SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('restores the draft and re-parses it when reopening the same list', async () => {
+    localStorage.setItem(IMPORT_SNAPSHOT_KEY, JSON.stringify({ id: 'l1', text: 'Milk\nBread', _savedAt: Date.now() }));
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount('l1');
+    openImportDialog(el);
+
+    expect(el.shadowRoot.querySelector('#import-textarea').value).toBe('Milk\nBread');
+    expect(el.shadowRoot.querySelector('#import-cta-btn').disabled).toBe(false);
+  });
+
+  it('does not restore a draft that belongs to a different list', async () => {
+    localStorage.setItem(IMPORT_SNAPSHOT_KEY, JSON.stringify({ id: 'l2', text: 'For the other list', _savedAt: Date.now() }));
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount('l1');
+    openImportDialog(el);
+
+    expect(el.shadowRoot.querySelector('#import-textarea').value).toBe('');
+  });
+
+  it('clears the draft after a successful import instead of re-capturing the imported text', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount('l1');
+    openImportDialog(el);
+    el.shadowRoot.querySelector('#import-textarea').value = 'Buy flowers';
+    el.shadowRoot.querySelector('#import-textarea').dispatchEvent(new Event('input'));
+    el.shadowRoot.querySelector('#import-cta-btn').click();
+
+    expect(el.shadowRoot.querySelector('#import-textarea').value).toBe('');
+    expect(localStorage.getItem(IMPORT_SNAPSHOT_KEY)).toBeNull();
+  });
+
+  it('reopening a second list does not see the first list\'s draft', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST_2] } });
+    const el = mount('l1');
+    openImportDialog(el);
+    el.shadowRoot.querySelector('#import-textarea').value = 'For list one';
+    el.shadowRoot.querySelector('#import-cancel-btn').click();
+
+    const el2 = mount('l2');
+    openImportDialog(el2);
+    expect(el2.shadowRoot.querySelector('#import-textarea').value).toBe('');
   });
 });
 
