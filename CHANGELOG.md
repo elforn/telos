@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.10.5] — 2026-07-22
+
+### Added
+- Import-from-text now keeps an unsaved draft per list — dismissing the dialog (Cancel, backdrop, swipe-down, or the app getting backgrounded mid-paste) preserves your typed text, restored the next time you reopen that list's import box
+
+### Changed
+- The item and goal "more actions" menus, and the list import-from-text dialog, now use the shared bottom-sheet component — closes the gap noted in 1.10.4; swipe-down-to-dismiss works there too now
+- Modal padding is consistent across the app (20px on both axes) instead of varying per dialog
+- Draft-recovery snapshots (new item/goal/list entries, and now import-from-text) are kept for 72h instead of 24h
+
+### Fixed
+- A CSS cascade bug left extra horizontal padding on the "more actions" menu buttons after the padding cleanup
+- The Settings/Import dialog heading no longer carries an unintended top margin from the browser's default heading style, stacking on top of the sheet handle
+
+---
+
 ## [1.10.4] — 2026-07-19
 
 ### Added
