@@ -17,8 +17,8 @@ function stubModal(el) {
 
 function stubSheet(el) {
   const sheet = el.shadowRoot.querySelector('#action-sheet');
-  sheet.showModal = vi.fn(() => sheet.setAttribute('open', ''));
-  sheet.close     = vi.fn(() => sheet.removeAttribute('open'));
+  sheet.show  = vi.fn();
+  sheet.close = vi.fn();
 }
 
 function stubPickerModal(el) {

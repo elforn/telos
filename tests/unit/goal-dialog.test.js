@@ -17,8 +17,8 @@ function stubModal(el) {
 
 function stubActionSheet(el) {
   const sheet = el.shadowRoot.querySelector('#action-sheet');
-  sheet.showModal = vi.fn(() => sheet.setAttribute('open', ''));
-  sheet.close     = vi.fn(() => sheet.removeAttribute('open'));
+  sheet.show  = vi.fn();
+  sheet.close = vi.fn();
   return sheet;
 }
 
@@ -414,12 +414,12 @@ describe('goal-dialog — more actions (⋯ menu)', () => {
     expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
   });
 
-  it('clicking menu button calls showModal on the action sheet', () => {
+  it('clicking menu button calls show() on the action sheet', () => {
     const el = mount();
     const sheet = el.shadowRoot.querySelector('#action-sheet');
     el.open({ id: '1', title: 'My goal' });
     el.shadowRoot.querySelector('#menu-btn').click();
-    expect(sheet.showModal).toHaveBeenCalledOnce();
+    expect(sheet.show).toHaveBeenCalledOnce();
   });
 });
 

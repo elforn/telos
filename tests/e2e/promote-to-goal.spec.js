@@ -122,7 +122,8 @@ async function openActionSheet(page) {
     const sheet = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
       ?.querySelector('item-dialog')?.shadowRoot
-      ?.querySelector('#action-sheet');
+      ?.querySelector('#action-sheet')?.shadowRoot
+      ?.querySelector('dialog');
     return sheet?.open;
   });
 }

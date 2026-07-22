@@ -36,8 +36,8 @@ class ListPickerDialog extends AppElement {
       <style>
         :host { display: contents; }
 
-        /* ── Modal padding override ──────────────────────────────────────── */
-        #modal { --space-6: var(--space-3); }
+        /* Consistent modal padding across the app: --space-5 on both axes. */
+        #modal { --space-6: var(--space-5); }
 
         /* ── Heading ─────────────────────────────────────────────────────── */
         .heading {

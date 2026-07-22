@@ -65,8 +65,8 @@ class GoalDialog extends AppElement {
   template() {
     return `
       <style>
-        /* Halve the modal's default 24px top/bottom padding */
-        #modal { --space-6: var(--space-3); }
+        /* Consistent modal padding across the app: --space-5 on both axes. */
+        #modal { --space-6: var(--space-5); }
 
         .sr-only {
           position: absolute;
@@ -322,52 +322,14 @@ class GoalDialog extends AppElement {
         }
 
         /* ── Action sheet ────────────────────────────────────────────────── */
-
-        #action-sheet {
-          position: fixed;
-          inset-block-end: 0;
-          inset-inline-start: 0;
-          inset-block-start: auto;
-          margin: 0;
-          inline-size: 100%;
-          max-inline-size: 100%;
-          background: var(--color-surface);
-          border: none;
-          border-start-start-radius: var(--radius-lg);
-          border-start-end-radius: var(--radius-lg);
-          border-end-start-radius: 0;
-          border-end-end-radius: 0;
-          padding: 0;
-          padding-block-end: calc(var(--space-4) + var(--safe-area-bottom, 0px));
-          box-shadow: var(--shadow-sheet);
-        }
-
-        @keyframes sheet-up {
-          from { transform: translateY(100%); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-
-        #action-sheet[open] { animation: sheet-up 0.25s cubic-bezier(0.32, 0.72, 0, 1); }
-
-        @media (prefers-reduced-motion: reduce) {
-          #action-sheet[open] { animation: none; }
-        }
-
-        #action-sheet::backdrop { background: var(--color-overlay); }
-
-        .sheet-handle {
-          inline-size: 36px;
-          block-size: 4px;
-          border-radius: var(--radius-full);
-          background: var(--color-border);
-          margin: var(--space-3) auto var(--space-1);
-        }
+        /* Consistent modal padding across the app: --space-5 on both axes. */
+        #action-sheet { --space-6: var(--space-5); }
 
         .sheet-item {
           display: flex;
           align-items: center;
           min-block-size: var(--touch-target-lg);
-          padding-inline: var(--space-5);
+          padding-inline: 0;
           background: none;
           border: none;
           cursor: pointer;
@@ -562,12 +524,11 @@ class GoalDialog extends AppElement {
         <div id="save-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
       </modal-dialog>
 
-      <!-- ── Action sheet (outside modal-dialog) ──────────────────────────── -->
-      <dialog id="action-sheet" aria-label="${t('goal-dialog.more-actions')}">
-        <div class="sheet-handle" aria-hidden="true"></div>
+      <!-- ── Action sheet ─────────────────────────────────────────────────── -->
+      <modal-dialog id="action-sheet" aria-label="${t('goal-dialog.more-actions')}">
         <button type="button" id="action-move-btn" class="sheet-item">${t('goal-dialog.move-to-year')}</button>
         <button type="button" id="action-create-btn" class="sheet-item">${t('goal-dialog.create-list-item')}</button>
-      </dialog>
+      </modal-dialog>
 
       <!-- ── List picker (opens as sub-modal for Create list item) ──────── -->
       <list-picker-dialog id="list-picker"></list-picker-dialog>
@@ -675,7 +636,7 @@ class GoalDialog extends AppElement {
         this._snapshot?.clear(); // edited record closed — store owns it now
         this.dispatchEvent(new CustomEvent('goal-closed', { bubbles: true, composed: true }));
       }
-      if (this._actionSheet?.open) this._actionSheet.close();
+      this._actionSheet?.close();
       clearTimeout(this._copyResetTimer);
     };
 
@@ -745,11 +706,8 @@ class GoalDialog extends AppElement {
 
     // ── Action sheet ──────────────────────────────────────────────────────────
 
-    this._onMenuBtn = () => this._actionSheet.showModal();
+    this._onMenuBtn = () => this._actionSheet.show();
     this._menuBtn.addEventListener('click', this._onMenuBtn);
-
-    this._onSheetBackdrop = e => { if (e.target === this._actionSheet) this._actionSheet.close(); };
-    this._actionSheet.addEventListener('click', this._onSheetBackdrop);
 
     this._onArchivePD = e => e.preventDefault();
     this._archiveBtn.addEventListener('pointerdown', this._onArchivePD);
@@ -850,7 +808,6 @@ class GoalDialog extends AppElement {
     this._modal?.removeEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).removeEventListener('resize', this._onResize);
     this._menuBtn?.removeEventListener('click', this._onMenuBtn);
-    this._actionSheet?.removeEventListener('click', this._onSheetBackdrop);
     this._archiveBtn?.removeEventListener('pointerdown', this._onArchivePD);
     this._archiveBtn?.removeEventListener('click', this._onActionArchive);
     this.shadowRoot.querySelector('#action-move-btn')?.removeEventListener('click', this._onActionMove);

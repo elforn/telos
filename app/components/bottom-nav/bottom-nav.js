@@ -64,6 +64,9 @@ class BottomNav extends AppElement {
   template() {
     return `
       <style>
+        /* Consistent modal padding across the app: --space-5 on both axes. */
+        #settings-modal, #import-modal { --space-6: var(--space-5); }
+
         :host {
           display: block;
           position: fixed;
@@ -160,7 +163,7 @@ class BottomNav extends AppElement {
           font-size: var(--font-size-subheading);
           font-weight: var(--font-weight-semibold);
           color: var(--color-text-primary);
-          margin-block-end: var(--space-4);
+          margin-block: 0 var(--space-4);
         }
 
         .section {

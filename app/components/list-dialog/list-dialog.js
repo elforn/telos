@@ -29,8 +29,8 @@ class ListDialog extends AppElement {
   template() {
     return `
       <style>
-        /* Halve the modal's default 24px top/bottom padding */
-        #modal { --space-6: var(--space-3); }
+        /* Consistent modal padding across the app: --space-5 on both axes. */
+        #modal { --space-6: var(--space-5); }
 
         .sr-only {
           position: absolute;

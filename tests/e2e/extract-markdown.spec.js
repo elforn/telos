@@ -227,7 +227,8 @@ test.describe('Extract Markdown — item dialog overflow', () => {
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('item-dialog')?.shadowRoot
-        ?.querySelector('#action-sheet')?.open
+        ?.querySelector('#action-sheet')?.shadowRoot
+        ?.querySelector('dialog')?.open
     );
     const btn = await page.evaluate(() =>
       !!document.querySelector('app-router')?.shadowRoot
@@ -250,7 +251,8 @@ test.describe('Extract Markdown — item dialog overflow', () => {
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('item-dialog')?.shadowRoot
-        ?.querySelector('#action-sheet')?.open
+        ?.querySelector('#action-sheet')?.shadowRoot
+        ?.querySelector('dialog')?.open
     );
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
@@ -281,7 +283,8 @@ test.describe('Extract Markdown — item dialog overflow', () => {
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('item-dialog')?.shadowRoot
-        ?.querySelector('#action-sheet')?.open
+        ?.querySelector('#action-sheet')?.shadowRoot
+        ?.querySelector('dialog')?.open
     );
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot

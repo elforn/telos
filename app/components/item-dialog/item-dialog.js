@@ -91,8 +91,8 @@ class ItemDialog extends AppElement {
           --_suggestions-shadow:  0 -4px 10px rgba(0, 0, 0, 0.07);
         }
 
-        /* ── Modal padding override ──────────────────────────────────────── */
-        #modal { --space-6: var(--space-3); }
+        /* Consistent modal padding across the app: --space-5 on both axes. */
+        #modal { --space-6: var(--space-5); }
 
         .sr-only {
           position: absolute;
@@ -438,55 +438,14 @@ class ItemDialog extends AppElement {
         }
 
         /* ── Action sheet ────────────────────────────────────────────────── */
-        #action-sheet {
-          position: fixed;
-          inset-block-end: 0;
-          inset-inline-start: 0;
-          inset-block-start: auto;
-          margin: 0;
-          inline-size: 100%;
-          max-inline-size: 100%;
-          background: var(--color-surface);
-          border: none;
-          border-start-start-radius: var(--radius-lg);
-          border-start-end-radius: var(--radius-lg);
-          border-end-start-radius: 0;
-          border-end-end-radius: 0;
-          padding: 0;
-          padding-block-end: calc(var(--space-4) + var(--safe-area-bottom, 0px));
-          box-shadow: var(--shadow-sheet);
-        }
-
-        @keyframes sheet-up {
-          from { transform: translateY(100%); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-
-        #action-sheet[open] { animation: sheet-up 0.25s cubic-bezier(0.32, 0.72, 0, 1); }
-
-        #action-sheet::backdrop {
-          background: var(--color-overlay);
-          animation: fade-in 0.2s ease-out;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          #action-sheet[open] { animation: none; }
-          #action-sheet::backdrop { animation: none; }
-        }
-
-        .sheet-handle {
-          inline-size: 36px;
-          block-size: 4px;
-          border-radius: var(--radius-full);
-          background: var(--color-border);
-          margin: var(--space-3) auto var(--space-1);
-        }
+        /* Consistent modal padding across the app: --space-5 on both axes. */
+        #action-sheet { --space-6: var(--space-5); }
 
         .sheet-item {
           display: flex;
           align-items: center;
           min-block-size: var(--touch-target-lg);
-          padding-inline: var(--space-5);
+          padding-inline: 0;
           background: none;
           border: none;
           cursor: pointer;
@@ -735,12 +694,11 @@ class ItemDialog extends AppElement {
         <div id="save-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
       </modal-dialog>
 
-      <dialog id="action-sheet" aria-label="${t('item-dialog.more-actions')}">
-        <div class="sheet-handle" aria-hidden="true"></div>
+      <modal-dialog id="action-sheet" aria-label="${t('item-dialog.more-actions')}">
         <button type="button" id="action-move-btn" class="sheet-item">${t('item-dialog.move-to-list')}</button>
         <button type="button" id="action-promote-btn" class="sheet-item">${t('item-dialog.add-to-goal')}</button>
         <button type="button" id="action-export-btn" class="sheet-item">${t('item-dialog.extract-markdown')}</button>
-      </dialog>
+      </modal-dialog>
 
       <list-picker-dialog id="list-picker"></list-picker-dialog>
     `;
@@ -904,7 +862,7 @@ class ItemDialog extends AppElement {
         this.dispatchEvent(new CustomEvent('item-closed', { bubbles: true, composed: true }));
       }
       clearTimeout(this._copyResetTimer);
-      if (this._actionSheet?.open) this._actionSheet.close();
+      this._actionSheet?.close();
     };
 
     this._onKeyDown = e => {
@@ -1003,11 +961,8 @@ class ItemDialog extends AppElement {
 
     // ── More actions (··· menu) ───────────────────────────────────────────────
 
-    this._onMenuBtn = () => this._actionSheet.showModal();
+    this._onMenuBtn = () => this._actionSheet.show();
     this._menuBtn.addEventListener('click', this._onMenuBtn);
-
-    this._onSheetBackdrop = e => { if (e.target === this._actionSheet) this._actionSheet.close(); };
-    this._actionSheet.addEventListener('click', this._onSheetBackdrop);
 
     this._onActionMove = () => {
       this._actionSheet.close();
@@ -1114,7 +1069,6 @@ class ItemDialog extends AppElement {
     this.shadowRoot.querySelector('.status-options')?.removeEventListener('change', this._onStatusChange);
 
     this._menuBtn?.removeEventListener('click', this._onMenuBtn);
-    this._actionSheet?.removeEventListener('click', this._onSheetBackdrop);
     this.shadowRoot.querySelector('#action-move-btn')?.removeEventListener('click', this._onActionMove);
     this.shadowRoot.querySelector('#action-promote-btn')?.removeEventListener('click', this._onActionPromote);
     this.shadowRoot.querySelector('#action-export-btn')?.removeEventListener('click', this._onActionExport);
