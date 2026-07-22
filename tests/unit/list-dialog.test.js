@@ -334,8 +334,8 @@ describe('list-dialog — hide-time snapshot', () => {
   });
 
   it('ignores a stale snapshot older than the max age', () => {
-    const dayAgo = Date.now() - (25 * 60 * 60 * 1000);
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, name: 'Ancient', color: null, _savedAt: dayAgo }));
+    const overMaxAge = Date.now() - (73 * 60 * 60 * 1000);
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, name: 'Ancient', color: null, _savedAt: overMaxAge }));
     const el = mount();
     el.open(null);
     expect(el.shadowRoot.querySelector('#input').value).toBe('');

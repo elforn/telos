@@ -17,7 +17,7 @@
 // edit that then fails to reach IDB on reload is the store's concern, the same
 // as any other write before a reload.
 
-const MAX_AGE_MS = 24 * 60 * 60 * 1000; // ignore snapshots older than a day
+const MAX_AGE_MS = 72 * 60 * 60 * 1000; // ignore snapshots older than 3 days
 
 function read(key) {
   try {
