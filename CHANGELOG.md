@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.11.0] — 2026-07-24
+
+### Added
+- Two shortcuts on the install icon — "Lists" and "This year" (long-press on Android, right-click on desktop)
+
+### Changed
+- Typography (Onest) is now bundled with the app instead of loaded from Google Fonts — identical look, but the app now works fully offline with zero external requests, and skips two extra network round-trips on first load
+- The install icon now has a dedicated maskable variant, so Android launchers that crop icons into a circle or squircle mask it correctly instead of reusing the regular icon
+- The install splash screen background now matches the app's surface color instead of flashing accent blue before the real UI appears
+
+### Fixed
+- Automatic recovery from a stuck update (poisoned service-worker cache) now always backs up your data first, the same guarantee the manual "Repair installation" button in Settings already had — previously only the manual path was guaranteed to back up before clearing caches
+
 ## [1.10.6] — 2026-07-23
 
 ### Added

@@ -2,7 +2,7 @@
 
 A yearly goal planner
 
-Scaffolded from Socle 0.2.5 on 2026-06-06. Now on 0.13.3.
+Scaffolded from Socle 0.2.5 on 2026-06-06. Now on 0.14.2.
 Installed modules: core, gestures, sync, images, app-header, modal-dialog, toast
 
 ---
@@ -193,6 +193,8 @@ subscribe('goals', this._onGoals = goals => this._renderGoals(goals));
 // Unsubscribe — always clean up in unsubscribe()
 unsubscribe('goals', this._onGoals);
 ```
+
+**Migrations.** `boot()` accepts an optional `migrate: (state) => state` option (`app/main.js`), run once synchronously after merging `initialState` with the stored state and before the store is usable. Returning a new object (reference inequality) persists the migrated shape back to IDB immediately; returning the same reference is a no-op. No migration is currently registered — the last one (`description`→`notes`) was removed once no stored data needed it. The next real consumer will be the `tracking` union migration (`percentage` → `tracking`, see the data model section above).
 
 ---
 
