@@ -1,5 +1,5 @@
 {
-  "id": "/telos",
+  "id": "%%BASE_PATH%%",
   "name": "Telos",
   "short_name": "Telos",
   "description": "A yearly goal planner",
@@ -7,20 +7,42 @@
   "scope": "%%BASE_PATH%%",
   "lang": "en",
   "display": "standalone",
-  "background_color": "#5BADE0",
+  "background_color": "#F5F2EE",
   "theme_color": "#5BADE0",
   "icons": [
     {
       "src": "app/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "app/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "app/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "app/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Lists",
+      "url": "%%BASE_PATH%%lists"
+    },
+    {
+      "name": "This year",
+      "url": "%%BASE_PATH%%"
     }
   ],
   "file_handlers": [

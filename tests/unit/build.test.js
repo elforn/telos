@@ -107,6 +107,37 @@ it('substitutes %%BASE_PATH%% tokens in manifest.json', () => {
     expect(manifest).toContain('"scope": "/"');
   });
 
+  it('manifest id matches start_url/scope under BASE_PATH', () => {
+    const manifest = JSON.parse(readDist('manifest.json'));
+    expect(manifest.id).toBe(manifest.start_url);
+    expect(manifest.id).toBe(manifest.scope);
+  });
+
+  it('manifest declares each icon size as separate any and maskable entries', () => {
+    const manifest = JSON.parse(readDist('manifest.json'));
+    const sizes = [...new Set(manifest.icons.map(i => i.sizes))];
+    for (const size of sizes) {
+      const purposes = manifest.icons.filter(i => i.sizes === size).map(i => i.purpose);
+      expect(purposes).toContain('any');
+      expect(purposes).toContain('maskable');
+    }
+  });
+
+  it('manifest background_color matches the light --color-bg surface (no accent-color splash flash)', () => {
+    const manifest = JSON.parse(readDist('manifest.json'));
+    expect(manifest.background_color).toBe('#F5F2EE');
+  });
+
+  it('manifest declares Lists and This year shortcuts, resolved under BASE_PATH', () => {
+    const manifest = JSON.parse(readDist('manifest.json'));
+    expect(manifest.shortcuts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'Lists', url: '/lists' }),
+        expect.objectContaining({ name: 'This year', url: '/' }),
+      ])
+    );
+  });
+
   it('does not copy _lib/ or app/ source modules to dist/ (all bundled)', () => {
     expect(existsSync(join(DIST, '_lib'))).toBe(false);
     expect(existsSync(join(DIST, 'app', 'pages'))).toBe(false);
@@ -176,5 +207,18 @@ describe('build — custom BASE_PATH', () => {
     const sw = readDist('sw.js');
     expect(sw).not.toContain('%%BASE_PATH%%');
     expect(sw).toContain("const BASE_PATH = '/my-app/'");
+  });
+
+  it('prefixes manifest id/start_url/scope/shortcuts with BASE_PATH, kept consistent', () => {
+    const manifest = JSON.parse(readDist('manifest.json'));
+    expect(manifest.id).toBe('/my-app/');
+    expect(manifest.start_url).toBe('/my-app/');
+    expect(manifest.scope).toBe('/my-app/');
+    expect(manifest.shortcuts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'Lists', url: '/my-app/lists' }),
+        expect.objectContaining({ name: 'This year', url: '/my-app/' }),
+      ])
+    );
   });
 });
