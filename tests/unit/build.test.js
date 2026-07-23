@@ -116,6 +116,24 @@ it('substitutes %%BASE_PATH%% tokens in manifest.json', () => {
     expect(existsSync(join(DIST, 'app', 'icons'))).toBe(true);
   });
 
+  it('copies app/fonts/ to dist/app/fonts/', () => {
+    expect(existsSync(join(DIST, 'app', 'fonts'))).toBe(true);
+    expect(readdirSync(join(DIST, 'app', 'fonts')).length).toBeGreaterThan(0);
+  });
+
+  it('includes font files in sw.js ASSETS (self-hosted, precached for offline)', () => {
+    const sw = readDist('sw.js');
+    const parsed = sw.match(/const ASSETS = (\[.*?\]);/s);
+    const assets = JSON.parse(parsed[1]);
+    expect(assets.some(a => a.startsWith('/app/fonts/') && a.endsWith('.woff2'))).toBe(true);
+  });
+
+  it('index.html has no cross-origin font requests (fonts are self-hosted)', () => {
+    const html = readDist('index.html');
+    expect(html).not.toContain('fonts.googleapis.com');
+    expect(html).not.toContain('fonts.gstatic.com');
+  });
+
   it('produces a deterministic hash — same content yields same filename', () => {
     const first = mainFilename();
     rmSync(DIST, { recursive: true, force: true });
@@ -146,6 +164,12 @@ describe('build — custom BASE_PATH', () => {
   it('prefixes main.js src in index.html with BASE_PATH', () => {
     const html = readDist('index.html');
     expect(html).toContain('src="/my-app/main.');
+  });
+
+  it('prefixes the font preload and @font-face src in index.html with BASE_PATH', () => {
+    const html = readDist('index.html');
+    expect(html).toContain('href="/my-app/app/fonts/onest-latin-variable.woff2"');
+    expect(html).toContain("url('/my-app/app/fonts/onest-latin-variable.woff2')");
   });
 
   it('injects custom BASE_PATH into sw.js', () => {

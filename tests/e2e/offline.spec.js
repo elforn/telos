@@ -71,4 +71,24 @@ test.describe('Offline behaviour', () => {
     });
     expect(title).toBe('Offline goal');
   });
+
+  test('self-hosted Onest font loads offline (no fallback to system font)', async ({ page, context }) => {
+    await page.goto('/');
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await page.waitForFunction(() =>
+      !!document.querySelector('app-router')?.shadowRoot?.querySelector('home-page')
+    );
+
+    await context.setOffline(true);
+    await page.reload();
+    await page.waitForFunction(() =>
+      !!document.querySelector('app-router')?.shadowRoot?.querySelector('home-page')
+    );
+
+    const onestAvailable = await page.evaluate(async () => {
+      await document.fonts.ready;
+      return document.fonts.check('16px Onest');
+    });
+    expect(onestAvailable).toBe(true);
+  });
 });
