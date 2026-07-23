@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.12.0] — 2026-07-24
+
+### Added
+- Due dates on list items — set one from the item dialog (behind a collapsed "Due date" toggle, next to the existing Link toggle); overdue items show a small red calendar icon
+- Deadlines on goals — same toggle pattern in the goal dialog, labeled "Deadline"; overdue goals (not archived, not yet 100%) show the same icon
+
+### Changed
+- Promoting a list item to a goal now carries its tags and due date onto the new goal, instead of dropping them (`tags: []` was previously hardcoded); creating a list item from a goal now carries the goal's tags and deadline the same way
+- Goal deadlines are included in the Markdown export, the same way item due dates already were
+
+### Fixed
+- Deleting a list no longer leaves its saved filter behind in local storage
+
 ## [1.11.0] — 2026-07-24
 
 ### Added
