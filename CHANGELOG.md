@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.10.6] — 2026-07-23
+
+### Added
+- A Clear/Revert ⇄ Undo toggle button on item, goal, and list dialogs, and the import-from-text sheet — restoring a draft now shows a way to discard it (or put it back) without retyping
+
+### Fixed
+- Drafts for new items, goals, and import-from-text no longer overwrite each other across different lists or years — each draft is now stored under its own key instead of a single shared one, so switching context (e.g. moving from a 2026 goal draft to a 2027 one) no longer silently erases the other
+- Draft-recovery snapshots no longer expire after 72h — a draft is kept until it's explicitly cleared or committed
+- Tapping the Clear/Revert/Undo button no longer dismisses the on-screen keyboard on mobile
+
+### Changed
+- The year header's menu and the export sheet now use the shared bottom-sheet component, closing the last gap in the modal-dialog migration
+- Modal padding is consistent across the remaining dialogs (20px on both axes)
+
 ## [1.10.5] — 2026-07-22
 
 ### Added
