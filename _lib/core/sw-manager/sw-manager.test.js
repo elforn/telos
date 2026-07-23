@@ -2,6 +2,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { reset as resetStore, getState, boot } from '../store/store.js';
 
+vi.mock('./sw-repair.js', () => ({
+  recordControllerChange: vi.fn(),
+  isUpdateLoop: vi.fn(() => false),
+  clearLoopMarker: vi.fn(),
+  repairInstallation: vi.fn(),
+}));
+
+import { recordControllerChange, isUpdateLoop, clearLoopMarker, repairInstallation } from './sw-repair.js';
+
 // Minimal reducer — sw-manager tests don't use app state
 const reducer = s => s ?? {};
 
@@ -53,8 +62,9 @@ function mountElement(attrs = {}) {
 beforeEach(async () => {
   resetStore();
   await boot({ dbName: `sw-test-${Math.random()}`, reducer });
-  // Reset fetch
   vi.restoreAllMocks();
+  vi.resetAllMocks();
+  isUpdateLoop.mockReturnValue(false); // default: not a loop
   // Ensure sw-manager module is loaded
   await import('./sw-manager.js');
 });
@@ -244,5 +254,66 @@ describe('Layer 2 — version.json check', () => {
     await new Promise(r => setTimeout(r, 0));
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('loop detection and auto-repair', () => {
+  it('records reload timestamp on controllerchange when a previous controller existed', () => {
+    const swStub = stubServiceWorker({ controller: { scriptURL: 'sw.js' } });
+    vi.spyOn(location, 'reload').mockImplementation(() => {});
+
+    mountElement({ 'base-path': '/' });
+    swStub._fire('controllerchange');
+
+    expect(recordControllerChange).toHaveBeenCalledOnce();
+  });
+
+  it('does not record timestamp on first install (no previous controller)', () => {
+    const swStub = stubServiceWorker({ controller: null });
+    vi.spyOn(location, 'reload').mockImplementation(() => {});
+
+    mountElement({ 'base-path': '/' });
+    swStub._fire('controllerchange');
+
+    expect(recordControllerChange).not.toHaveBeenCalled();
+  });
+
+  it('triggers repairInstallation when update loop is detected', async () => {
+    isUpdateLoop.mockReturnValue(true);
+    const waitingSW = makeFakeSW('installed');
+    const registration = makeFakeRegistration({ waiting: waitingSW });
+    stubServiceWorker({ register: vi.fn().mockResolvedValue(registration) });
+
+    mountElement({ 'base-path': '/app/' });
+    await Promise.resolve();
+
+    expect(clearLoopMarker).toHaveBeenCalledOnce();
+    expect(repairInstallation).toHaveBeenCalledWith({ basePath: '/app/', checkServer: false, onBackup: undefined });
+  });
+
+  it('passes onBackup property through to repairInstallation on loop', async () => {
+    isUpdateLoop.mockReturnValue(true);
+    const waitingSW = makeFakeSW('installed');
+    const registration = makeFakeRegistration({ waiting: waitingSW });
+    stubServiceWorker({ register: vi.fn().mockResolvedValue(registration) });
+
+    const onBackup = vi.fn();
+    const el = mountElement({ 'base-path': '/' });
+    el.onBackup = onBackup;
+    await Promise.resolve();
+
+    expect(repairInstallation).toHaveBeenCalledWith({ basePath: '/', checkServer: false, onBackup });
+  });
+
+  it('does not trigger repairInstallation when not a loop', async () => {
+    isUpdateLoop.mockReturnValue(false);
+    const waitingSW = makeFakeSW('installed');
+    const registration = makeFakeRegistration({ waiting: waitingSW });
+    stubServiceWorker({ register: vi.fn().mockResolvedValue(registration) });
+
+    mountElement({ 'base-path': '/' });
+    await Promise.resolve();
+
+    expect(repairInstallation).not.toHaveBeenCalled();
   });
 });

@@ -4,14 +4,18 @@ let _db = null;
 let _state = {};
 const _subs = new Map(); // key → Set<callback>
 
-export async function boot({ dbName, initialState = {} } = {}) {
+export async function boot({ dbName, initialState = {}, migrate } = {}) {
   const db = await openDB(dbName, 1, db => {
     db.createObjectStore('state', { keyPath: 'id' });
     db.createObjectStore('images', { keyPath: 'id' });
   });
   const stored = await get(db, 'state', 'root');
-  _state = { ...initialState, ...(stored?.data ?? {}) };
+  const merged = { ...initialState, ...(stored?.data ?? {}) };
+  const final = migrate ? migrate(merged) : merged;
+  if (final instanceof Promise) throw new Error('store-simple migrate must be synchronous');
   _db = db; // set last: no setState can write partial state to IDB during boot
+  if (migrate && final !== merged) await put(_db, 'state', { id: 'root', data: final });
+  _state = final;
 }
 
 export function setState(key, value) {

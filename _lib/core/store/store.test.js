@@ -38,6 +38,44 @@ describe('boot', () => {
   });
 });
 
+describe('migrate hook', () => {
+  it('runs migrate on boot and applies returned state', async () => {
+    const migrate = vi.fn(state => ({ ...state, migrated: true }));
+    await boot({ dbName: freshName(), initialState: { count: 1 }, migrate });
+    expect(migrate).toHaveBeenCalledOnce();
+    expect(migrate).toHaveBeenCalledWith({ count: 1 });
+    expect(getState().migrated).toBe(true);
+  });
+
+  it('persists migrated state across a second boot', async () => {
+    const name = freshName();
+    await boot({ dbName: name, migrate: state => ({ ...state, schema: 2 }) });
+    reset();
+    await boot({ dbName: name });
+    expect(getState().schema).toBe(2);
+  });
+
+  it('no-op migration (same reference) writes nothing to IDB', async () => {
+    const name = freshName();
+    await boot({ dbName: name, initialState: { count: 1 }, migrate: s => s });
+    reset();
+    await boot({ dbName: name }); // second boot, no initialState
+    expect(getState().count).toBeUndefined(); // IDB was never written
+  });
+
+  it('thrown migration error fails boot loudly', async () => {
+    await expect(
+      boot({ dbName: freshName(), migrate: () => { throw new Error('bad migration'); } })
+    ).rejects.toThrow('bad migration');
+  });
+
+  it('throws if migrate returns a Promise (async migrate not supported)', async () => {
+    await expect(
+      boot({ dbName: freshName(), migrate: async s => s })
+    ).rejects.toThrow('store-simple migrate must be synchronous');
+  });
+});
+
 describe('setState', () => {
   it('updates the value returned by getState', async () => {
     await boot({ dbName: freshName() });
