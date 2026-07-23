@@ -22,6 +22,9 @@ defineStrings({
   'goal-dialog.title-new':      'New goal',
   'goal-dialog.title-edit':     'Edit goal',
   'goal-dialog.delete':         'Delete',
+  'goal-dialog.draft-clear':    'Clear',
+  'goal-dialog.draft-revert':   'Revert',
+  'goal-dialog.draft-undo':     'Undo',
 
   'goal-item.delete':          'Delete',
   'goal-item.add-capstone':    'Add capstone goal',
@@ -141,6 +144,9 @@ defineStrings({
   'list-dialog.title-new':        'New list',
   'list-dialog.title-edit':       'Edit list',
   'list-dialog.delete':           'Delete',
+  'list-dialog.draft-clear':      'Clear',
+  'list-dialog.draft-revert':     'Revert',
+  'list-dialog.draft-undo':       'Undo',
 
   'item-dialog.title-placeholder':'Title',
   'item-dialog.status-label':     'Status',
@@ -158,6 +164,9 @@ defineStrings({
   'item-dialog.title-new':        'New item',
   'item-dialog.title-edit':       'Edit item',
   'item-dialog.delete':           'Delete',
+  'item-dialog.draft-clear':      'Clear',
+  'item-dialog.draft-revert':     'Revert',
+  'item-dialog.draft-undo':       'Undo',
   'dialog.saved-sr':              'Saved',
 
   'item-dialog.move-to-list':           'Move to list',
@@ -238,6 +247,8 @@ defineStrings({
   'list-detail.import-cancel':       'Cancel',
   'list-detail.import-cta':          'Import',
   'list-detail.import-toast':        'Imported {n} items',
+  'list-detail.import-draft-clear':  'Clear',
+  'list-detail.import-draft-undo':   'Undo',
 
   'bottom-nav.years':    'Years',
   'bottom-nav.lists':    'Lists',

@@ -21,6 +21,9 @@ defineStrings({
   'goal-dialog.title-new':      'Nou objectiu',
   'goal-dialog.title-edit':     'Edita l\'objectiu',
   'goal-dialog.delete':          'Elimina',
+  'goal-dialog.draft-clear':     'Esborra',
+  'goal-dialog.draft-revert':    'Reverteix',
+  'goal-dialog.draft-undo':      'Desfés',
 
   'home-page.done':              'Fet',
 
@@ -143,6 +146,8 @@ defineStrings({
   'list-detail.import-cancel':       'Cancel·la',
   'list-detail.import-cta':          'Importar',
   'list-detail.import-toast':        '{n} elements importats',
+  'list-detail.import-draft-clear':  'Esborra',
+  'list-detail.import-draft-undo':   'Desfés',
 
   'list-dialog.name-placeholder': 'Nom de la llista',
   'list-dialog.close':            'Tanca',
@@ -150,6 +155,9 @@ defineStrings({
   'list-dialog.title-new':        'Nova llista',
   'list-dialog.title-edit':       'Edita la llista',
   'list-dialog.delete':           'Elimina',
+  'list-dialog.draft-clear':      'Esborra',
+  'list-dialog.draft-revert':     'Reverteix',
+  'list-dialog.draft-undo':       'Desfés',
 
   'item-dialog.title-placeholder':'Títol',
   'item-dialog.status-label':     'Estat',
@@ -167,6 +175,9 @@ defineStrings({
   'item-dialog.title-new':        'Nou element',
   'item-dialog.title-edit':       'Edita l\'element',
   'item-dialog.delete':           'Elimina',
+  'item-dialog.draft-clear':      'Esborra',
+  'item-dialog.draft-revert':     'Reverteix',
+  'item-dialog.draft-undo':       'Desfés',
 
   'item-dialog.move-to-list':           'Mou a una llista',
   'item-dialog.add-to-goal':            'Afegeix a un objectiu',

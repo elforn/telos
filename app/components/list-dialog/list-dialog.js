@@ -3,6 +3,7 @@ import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import { COLOR_PALETTE } from '../lists-page-item/lists-page-item.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
+import { installDraftToggle } from '../../utils/draft-toggle.js';
 
 const SNAPSHOT_KEY = 'telos:snapshot.new-list';
 
@@ -22,7 +23,18 @@ class ListDialog extends AppElement {
       this._isNew ? t('list-dialog.save-and-close') : t('list-dialog.close'));
     this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
       this._isNew ? t('list-dialog.title-new') : t('list-dialog.title-edit'));
-    this._snapshot?.restoreFor(list);
+
+    // Draft recovery: target is blank for a new entry, the stored record for an existing one.
+    const targetValues = list
+      ? { name: list.name ?? '', color: list.color ?? null }
+      : { name: '', color: null };
+    this._draftToggle.reset({
+      draft: this._snapshot?.restoreFor() ?? null,
+      target: targetValues,
+      clearLabel: this._isNew ? t('list-dialog.draft-clear') : t('list-dialog.draft-revert'),
+      undoLabel:  t('list-dialog.draft-undo'),
+    });
+
     this._modal.show(this._input);
   }
 
@@ -137,6 +149,7 @@ class ListDialog extends AppElement {
 
         #delete { background: none; color: var(--color-danger); }
         #close  { background: none; color: var(--color-text-secondary); }
+        #draft-toggle-btn { background: none; color: var(--color-text-secondary); }
       </style>
 
       <modal-dialog id="modal">
@@ -160,6 +173,7 @@ class ListDialog extends AppElement {
                maxlength="60" />
         <div slot="footer" class="actions">
           <button type="button" id="delete" hidden>${t('list-dialog.delete')}</button>
+          <button type="button" id="draft-toggle-btn" hidden></button>
           <div class="actions-end">
             <button type="button" id="close" aria-label="${t('list-dialog.close')}">${t('list-dialog.close')}</button>
           </div>
@@ -176,6 +190,7 @@ class ListDialog extends AppElement {
     this._colorSwatches = this.shadowRoot.querySelector('.color-swatches');
     this._deleteBtn     = this.shadowRoot.querySelector('#delete');
     this._closeBtn      = this.shadowRoot.querySelector('#close');
+    this._draftToggleBtn = this.shadowRoot.querySelector('#draft-toggle-btn');
     this._saveStatus    = this.shadowRoot.querySelector('#save-status');
     this._selectedColor = null;
     this._isNew         = false;
@@ -246,6 +261,10 @@ class ListDialog extends AppElement {
     this._input.addEventListener('blur',    this._onNameBlur);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this._closeBtn.addEventListener('click', this._onClose);
+    this._draftToggle = installDraftToggle(this, {
+      button: this._draftToggleBtn,
+      applyValues: data => this._applyFormValues(data),
+    });
     this._onSwatchPointerDown = e => e.preventDefault();
     this._colorSwatches.addEventListener('pointerdown', this._onSwatchPointerDown);
     this._colorSwatches.addEventListener('click', this._onSwatchClick);
@@ -263,10 +282,7 @@ class ListDialog extends AppElement {
         // existing: only if the name has an unsaved edit
         return name !== this._lastValidName ? { name, color: this._selectedColor } : null;
       },
-      restore: ({ name, color }) => {
-        this._input.value = name ?? '';
-        this._selectColor(color ?? null);
-      },
+      restore: data => this._applyFormValues(data),
     });
   }
 
@@ -278,6 +294,13 @@ class ListDialog extends AppElement {
     this._colorSwatches?.removeEventListener('pointerdown', this._onSwatchPointerDown);
     this._colorSwatches?.removeEventListener('click', this._onSwatchClick);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
+  }
+
+  // ── Draft recovery toggle ─────────────────────────────────────────────────
+
+  _applyFormValues({ name, color }) {
+    this._input.value = name ?? '';
+    this._selectColor(color ?? null);
   }
 
   _selectColor(color) {

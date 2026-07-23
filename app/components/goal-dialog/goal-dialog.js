@@ -6,6 +6,7 @@ import '../list-picker-dialog/list-picker-dialog.js';
 import { icons } from '../../icons.js';
 import { tagColor } from '../../utils/tag-color.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
+import { installDraftToggle } from '../../utils/draft-toggle.js';
 
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
@@ -52,8 +53,18 @@ class GoalDialog extends AppElement {
     this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
       this._isNew ? t('goal-dialog.title-new') : t('goal-dialog.title-edit'));
 
+    // Draft recovery: target is blank for a new entry, the stored record for an existing one.
+    const targetValues = goal
+      ? { title: goal.title ?? '', notes: goal.notes, tags: [...(goal.tags ?? [])] }
+      : { title: '', notes: undefined, tags: [] };
+    this._draftToggle.reset({
+      draft: this._snapshot?.restoreFor() ?? null,
+      target: targetValues,
+      clearLabel: this._isNew ? t('goal-dialog.draft-clear') : t('goal-dialog.draft-revert'),
+      undoLabel:  t('goal-dialog.draft-undo'),
+    });
+
     this._showView('main');
-    this._snapshot?.restoreFor(goal);
     this._modal.show(this._input);
     setTimeout(() => {
       const len = this._input.value.length;
@@ -434,6 +445,7 @@ class GoalDialog extends AppElement {
         #delete { background: none; color: var(--color-danger); }
         #archive { background: none; color: var(--color-text-secondary); }
         #close, #move-back { background: none; color: var(--color-text-secondary); }
+        #draft-toggle-btn { background: none; color: var(--color-text-secondary); }
 
         #copy-btn {
           background: var(--color-accent);
@@ -507,6 +519,7 @@ class GoalDialog extends AppElement {
           <button type="button" id="menu-btn" hidden aria-label="${t('goal-dialog.more-actions')}">${icons.dotsVertical}</button>
           <button type="button" id="delete" hidden>${t('goal-dialog.delete')}</button>
           <button type="button" id="archive" hidden aria-pressed="false">${t('goal-dialog.archive')}</button>
+          <button type="button" id="draft-toggle-btn" hidden></button>
           <div class="actions-end">
             <button type="button" id="close" aria-label="${t('goal-dialog.close')}">${t('goal-dialog.close')}</button>
           </div>
@@ -551,6 +564,7 @@ class GoalDialog extends AppElement {
     this._archiveBtn    = this.shadowRoot.querySelector('#archive');
     this._menuBtn       = this.shadowRoot.querySelector('#menu-btn');
     this._closeBtn      = this.shadowRoot.querySelector('#close');
+    this._draftToggleBtn = this.shadowRoot.querySelector('#draft-toggle-btn');
     this._saveStatus    = this.shadowRoot.querySelector('#save-status');
     this._viewMain      = this.shadowRoot.querySelector('#view-main');
     this._viewMove      = this.shadowRoot.querySelector('#view-move');
@@ -701,6 +715,13 @@ class GoalDialog extends AppElement {
     this._tagChipsWrap.addEventListener('pointerdown', this._onChipRemovePointerDown);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this._closeBtn.addEventListener('click', this._onClose);
+    this._draftToggle = installDraftToggle(this, {
+      button: this._draftToggleBtn,
+      applyValues: data => {
+        this._applyFormValues(data);
+        requestAnimationFrame(() => this._syncDescHeight());
+      },
+    });
     this._modal.addEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).addEventListener('resize', this._onResize);
 
@@ -767,7 +788,7 @@ class GoalDialog extends AppElement {
     this._snapshot = installDialogSnapshot(this, {
       key:      SNAPSHOT_KEY,
       isOpen:   () => !!this._modal.shadowRoot?.querySelector('dialog')?.open,
-      recordId: () => this._goal?.id ?? null,
+      recordId: () => this._snapshotRecordId(),
       snapshot: () => {
         const title = this._input.value;
         const notes = this._descInput.value;
@@ -779,14 +800,7 @@ class GoalDialog extends AppElement {
         return (title !== this._lastValidTitle || notes !== this._lastValidNotes)
           ? { title, notes, tags: [...this._tags] } : null;
       },
-      restore: ({ title, notes, tags }) => {
-        this._input.value = title ?? '';
-        this._descInput.value = notes ?? '';
-        this._descHighlight?.sync();
-        this._tags = [...(tags ?? [])];
-        this._renderTagChips();
-        this._updateSuggestions();
-      },
+      restore: data => this._applyFormValues(data),
     });
   }
 
@@ -891,6 +905,24 @@ class GoalDialog extends AppElement {
       this._renderTagChips();
     }
     return [...this._tags];
+  }
+
+  // ── Draft recovery toggle ─────────────────────────────────────────────────
+
+  // A new goal has no id of its own — scope its draft to the year+section
+  // it's being added to, so a draft started in one slot never resurfaces in,
+  // or gets overwritten by, another (including a different year).
+  _snapshotRecordId() {
+    return this._goal?.id ?? `new:${this._fromYear}:${this._fromSection}`;
+  }
+
+  _applyFormValues({ title, notes, tags }) {
+    this._input.value = title ?? '';
+    this._descInput.value = notes ?? '';
+    this._descHighlight?.sync();
+    this._tags = [...(tags ?? [])];
+    this._renderTagChips();
+    this._updateSuggestions();
   }
 
   // ── Private ───────────────────────────────────────────────────────────────

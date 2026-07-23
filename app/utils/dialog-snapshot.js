@@ -3,8 +3,11 @@
 // Nothing is written while you type. A snapshot is written only when the page
 // is hidden or unloaded (reload, tab switch, PWA backgrounding) with a dialog
 // open, or when a new entry that can't be committed yet (content but no title)
-// is closed. It is keyed by the record id (null for a new entry) and applied
-// once on the next open of that same record.
+// is closed. Each distinct record gets its own localStorage key (real id for
+// an existing record, a context key like `new:${listId}` for a not-yet-created
+// one) — so a draft for one record/context is never overwritten by a draft
+// captured for a different one, and is applied once on the next open of that
+// same record/context.
 //
 // Why snapshot rather than commit on the way out: a commit is an async
 // IndexedDB write, and a hard reload destroys the page before it flushes —
@@ -17,20 +20,15 @@
 // edit that then fails to reach IDB on reload is the store's concern, the same
 // as any other write before a reload.
 
-const MAX_AGE_MS = 72 * 60 * 60 * 1000; // ignore snapshots older than 3 days
-
 function read(key) {
   try {
     const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed._savedAt || Date.now() - parsed._savedAt > MAX_AGE_MS) { localStorage.removeItem(key); return null; }
-    return parsed;
+    return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
 function write(key, data) {
-  try { localStorage.setItem(key, JSON.stringify({ ...data, _savedAt: Date.now() })); } catch {}
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
 }
 
 function clear(key) {
@@ -42,22 +40,28 @@ function clear(key) {
  *
  * @param {AppElement} el  the dialog element (uses its auto-cleanup `listen`)
  * @param {object} opts
- * @param {string}          opts.key       localStorage key for this dialog
+ * @param {string}          opts.key       localStorage key prefix for this dialog — combined
+ *                          with recordId() to give each record/context its own key
  * @param {() => boolean}   opts.isOpen    is the modal currently shown
- * @param {() => (string|null)} opts.recordId  id of the record being edited, or null for a new one
+ * @param {() => (string|null)} opts.recordId  id of the record being edited, or a context key
+ *                          (e.g. `new:${listId}`) for a not-yet-created entry
  * @param {() => (object|null)} opts.snapshot   current form state to keep, or null when there's nothing worth keeping
  * @param {(data: object) => void} opts.restore  apply a restored snapshot to the form
- * @returns {{ capture: () => void, restoreFor: (record: object|null) => void, clear: () => void }}
+ * @returns {{ capture: () => void, restoreFor: () => (object|null), clear: () => void }}
  *   capture()   — snapshot now (or clear if empty). Called on hide, and by the dialog when closing a
  *                 new entry that can't be committed yet.
- *   restoreFor(record) — from open(): apply a snapshot only if it belongs to the record being opened.
+ *   restoreFor() — from open(): apply the snapshot for the current recordId(), if any. Returns the
+ *                 restored data (so the caller can keep it for a Clear/Revert ⇄ Undo toggle), or
+ *                 null if there was nothing to restore.
  *   clear()     — drop the snapshot (on commit, or when an edited record's dialog closes).
  */
 export function installDialogSnapshot(el, { key, isOpen, recordId, snapshot, restore }) {
+  const storageKey = () => `${key}:${recordId() ?? ''}`;
+
   const capture = () => {
     const data = snapshot();
-    if (data) write(key, { id: recordId(), ...data });
-    else clear(key);
+    if (data) write(storageKey(), data);
+    else clear(storageKey());
   };
 
   const onHide = () => { if (isOpen()) capture(); };
@@ -66,13 +70,12 @@ export function installDialogSnapshot(el, { key, isOpen, recordId, snapshot, res
 
   return {
     capture,
-    restoreFor(record) {
-      const snap = read(key);
-      if (!snap) return;
-      if (snap.id !== (record?.id ?? null)) return; // snapshot belongs to a different record
-      const { id, _savedAt, ...data } = snap;
+    restoreFor() {
+      const data = read(storageKey());
+      if (!data) return null;
       restore(data);
+      return data;
     },
-    clear() { clear(key); },
+    clear() { clear(storageKey()); },
   };
 }

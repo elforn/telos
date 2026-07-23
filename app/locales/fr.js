@@ -21,6 +21,9 @@ defineStrings({
   'goal-dialog.title-new':      'Nouvel objectif',
   'goal-dialog.title-edit':     'Modifier l\'objectif',
   'goal-dialog.delete':          'Supprimer',
+  'goal-dialog.draft-clear':     'Effacer',
+  'goal-dialog.draft-revert':    'Rétablir',
+  'goal-dialog.draft-undo':      'Annuler',
 
   'home-page.done':              'Terminé',
 
@@ -143,6 +146,8 @@ defineStrings({
   'list-detail.import-cancel':       'Annuler',
   'list-detail.import-cta':          'Importer',
   'list-detail.import-toast':        '{n} éléments importés',
+  'list-detail.import-draft-clear':  'Effacer',
+  'list-detail.import-draft-undo':   'Annuler',
 
   'list-dialog.name-placeholder': 'Nom de la liste',
   'list-dialog.close':            'Fermer',
@@ -150,6 +155,9 @@ defineStrings({
   'list-dialog.title-new':        'Nouvelle liste',
   'list-dialog.title-edit':       'Modifier la liste',
   'list-dialog.delete':           'Supprimer',
+  'list-dialog.draft-clear':      'Effacer',
+  'list-dialog.draft-revert':     'Rétablir',
+  'list-dialog.draft-undo':       'Annuler',
 
   'item-dialog.title-placeholder':'Titre',
   'item-dialog.status-label':     'Statut',
@@ -167,6 +175,9 @@ defineStrings({
   'item-dialog.title-new':        'Nouvel élément',
   'item-dialog.title-edit':       'Modifier l\'élément',
   'item-dialog.delete':           'Supprimer',
+  'item-dialog.draft-clear':      'Effacer',
+  'item-dialog.draft-revert':     'Rétablir',
+  'item-dialog.draft-undo':       'Annuler',
 
   'item-dialog.move-to-list':           'Déplacer vers une liste',
   'item-dialog.add-to-goal':            'Ajouter à un objectif',

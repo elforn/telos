@@ -6,6 +6,7 @@ import '../list-picker-dialog/list-picker-dialog.js';
 import { icons } from '../../icons.js';
 import { tagColor } from '../../utils/tag-color.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
+import { installDraftToggle } from '../../utils/draft-toggle.js';
 
 const STATUSES = ['open', 'paused', 'done', 'closed'];
 const SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
@@ -75,7 +76,17 @@ class ItemDialog extends AppElement {
     this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
       this._isNew ? t('item-dialog.title-new') : t('item-dialog.title-edit'));
 
-    this._snapshot?.restoreFor(item);
+    // Draft recovery: target is blank for a new entry, the stored record for an existing one.
+    const targetValues = item
+      ? { title: item.title ?? '', note: item.note, url: item.url, tags: [...(item.tags ?? [])] }
+      : { title: '', note: undefined, url: undefined, tags: [] };
+    this._draftToggle.reset({
+      draft: this._snapshot?.restoreFor() ?? null,
+      target: targetValues,
+      clearLabel: this._isNew ? t('item-dialog.draft-clear') : t('item-dialog.draft-revert'),
+      undoLabel:  t('item-dialog.draft-undo'),
+    });
+
     this._modal.show(item ? this._noteInput : this._titleInput);
     requestAnimationFrame(() => requestAnimationFrame(() => this._syncNoteHeight()));
   }
@@ -571,6 +582,7 @@ class ItemDialog extends AppElement {
         #menu-btn { background: none; color: var(--color-text-secondary); padding-inline: var(--space-2); display: flex; align-items: center; }
         #delete { background: none; color: var(--color-danger); }
         #close { background: none; color: var(--color-text-secondary); }
+        #draft-toggle-btn { background: none; color: var(--color-text-secondary); }
 
         #add-to-goal-cta {
           background: var(--color-accent);
@@ -680,6 +692,7 @@ class ItemDialog extends AppElement {
         <div slot="footer" class="actions footer-main">
           <button type="button" id="menu-btn" hidden aria-label="${t('item-dialog.more-actions')}">${icons.dotsVertical}</button>
           <button type="button" id="delete" hidden>${t('item-dialog.delete')}</button>
+          <button type="button" id="draft-toggle-btn" hidden></button>
           <div class="actions-end">
             <button type="button" id="close" aria-label="${t('item-dialog.close')}">${t('item-dialog.close')}</button>
           </div>
@@ -723,6 +736,7 @@ class ItemDialog extends AppElement {
     this._deleteBtn = this.shadowRoot.querySelector('#delete');
     this._menuBtn = this.shadowRoot.querySelector('#menu-btn');
     this._closeBtn = this.shadowRoot.querySelector('#close');
+    this._draftToggleBtn = this.shadowRoot.querySelector('#draft-toggle-btn');
     this._saveStatus = this.shadowRoot.querySelector('#save-status');
     this._actionSheet = this.shadowRoot.querySelector('#action-sheet');
     this._viewMain = this.shadowRoot.querySelector('#view-main');
@@ -940,6 +954,13 @@ class ItemDialog extends AppElement {
     this._tagChipsWrap.addEventListener('pointerdown', this._onChipRemovePointerDown);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this._closeBtn.addEventListener('click', this._onClose);
+    this._draftToggle = installDraftToggle(this, {
+      button: this._draftToggleBtn,
+      applyValues: data => {
+        this._applyFormValues(data);
+        requestAnimationFrame(() => this._syncNoteHeight());
+      },
+    });
     this._modal.addEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).addEventListener('resize', this._onResize);
     // preventDefault stops the browser's default label→radio handling so we
@@ -1015,7 +1036,7 @@ class ItemDialog extends AppElement {
     this._snapshot = installDialogSnapshot(this, {
       key:      SNAPSHOT_KEY,
       isOpen:   () => !!this._modal.shadowRoot?.querySelector('dialog')?.open,
-      recordId: () => this._item?.id ?? null,
+      recordId: () => this._snapshotRecordId(),
       snapshot: () => {
         if (this._isNew) {
           const { title, note, url, tags } = this._getFormValues();
@@ -1029,17 +1050,7 @@ class ItemDialog extends AppElement {
         const { title, note, url, tags } = this._getFormValues();
         return { title, note, url, tags };
       },
-      restore: ({ title, note, url, tags }) => {
-        this._titleInput.value = title ?? '';
-        this._noteInput.value  = note ?? '';
-        this._noteHighlight?.sync();
-        this._urlInput.value = url ?? '';
-        this._syncUrlOpen();
-        this._showUrlField(!!url);
-        this._tags = [...(tags ?? [])];
-        this._renderTagChips();
-        this._updateSuggestions();
-      },
+      restore: data => this._applyFormValues(data),
     });
   }
 
@@ -1215,6 +1226,27 @@ class ItemDialog extends AppElement {
       this._tagSuggestions.appendChild(btn);
     }
     this._tagSuggestions.hidden = false;
+  }
+
+  // ── Draft recovery toggle ─────────────────────────────────────────────────
+
+  // A new item has no id of its own — scope its draft to the list it's being
+  // added to, so a draft started in one list never resurfaces in, or gets
+  // overwritten by, another.
+  _snapshotRecordId() {
+    return this._item?.id ?? `new:${this.sourceListId ?? ''}`;
+  }
+
+  _applyFormValues({ title, note, url, tags }) {
+    this._titleInput.value = title ?? '';
+    this._noteInput.value  = note ?? '';
+    this._noteHighlight?.sync();
+    this._urlInput.value = url ?? '';
+    this._syncUrlOpen();
+    this._showUrlField(!!url);
+    this._tags = [...(tags ?? [])];
+    this._renderTagChips();
+    this._updateSuggestions();
   }
 
   // ── Shared helpers ────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ import { tagColor } from '../utils/tag-color.js';
 import '../components/export-sheet/export-sheet.js';
 import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdown.js';
 import { installDialogSnapshot } from '../utils/dialog-snapshot.js';
+import { installDraftToggle } from '../utils/draft-toggle.js';
 
 const EXPORT_MODE_LIST      = 'list';
 const EXPORT_MODE_SELECTION = 'selection';
@@ -32,7 +33,17 @@ class ListDetailPage extends AppElement {
         }
 
         /* Consistent modal padding across the app: --space-5 on both axes. */
-        #import-dialog { --space-6: var(--space-5); }
+        #import-dialog, #menu { --space-6: var(--space-5); }
+
+        /* #menu is a <modal-dialog> now (real container padding); #bulk-status-sheet
+           and #bulk-more-sheet stay raw <dialog>s with zero container padding, so
+           .menu-section/.menu-item's own inline padding must stay in place for them —
+           scope the removal to #menu's own instances only. */
+        #menu .menu-section, #menu .menu-item { padding-inline: 0; }
+
+        /* The container now supplies top padding — the first section's own
+           padding-block-start/divider would double up on top of it. */
+        #menu .menu-section:first-child { padding-block-start: 0; border-block-start: none; }
 
         :host {
           display: block;
@@ -143,7 +154,7 @@ class ListDetailPage extends AppElement {
         }
 
         .menu-delete-section {
-          padding: var(--space-3) var(--space-5) var(--space-3);
+          padding-block: var(--space-3);
           border-block-start: 1px solid var(--color-border);
         }
 
@@ -261,7 +272,7 @@ class ListDetailPage extends AppElement {
           outline-offset: 2px;
         }
 
-        #import-cancel-btn {
+        #import-cancel-btn, #import-draft-toggle-btn {
           background: none;
           color: var(--color-text-secondary);
         }
@@ -795,8 +806,7 @@ class ListDetailPage extends AppElement {
         <add-row id="add-row">+ ${t('list-detail.add')}</add-row>
       </main>
 
-      <dialog id="menu" aria-label="${t('list-detail.menu')}">
-        <div class="menu-handle" aria-hidden="true"></div>
+      <modal-dialog id="menu" aria-label="${t('list-detail.menu')}">
         <div class="menu-section">
           <p class="menu-section-label">${t('list-detail.status-label')}</p>
           <div class="status-pill-group" role="group" aria-label="${t('list-detail.status-label')}">
@@ -822,7 +832,7 @@ class ListDetailPage extends AppElement {
         <div class="menu-delete-section">
           <button class="menu-delete-btn" id="list-delete-btn">${t('list-detail.delete-list')}</button>
         </div>
-      </dialog>
+      </modal-dialog>
 
       <item-dialog id="dialog"></item-dialog>
       <list-dialog id="list-dialog"></list-dialog>
@@ -869,6 +879,7 @@ class ListDetailPage extends AppElement {
                   enterkeyhint="enter"></textarea>
         <div slot="footer" class="import-footer">
           <button type="button" id="import-cancel-btn">${t('list-detail.import-cancel')}</button>
+          <button type="button" id="import-draft-toggle-btn" hidden></button>
           <div class="import-footer-end">
             <span id="import-count" hidden></span>
             <button type="button" id="import-cta-btn" disabled>${t('list-detail.import-cta')}</button>
@@ -899,7 +910,7 @@ class ListDetailPage extends AppElement {
 
     const menuBtn = this.shadowRoot.querySelector('#menu-btn');
     this._onMenuBtn = () => {
-      this._menuDialog.showModal();
+      this._menuDialog.show();
       menuBtn.setAttribute('aria-expanded', 'true');
     };
     this.listen(menuBtn, 'click', this._onMenuBtn);
@@ -907,10 +918,7 @@ class ListDetailPage extends AppElement {
     this._onMenuClose = () => {
       menuBtn.setAttribute('aria-expanded', 'false');
     };
-    this.listen(this._menuDialog, 'close', this._onMenuClose);
-
-    this._onBackdrop = e => { if (e.target === this._menuDialog) this._menuDialog.close(); };
-    this.listen(this._menuDialog, 'click', this._onBackdrop);
+    this.listen(this._menuDialog, 'modal-close', this._onMenuClose);
 
     // ── Name edit button ──────────────────────────────────────────────────────
     this._onNameEdit = () => {
@@ -1337,6 +1345,7 @@ class ListDetailPage extends AppElement {
     this._importTextarea = this.shadowRoot.querySelector('#import-textarea');
     this._importCountEl  = this.shadowRoot.querySelector('#import-count');
     this._importCtaBtn   = this.shadowRoot.querySelector('#import-cta-btn');
+    this._importDraftToggleBtn = this.shadowRoot.querySelector('#import-draft-toggle-btn');
     this._importParsed   = [];
 
     // Draft recovery, scoped per list (mirrors item/goal/list dialogs) — a paste
@@ -1356,12 +1365,26 @@ class ListDetailPage extends AppElement {
       },
     });
 
+    this._importDraftToggle = installDraftToggle(this, {
+      button: this._importDraftToggleBtn,
+      applyValues: ({ text }) => {
+        this._importTextarea.value = text ?? '';
+        this._importParsed = this._parseImportText(this._importTextarea.value);
+        this._updateImportUI();
+      },
+    });
+
     this._onImportMenuBtn = () => {
       this._menuDialog.close();
       this._importTextarea.value = '';
       this._importParsed = [];
       this._updateImportUI();
-      this._importSnapshot.restoreFor({ id: this._listId });
+      this._importDraftToggle.reset({
+        draft: this._importSnapshot.restoreFor(),
+        target: { text: '' },
+        clearLabel: t('list-detail.import-draft-clear'),
+        undoLabel:  t('list-detail.import-draft-undo'),
+      });
       this._importDialog.show(this._importTextarea);
     };
     this.listen(this.shadowRoot.querySelector('#import-menu-btn'), 'click', this._onImportMenuBtn);

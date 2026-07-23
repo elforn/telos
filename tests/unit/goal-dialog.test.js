@@ -244,6 +244,7 @@ describe('goal-dialog — delete', () => {
 // ── hide-time snapshot ──────────────────────────────────────────────────────────
 
 const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
+function snapshotKey(id) { return `${SNAPSHOT_KEY}:${id}`; }
 
 function markOpen(el) {
   const d = el.shadowRoot.querySelector('#modal').shadowRoot.querySelector('dialog');
@@ -257,58 +258,79 @@ const EXISTING_GOAL = { id: 'g1', title: 'Real goal', percentage: 0 };
 
 describe('goal-dialog — hide-time snapshot', () => {
   // ── new goal ──
-  it('snapshots a titleless new goal that has notes on hide (id null)', () => {
+  it('snapshots a titleless new goal that has notes on hide, keyed by year+section', () => {
     const el = mount();
+    el.currentYear = 2026;
     el.open(null);
     markOpen(el);
     el.shadowRoot.querySelector('#desc-input').value = 'Some idea';
     hidePage();
-    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    const snap = JSON.parse(localStorage.getItem(snapshotKey('new:2026:capstone')));
     expect(snap.notes).toBe('Some idea');
-    expect(snap.id).toBeNull();
   });
 
-  it('restores title and notes on the next new open', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, title: 'T', notes: 'N', tags: ['health'], _savedAt: Date.now() }));
+  it('restores title and notes on the next new open in the same year+section', () => {
+    localStorage.setItem(snapshotKey('new:2026:capstone'), JSON.stringify({ title: 'T', notes: 'N', tags: ['health'] }));
     const el = mount();
+    el.currentYear = 2026;
     el.open(null);
     expect(el.shadowRoot.querySelector('#input').value).toBe('T');
     expect(el.shadowRoot.querySelector('#desc-input').value).toBe('N');
   });
 
-  it('does not restore a new snapshot when opening an existing goal', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, title: 'Snap', _savedAt: Date.now() }));
+  it('does not restore a new-goal draft when opening a different year', () => {
+    localStorage.setItem(snapshotKey('new:2026:capstone'), JSON.stringify({ title: 'For 2026' }));
     const el = mount();
+    el.currentYear = 2027;
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#input').value).toBe('');
+  });
+
+  it('does not restore a new-goal draft when opening a different section', () => {
+    localStorage.setItem(snapshotKey('new:2026:capstone'), JSON.stringify({ title: 'For capstone' }));
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(null, { year: '2026', section: 'wow' });
+    expect(el.shadowRoot.querySelector('#input').value).toBe('');
+  });
+
+  it('does not restore a new-goal draft when opening an existing goal', () => {
+    localStorage.setItem(snapshotKey('new:2026:capstone'), JSON.stringify({ title: 'Snap' }));
+    const el = mount();
+    el.currentYear = 2026;
     el.open(EXISTING_GOAL);
     expect(el.shadowRoot.querySelector('#input').value).toBe('Real goal');
   });
 
   it('does not write a snapshot for an empty new goal on hide', () => {
     const el = mount();
+    el.currentYear = 2026;
     el.open(null);
     markOpen(el);
     hidePage();
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+    expect(localStorage.getItem(snapshotKey('new:2026:capstone'))).toBeNull();
   });
 
   it('clears the snapshot when the new goal is committed', () => {
     const el = mount();
+    el.currentYear = 2026;
     el.open(null);
     markOpen(el);
     el.shadowRoot.querySelector('#input').value = 'Run a marathon';
     hidePage();
-    expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
+    expect(localStorage.getItem(snapshotKey('new:2026:capstone'))).not.toBeNull();
     el.shadowRoot.querySelector('#modal').close(); // title present → commits → clears
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+    expect(localStorage.getItem(snapshotKey('new:2026:capstone'))).toBeNull();
   });
 
   it('preserves a titleless new goal on close instead of discarding it', () => {
     const el = mount();
+    el.currentYear = 2026;
     el.open(null);
     markOpen(el);
     el.shadowRoot.querySelector('#desc-input').value = 'Idea without a title';
     el.shadowRoot.querySelector('#modal').close(); // no title → capture
-    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    const snap = JSON.parse(localStorage.getItem(snapshotKey('new:2026:capstone')));
     expect(snap.notes).toBe('Idea without a title');
   });
 
@@ -319,8 +341,7 @@ describe('goal-dialog — hide-time snapshot', () => {
     markOpen(el);
     el.shadowRoot.querySelector('#input').value = 'Real goal (edited)';
     hidePage();
-    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
-    expect(snap.id).toBe('g1');
+    const snap = JSON.parse(localStorage.getItem(snapshotKey('g1')));
     expect(snap.title).toBe('Real goal (edited)');
   });
 
@@ -329,18 +350,18 @@ describe('goal-dialog — hide-time snapshot', () => {
     el.open(EXISTING_GOAL);
     markOpen(el);
     hidePage();
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+    expect(localStorage.getItem(snapshotKey('g1'))).toBeNull();
   });
 
   it('restores an existing-goal snapshot only when reopening the same goal', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: 'g1', title: 'Pending', notes: '', tags: [], _savedAt: Date.now() }));
+    localStorage.setItem(snapshotKey('g1'), JSON.stringify({ title: 'Pending', notes: '', tags: [] }));
     const el = mount();
     el.open(EXISTING_GOAL);
     expect(el.shadowRoot.querySelector('#input').value).toBe('Pending');
   });
 
   it('does not restore an existing-goal snapshot when opening a different goal', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: 'g1', title: 'Pending', notes: '', tags: [], _savedAt: Date.now() }));
+    localStorage.setItem(snapshotKey('g1'), JSON.stringify({ title: 'Pending', notes: '', tags: [] }));
     const el = mount();
     el.open({ id: 'g2', title: 'Another goal', percentage: 0 });
     expect(el.shadowRoot.querySelector('#input').value).toBe('Another goal');
@@ -352,9 +373,108 @@ describe('goal-dialog — hide-time snapshot', () => {
     markOpen(el);
     el.shadowRoot.querySelector('#input').value = 'Edited';
     hidePage();
-    expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
+    expect(localStorage.getItem(snapshotKey('g1'))).not.toBeNull();
     el.shadowRoot.querySelector('#modal').close(); // existing close → clear
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+    expect(localStorage.getItem(snapshotKey('g1'))).toBeNull();
+  });
+
+  it('a draft for one year is not overwritten by a draft captured for a different year', () => {
+    const el1 = mount();
+    el1.currentYear = 2026;
+    el1.open(null);
+    markOpen(el1);
+    el1.shadowRoot.querySelector('#desc-input').value = 'for 2026';
+    hidePage();
+
+    const el2 = mount();
+    el2.currentYear = 2027;
+    el2.open(null);
+    markOpen(el2);
+    el2.shadowRoot.querySelector('#desc-input').value = 'for 2027';
+    hidePage();
+
+    expect(JSON.parse(localStorage.getItem(snapshotKey('new:2026:capstone'))).notes).toBe('for 2026');
+    expect(JSON.parse(localStorage.getItem(snapshotKey('new:2027:capstone'))).notes).toBe('for 2027');
+  });
+});
+
+// ── draft recovery toggle ───────────────────────────────────────────────────
+
+describe('goal-dialog — draft recovery toggle', () => {
+  it('hides the toggle button when no draft was restored', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#draft-toggle-btn').hidden).toBe(true);
+  });
+
+  it('hides the toggle button when the stored draft belongs to a different year', () => {
+    localStorage.setItem(snapshotKey('new:2026:capstone'), JSON.stringify({ title: 'Draft goal' }));
+    const el = mount();
+    el.currentYear = 2027;
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#draft-toggle-btn').hidden).toBe(true);
+  });
+
+  it('shows a Clear toggle when a draft is restored into a new goal', () => {
+    localStorage.setItem(snapshotKey('new:2026:capstone'), JSON.stringify({ title: 'Draft goal', notes: 'Draft notes', tags: [] }));
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(null);
+    const btn = el.shadowRoot.querySelector('#draft-toggle-btn');
+    expect(btn.hidden).toBe(false);
+    expect(btn.textContent).toBe('Clear');
+  });
+
+  it('clicking Clear blanks the form and flips the button to Undo', () => {
+    localStorage.setItem(snapshotKey('new:2026:capstone'), JSON.stringify({ title: 'Draft goal', notes: 'Draft notes', tags: [] }));
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(null);
+    el.shadowRoot.querySelector('#draft-toggle-btn').click();
+    expect(el.shadowRoot.querySelector('#input').value).toBe('');
+    expect(el.shadowRoot.querySelector('#desc-input').value).toBe('');
+    expect(el.shadowRoot.querySelector('#draft-toggle-btn').textContent).toBe('Undo');
+  });
+
+  it('clicking Undo after Clear restores the draft again', () => {
+    localStorage.setItem(snapshotKey('new:2026:capstone'), JSON.stringify({ title: 'Draft goal', notes: 'Draft notes', tags: [] }));
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(null);
+    const btn = el.shadowRoot.querySelector('#draft-toggle-btn');
+    btn.click(); // Clear
+    btn.click(); // Undo
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Draft goal');
+    expect(el.shadowRoot.querySelector('#desc-input').value).toBe('Draft notes');
+    expect(btn.textContent).toBe('Clear');
+  });
+
+  it('shows a Revert toggle when a draft is restored into an existing goal', () => {
+    localStorage.setItem(snapshotKey('g1'), JSON.stringify({ title: 'Edited', notes: 'Edited notes', tags: [] }));
+    const el = mount();
+    el.open(EXISTING_GOAL);
+    const btn = el.shadowRoot.querySelector('#draft-toggle-btn');
+    expect(btn.hidden).toBe(false);
+    expect(btn.textContent).toBe('Revert');
+  });
+
+  it('clicking Revert on an existing goal restores the stored record, not blank', () => {
+    localStorage.setItem(snapshotKey('g1'), JSON.stringify({ title: 'Edited', notes: 'Edited notes', tags: [] }));
+    const el = mount();
+    el.open(EXISTING_GOAL);
+    el.shadowRoot.querySelector('#draft-toggle-btn').click();
+    expect(el.shadowRoot.querySelector('#input').value).toBe(EXISTING_GOAL.title);
+  });
+
+  it('does not store a _savedAt field any more (TTL removed)', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(null);
+    markOpen(el);
+    el.shadowRoot.querySelector('#desc-input').value = 'notes only';
+    hidePage();
+    const snap = JSON.parse(localStorage.getItem(snapshotKey('new:2026:capstone')));
+    expect(snap._savedAt).toBeUndefined();
   });
 });
 

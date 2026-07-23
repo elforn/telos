@@ -1355,6 +1355,7 @@ describe('list-detail-page — _parseImportText', () => {
 // ── list-detail-page — import draft recovery ─────────────────────────────────
 
 const IMPORT_SNAPSHOT_KEY = 'telos:snapshot.import-text';
+function snapshotKey(id) { return `${IMPORT_SNAPSHOT_KEY}:${id}`; }
 const LIST_2 = { id: 'l2', name: 'Other list', items: [] };
 
 function openImportDialog(el) {
@@ -1369,8 +1370,7 @@ describe('list-detail-page — import draft recovery', () => {
     el.shadowRoot.querySelector('#import-textarea').value = 'Buy flowers';
     el.shadowRoot.querySelector('#import-cancel-btn').click();
 
-    const snap = JSON.parse(localStorage.getItem(IMPORT_SNAPSHOT_KEY));
-    expect(snap.id).toBe('l1');
+    const snap = JSON.parse(localStorage.getItem(snapshotKey('l1')));
     expect(snap.text).toBe('Buy flowers');
   });
 
@@ -1381,23 +1381,23 @@ describe('list-detail-page — import draft recovery', () => {
     el.shadowRoot.querySelector('#import-textarea').value = 'Call the vet';
     el.shadowRoot.querySelector('#import-dialog').close();
 
-    const snap = JSON.parse(localStorage.getItem(IMPORT_SNAPSHOT_KEY));
+    const snap = JSON.parse(localStorage.getItem(snapshotKey('l1')));
     expect(snap.text).toBe('Call the vet');
   });
 
   it('does not save an empty draft, and clears any existing one', async () => {
-    localStorage.setItem(IMPORT_SNAPSHOT_KEY, JSON.stringify({ id: 'l1', text: 'stale', _savedAt: Date.now() }));
+    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ text: 'stale' }));
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount('l1');
     openImportDialog(el);
     el.shadowRoot.querySelector('#import-textarea').value = '   ';
     el.shadowRoot.querySelector('#import-cancel-btn').click();
 
-    expect(localStorage.getItem(IMPORT_SNAPSHOT_KEY)).toBeNull();
+    expect(localStorage.getItem(snapshotKey('l1'))).toBeNull();
   });
 
   it('restores the draft and re-parses it when reopening the same list', async () => {
-    localStorage.setItem(IMPORT_SNAPSHOT_KEY, JSON.stringify({ id: 'l1', text: 'Milk\nBread', _savedAt: Date.now() }));
+    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ text: 'Milk\nBread' }));
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount('l1');
     openImportDialog(el);
@@ -1407,7 +1407,7 @@ describe('list-detail-page — import draft recovery', () => {
   });
 
   it('does not restore a draft that belongs to a different list', async () => {
-    localStorage.setItem(IMPORT_SNAPSHOT_KEY, JSON.stringify({ id: 'l2', text: 'For the other list', _savedAt: Date.now() }));
+    localStorage.setItem(snapshotKey('l2'), JSON.stringify({ text: 'For the other list' }));
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount('l1');
     openImportDialog(el);
@@ -1424,7 +1424,7 @@ describe('list-detail-page — import draft recovery', () => {
     el.shadowRoot.querySelector('#import-cta-btn').click();
 
     expect(el.shadowRoot.querySelector('#import-textarea').value).toBe('');
-    expect(localStorage.getItem(IMPORT_SNAPSHOT_KEY)).toBeNull();
+    expect(localStorage.getItem(snapshotKey('l1'))).toBeNull();
   });
 
   it('reopening a second list does not see the first list\'s draft', async () => {
@@ -1437,6 +1437,75 @@ describe('list-detail-page — import draft recovery', () => {
     const el2 = mount('l2');
     openImportDialog(el2);
     expect(el2.shadowRoot.querySelector('#import-textarea').value).toBe('');
+  });
+
+  it('a draft for one list is not overwritten by a draft captured for a different list', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST_2] } });
+    const el1 = mount('l1');
+    openImportDialog(el1);
+    el1.shadowRoot.querySelector('#import-textarea').value = 'For list one';
+    el1.shadowRoot.querySelector('#import-cancel-btn').click();
+
+    const el2 = mount('l2');
+    openImportDialog(el2);
+    el2.shadowRoot.querySelector('#import-textarea').value = 'For list two';
+    el2.shadowRoot.querySelector('#import-cancel-btn').click();
+
+    expect(JSON.parse(localStorage.getItem(snapshotKey('l1'))).text).toBe('For list one');
+    expect(JSON.parse(localStorage.getItem(snapshotKey('l2'))).text).toBe('For list two');
+  });
+});
+
+// ── list-detail-page — import draft recovery toggle ──────────────────────────
+
+describe('list-detail-page — import draft recovery toggle', () => {
+  it('hides the toggle button when no draft was restored', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount('l1');
+    openImportDialog(el);
+    expect(el.shadowRoot.querySelector('#import-draft-toggle-btn').hidden).toBe(true);
+  });
+
+  it('shows a Clear toggle when a draft is restored', async () => {
+    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ text: 'Milk\nBread' }));
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount('l1');
+    openImportDialog(el);
+    const btn = el.shadowRoot.querySelector('#import-draft-toggle-btn');
+    expect(btn.hidden).toBe(false);
+    expect(btn.textContent).toBe('Clear');
+  });
+
+  it('clicking Clear blanks the textarea and flips the button to Undo', async () => {
+    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ text: 'Milk\nBread' }));
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount('l1');
+    openImportDialog(el);
+    el.shadowRoot.querySelector('#import-draft-toggle-btn').click();
+    expect(el.shadowRoot.querySelector('#import-textarea').value).toBe('');
+    expect(el.shadowRoot.querySelector('#import-draft-toggle-btn').textContent).toBe('Undo');
+  });
+
+  it('clicking Undo after Clear restores the draft again', async () => {
+    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ text: 'Milk\nBread' }));
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount('l1');
+    openImportDialog(el);
+    const btn = el.shadowRoot.querySelector('#import-draft-toggle-btn');
+    btn.click(); // Clear
+    btn.click(); // Undo
+    expect(el.shadowRoot.querySelector('#import-textarea').value).toBe('Milk\nBread');
+    expect(btn.textContent).toBe('Clear');
+  });
+
+  it('does not store a _savedAt field any more (TTL removed)', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount('l1');
+    openImportDialog(el);
+    el.shadowRoot.querySelector('#import-textarea').value = 'Buy flowers';
+    el.shadowRoot.querySelector('#import-cancel-btn').click();
+    const snap = JSON.parse(localStorage.getItem(snapshotKey('l1')));
+    expect(snap._savedAt).toBeUndefined();
   });
 });
 

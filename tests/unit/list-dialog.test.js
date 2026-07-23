@@ -213,6 +213,7 @@ describe('list-dialog — delete', () => {
 // ── hide-time snapshot ──────────────────────────────────────────────────────────
 
 const SNAPSHOT_KEY = 'telos:snapshot.new-list';
+function snapshotKey(id) { return `${SNAPSHOT_KEY}:${id ?? ''}`; }
 
 // Simulate the modal actually being shown (the stubbed show() doesn't set it).
 function markOpen(el) {
@@ -225,19 +226,18 @@ function hidePage() {
 
 describe('list-dialog — hide-time snapshot', () => {
   // ── new list ──
-  it('snapshots a titleless new list with a picked colour on hide (id null)', () => {
+  it('snapshots a titleless new list with a picked colour on hide', () => {
     const el = mount();
     el.open(null);
     markOpen(el);
     el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
     hidePage();
-    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    const snap = JSON.parse(localStorage.getItem(snapshotKey(null)));
     expect(snap.color).toBe('#4A94D4');
-    expect(snap.id).toBeNull();
   });
 
   it('restores a new-list snapshot on the next new open', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, name: 'Half typed', color: '#4A94D4', _savedAt: Date.now() }));
+    localStorage.setItem(snapshotKey(null), JSON.stringify({ name: 'Half typed', color: '#4A94D4' }));
     const el = mount();
     el.open(null);
     expect(el.shadowRoot.querySelector('#input').value).toBe('Half typed');
@@ -245,7 +245,7 @@ describe('list-dialog — hide-time snapshot', () => {
   });
 
   it('does not restore a new snapshot when opening an existing list', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, name: 'Half typed', color: null, _savedAt: Date.now() }));
+    localStorage.setItem(snapshotKey(null), JSON.stringify({ name: 'Half typed', color: null }));
     const el = mount();
     el.open(LIST);
     expect(el.shadowRoot.querySelector('#input').value).toBe('Gift ideas');
@@ -256,7 +256,7 @@ describe('list-dialog — hide-time snapshot', () => {
     el.open(null);
     markOpen(el);
     hidePage();
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+    expect(localStorage.getItem(snapshotKey(null))).toBeNull();
   });
 
   it('does not snapshot when the dialog is not open', () => {
@@ -264,7 +264,7 @@ describe('list-dialog — hide-time snapshot', () => {
     el.open(null);
     el.shadowRoot.querySelector('#input').value = 'Typed';
     hidePage(); // dialog not marked open → no-op
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+    expect(localStorage.getItem(snapshotKey(null))).toBeNull();
   });
 
   it('clears the snapshot when the new list is committed', () => {
@@ -273,9 +273,9 @@ describe('list-dialog — hide-time snapshot', () => {
     markOpen(el);
     el.shadowRoot.querySelector('#input').value = 'Groceries';
     hidePage();
-    expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
+    expect(localStorage.getItem(snapshotKey(null))).not.toBeNull();
     el.shadowRoot.querySelector('#modal').close(); // name present → commits → clears
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+    expect(localStorage.getItem(snapshotKey(null))).toBeNull();
   });
 
   it('preserves a titleless new list on close instead of discarding it', () => {
@@ -284,7 +284,7 @@ describe('list-dialog — hide-time snapshot', () => {
     markOpen(el);
     el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click(); // colour, no name
     el.shadowRoot.querySelector('#modal').close(); // no name → capture, not discard
-    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    const snap = JSON.parse(localStorage.getItem(snapshotKey(null)));
     expect(snap.color).toBe('#4A94D4');
   });
 
@@ -295,8 +295,7 @@ describe('list-dialog — hide-time snapshot', () => {
     markOpen(el);
     el.shadowRoot.querySelector('#input').value = 'Gift ideas (edited)';
     hidePage();
-    const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
-    expect(snap.id).toBe('l1');
+    const snap = JSON.parse(localStorage.getItem(snapshotKey('l1')));
     expect(snap.name).toBe('Gift ideas (edited)');
   });
 
@@ -305,18 +304,18 @@ describe('list-dialog — hide-time snapshot', () => {
     el.open(LIST);
     markOpen(el);
     hidePage(); // name unchanged
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+    expect(localStorage.getItem(snapshotKey('l1'))).toBeNull();
   });
 
   it('restores an existing-list snapshot only when reopening the same list', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: 'l1', name: 'Pending edit', color: null, _savedAt: Date.now() }));
+    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ name: 'Pending edit', color: null }));
     const el = mount();
     el.open(LIST); // same id → restore
     expect(el.shadowRoot.querySelector('#input').value).toBe('Pending edit');
   });
 
   it('does not restore an existing-list snapshot when opening a different list', () => {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: 'l1', name: 'Pending edit', color: null, _savedAt: Date.now() }));
+    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ name: 'Pending edit', color: null }));
     const el = mount();
     el.open({ id: 'l2', name: 'Other list' }); // different id → ignore
     expect(el.shadowRoot.querySelector('#input').value).toBe('Other list');
@@ -328,18 +327,94 @@ describe('list-dialog — hide-time snapshot', () => {
     markOpen(el);
     el.shadowRoot.querySelector('#input').value = 'Edited';
     hidePage();
-    expect(localStorage.getItem(SNAPSHOT_KEY)).not.toBeNull();
+    expect(localStorage.getItem(snapshotKey('l1'))).not.toBeNull();
     el.shadowRoot.querySelector('#modal').close(); // existing close → clear
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
+    expect(localStorage.getItem(snapshotKey('l1'))).toBeNull();
   });
 
-  it('ignores a stale snapshot older than the max age', () => {
-    const overMaxAge = Date.now() - (73 * 60 * 60 * 1000);
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ id: null, name: 'Ancient', color: null, _savedAt: overMaxAge }));
+  it('a draft for one list is not overwritten by a draft captured for a different list', () => {
+    const el1 = mount();
+    el1.open(LIST);
+    markOpen(el1);
+    el1.shadowRoot.querySelector('#input').value = 'Gift ideas (l1 edit)';
+    hidePage();
+
+    const el2 = mount();
+    el2.open({ id: 'l2', name: 'Other list' });
+    markOpen(el2);
+    el2.shadowRoot.querySelector('#input').value = 'Other list (l2 edit)';
+    hidePage();
+
+    expect(JSON.parse(localStorage.getItem(snapshotKey('l1'))).name).toBe('Gift ideas (l1 edit)');
+    expect(JSON.parse(localStorage.getItem(snapshotKey('l2'))).name).toBe('Other list (l2 edit)');
+  });
+});
+
+// ── draft recovery toggle ───────────────────────────────────────────────────
+
+describe('list-dialog — draft recovery toggle', () => {
+  it('hides the toggle button when no draft was restored', () => {
     const el = mount();
     el.open(null);
+    expect(el.shadowRoot.querySelector('#draft-toggle-btn').hidden).toBe(true);
+  });
+
+  it('shows a Clear toggle when a draft is restored into a new list', () => {
+    localStorage.setItem(snapshotKey(null), JSON.stringify({ name: 'Draft list', color: '#4A94D4' }));
+    const el = mount();
+    el.open(null);
+    const btn = el.shadowRoot.querySelector('#draft-toggle-btn');
+    expect(btn.hidden).toBe(false);
+    expect(btn.textContent).toBe('Clear');
+  });
+
+  it('clicking Clear blanks the form and flips the button to Undo', () => {
+    localStorage.setItem(snapshotKey(null), JSON.stringify({ name: 'Draft list', color: '#4A94D4' }));
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#draft-toggle-btn').click();
     expect(el.shadowRoot.querySelector('#input').value).toBe('');
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBeNull(); // expired + purged
+    expect(el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('false');
+    expect(el.shadowRoot.querySelector('#draft-toggle-btn').textContent).toBe('Undo');
+  });
+
+  it('clicking Undo after Clear restores the draft again', () => {
+    localStorage.setItem(snapshotKey(null), JSON.stringify({ name: 'Draft list', color: '#4A94D4' }));
+    const el = mount();
+    el.open(null);
+    const btn = el.shadowRoot.querySelector('#draft-toggle-btn');
+    btn.click(); // Clear
+    btn.click(); // Undo
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Draft list');
+    expect(el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('true');
+    expect(btn.textContent).toBe('Clear');
+  });
+
+  it('shows a Revert toggle when a draft is restored into an existing list', () => {
+    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ name: 'Edited', color: null }));
+    const el = mount();
+    el.open(LIST);
+    const btn = el.shadowRoot.querySelector('#draft-toggle-btn');
+    expect(btn.hidden).toBe(false);
+    expect(btn.textContent).toBe('Revert');
+  });
+
+  it('clicking Revert on an existing list restores the stored record, not blank', () => {
+    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ name: 'Edited', color: null }));
+    const el = mount();
+    el.open(LIST);
+    el.shadowRoot.querySelector('#draft-toggle-btn').click();
+    expect(el.shadowRoot.querySelector('#input').value).toBe(LIST.name);
+  });
+
+  it('does not store a _savedAt field any more (TTL removed)', () => {
+    const el = mount();
+    el.open(null);
+    markOpen(el);
+    el.shadowRoot.querySelector('#input').value = 'Groceries';
+    hidePage();
+    const snap = JSON.parse(localStorage.getItem(snapshotKey(null)));
+    expect(snap._savedAt).toBeUndefined();
   });
 });
 
