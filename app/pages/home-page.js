@@ -913,6 +913,10 @@ class HomePage extends AppElement {
   }
 
   // ── Filter helpers ────────────────────────────────────────────────────────
+  // No cleanup hook for telos:filter:goals:<year> on year "deletion" — years
+  // aren't a deletable entity (no delete-year feature exists); a year is just
+  // whichever key happens to have goal data. Unlike list deletion, there's
+  // nothing to hook this removal to.
 
   _loadFilter() {
     try {

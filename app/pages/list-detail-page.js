@@ -1661,6 +1661,7 @@ class ListDetailPage extends AppElement {
     const snapshot = getState().lists ?? [];
     const listName = snapshot.find(l => l.id === this._listId)?.name ?? '';
     setState('lists', snapshot.filter(l => l.id !== this._listId));
+    localStorage.removeItem(`telos:filter:list:${this._listId}`);
     setRuntimeState('pendingListUndo', { snapshot, listName });
     navigate(`${BASE_PATH}lists`);
   }
