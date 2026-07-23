@@ -61,6 +61,26 @@ describe('goal-dialog — open', () => {
     el.open(null);
     expect(el.shadowRoot.querySelector('#input').value).toBe('');
   });
+
+  it('deadline field is hidden by default on a new goal', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(true);
+  });
+
+  it('deadline field is shown automatically when goal has a dueDate', () => {
+    const el = mount();
+    el.open({ title: 'Grand Capstone', dueDate: '2026-12-31' });
+    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#duedate-input').value).toBe('2026-12-31');
+  });
+
+  it('clicking duedate-toggle reveals the deadline field', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-toggle').click();
+    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(false);
+  });
 });
 
 describe('goal-dialog — new goal creation', () => {
@@ -126,6 +146,27 @@ describe('goal-dialog — new goal creation', () => {
     );
     expect(modal.close).not.toHaveBeenCalled();
   });
+
+  it('includes dueDate in goal-created when deadline is filled', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Grand Capstone';
+    el.shadowRoot.querySelector('#duedate-input').value = '2026-12-31';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.dueDate).toBe('2026-12-31');
+  });
+
+  it('dueDate is undefined in goal-created when deadline is empty', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Grand Capstone';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.dueDate).toBeUndefined();
+  });
 });
 
 describe('goal-dialog — edit existing (blur-save)', () => {
@@ -169,6 +210,29 @@ describe('goal-dialog — edit existing (blur-save)', () => {
     desc.dispatchEvent(new Event('blur'));
     expect(events).toHaveLength(1);
     expect(events[0].detail.notes).toBe('New notes');
+  });
+
+  it('dispatches goal-duedate-changed when deadline changes', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Goal' });
+    const events = [];
+    el.addEventListener('goal-duedate-changed', e => events.push(e));
+    const inp = el.shadowRoot.querySelector('#duedate-input');
+    inp.value = '2026-10-01';
+    inp.dispatchEvent(new Event('change'));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.dueDate).toBe('2026-10-01');
+  });
+
+  it('clicking duedate-clear empties the field and dispatches goal-duedate-changed with undefined', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Goal', dueDate: '2026-10-01' });
+    const events = [];
+    el.addEventListener('goal-duedate-changed', e => events.push(e));
+    el.shadowRoot.querySelector('#duedate-clear').click();
+    expect(el.shadowRoot.querySelector('#duedate-input').value).toBe('');
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.dueDate).toBeUndefined();
   });
 
   it('dispatches goal-notes-changed with undefined when notes are cleared', () => {

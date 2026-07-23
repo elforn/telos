@@ -321,6 +321,20 @@ describe('list-detail-page — edit item (blur-save)', () => {
     }));
     await vi.waitFor(() => expect(getState().lists[0].items[0].url).toBe('https://new.example.com'));
   });
+
+  it('updates dueDate when item-duedate-changed fires after item-tap', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-duedate-changed', {
+      bubbles: true, composed: true, detail: { dueDate: '2026-09-01' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].items[0].dueDate).toBe('2026-09-01'));
+  });
 });
 
 describe('list-detail-page — delete item', () => {
@@ -605,7 +619,7 @@ describe('list-detail-page — item-promote', () => {
     }));
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-promote', {
       bubbles: true, composed: true,
-      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, year: '2026', section: 'milestones' },
+      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, dueDate: undefined, tags: [], year: '2026', section: 'milestones' },
     }));
 
     await vi.waitFor(() => {
@@ -625,13 +639,33 @@ describe('list-detail-page — item-promote', () => {
     }));
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-promote', {
       bubbles: true, composed: true,
-      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, year: '2026', section: 'capstone' },
+      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, dueDate: undefined, tags: [], year: '2026', section: 'capstone' },
     }));
 
     await vi.waitFor(() => {
       const goal = getState().goals?.['2026']?.capstone?.[0];
       expect(goal?.percentage).toBe(0);
       expect(goal && 'tracking' in goal).toBe(false);
+    });
+  });
+
+  it('carries the item\'s tags and dueDate onto the created goal', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }], goals: {} } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-promote', {
+      bubbles: true, composed: true,
+      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, dueDate: '2026-08-01', tags: ['garden', 'urgent'], year: '2026', section: 'capstone' },
+    }));
+
+    await vi.waitFor(() => {
+      const goal = getState().goals?.['2026']?.capstone?.[0];
+      expect(goal?.tags).toEqual(['garden', 'urgent']);
+      expect(goal?.dueDate).toBe('2026-08-01');
     });
   });
 
@@ -645,7 +679,7 @@ describe('list-detail-page — item-promote', () => {
     }));
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-promote', {
       bubbles: true, composed: true,
-      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, year: '2026', section: 'wow' },
+      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, dueDate: undefined, tags: [], year: '2026', section: 'wow' },
     }));
 
     await vi.waitFor(() => {
@@ -672,7 +706,7 @@ describe('list-detail-page — item-promote', () => {
     }));
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-promote', {
       bubbles: true, composed: true,
-      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, year: '2026', section: 'milestones' },
+      detail: { title: 'Flowers', status: 'open', note: undefined, url: undefined, dueDate: undefined, tags: [], year: '2026', section: 'milestones' },
     }));
 
     await vi.waitFor(() => {
@@ -1131,6 +1165,15 @@ describe('list-detail-page — delete list (menu)', () => {
     const btn = el.shadowRoot.querySelector('#list-delete-btn');
     btn.click();
     await vi.waitFor(() => expect(getState().lists).toHaveLength(0));
+  });
+
+  it('removes the orphaned filter localStorage key when the list is deleted', async () => {
+    localStorage.setItem('telos:filter:list:l1', JSON.stringify({ query: 'flowers' }));
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    el.shadowRoot.querySelector('#list-delete-btn').click();
+    await vi.waitFor(() => expect(getState().lists).toHaveLength(0));
+    expect(localStorage.getItem('telos:filter:list:l1')).toBeNull();
   });
 
   it('first click does not affect other lists', async () => {

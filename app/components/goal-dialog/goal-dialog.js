@@ -40,13 +40,17 @@ class GoalDialog extends AppElement {
     this._descInput.value = goal?.notes ?? '';
     this._descHighlight?.sync();
 
+    this._dueDateInput.value = goal?.dueDate ?? '';
+    this._showDueDateField(!!goal?.dueDate);
+
     this._tags = [...(goal?.tags ?? [])];
     this._tagInput.value = '';
     this._renderTagChips();
     this._updateSuggestions();
 
-    this._lastValidTitle = goal?.title ?? '';
-    this._lastValidNotes = goal?.notes ?? '';
+    this._lastValidTitle   = goal?.title ?? '';
+    this._lastValidNotes   = goal?.notes ?? '';
+    this._lastValidDueDate = goal?.dueDate ?? '';
 
     this._closeBtn.setAttribute('aria-label',
       this._isNew ? t('goal-dialog.save-and-close') : t('goal-dialog.close'));
@@ -55,8 +59,8 @@ class GoalDialog extends AppElement {
 
     // Draft recovery: target is blank for a new entry, the stored record for an existing one.
     const targetValues = goal
-      ? { title: goal.title ?? '', notes: goal.notes, tags: [...(goal.tags ?? [])] }
-      : { title: '', notes: undefined, tags: [] };
+      ? { title: goal.title ?? '', notes: goal.notes, dueDate: goal.dueDate, tags: [...(goal.tags ?? [])] }
+      : { title: '', notes: undefined, dueDate: undefined, tags: [] };
     this._draftToggle.reset({
       draft: this._snapshot?.restoreFor() ?? null,
       target: targetValues,
@@ -108,6 +112,75 @@ class GoalDialog extends AppElement {
 
         input[type="text"]:focus { border-color: var(--color-accent); }
         input[type="text"]::placeholder { color: var(--color-text-muted); }
+
+        /* ── Deadline toggle + row ───────────────────────────────────────── */
+        .duedate-field { margin-block-end: var(--space-4); }
+
+        #duedate-toggle {
+          display: inline-flex;
+          align-items: center;
+          padding: var(--space-2) var(--space-3);
+          border-radius: var(--radius-full);
+          border: 1px solid var(--color-accent);
+          background: transparent;
+          color: var(--color-accent);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-medium);
+          font-family: var(--font-family);
+          cursor: pointer;
+          min-block-size: auto;
+          line-height: normal;
+        }
+
+        #duedate-toggle[aria-expanded="true"] { background: var(--color-accent-subtle); }
+
+        #duedate-toggle:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .duedate-row {
+          display: flex;
+          gap: var(--space-2);
+          align-items: center;
+          margin-block-start: var(--space-3);
+        }
+
+        #duedate-input {
+          flex: 1;
+          min-inline-size: 0;
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding: var(--space-3);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          outline: none;
+          box-sizing: border-box;
+        }
+
+        #duedate-input:focus { border-color: var(--color-accent); }
+
+        #duedate-clear {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
+          padding-inline: var(--space-3);
+          border-radius: var(--radius-sm);
+          border: 0.5px solid var(--color-border);
+          background: var(--color-surface-raised);
+          color: var(--color-accent);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        #duedate-clear:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
 
         /* ── Description textarea + highlight overlay ───────────────────── */
 
@@ -479,6 +552,15 @@ class GoalDialog extends AppElement {
                  autocomplete="off"
                  enterkeyhint="go"
                  maxlength="80" />
+          <div class="duedate-field">
+            <button type="button" id="duedate-toggle" aria-expanded="false">📅 ${t('goal-dialog.duedate-toggle')}</button>
+            <div class="duedate-row" hidden>
+              <input id="duedate-input"
+                     type="date"
+                     aria-label="${t('goal-dialog.duedate-toggle')}" />
+              <button type="button" id="duedate-clear" aria-label="${t('goal-dialog.duedate-clear')}">${icons.xMark}</button>
+            </div>
+          </div>
           <div class="textarea-wrap">
             <div class="md-highlight" aria-hidden="true"></div>
             <textarea id="desc-input"
@@ -557,6 +639,10 @@ class GoalDialog extends AppElement {
       this.shadowRoot.querySelector('.md-highlight'),
     );
     this._descCopyBtn   = this.shadowRoot.querySelector('#desc-copy-btn');
+    this._dueDateInput  = this.shadowRoot.querySelector('#duedate-input');
+    this._dueDateClear  = this.shadowRoot.querySelector('#duedate-clear');
+    this._dueDateToggle = this.shadowRoot.querySelector('#duedate-toggle');
+    this._dueDateRow    = this.shadowRoot.querySelector('.duedate-row');
     this._tagChipsWrap    = this.shadowRoot.querySelector('#tag-chips-wrap');
     this._tagInput        = this.shadowRoot.querySelector('#tag-input');
     this._tagSuggestions  = this.shadowRoot.querySelector('#tag-suggestions');
@@ -579,8 +665,9 @@ class GoalDialog extends AppElement {
 
     this._isNew           = false;
     this._tags            = [];
-    this._lastValidTitle  = '';
-    this._lastValidNotes  = '';
+    this._lastValidTitle   = '';
+    this._lastValidNotes   = '';
+    this._lastValidDueDate = '';
 
     // ── Main view ─────────────────────────────────────────────────────────────
 
@@ -625,6 +712,28 @@ class GoalDialog extends AppElement {
       } catch {} // clipboard unavailable — fail silently
     };
 
+    this._onDueDateInput = () => {
+      if (this._isNew) return;
+      const v = this._dueDateInput.value;
+      if (v === this._lastValidDueDate) return;
+      this._lastValidDueDate = v;
+      this.dispatchEvent(new CustomEvent('goal-duedate-changed', {
+        bubbles: true, composed: true, detail: { dueDate: v || undefined },
+      }));
+      this._announceSaved();
+    };
+
+    this._onDueDateToggle = () => {
+      const opening = this._dueDateRow.hidden;
+      this._showDueDateField(opening);
+      if (opening) this._dueDateInput.focus();
+    };
+
+    this._onDueDateClear = () => {
+      this._dueDateInput.value = '';
+      this._onDueDateInput();
+    };
+
     this._onClose = () => { this._modal.close(); };
 
     this._onDelete = () => {
@@ -639,9 +748,10 @@ class GoalDialog extends AppElement {
         if (title) {
           this._snapshot?.clear(); // committed — drop any hide-time snapshot
           const notes = this._descInput.value.trim() || undefined;
+          const dueDate = this._dueDateInput.value || undefined;
           const tags  = this._getTagValues();
           this.dispatchEvent(new CustomEvent('goal-created', {
-            bubbles: true, composed: true, detail: { title, notes, tags },
+            bubbles: true, composed: true, detail: { title, notes, dueDate, tags },
           }));
         } else {
           this._snapshot?.capture(); // can't commit without a title — preserve notes/tags
@@ -705,6 +815,11 @@ class GoalDialog extends AppElement {
     this._descInput.addEventListener('blur',  this._onNotesBlur);
     this._descCopyBtn.addEventListener('pointerdown', e => e.preventDefault());
     this._descCopyBtn.addEventListener('click', this._onDescCopy);
+    this._dueDateInput.addEventListener('change', this._onDueDateInput);
+    this._dueDateToggle.addEventListener('pointerdown', e => e.preventDefault());
+    this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
+    this._dueDateClear.addEventListener('pointerdown', e => e.preventDefault());
+    this._dueDateClear.addEventListener('click', this._onDueDateClear);
     this._tagInput.addEventListener('keydown',   this._onTagKeyDown);
     this._tagInput.addEventListener('input',     this._onTagInput);
     this._tagInput.addEventListener('blur',      this._onTagBlur);
@@ -792,13 +907,14 @@ class GoalDialog extends AppElement {
       snapshot: () => {
         const title = this._input.value;
         const notes = this._descInput.value;
+        const dueDate = this._dueDateInput.value;
         if (this._isNew) {
           const tags = this._getTagValues();
-          return (title.trim() || notes.trim() || tags.length) ? { title, notes, tags } : null;
+          return (title.trim() || notes.trim() || dueDate || tags.length) ? { title, notes, dueDate, tags } : null;
         }
-        // existing: only if a text field has an unsaved edit (tags/status commit immediately)
+        // existing: only if a text field has an unsaved edit (tags/dueDate commit immediately)
         return (title !== this._lastValidTitle || notes !== this._lastValidNotes)
-          ? { title, notes, tags: [...this._tags] } : null;
+          ? { title, notes, dueDate, tags: [...this._tags] } : null;
       },
       restore: data => this._applyFormValues(data),
     });
@@ -811,6 +927,9 @@ class GoalDialog extends AppElement {
     this._descInput?.removeEventListener('input', this._onDescInput);
     this._descInput?.removeEventListener('blur',  this._onNotesBlur);
     this._descCopyBtn?.removeEventListener('click', this._onDescCopy);
+    this._dueDateInput?.removeEventListener('change', this._onDueDateInput);
+    this._dueDateToggle?.removeEventListener('click', this._onDueDateToggle);
+    this._dueDateClear?.removeEventListener('click', this._onDueDateClear);
     this._tagInput?.removeEventListener('keydown',   this._onTagKeyDown);
     this._tagInput?.removeEventListener('input',     this._onTagInput);
     this._tagInput?.removeEventListener('blur',      this._onTagBlur);
@@ -916,16 +1035,23 @@ class GoalDialog extends AppElement {
     return this._goal?.id ?? `new:${this._fromYear}:${this._fromSection}`;
   }
 
-  _applyFormValues({ title, notes, tags }) {
+  _applyFormValues({ title, notes, dueDate, tags }) {
     this._input.value = title ?? '';
     this._descInput.value = notes ?? '';
     this._descHighlight?.sync();
+    this._dueDateInput.value = dueDate ?? '';
+    this._showDueDateField(!!dueDate);
     this._tags = [...(tags ?? [])];
     this._renderTagChips();
     this._updateSuggestions();
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
+
+  _showDueDateField(show) {
+    this._dueDateRow.hidden = !show;
+    this._dueDateToggle.setAttribute('aria-expanded', String(show));
+  }
 
   _showView(name) {
     this._viewMain.hidden    = name !== 'main';
@@ -981,10 +1107,11 @@ class GoalDialog extends AppElement {
     if (!ta) return;
     ta.style.blockSize = 'auto';
     const vh = window.visualViewport?.height ?? window.innerHeight;
+    const dueDateRowH = this._dueDateRow?.hidden ? 0 : (this._dueDateRow?.offsetHeight ?? 0);
     const MIN_H        = 56;
     const CHROME_H     = 320; // approx header + footer + input + tags chrome
     const MIN_WRAP_H   = 100;
-    const maxH = Math.max(vh - CHROME_H, MIN_WRAP_H);
+    const maxH = Math.max(vh - CHROME_H - dueDateRowH, MIN_WRAP_H);
     ta.style.blockSize = `${Math.max(ta.scrollHeight, MIN_H)}px`;
     const wrap = ta.closest('.textarea-wrap');
     if (wrap) wrap.style.maxBlockSize = `${maxH}px`;

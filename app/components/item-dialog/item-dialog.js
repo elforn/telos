@@ -13,17 +13,18 @@ const SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
 const SNAPSHOT_KEY = 'telos:snapshot.new-item';
 
 // Events emitted (all bubbles + composed):
-//   item-created        { id, title, status, note, url, tags }
+//   item-created         { id, title, status, note, url, tags, dueDate }
 //   item-closed
-//   item-title-changed  { title }
-//   item-note-changed   { note }
-//   item-url-changed    { url }
-//   item-status-changed { status }
-//   item-tags-changed   { tags }
+//   item-title-changed   { title }
+//   item-note-changed    { note }
+//   item-url-changed     { url }
+//   item-duedate-changed { dueDate }
+//   item-status-changed  { status }
+//   item-tags-changed    { tags }
 //   item-delete
-//   item-move           { title, status, note, url, tags, targetListIds, newListName, copy }
-//   item-promote        { title, status, note, url, tags, year, section }
-//   item-export-request { item }
+//   item-move            { title, status, note, url, tags, dueDate, targetListIds, newListName, copy }
+//   item-promote         { title, status, note, url, tags, dueDate, year, section }
+//   item-export-request  { item }
 class ItemDialog extends AppElement {
   // ── Public properties ────────────────────────────────────────────────────────
 
@@ -60,6 +61,9 @@ class ItemDialog extends AppElement {
     this._syncUrlOpen();
     this._showUrlField(!!item?.url);
 
+    this._dueDateInput.value = item?.dueDate ?? '';
+    this._showDueDateField(!!item?.dueDate);
+
     this._tags = [...(item?.tags ?? [])];
     this._tagInput.value = '';
     this._renderTagChips();
@@ -67,9 +71,10 @@ class ItemDialog extends AppElement {
 
     this._menuBtn.hidden = this._isNew;
 
-    this._lastValidTitle = item?.title ?? '';
-    this._lastValidNote  = item?.note  ?? '';
-    this._lastValidUrl   = item?.url   ?? '';
+    this._lastValidTitle   = item?.title ?? '';
+    this._lastValidNote    = item?.note  ?? '';
+    this._lastValidUrl     = item?.url   ?? '';
+    this._lastValidDueDate = item?.dueDate ?? '';
 
     this._closeBtn.setAttribute('aria-label',
       this._isNew ? t('item-dialog.save-and-close') : t('item-dialog.close'));
@@ -78,8 +83,8 @@ class ItemDialog extends AppElement {
 
     // Draft recovery: target is blank for a new entry, the stored record for an existing one.
     const targetValues = item
-      ? { title: item.title ?? '', note: item.note, url: item.url, tags: [...(item.tags ?? [])] }
-      : { title: '', note: undefined, url: undefined, tags: [] };
+      ? { title: item.title ?? '', note: item.note, url: item.url, dueDate: item.dueDate, tags: [...(item.tags ?? [])] }
+      : { title: '', note: undefined, url: undefined, dueDate: undefined, tags: [] };
     this._draftToggle.reset({
       draft: this._snapshot?.restoreFor() ?? null,
       target: targetValues,
@@ -268,8 +273,15 @@ class ItemDialog extends AppElement {
           outline-offset: 2px;
         }
 
-        /* ── URL toggle ──────────────────────────────────────────────────── */
-        #url-toggle {
+        /* ── URL / due-date toggles ──────────────────────────────────────── */
+        .toggles-end {
+          display: flex;
+          gap: var(--space-2);
+          flex-wrap: wrap;
+          margin-inline-start: auto;
+        }
+
+        #url-toggle, #duedate-toggle {
           display: inline-flex;
           align-items: center;
           padding: var(--space-2) var(--space-3);
@@ -284,18 +296,19 @@ class ItemDialog extends AppElement {
           flex-shrink: 0;
           min-block-size: auto;
           line-height: normal;
-          margin-inline-start: auto;
         }
 
-        #url-toggle[aria-expanded="true"] { background: var(--color-accent-subtle); }
+        #url-toggle[aria-expanded="true"], #duedate-toggle[aria-expanded="true"] {
+          background: var(--color-accent-subtle);
+        }
 
-        #url-toggle:focus-visible {
+        #url-toggle:focus-visible, #duedate-toggle:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
 
-        /* ── URL row ─────────────────────────────────────────────────────── */
-        .url-row {
+        /* ── URL row / due-date row ──────────────────────────────────────── */
+        .url-row, .duedate-row {
           display: flex;
           gap: var(--space-2);
           align-items: center;
@@ -307,9 +320,26 @@ class ItemDialog extends AppElement {
           margin-block-end: 0;
         }
 
-        #url-open {
+        #duedate-input {
+          flex: 1;
+          min-inline-size: 0;
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding: var(--space-3);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          outline: none;
+          box-sizing: border-box;
+        }
+
+        #duedate-input:focus { border-color: var(--color-accent); }
+
+        #url-open, #duedate-clear {
           flex-shrink: 0;
           min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
           padding-inline: var(--space-3);
           border-radius: var(--radius-sm);
           border: 0.5px solid var(--color-border);
@@ -319,9 +349,12 @@ class ItemDialog extends AppElement {
           font-family: var(--font-family);
           font-weight: var(--font-weight-medium);
           cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
-        #url-open:focus-visible {
+        #url-open:focus-visible, #duedate-clear:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
@@ -644,7 +677,10 @@ class ItemDialog extends AppElement {
                   </label>
                 `).join('')}
               </div>
-              <button type="button" id="url-toggle" aria-expanded="false">🔗 ${t('item-dialog.url-toggle')}</button>
+              <div class="toggles-end">
+                <button type="button" id="url-toggle" aria-expanded="false">🔗 ${t('item-dialog.url-toggle')}</button>
+                <button type="button" id="duedate-toggle" aria-expanded="false">📅 ${t('item-dialog.duedate-toggle')}</button>
+              </div>
             </div>
             <div class="url-row" hidden>
               <input id="url-input"
@@ -654,6 +690,12 @@ class ItemDialog extends AppElement {
                      autocomplete="off"
                      inputmode="url" />
               <button type="button" id="url-open" hidden>${t('item-dialog.url-open')}</button>
+            </div>
+            <div class="duedate-row" hidden>
+              <input id="duedate-input"
+                     type="date"
+                     aria-label="${t('item-dialog.duedate-toggle')}" />
+              <button type="button" id="duedate-clear" aria-label="${t('item-dialog.duedate-clear')}">${icons.xMark}</button>
             </div>
           </div>
           <div class="tag-area">
@@ -730,6 +772,10 @@ class ItemDialog extends AppElement {
     this._urlOpen = this.shadowRoot.querySelector('#url-open');
     this._urlToggle = this.shadowRoot.querySelector('#url-toggle');
     this._urlRow = this.shadowRoot.querySelector('.url-row');
+    this._dueDateInput = this.shadowRoot.querySelector('#duedate-input');
+    this._dueDateClear = this.shadowRoot.querySelector('#duedate-clear');
+    this._dueDateToggle = this.shadowRoot.querySelector('#duedate-toggle');
+    this._dueDateRow = this.shadowRoot.querySelector('.duedate-row');
     this._tagChipsWrap = this.shadowRoot.querySelector('#tag-chips-wrap');
     this._tagInput = this.shadowRoot.querySelector('#tag-input');
     this._tagSuggestions = this.shadowRoot.querySelector('#tag-suggestions');
@@ -753,9 +799,10 @@ class ItemDialog extends AppElement {
     this._skipCreate      = false;
     this._view           = 'main';
     this._tags           = [];
-    this._lastValidTitle = '';
-    this._lastValidNote  = '';
-    this._lastValidUrl   = '';
+    this._lastValidTitle   = '';
+    this._lastValidNote    = '';
+    this._lastValidUrl     = '';
+    this._lastValidDueDate = '';
 
     // ── Main view ─────────────────────────────────────────────────────────────
 
@@ -763,17 +810,18 @@ class ItemDialog extends AppElement {
       const v = this._titleInput.value.trim();
       if (this._isNew) {
         if (!v) return;
-        const { status, note, url, tags } = this._getFormValues();
+        const { status, note, url, dueDate, tags } = this._getFormValues();
         const id = crypto.randomUUID();
-        this._item = { id, title: v, status, note, url, tags, inGoals: [] };
+        this._item = { id, title: v, status, note, url, dueDate, tags, inGoals: [] };
         this._isNew = false;
-        this._lastValidTitle = v;
-        this._lastValidNote  = note;
-        this._lastValidUrl   = url;
+        this._lastValidTitle   = v;
+        this._lastValidNote    = note;
+        this._lastValidUrl     = url;
+        this._lastValidDueDate = dueDate ?? '';
         this._snapshot?.clear(); // committed — drop any hide-time snapshot
         this.dispatchEvent(new CustomEvent('item-created', {
           bubbles: true, composed: true,
-          detail: { id, title: v, status, note, url, tags },
+          detail: { id, title: v, status, note, url, dueDate, tags },
         }));
         this._closeBtn.setAttribute('aria-label', t('item-dialog.close'));
         this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
@@ -844,6 +892,28 @@ class ItemDialog extends AppElement {
       if (url) window.open(url, '_blank', 'noopener');
     };
 
+    this._onDueDateInput = () => {
+      if (this._isNew) return;
+      const v = this._dueDateInput.value;
+      if (v === this._lastValidDueDate) return;
+      this._lastValidDueDate = v;
+      this.dispatchEvent(new CustomEvent('item-duedate-changed', {
+        bubbles: true, composed: true, detail: { dueDate: v || undefined },
+      }));
+      this._announceSaved();
+    };
+
+    this._onDueDateToggle = () => {
+      const opening = this._dueDateRow.hidden;
+      this._showDueDateField(opening);
+      if (opening) this._dueDateInput.focus();
+    };
+
+    this._onDueDateClear = () => {
+      this._dueDateInput.value = '';
+      this._onDueDateInput();
+    };
+
     this._onClose = () => { this._modal.close(); };
 
     this._onDelete = () => {
@@ -857,14 +927,14 @@ class ItemDialog extends AppElement {
         // _skipCreate: move/promote already dispatched item-move/item-promote
         // directly — don't also create it here.
         if (!this._skipCreate) {
-          const { title, status, note, url, tags } = this._getFormValues();
+          const { title, status, note, url, dueDate, tags } = this._getFormValues();
           if (title) {
             const id = crypto.randomUUID();
             this._isNew = false;
             this._lastValidTitle = title;
             this._snapshot?.clear(); // committed — drop any hide-time snapshot
             this.dispatchEvent(new CustomEvent('item-created', {
-              bubbles: true, composed: true, detail: { id, title, status, note, url, tags },
+              bubbles: true, composed: true, detail: { id, title, status, note, url, dueDate, tags },
             }));
           } else {
             this._snapshot?.capture(); // can't commit without a title — preserve note/url/tags
@@ -944,6 +1014,11 @@ class ItemDialog extends AppElement {
     this._urlToggle.addEventListener('pointerdown', e => e.preventDefault());
     this._urlToggle.addEventListener('click', this._onUrlToggle);
     this._urlOpen.addEventListener('click', this._onUrlOpen);
+    this._dueDateInput.addEventListener('change', this._onDueDateInput);
+    this._dueDateToggle.addEventListener('pointerdown', e => e.preventDefault());
+    this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
+    this._dueDateClear.addEventListener('pointerdown', e => e.preventDefault());
+    this._dueDateClear.addEventListener('click', this._onDueDateClear);
     this._tagInput.addEventListener('keydown', this._onTagKeyDown);
     this._tagInput.addEventListener('input', this._onTagInput);
     this._tagInput.addEventListener('blur', this._onTagBlur);
@@ -1009,11 +1084,11 @@ class ItemDialog extends AppElement {
 
     this._onListPick = e => {
       const { targetListIds, newListName, copy } = e.detail;
-      const { title, status, note, url, tags } = this._getFormValues();
+      const { title, status, note, url, dueDate, tags } = this._getFormValues();
       if (this._isNew) { this._skipCreate = true; this._snapshot?.clear(); }
       this.dispatchEvent(new CustomEvent('item-move', {
         bubbles: true, composed: true,
-        detail: { title, status, note, url, tags, targetListIds, newListName, copy },
+        detail: { title, status, note, url, dueDate, tags, targetListIds, newListName, copy },
       }));
       this._modal.close();
     };
@@ -1039,16 +1114,16 @@ class ItemDialog extends AppElement {
       recordId: () => this._snapshotRecordId(),
       snapshot: () => {
         if (this._isNew) {
-          const { title, note, url, tags } = this._getFormValues();
-          return (title || note || url || tags.length) ? { title, note, url, tags } : null;
+          const { title, note, url, dueDate, tags } = this._getFormValues();
+          return (title || note || url || dueDate || tags.length) ? { title, note, url, dueDate, tags } : null;
         }
-        // existing: only if a text field has an unsaved edit (tags/status commit immediately)
+        // existing: only if a text field has an unsaved edit (tags/status/dueDate commit immediately)
         const dirty = this._titleInput.value !== this._lastValidTitle
           || this._noteInput.value !== this._lastValidNote
           || this._urlInput.value !== this._lastValidUrl;
         if (!dirty) return null;
-        const { title, note, url, tags } = this._getFormValues();
-        return { title, note, url, tags };
+        const { title, note, url, dueDate, tags } = this._getFormValues();
+        return { title, note, url, dueDate, tags };
       },
       restore: data => this._applyFormValues(data),
     });
@@ -1065,6 +1140,9 @@ class ItemDialog extends AppElement {
     this._urlInput?.removeEventListener('blur',  this._onUrlBlur);
     this._urlToggle?.removeEventListener('click', this._onUrlToggle);
     this._urlOpen?.removeEventListener('click', this._onUrlOpen);
+    this._dueDateInput?.removeEventListener('change', this._onDueDateInput);
+    this._dueDateToggle?.removeEventListener('click', this._onDueDateToggle);
+    this._dueDateClear?.removeEventListener('click', this._onDueDateClear);
     this._tagInput?.removeEventListener('keydown', this._onTagKeyDown);
     this._tagInput?.removeEventListener('input', this._onTagInput);
     this._tagInput?.removeEventListener('blur', this._onTagBlur);
@@ -1156,11 +1234,11 @@ class ItemDialog extends AppElement {
     const year = this._yearSelect?.value;
     const section = this._checkedSection();
     if (!year || !section) return;
-    const { title, status, note, url, tags } = this._getFormValues();
+    const { title, status, note, url, dueDate, tags } = this._getFormValues();
     if (this._isNew) { this._skipCreate = true; this._snapshot?.clear(); }
     this.dispatchEvent(new CustomEvent('item-promote', {
       bubbles: true, composed: true,
-      detail: { title, status, note, url, tags, year, section },
+      detail: { title, status, note, url, dueDate, tags, year, section },
     }));
     this._modal.close();
   }
@@ -1237,13 +1315,15 @@ class ItemDialog extends AppElement {
     return this._item?.id ?? `new:${this.sourceListId ?? ''}`;
   }
 
-  _applyFormValues({ title, note, url, tags }) {
+  _applyFormValues({ title, note, url, dueDate, tags }) {
     this._titleInput.value = title ?? '';
     this._noteInput.value  = note ?? '';
     this._noteHighlight?.sync();
     this._urlInput.value = url ?? '';
     this._syncUrlOpen();
     this._showUrlField(!!url);
+    this._dueDateInput.value = dueDate ?? '';
+    this._showDueDateField(!!dueDate);
     this._tags = [...(tags ?? [])];
     this._renderTagChips();
     this._updateSuggestions();
@@ -1266,8 +1346,9 @@ class ItemDialog extends AppElement {
     const status = this.shadowRoot.querySelector('input[name="status"]:checked')?.value ?? 'open';
     const note = this._noteInput.value.trim() || undefined;
     const url = this._urlInput.value.trim() || undefined;
+    const dueDate = this._dueDateInput.value || undefined;
     const tags = [...this._tags];
-    return { title, status, note, url, tags };
+    return { title, status, note, url, dueDate, tags };
   }
 
   _syncNoteHeight() {
@@ -1276,10 +1357,11 @@ class ItemDialog extends AppElement {
     ta.style.blockSize = 'auto';
     const vh = window.visualViewport?.height ?? window.innerHeight;
     const urlRowH = this._urlRow?.hidden ? 0 : (this._urlRow?.offsetHeight ?? 0);
+    const dueDateRowH = this._dueDateRow?.hidden ? 0 : (this._dueDateRow?.offsetHeight ?? 0);
     const MIN_H = 56;
     const CHROME_H = 340; // approx header + footer + title + status + tags chrome
     const MIN_WRAP_H = 120;
-    const maxH = Math.max(vh - CHROME_H - urlRowH, MIN_WRAP_H);
+    const maxH = Math.max(vh - CHROME_H - urlRowH - dueDateRowH, MIN_WRAP_H);
     ta.style.blockSize = `${Math.max(ta.scrollHeight, MIN_H)}px`;
     const wrap = ta.closest('.textarea-wrap');
     if (wrap) wrap.style.maxBlockSize = `${maxH}px`;
@@ -1293,6 +1375,11 @@ class ItemDialog extends AppElement {
   _showUrlField(show) {
     this._urlRow.hidden = !show;
     this._urlToggle.setAttribute('aria-expanded', String(show));
+  }
+
+  _showDueDateField(show) {
+    this._dueDateRow.hidden = !show;
+    this._dueDateToggle.setAttribute('aria-expanded', String(show));
   }
 
   _announceSaved() {

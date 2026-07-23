@@ -22,7 +22,10 @@ function _goalListLine(goal, metadata) {
   if (metadata) {
     const pct  = done ? '✅' : `[${goal.percentage}%]`;
     const tags = _tags(goal.tags);
-    return `- ${pct} ${goal.title}${tags ? ` ${tags}` : ''}`;
+    const due  = goal.dueDate ? `Due: ${_formatDate(goal.dueDate)}` : null;
+    const parts = [tags, due].filter(Boolean);
+    const suffix = parts.length ? ` ${parts.join(' ')}` : '';
+    return `- ${pct} ${goal.title}${suffix}`;
   }
   return done ? `- ✅ ${goal.title}` : `- ${goal.title}`;
 }
@@ -36,7 +39,9 @@ function _goalContentBlock(goal, metadata) {
   if (metadata) {
     const pct  = `[${goal.percentage}%]`;
     const tags = _tags(goal.tags);
-    lines.push('', `${pct}${tags ? ` - ${tags}` : ''}`);
+    const due  = goal.dueDate ? `Due: ${_formatDate(goal.dueDate)}` : null;
+    const parts = [tags, due].filter(Boolean);
+    lines.push('', `${pct}${parts.length ? ` - ${parts.join(' - ')}` : ''}`);
     hasBody = true;
   }
 

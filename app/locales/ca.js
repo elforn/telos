@@ -33,6 +33,7 @@ defineStrings({
   'goal-item.add-wow':           'Afegeix un moment guau',
   'goal-item.add-focus':         'Afegeix una prioritat',
   'goal-item.drag':              'Arrossega per reordenar',
+  'goal-item.overdue-aria':      '{title}, endarrerit',
 
   'home.toast-goal-saved':       'Objectiu desat',
   'home.toast-goal-hidden':      'Objectiu afegit — amagat pel filtre actiu',
@@ -46,6 +47,8 @@ defineStrings({
 
   'goal-dialog.tags-label':       'Etiquetes',
   'goal-dialog.tags-placeholder': 'Afegeix etiqueta…',
+  'goal-dialog.duedate-toggle':   'Termini',
+  'goal-dialog.duedate-clear':    'Esborra el termini',
 
   'goal-dialog.archive':                  'Arxiva',
   'goal-dialog.unarchive':               'Desarxiva',
@@ -170,6 +173,8 @@ defineStrings({
   'item-dialog.url-placeholder':  'Enllaç (https://…)',
   'item-dialog.url-toggle':       'Enllaç',
   'item-dialog.url-open':         'Obre',
+  'item-dialog.duedate-toggle':   'Data límit',
+  'item-dialog.duedate-clear':    'Esborra la data límit',
   'item-dialog.close':            'Tanca',
   'item-dialog.save-and-close':   'Desa i tanca',
   'item-dialog.title-new':        'Nou element',
@@ -212,6 +217,7 @@ defineStrings({
   'list-item.mark-done': 'Marca com a fet',
   'list-item.restore':   'Restaura',
   'list-item.drag':      'Arrossega per reordenar',
+  'list-item.overdue-aria': '{title}, endarrerit',
 
   'lists.toast-list-saved':   'Llista desada',
   'lists.toast-list-hidden':  'Llista afegida — amagada pel filtre actiu',

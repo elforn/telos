@@ -3,6 +3,7 @@ import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { tagStrip } from '../../utils/tag-color.js';
+import { todayISO } from '../../utils/today-iso.js';
 
 const REVEAL_WIDTH = 60;
 const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
@@ -102,7 +103,8 @@ class GoalItem extends Gestures(AppElement) {
           display: var(--tag-strip-display, block);
         }
 
-        .desc-icon {
+        .desc-icon,
+        .deadline-icon {
           position: relative;
           z-index: 1;
           flex-shrink: 0;
@@ -112,13 +114,18 @@ class GoalItem extends Gestures(AppElement) {
           margin-inline-start: var(--space-1);
         }
 
-        .desc-icon svg {
+        .desc-icon svg,
+        .deadline-icon svg {
           display: block;
           inline-size: var(--icon-size-sm);
           block-size: var(--icon-size-sm);
         }
 
         .bar[data-has-desc="true"] .desc-icon { display: block; }
+        :host([data-overdue="true"]) .deadline-icon {
+          display: block;
+          color: var(--color-danger);
+        }
 
         .pct-label {
           position: relative;
@@ -355,6 +362,7 @@ class GoalItem extends Gestures(AppElement) {
         </span>
         <span class="tag-strip" aria-hidden="true"></span>
         <span class="desc-icon" aria-hidden="true">${icons.info}</span>
+        <span class="deadline-icon" aria-hidden="true">${icons.calendar}</span>
         <span class="pct-label" hidden></span>
       </div>
     `;
@@ -557,10 +565,15 @@ class GoalItem extends Gestures(AppElement) {
     const pct = this._goal?.percentage ?? 0;
     const prevPct = this._pct;
     this._pct = Math.max(0, pct);
-    this._title.textContent = this._goal?.title ?? '';
-    this._bar.setAttribute('aria-label', this._goal?.title ?? '');
+    const title = this._goal?.title ?? '';
+    const isOverdue = !!this._goal?.dueDate
+      && this._goal.dueDate < todayISO()
+      && this._pct < 100 && !this._goal?.archived;
+    this._title.textContent = title;
+    this._bar.setAttribute('aria-label', isOverdue ? t('goal-item.overdue-aria', { title }) : title);
     this._bar.dataset.hasDesc = String(!!this._goal?.notes);
     this.dataset.archived = String(!!this._goal?.archived);
+    this.dataset.overdue = String(isOverdue);
     this._setPct(this._pct);
     if (this._pct === 100 && prevPct !== undefined && prevPct < 100) this._celebrate();
     if (this._stripEl) {

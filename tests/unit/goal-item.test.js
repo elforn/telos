@@ -13,6 +13,12 @@ function mount(goal = { id: 'g1', title: 'Test goal', percentage: 0 }) {
   return el;
 }
 
+function isoDaysFromNow(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 afterEach(() => { document.body.innerHTML = ''; });
 
 describe('goal-item — structure', () => {
@@ -47,6 +53,49 @@ describe('goal-item — structure', () => {
   it('delete button contains an svg icon', () => {
     const el = mount();
     expect(el.shadowRoot.querySelector('#delete-btn svg')).not.toBeNull();
+  });
+});
+
+describe('goal-item — overdue', () => {
+  it('is not overdue when there is no dueDate', () => {
+    const el = mount();
+    expect(el.dataset.overdue).toBe('false');
+  });
+
+  it('is not overdue when dueDate is in the future', () => {
+    const el = mount({ id: 'g1', title: 'Goal', percentage: 0, dueDate: isoDaysFromNow(5) });
+    expect(el.dataset.overdue).toBe('false');
+  });
+
+  it('is overdue when dueDate is in the past and percentage is below 100', () => {
+    const el = mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(-1) });
+    expect(el.dataset.overdue).toBe('true');
+  });
+
+  it('is not overdue when percentage is 100, even if dueDate is in the past', () => {
+    const el = mount({ id: 'g1', title: 'Goal', percentage: 100, dueDate: isoDaysFromNow(-1) });
+    expect(el.dataset.overdue).toBe('false');
+  });
+
+  it('is not overdue when archived, even if dueDate is in the past', () => {
+    const el = mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(-1), archived: true });
+    expect(el.dataset.overdue).toBe('false');
+  });
+
+  it('appends overdue to the bar aria-label when overdue', () => {
+    const el = mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(-1) });
+    expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-label')).toBe('Goal, overdue');
+  });
+
+  it('uses the plain title as aria-label when not overdue', () => {
+    const el = mount({ id: 'g1', title: 'Goal', percentage: 0 });
+    expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-label')).toBe('Goal');
+  });
+
+  it('updates overdue state when goal property changes', () => {
+    const el = mount({ id: 'g1', title: 'Goal', percentage: 0 });
+    el.goal = { id: 'g1', title: 'Goal', percentage: 0, dueDate: isoDaysFromNow(-1) };
+    expect(el.dataset.overdue).toBe('true');
   });
 });
 

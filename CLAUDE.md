@@ -32,9 +32,9 @@ All state lives in a **simple store** (setState/getState — no event log, no re
 
 - **`goals`** — `{ [year]: { capstone: Goal[], milestones: Goal[], wow: Goal[], focus: Goal[] } }`. Each `Goal` has a fixed schema:
   ```
-  { id, title, notes?, tags: string[], archived?: boolean, percentage: number }
+  { id, title, notes?, tags: string[], archived?: boolean, percentage: number, dueDate?: string }
   ```
-  `percentage` is the progress value, 0–100. The field is `notes`, never `description` (renamed in 1.8.0). `archived` goals are hidden unless the Archived filter pill is active.
+  `percentage` is the progress value, 0–100. The field is `notes`, never `description` (renamed in 1.8.0). `archived` goals are hidden unless the Archived filter pill is active. `dueDate` (added 1.11.0) is an optional ISO date string (`YYYY-MM-DD`, from a native `<input type="date">`) shown as "Deadline" in the UI; a goal is rendered overdue when `dueDate` is in the past and `percentage < 100` and the goal isn't archived. No filter pill for it — the field is deliberately quiet (a small icon on `goal-item`, editable via a collapsed toggle in `goal-dialog`), matching `ListItem.dueDate`'s treatment.
 
   **Planned — not yet implemented:** a `tracking` union replacing flat `percentage`. Code currently uses flat `percentage` everywhere. When built, `tracking` will be one of three types:
   - `{ type: 'percentage', value: number }` — value 0–100; Default for all new goals.
@@ -52,6 +52,7 @@ All state lives in a **simple store** (setState/getState — no event log, no re
   - `closed` means dropped/abandoned: closed items are hidden by default and appear only when the Closed filter pill is active (see `_applyFilter` in `list-detail-page.js`).
   - `inGoals` is an empty array when not linked; each entry records where the item was promoted. A single item can be promoted into goals across multiple years/sections.
   - Progress is **not** synced between list items and goal copies — each goal tracks independently.
+  - `dueDate` (functional since 1.11.0) is an optional ISO date string (`YYYY-MM-DD`); an item is rendered overdue when `dueDate` is in the past and `status` isn't `done` or `closed`. Promoting an item to a goal, or creating an item from a goal, carries both `tags` and `dueDate` across (see `_onItemPromote` in `list-detail-page.js`, `_onGoalCreateItem` in `home-page.js`) — same one-way copy, no ongoing sync, as everything else in the promote/create-item flow.
 - **`accentColors`** — `{ [year]: string }`. Hex colour per year. On year change, writes to `--color-accent` on `:root` (or resets to the default `#5BADE0`).
 - **`goalsTagsVisible`** — `{ [year]: boolean }`. Whether tag chips are shown on goal items for that year.
 - **`listsTagsVisible`** — `{ [listId]: boolean }`. Whether tag chips are shown on items of that list.

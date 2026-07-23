@@ -3,6 +3,7 @@ import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { tagStrip } from '../../utils/tag-color.js';
+import { todayISO } from '../../utils/today-iso.js';
 
 const DONE_WIDTH = 48;   // square-ish done button
 const DELETE_WIDTH = 60;   // icon-only delete button
@@ -151,7 +152,8 @@ class ListItem extends Gestures(AppElement) {
         }
 
         .note-icon,
-        .url-icon {
+        .url-icon,
+        .duedate-icon {
           flex-shrink: 0;
           color: var(--color-text-muted);
           display: none;
@@ -159,7 +161,8 @@ class ListItem extends Gestures(AppElement) {
         }
 
         .note-icon svg,
-        .url-icon svg {
+        .url-icon svg,
+        .duedate-icon svg {
           display: block;
           inline-size: var(--icon-size-sm);
           block-size: var(--icon-size-sm);
@@ -167,6 +170,10 @@ class ListItem extends Gestures(AppElement) {
 
         .row[data-has-note="true"]  .note-icon { display: block; }
         .row[data-has-url="true"]   .url-icon  { display: block; }
+        .row[data-overdue="true"]   .duedate-icon {
+          display: block;
+          color: var(--color-danger);
+        }
 
         .badge {
           display: var(--list-badge-display, inline-flex);
@@ -255,6 +262,7 @@ class ListItem extends Gestures(AppElement) {
         <span class="title"></span>
         <span class="note-icon" aria-hidden="true">${icons.info}</span>
         <span class="url-icon"  aria-hidden="true">${icons.link}</span>
+        <span class="duedate-icon" aria-hidden="true">${icons.calendar}</span>
         <button type="button" class="badge" id="badge-btn" data-status="open"></button>
         <span class="tag-strip" aria-hidden="true"></span>
       </div>
@@ -458,11 +466,15 @@ class ListItem extends Gestures(AppElement) {
     const title = this._item?.title ?? '';
     const status = this._item?.status ?? 'open';
     const isDone = status === 'done';
+    const isOverdue = !!this._item?.dueDate
+      && this._item.dueDate < todayISO()
+      && status !== 'done' && status !== 'closed';
     this._title.textContent = title;
-    this._row.setAttribute('aria-label', title);
+    this._row.setAttribute('aria-label', isOverdue ? t('list-item.overdue-aria', { title }) : title);
     this._row.dataset.status = status;
     this._row.dataset.hasNote = String(!!this._item?.note);
     this._row.dataset.hasUrl = String(!!this._item?.url);
+    this._row.dataset.overdue = String(isOverdue);
     this._badge.textContent = t(`item-dialog.status-${status}`);
     this._badge.dataset.status = status;
     this._doneEl.innerHTML = isDone ? icons.undo : icons.check;

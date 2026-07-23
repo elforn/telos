@@ -10,7 +10,7 @@ import {
 const YEAR = '2026';
 
 const GOALS = {
-  capstone:  [{ id: '1', title: 'Ship it', percentage: 60, tags: ['work'] }],
+  capstone:  [{ id: '1', title: 'Ship it', percentage: 60, tags: ['work'], dueDate: '2026-07-03' }],
   milestones: [
     { id: '2', title: 'MVP done',  percentage: 100, tags: [] },
     { id: '3', title: 'Beta live', percentage: 0,   tags: ['work', 'q2'], notes: 'Need testers' },
@@ -20,7 +20,7 @@ const GOALS = {
 };
 
 const GOALS_WITH_NOTES = {
-  capstone: [{ id: '1', title: 'Ship it', percentage: 100, tags: ['work'], notes: 'Make it happen' }],
+  capstone: [{ id: '1', title: 'Ship it', percentage: 100, tags: ['work'], notes: 'Make it happen', dueDate: '2026-07-03' }],
   milestones: [{ id: '2', title: 'MVP done', percentage: 50, tags: [], notes: undefined }],
   wow: [], focus: [],
 };
@@ -96,6 +96,18 @@ describe('goals, no notes, metadata', () => {
     expect(out).not.toMatch(/MVP done \(/);
   });
 
+  it('includes due date when present, with . date separators', () => {
+    const out = exportGoalsMarkdown(GOALS, YEAR, { metadata: true });
+    expect(out).toContain('Due: 2026.07.03');
+    expect(out).not.toContain('2026-07-03');
+  });
+
+  it('omits due date when absent', () => {
+    const out = exportGoalsMarkdown(GOALS, YEAR, { metadata: true });
+    const mvpLine = out.split('\n').find(l => l.includes('MVP done'));
+    expect(mvpLine).not.toContain('Due:');
+  });
+
   it('uses bullet list format', () => {
     const out = exportGoalsMarkdown(GOALS, YEAR, { metadata: true });
     expect(out).not.toContain('---');
@@ -153,6 +165,11 @@ describe('goals, notes, metadata', () => {
   it('includes tags on the metadata line', () => {
     const out = exportGoalsMarkdown(GOALS_WITH_NOTES, YEAR, { notes: true, metadata: true });
     expect(out).toContain('[100%] - (work)');
+  });
+
+  it('includes due date on the metadata line', () => {
+    const out = exportGoalsMarkdown(GOALS_WITH_NOTES, YEAR, { notes: true, metadata: true });
+    expect(out).toContain('[100%] - (work) - Due: 2026.07.03');
   });
 
   it('omits tag part when tags are empty', () => {

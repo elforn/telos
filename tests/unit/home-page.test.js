@@ -53,6 +53,22 @@ describe('home-page — structure', () => {
   });
 });
 
+describe('home-page — accent color defaults', () => {
+  afterEach(() => {
+    document.documentElement.style.removeProperty('--color-app-accent');
+    document.documentElement.style.removeProperty('--color-app-accent-light');
+  });
+
+  it('reads default --color-accent from the --color-app-accent custom property (no per-app hardcoded hex)', async () => {
+    document.documentElement.style.setProperty('--color-app-accent', '#123456');
+    document.documentElement.style.setProperty('--color-app-accent-light', '#abcdef');
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() => expect(el.style.getPropertyValue('--color-accent')).toBe('#123456'));
+    expect(el.style.getPropertyValue('--color-accent-light')).toBe('#abcdef');
+  });
+});
+
 describe('home-page — store integration', () => {
   it('renders capstone goal-items when goals set via setState', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
@@ -216,6 +232,18 @@ describe('home-page — goal mutations', () => {
     );
   });
 
+  it('stores dueDate when goal-created includes one', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#add-capstone').click();
+    el.shadowRoot.dispatchEvent(new CustomEvent('goal-created', {
+      bubbles: true, composed: true, detail: { title: 'Goal', dueDate: '2026-12-31' },
+    }));
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list goal-item')?._goal?.dueDate).toBe('2026-12-31')
+    );
+  });
+
   it('updates notes when goal-notes-changed fires after goal-tap on existing goal', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
       '2026': { capstone: [{ id: 'c1', title: 'Goal', percentage: 0 }], milestones: [], wow: [] },
@@ -233,6 +261,46 @@ describe('home-page — goal mutations', () => {
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list goal-item')._goal.notes).toBe('Updated notes')
     );
+  });
+
+  it('updates dueDate when goal-duedate-changed fires after goal-tap on existing goal', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', percentage: 0 }], milestones: [], wow: [] },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-tap', {
+      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Goal', percentage: 0 } },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-duedate-changed', {
+      bubbles: true, composed: true, detail: { dueDate: '2026-11-15' },
+    }));
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list goal-item')._goal.dueDate).toBe('2026-11-15')
+    );
+  });
+
+  it('carries tags and dueDate onto the item created from a goal', async () => {
+    await boot({ dbName: freshName(), initialState: {
+      goals: {}, images: {},
+      lists: [{ id: 'l1', name: 'Groceries', items: [] }],
+    } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-create-item', {
+      bubbles: true, composed: true,
+      detail: {
+        goal: { id: 'g1', title: 'Goal', tags: ['garden', 'urgent'], dueDate: '2026-08-01' },
+        targetListIds: ['l1'], newListName: null, copy: true,
+        fromYear: '2026', fromSection: 'capstone',
+      },
+    }));
+    await vi.waitFor(() => {
+      const item = getState().lists[0].items[0];
+      expect(item.tags).toEqual(['garden', 'urgent']);
+      expect(item.dueDate).toBe('2026-08-01');
+    });
   });
 
   it('removes goal when goal-delete fires from dialog', async () => {

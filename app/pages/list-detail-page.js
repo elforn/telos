@@ -1027,9 +1027,9 @@ class ListDetailPage extends AppElement {
     this.listen(this._itemList, 'item-status-cycle', this._onItemStatusCycle);
 
     this._onItemCreated = e => {
-      const { id, title, status, note, url, tags } = e.detail;
-      this._addItem({ id, title, status, note, url, tags });
-      this._editingItem = { id, title, status, note, url, tags, inGoals: [] };
+      const { id, title, status, note, url, dueDate, tags } = e.detail;
+      this._addItem({ id, title, status, note, url, dueDate, tags });
+      this._editingItem = { id, title, status, note, url, dueDate, tags, inGoals: [] };
       this._createdItemId = id;
     };
     this.listen(this.shadowRoot, 'item-created', this._onItemCreated);
@@ -1096,6 +1096,14 @@ class ListDetailPage extends AppElement {
     };
     this.listen(this._dialog, 'item-url-changed', this._onItemUrlChanged);
 
+    this._onItemDueDateChanged = e => {
+      if (!this._editingItem) return;
+      this._mutateItems(items => items.map(i =>
+        i.id === this._editingItem.id ? { ...i, dueDate: e.detail.dueDate } : i
+      ));
+    };
+    this.listen(this._dialog, 'item-duedate-changed', this._onItemDueDateChanged);
+
     this._onItemStatusChanged = e => {
       if (!this._editingItem) return;
       const { status } = e.detail;
@@ -1125,9 +1133,9 @@ class ListDetailPage extends AppElement {
 
     this._onItemMove = e => {
       if (!this._editingItem) return;
-      const { title, status, note, url, tags, targetListIds, newListName, copy } = e.detail;
+      const { title, status, note, url, dueDate, tags, targetListIds, newListName, copy } = e.detail;
       const item         = this._editingItem;
-      const updatedItem  = { ...item, title, status, note, url, tags };
+      const updatedItem  = { ...item, title, status, note, url, dueDate, tags };
       const currentLists = getState().lists ?? [];
       const targetNames  = currentLists
         .filter(l => targetListIds.includes(l.id))
@@ -1162,10 +1170,10 @@ class ListDetailPage extends AppElement {
 
     this._onItemPromote = e => {
       if (!this._editingItem) return;
-      const { title, status, note, url, tags, year, section } = e.detail;
+      const { title, status, note, url, dueDate, tags, year, section } = e.detail;
       const item    = this._editingItem;
       const goalId  = crypto.randomUUID();
-      const goal    = { id: goalId, title, tags: [], percentage: 0 };
+      const goal    = { id: goalId, title, tags: [...(tags ?? [])], dueDate, percentage: 0 };
       const state   = getState();
       const yearStr = String(year);
       const existing = state.goals?.[yearStr] ?? { capstone: [], milestones: [], wow: [], focus: [] };
@@ -1176,7 +1184,7 @@ class ListDetailPage extends AppElement {
       });
 
       const updatedItem = {
-        ...item, title, status, note, url, tags,
+        ...item, title, status, note, url, dueDate, tags,
         inGoals: [...(item.inGoals ?? []), { year: yearStr, section, goalId }],
       };
       setState('lists', (getState().lists ?? []).map(l =>
@@ -1617,10 +1625,10 @@ class ListDetailPage extends AppElement {
     ));
   }
 
-  _addItem({ id, title, status, note, url, tags }) {
+  _addItem({ id, title, status, note, url, dueDate, tags }) {
     const item = {
       id: id ?? crypto.randomUUID(), title, status,
-      note, url, dueDate: undefined,
+      note, url, dueDate,
       tags: tags ?? [], inGoals: [],
     };
     this._mutateItems(items => [...items, item]);

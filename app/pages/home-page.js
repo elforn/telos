@@ -711,6 +711,14 @@ class HomePage extends AppElement {
     };
     this.listen(this.shadowRoot, 'goal-notes-changed', this._onGoalNotesChanged);
 
+    this._onGoalDueDateChanged = e => {
+      if (!this._editingGoal) return;
+      this._mutateSection(this._editingSection, list =>
+        list.map(g => g.id === this._editingGoal.id ? { ...g, dueDate: e.detail.dueDate } : g)
+      );
+    };
+    this.listen(this.shadowRoot, 'goal-duedate-changed', this._onGoalDueDateChanged);
+
     this._onGoalArchivedChanged = e => {
       if (!this._editingGoal) return;
       const { archived } = e.detail;
@@ -744,9 +752,9 @@ class HomePage extends AppElement {
     this.listen(this.shadowRoot, 'goal-closed', this._onGoalClosed);
 
     this._onGoalCreated = e => {
-      const { title, notes, tags } = e.detail;
+      const { title, notes, dueDate, tags } = e.detail;
       const snapshot = getState().goals;
-      const goal = this._addGoal(this._editingSection, title, notes, tags);
+      const goal = this._addGoal(this._editingSection, title, notes, dueDate, tags);
       if (this._goalFilterActive() && !this._goalMatchesFilter(goal)) {
         toast(t('home.toast-goal-hidden'), 'info',
           { action: { label: t('filter.toast-show'), onClick: () => this._revealCreatedGoal(goal.id) } });
@@ -799,7 +807,8 @@ class HomePage extends AppElement {
         title: goal.title,
         note: goal.notes || undefined,
         status: 'open',
-        tags: [],
+        dueDate: goal.dueDate,
+        tags: [...(goal.tags ?? [])],
         inGoals: [],
       };
 
@@ -879,8 +888,8 @@ class HomePage extends AppElement {
     setState('goals', { ...getState().goals, [year]: { ...yg, [section]: fn(yg[section] ?? []) } });
   }
 
-  _addGoal(section, title, notes, tags) {
-    const goal = { id: crypto.randomUUID(), title, notes, tags: tags ?? [], percentage: 0 };
+  _addGoal(section, title, notes, dueDate, tags) {
+    const goal = { id: crypto.randomUUID(), title, notes, dueDate, tags: tags ?? [], percentage: 0 };
     this._mutateSection(section, list => [...list, goal]);
     return goal;
   }

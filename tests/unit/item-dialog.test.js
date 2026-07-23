@@ -139,6 +139,32 @@ describe('item-dialog — open', () => {
     expect(el.shadowRoot.querySelector('#url-open').hidden).toBe(false);
   });
 
+  it('due-date field is hidden by default on new item', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(true);
+  });
+
+  it('due-date field is shown automatically when item has a dueDate', () => {
+    const el = mount();
+    el.open({ ...ITEM, dueDate: '2026-08-01' });
+    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#duedate-input').value).toBe('2026-08-01');
+  });
+
+  it('clicking duedate-toggle reveals the due-date field', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-toggle').click();
+    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(false);
+  });
+
+  it('duedate-toggle sets aria-expanded to true when due-date field is shown', () => {
+    const el = mount();
+    el.open({ ...ITEM, dueDate: '2026-08-01' });
+    expect(el.shadowRoot.querySelector('#duedate-toggle').getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('pre-selects the item status radio', () => {
     const el = mount();
     el.open(ITEM);
@@ -243,6 +269,27 @@ describe('item-dialog — new item creation', () => {
     expect(events[0].detail.url).toBeUndefined();
   });
 
+  it('includes dueDate in item-created when due date is filled', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('#duedate-input').value = '2026-08-01';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.dueDate).toBe('2026-08-01');
+  });
+
+  it('dueDate is undefined in item-created when due date is empty', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.dueDate).toBeUndefined();
+  });
+
   it('dispatches item-created on Enter key when title is non-empty', () => {
     const el = mount();
     el.open(null);
@@ -331,6 +378,29 @@ describe('item-dialog — edit existing (blur-save)', () => {
     inp.dispatchEvent(new Event('blur'));
     expect(events).toHaveLength(1);
     expect(events[0].detail.url).toBe('https://new.example.com');
+  });
+
+  it('dispatches item-duedate-changed when due date changes', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-duedate-changed', e => events.push(e));
+    const inp = el.shadowRoot.querySelector('#duedate-input');
+    inp.value = '2026-09-15';
+    inp.dispatchEvent(new Event('change'));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.dueDate).toBe('2026-09-15');
+  });
+
+  it('clicking duedate-clear empties the field and dispatches item-duedate-changed with undefined', () => {
+    const el = mount();
+    el.open({ ...ITEM, dueDate: '2026-08-01' });
+    const events = [];
+    el.addEventListener('item-duedate-changed', e => events.push(e));
+    el.shadowRoot.querySelector('#duedate-clear').click();
+    expect(el.shadowRoot.querySelector('#duedate-input').value).toBe('');
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.dueDate).toBeUndefined();
   });
 
   it('dispatches item-closed on modal close for existing item', () => {

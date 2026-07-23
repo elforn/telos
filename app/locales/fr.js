@@ -33,6 +33,7 @@ defineStrings({
   'goal-item.add-wow':           'Ajouter un moment wow',
   'goal-item.add-focus':         'Ajouter une priorité',
   'goal-item.drag':              'Glisser pour réordonner',
+  'goal-item.overdue-aria':      '{title}, en retard',
 
   'home.toast-goal-saved':       'Objectif enregistré',
   'home.toast-goal-hidden':      'Objectif ajouté — masqué par le filtre actif',
@@ -46,6 +47,8 @@ defineStrings({
 
   'goal-dialog.tags-label':       'Étiquettes',
   'goal-dialog.tags-placeholder': 'Ajouter une étiquette…',
+  'goal-dialog.duedate-toggle':   'Échéance',
+  'goal-dialog.duedate-clear':    'Effacer l\'échéance',
 
   'goal-dialog.archive':                  'Archiver',
   'goal-dialog.unarchive':               'Désarchiver',
@@ -170,6 +173,8 @@ defineStrings({
   'item-dialog.url-placeholder':  'Lien (https://…)',
   'item-dialog.url-toggle':       'Lien',
   'item-dialog.url-open':         'Ouvrir',
+  'item-dialog.duedate-toggle':   'Échéance',
+  'item-dialog.duedate-clear':    'Effacer l\'échéance',
   'item-dialog.close':            'Fermer',
   'item-dialog.save-and-close':   'Enregistrer et fermer',
   'item-dialog.title-new':        'Nouvel élément',
@@ -212,6 +217,7 @@ defineStrings({
   'list-item.mark-done': 'Marquer comme terminé',
   'list-item.restore':   'Restaurer',
   'list-item.drag':      'Glisser pour réordonner',
+  'list-item.overdue-aria': '{title}, en retard',
 
   'lists.toast-list-saved':   'Liste enregistrée',
   'lists.toast-list-hidden':  'Liste ajoutée — masquée par le filtre actif',

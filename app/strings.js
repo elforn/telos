@@ -32,6 +32,7 @@ defineStrings({
   'goal-item.add-wow':         'Add wow moment',
   'goal-item.add-focus':       'Add to Forward Focus',
   'goal-item.drag':            'Drag to reorder',
+  'goal-item.overdue-aria':    '{title}, overdue',
 
   'home.toast-goal-saved':   'Goal saved',
   'home.toast-goal-hidden':  'Goal added — hidden by the current filter',
@@ -45,6 +46,8 @@ defineStrings({
 
   'goal-dialog.tags-label':              'Tags',
   'goal-dialog.tags-placeholder':        'Add tag…',
+  'goal-dialog.duedate-toggle':          'Deadline',
+  'goal-dialog.duedate-clear':           'Clear deadline',
 
   'goal-dialog.more-actions':            'More actions',
   'goal-dialog.archive':                 'Archive',
@@ -159,6 +162,8 @@ defineStrings({
   'item-dialog.url-placeholder':  'Link (https://…)',
   'item-dialog.url-toggle':       'Link',
   'item-dialog.url-open':         'Open',
+  'item-dialog.duedate-toggle':   'Due date',
+  'item-dialog.duedate-clear':    'Clear due date',
   'item-dialog.close':            'Close',
   'item-dialog.save-and-close':   'Save and close',
   'item-dialog.title-new':        'New item',
@@ -203,6 +208,7 @@ defineStrings({
   'list-item.mark-done': 'Mark done',
   'list-item.restore':   'Restore',
   'list-item.drag':      'Drag to reorder',
+  'list-item.overdue-aria': '{title}, overdue',
 
   'lists.toast-list-saved':   'List saved',
   'lists.toast-list-hidden':  'List added — hidden by the current filter',
