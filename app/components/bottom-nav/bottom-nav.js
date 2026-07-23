@@ -5,8 +5,10 @@ import { t, setLocale, getLocale } from '../../../_lib/core/strings.js';
 import { getTheme, setTheme, onThemeChange } from '../../../_lib/core/theme/theme.js';
 import { exportData, downloadExport, readImportFile, previewImport, applyMerge, applyReplace } from '../../../_lib/modules/sync/sync.js';
 import { toast } from '../../../_lib/modules/toast/toast.js';
-import { getState, subscribe, unsubscribe } from '../../../_lib/core/store/store.js';
+import { getState } from '../../../_lib/core/store/store.js';
+import { repairInstallation } from '../../../_lib/core/sw-manager/sw-repair.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
+import { backupBeforeRepair, LAST_EXPORT_KEY } from '../../utils/backup-before-repair.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 
 function _countGoals(goalsObj) {
@@ -52,10 +54,6 @@ function _themeName(theme) {
 const LOCALE_LABELS = { en: 'English', fr: 'Français', ca: 'Català' };
 function _localeName(locale) { return LOCALE_LABELS[locale] ?? locale; }
 
-const SW_LOOP_WINDOW_MS       = 15_000;
-const SERVER_CHECK_TIMEOUT_MS =  5_000;
-
-const LAST_EXPORT_KEY     = 'telos:lastExportedAt';
 const EXPORT_REMINDER_KEY = 'telos:exportReminderEnabled';
 const REMINDER_DAYS       = 30;
 const REMINDER_MS         = REMINDER_DAYS * 24 * 60 * 60 * 1000;
@@ -406,7 +404,7 @@ class BottomNav extends AppElement {
     this._subscribeSync();
     this._subscribeVersion();
     this._subscribeHeight();
-    this._subscribeUpdateSafety();
+    this._subscribeRepairButton();
     this._updateGearBadge();
 
     this._onReminderGroup = e => {
@@ -650,21 +648,13 @@ class BottomNav extends AppElement {
     this._closeBtn.hidden   = false;
   }
 
-  _subscribeUpdateSafety() {
-    // updateAvailable within SW_LOOP_WINDOW_MS of a SW reload = poisoned-cache update loop; auto-repair.
-    this._onUpdateAvailable = (available) => {
-      if (!available) return;
-      const lastReload = parseInt(sessionStorage.getItem('telos:swReloadAt') || '0', 10);
-      if (lastReload && (Date.now() - lastReload) < SW_LOOP_WINDOW_MS) {
-        sessionStorage.removeItem('telos:swReloadAt');
-        this._repairInstallation(false);
-      }
-    };
-    subscribe('updateAvailable', this._onUpdateAvailable);
-
+  _subscribeRepairButton() {
+    // Loop-detected auto-repair now lives in <sw-manager> (_lib/core/sw-manager/sw-repair.js),
+    // wired to backupBeforeRepair via its onBackup property in main.js. This button is the
+    // user-triggered path only.
     this._onRepairBtn = () => {
       this._settingsModal.close();
-      this._repairInstallation();
+      repairInstallation({ basePath: BASE_PATH, onBackup: backupBeforeRepair, checkServer: true });
     };
     this.shadowRoot.querySelector('#repair-btn').addEventListener('click', this._onRepairBtn);
   }
@@ -701,37 +691,6 @@ class BottomNav extends AppElement {
       // Backup failure is non-fatal — import proceeds without it rather than blocking the user.
       console.error('Backup before import failed:', err);
     }
-  }
-
-  async _repairInstallation(checkServer = true) {
-    // Verify the server is reachable before clearing caches.
-    // Without both a cache and a network, the app becomes completely inaccessible.
-    // Skip when called from loop detection — Layer 2 already confirmed connectivity.
-    if (checkServer) {
-      try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), SERVER_CHECK_TIMEOUT_MS);
-        const r = await fetch(`version.json?_=${Date.now()}`, { cache: 'no-store', signal: ctrl.signal });
-        clearTimeout(timer);
-        if (!r.ok) return;
-      } catch {
-        return; // offline or server down — leave the cached app intact
-      }
-    }
-    try {
-      const data = await exportData();
-      const ts = new Date().toISOString().replace(/\D/g, '').slice(0, 12);
-      downloadExport(data, `telos-backup-before-update-${ts}.telos`);
-      toast(t('sync.backup-downloaded'), 'info');
-      this._markExported();
-      this._updateGearBadge();
-    } catch (err) { console.error('Backup before repair failed:', err); }
-    caches.keys()
-      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
-      .then(() => navigator.serviceWorker.getRegistrations())
-      .then(regs => Promise.all(regs.map(r => r.unregister())))
-      .then(() => location.replace(BASE_PATH))
-      .catch(() => location.replace(BASE_PATH));
   }
 
   _subscribeVersion() {
@@ -774,7 +733,6 @@ class BottomNav extends AppElement {
     this.shadowRoot?.querySelector('#import-replace')?.removeEventListener('click', this._onImportReplace);
     this.shadowRoot?.querySelector('#import-close')?.removeEventListener('click', this._onImportClose);
     this._importModal?.removeEventListener('modal-close', this._onImportModalClose);
-    unsubscribe('updateAvailable', this._onUpdateAvailable);
     this.shadowRoot?.querySelector('#repair-btn')?.removeEventListener('click', this._onRepairBtn);
     this.shadowRoot?.querySelector('#reminder-group')?.removeEventListener('click', this._onReminderGroup);
     this._ro?.disconnect();

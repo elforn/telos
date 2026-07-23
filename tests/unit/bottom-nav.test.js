@@ -3,9 +3,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
 
 vi.mock('../../_lib/core/router/router.js', () => ({ navigate: vi.fn() }));
+vi.mock('../../_lib/core/sw-manager/sw-repair.js', () => ({ repairInstallation: vi.fn() }));
+vi.mock('../../app/utils/backup-before-repair.js', () => ({
+  backupBeforeRepair: vi.fn(),
+  LAST_EXPORT_KEY: 'telos:lastExportedAt',
+}));
 
 import '../../app/components/bottom-nav/bottom-nav.js';
 import { navigate } from '../../_lib/core/router/router.js';
+import { repairInstallation } from '../../_lib/core/sw-manager/sw-repair.js';
+import { backupBeforeRepair } from '../../app/utils/backup-before-repair.js';
 
 // happy-dom does not implement ResizeObserver
 globalThis.ResizeObserver = class {
@@ -427,5 +434,28 @@ describe('bottom-nav — export reminder: pill group', () => {
     const offPill = el.shadowRoot.querySelector('[data-reminder="off"]');
     expect(onPill.classList.contains('active')).toBe(false);
     expect(offPill.classList.contains('active')).toBe(true);
+  });
+});
+
+// ── Repair (manual, via Settings) ───────────────────────────────────────────
+// Loop-detected auto-repair lives entirely in <sw-manager> now (_lib); this button
+// is the only repair path bottom-nav still owns.
+
+describe('bottom-nav — repair button', () => {
+  it('calls repairInstallation with the app basePath, backupBeforeRepair, and checkServer:true', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#repair-btn').click();
+    expect(repairInstallation).toHaveBeenCalledWith({
+      basePath: '/',
+      onBackup: backupBeforeRepair,
+      checkServer: true,
+    });
+  });
+
+  it('closes the settings modal', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#settings-modal');
+    el.shadowRoot.querySelector('#repair-btn').click();
+    expect(modal.close).toHaveBeenCalledOnce();
   });
 });
