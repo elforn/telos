@@ -860,8 +860,11 @@ class HomePage extends AppElement {
   _applyAccent(hex) {
     const s = this.style;
     if (!hex) {
-      s.setProperty('--color-accent',        '#5BADE0');
-      s.setProperty('--color-accent-light',  '#E2F3FB');
+      // Read the fixed --color-app-accent* aliases from index.html rather than
+      // re-hardcoding the same hex here — one source of truth for the default.
+      const root = getComputedStyle(document.documentElement);
+      s.setProperty('--color-accent',        root.getPropertyValue('--color-app-accent').trim());
+      s.setProperty('--color-accent-light',  root.getPropertyValue('--color-app-accent-light').trim());
       s.setProperty('--color-accent-dark',   '#3A93CC');
       s.setProperty('--color-accent-subtle', 'rgba(91, 173, 224, 0.12)');
       return;
