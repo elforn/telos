@@ -34,7 +34,7 @@ All state lives in a **simple store** (setState/getState — no event log, no re
   ```
   { id, title, notes?, tags: string[], archived?: boolean, percentage: number }
   ```
-  `percentage` is the progress value, 0–100. The field is `notes`, never `description` (renamed in 1.8.0; a boot migration in `app/main.js` handles old data). `archived` goals are hidden unless the Archived filter pill is active.
+  `percentage` is the progress value, 0–100. The field is `notes`, never `description` (renamed in 1.8.0). `archived` goals are hidden unless the Archived filter pill is active.
 
   **Planned — not yet implemented:** a `tracking` union replacing flat `percentage`. Code currently uses flat `percentage` everywhere. When built, `tracking` will be one of three types:
   - `{ type: 'percentage', value: number }` — value 0–100; Default for all new goals.

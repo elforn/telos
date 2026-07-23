@@ -4,8 +4,7 @@ import { BASE_PATH } from './base-path.js';
 import './locales/fr.js';
 import './locales/ca.js';
 import './init-locale.js';
-import { boot, getState, setState } from '../_lib/core/store/store.js';
-import { migrateGoals } from './utils/migrate-goals.js';
+import { boot } from '../_lib/core/store/store.js';
 import '../_lib/core/router/app-router.js';
 import '../_lib/core/sw-manager/sw-manager.js';
 import '../_lib/core/components/update-banner/update-banner.js';
@@ -27,13 +26,6 @@ if ('serviceWorker' in navigator) {
 }
 
 await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, lists: [], goalsTagsVisible: {}, listsTagsVisible: {} } });
-
-// One-time goal shape migration (description → notes, dead `tracking` cleanup)
-{
-  const goals = getState().goals ?? {};
-  const migrated = migrateGoals(goals);
-  if (migrated !== goals) setState('goals', migrated);
-}
 
 console.log('Telos', __APP_VERSION__);
 

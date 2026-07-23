@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tagColor, tagStrip } from './tag-color.js';
+import { tagColor, tagStrip } from '../../app/utils/tag-color.js';
 
 describe('tagColor', () => {
   it('returns an hsla string', () => {

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
-import { attachMarkdownHighlight } from './markdown-highlight.js';
+import { attachMarkdownHighlight } from '../../app/utils/markdown-highlight.js';
 
 function makeElements() {
   const textarea  = document.createElement('textarea');
