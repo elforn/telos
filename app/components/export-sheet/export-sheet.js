@@ -1,61 +1,13 @@
 import { AppElement } from '../../../_lib/core/app-element.js';
 import { t } from '../../../_lib/core/strings.js';
+import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 
 class ExportSheet extends AppElement {
   template() {
     return `
       <style>
-        dialog {
-          position: fixed;
-          inset-block-end: 0;
-          inset-inline-start: 0;
-          inset-block-start: auto;
-          margin: 0;
-          inline-size: 100%;
-          max-inline-size: 100%;
-          background: var(--color-surface);
-          border: none;
-          border-start-start-radius: var(--radius-lg);
-          border-start-end-radius: var(--radius-lg);
-          border-end-start-radius: 0;
-          border-end-end-radius: 0;
-          padding: 0;
-          padding-block-end: calc(var(--space-3) + var(--safe-area-bottom, 0px));
-          box-shadow: var(--shadow-sheet);
-          color: var(--color-text-primary);
-          font-family: var(--font-family);
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          dialog[open], dialog::backdrop { animation: none; }
-        }
-
-        dialog[open] {
-          animation: sheet-in 0.28s cubic-bezier(0.32, 0.72, 0, 1);
-        }
-
-        @keyframes sheet-in {
-          from { transform: translateY(100%); }
-          to   { transform: translateY(0); }
-        }
-
-        dialog::backdrop {
-          background: var(--color-overlay);
-          animation: fade-in 0.2s ease-out;
-        }
-
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
-
-        .handle {
-          inline-size: var(--sheet-handle-width);
-          block-size: var(--sheet-handle-height);
-          border-radius: var(--radius-full);
-          background: var(--color-border);
-          margin: var(--space-3) auto var(--space-1);
-        }
+        /* Consistent modal padding across the app: --space-5 on both axes. */
+        #sheet { --space-6: var(--space-5); }
 
         .option-row {
           display: flex;
@@ -63,7 +15,6 @@ class ExportSheet extends AppElement {
           justify-content: space-between;
           inline-size: 100%;
           min-block-size: var(--touch-target-lg);
-          padding-inline: var(--space-5);
           border-block-start: 0.5px solid var(--color-border);
           cursor: pointer;
           font-size: var(--font-size-body);
@@ -113,8 +64,8 @@ class ExportSheet extends AppElement {
 
         .copy-btn {
           display: block;
-          inline-size: calc(100% - var(--space-5) * 2);
-          margin: var(--space-3) var(--space-5) 0;
+          inline-size: 100%;
+          margin-block-start: var(--space-3);
           padding-block: var(--space-3);
           background: var(--color-accent);
           color: white;
@@ -132,8 +83,7 @@ class ExportSheet extends AppElement {
         }
       </style>
 
-      <dialog id="sheet">
-        <div class="handle" aria-hidden="true"></div>
+      <modal-dialog id="sheet">
         <label class="option-row" id="metadata-row">
           <span>${t('export-sheet.metadata')}</span>
           <input type="checkbox" id="metadata-check">
@@ -143,7 +93,7 @@ class ExportSheet extends AppElement {
           <input type="checkbox" id="notes-check">
         </label>
         <button class="copy-btn" id="copy-btn">${t('export-sheet.extract')}</button>
-      </dialog>
+      </modal-dialog>
     `;
   }
 
@@ -151,9 +101,6 @@ class ExportSheet extends AppElement {
     this._dialog       = this.shadowRoot.querySelector('#sheet');
     this._metadataCheck = this.shadowRoot.querySelector('#metadata-check');
     this._notesCheck    = this.shadowRoot.querySelector('#notes-check');
-
-    this._onBackdrop = e => { if (e.target === this._dialog) this._dialog.close(); };
-    this._dialog.addEventListener('click', this._onBackdrop);
 
     this._onCopy = () => {
       const metadata = this._metadataCheck.checked;
@@ -167,14 +114,13 @@ class ExportSheet extends AppElement {
   }
 
   unsubscribe() {
-    this._dialog.removeEventListener('click', this._onBackdrop);
     this.shadowRoot.querySelector('#copy-btn').removeEventListener('click', this._onCopy);
   }
 
   show() {
     this._metadataCheck.checked = false;
     this._notesCheck.checked    = false;
-    this._dialog.showModal();
+    this._dialog.show();
   }
 }
 

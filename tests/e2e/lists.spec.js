@@ -138,7 +138,7 @@ async function openListDetailMenu(page) {
   await page.waitForFunction(() =>
     document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
-      ?.querySelector('#menu')?.open
+      ?.querySelector('#menu')?.shadowRoot?.querySelector('dialog')?.open
   );
 }
 
@@ -462,7 +462,7 @@ test.describe('Lists — list management', () => {
     await page.waitForFunction(() =>
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('#menu')?.open
+        ?.querySelector('#menu')?.shadowRoot?.querySelector('dialog')?.open
     );
     // Single click — immediately deletes and navigates back to /lists
     await page.evaluate(() => {
@@ -776,7 +776,7 @@ async function deleteListViaMenu(page) {
   await page.waitForFunction(() =>
     document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
-      ?.querySelector('#menu')?.open
+      ?.querySelector('#menu')?.shadowRoot?.querySelector('dialog')?.open
   );
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
@@ -925,7 +925,7 @@ test.describe('Lists — status toggle', () => {
     const open = await page.evaluate(() =>
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('#menu')?.open
+        ?.querySelector('#menu')?.shadowRoot?.querySelector('dialog')?.open
     );
     expect(open).toBe(true);
   });

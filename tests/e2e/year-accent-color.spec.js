@@ -32,14 +32,16 @@ async function openColorSheet(page) {
     document.querySelector('app-router')?.shadowRoot
       ?.querySelector('home-page')?.shadowRoot
       ?.querySelector('year-header')?.shadowRoot
-      ?.querySelector('#menu')?.open
+      ?.querySelector('#menu')?.shadowRoot
+      ?.querySelector('dialog')?.open
   );
   await clickInYH(page, '#year-color-btn');
   await page.waitForFunction(() =>
     document.querySelector('app-router')?.shadowRoot
       ?.querySelector('home-page')?.shadowRoot
       ?.querySelector('year-header')?.shadowRoot
-      ?.querySelector('#color-sheet')?.open
+      ?.querySelector('#color-sheet')?.shadowRoot
+      ?.querySelector('dialog')?.open
   );
 }
 
@@ -54,7 +56,8 @@ async function pickColor(page, hex) {
     !document.querySelector('app-router')?.shadowRoot
       ?.querySelector('home-page')?.shadowRoot
       ?.querySelector('year-header')?.shadowRoot
-      ?.querySelector('#color-sheet')?.open
+      ?.querySelector('#color-sheet')?.shadowRoot
+      ?.querySelector('dialog')?.open
   );
 }
 
@@ -126,7 +129,8 @@ test.describe('Year accent color — reset', () => {
       !document.querySelector('app-router')?.shadowRoot
         ?.querySelector('home-page')?.shadowRoot
         ?.querySelector('year-header')?.shadowRoot
-        ?.querySelector('#color-sheet')?.open
+        ?.querySelector('#color-sheet')?.shadowRoot
+        ?.querySelector('dialog')?.open
     );
 
     const accent = await getAppliedAccent(page);

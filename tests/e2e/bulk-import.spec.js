@@ -68,7 +68,8 @@ async function openMenuDialog(page) {
   await page.waitForFunction(() => {
     const d = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
-      ?.querySelector('#menu');
+      ?.querySelector('#menu')?.shadowRoot
+      ?.querySelector('dialog');
     return d?.open;
   });
 }

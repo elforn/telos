@@ -4,6 +4,7 @@ import { t } from '../../../_lib/core/strings.js';
 import * as Store from '../../../_lib/core/store/store.js';
 import { compressImage } from '../../../_lib/modules/images/images.js';
 import '../export-sheet/export-sheet.js';
+import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import { icons } from '../../icons.js';
 
 const PALETTE = [
@@ -33,7 +34,6 @@ class YearHeader extends Gestures(AppElement) {
         @media (prefers-reduced-motion: reduce) {
           .menu-sheet { animation: none; }
           .header-img { animation: none; }
-          dialog[open], dialog::backdrop { animation: none; }
           .header-bg, h1, .nav-btn, .menu-btn, .filter-btn { transition: none; }
         }
 
@@ -267,43 +267,8 @@ class YearHeader extends Gestures(AppElement) {
 
         /* ── Menu / sheets ─────────────────────────────────────────────── */
 
-        dialog {
-          position: fixed;
-          inset-block-end: 0;
-          inset-inline-start: 0;
-          inset-block-start: auto;
-          margin: 0;
-          inline-size: 100%;
-          max-inline-size: 100%;
-          background: var(--color-surface);
-          border: none;
-          border-start-start-radius: var(--radius-lg);
-          border-start-end-radius: var(--radius-lg);
-          border-end-start-radius: 0;
-          border-end-end-radius: 0;
-          padding: 0;
-          padding-block-end: calc(var(--space-3) + var(--safe-area-bottom, 0px));
-          box-shadow: var(--shadow-sheet);
-          color: var(--color-text-primary);
-          font-family: var(--font-family);
-        }
-
-        dialog[open] {
-          animation: menu-in 0.28s cubic-bezier(0.32, 0.72, 0, 1);
-        }
-
-        dialog::backdrop {
-          background: var(--color-overlay);
-          animation: fade-in 0.2s ease-out;
-        }
-
-        .menu-handle {
-          inline-size: var(--sheet-handle-width);
-          block-size: var(--sheet-handle-height);
-          border-radius: var(--radius-full);
-          background: var(--color-border);
-          margin: var(--space-3) auto var(--space-1);
-        }
+        /* Consistent modal padding across the app: --space-5 on both axes. */
+        #menu, #color-sheet, #photo-sheet { --space-6: var(--space-5); }
 
         .menu-item {
           display: flex;
@@ -311,7 +276,6 @@ class YearHeader extends Gestures(AppElement) {
           justify-content: space-between;
           inline-size: 100%;
           min-block-size: var(--touch-target-lg);
-          padding-inline: var(--space-5);
           background: none;
           border: none;
           border-block-start: 0.5px solid var(--color-border);
@@ -333,9 +297,7 @@ class YearHeader extends Gestures(AppElement) {
           color: var(--color-text-muted);
           text-transform: uppercase;
           letter-spacing: var(--letter-spacing-caps);
-          padding-inline: var(--space-5);
-          padding-block-start: var(--space-3);
-          padding-block-end: var(--space-1);
+          margin: 0 0 var(--space-2);
         }
 
         .menu-item-value {
@@ -344,14 +306,8 @@ class YearHeader extends Gestures(AppElement) {
         }
 
         .menu-section {
-          padding: var(--space-4) var(--space-5);
+          padding-block: var(--space-4);
           border-block-start: 0.5px solid var(--color-border);
-        }
-
-        .menu-section .menu-section-label {
-          padding-inline: 0;
-          padding-block-start: 0;
-          margin-block-end: var(--space-2);
         }
 
         .status-pill-group {
@@ -401,7 +357,7 @@ class YearHeader extends Gestures(AppElement) {
           display: grid;
           grid-template-columns: repeat(5, 1fr);
           gap: var(--space-3);
-          padding: var(--space-4) var(--space-5);
+          padding-block: var(--space-4);
           border-block-start: 0.5px solid var(--color-border);
         }
 
@@ -454,8 +410,7 @@ class YearHeader extends Gestures(AppElement) {
 
       <input type="file" id="photo-input" accept="image/*" hidden>
 
-      <dialog id="menu">
-        <div class="menu-handle"></div>
+      <modal-dialog id="menu">
         <p class="menu-section-label">${t('year-header.year-section')}</p>
         <div class="menu-section">
           <p class="menu-section-label">${t('settings.tag-strip')}</p>
@@ -476,12 +431,11 @@ class YearHeader extends Gestures(AppElement) {
           <span>${t('year-header.extract-markdown')}</span>
           <span class="menu-item-value">›</span>
         </button>
-      </dialog>
+      </modal-dialog>
 
       <export-sheet id="export-sheet"></export-sheet>
 
-      <dialog id="color-sheet">
-        <div class="menu-handle"></div>
+      <modal-dialog id="color-sheet">
         <p class="menu-section-label">${t('year-header.color')}</p>
         <div class="color-grid">
           ${PALETTE.map(({ hex, key }) => `<button class="swatch" data-color="${hex}" style="background:${hex}" aria-label="${t(key)}"></button>`).join('')}
@@ -489,10 +443,9 @@ class YearHeader extends Gestures(AppElement) {
         <button class="menu-item" id="color-reset-btn">
           <span>${t('year-header.color-reset')}</span>
         </button>
-      </dialog>
+      </modal-dialog>
 
-      <dialog id="photo-sheet">
-        <div class="menu-handle"></div>
+      <modal-dialog id="photo-sheet">
         <p class="menu-section-label">${t('year-header.photo')}</p>
         <button class="menu-item" id="photo-add">
           <span>${t('year-header.photo-add')}</span>
@@ -503,7 +456,7 @@ class YearHeader extends Gestures(AppElement) {
         <button class="menu-item destructive" id="photo-remove" hidden>
           <span>${t('year-header.photo-remove')}</span>
         </button>
-      </dialog>
+      </modal-dialog>
     `;
   }
 
@@ -587,7 +540,8 @@ class YearHeader extends Gestures(AppElement) {
   }
 
   onTap() {
-    if (this._menuDialog?.open || this._colorSheet?.open || this._photoSheet?.open || this._exportSheet?._dialog?.open) return;
+    const isOpen = el => !!el?.shadowRoot?.querySelector('dialog')?.open;
+    if (isOpen(this._menuDialog) || isOpen(this._colorSheet) || isOpen(this._photoSheet) || isOpen(this._exportSheet?._dialog)) return;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -605,13 +559,11 @@ class YearHeader extends Gestures(AppElement) {
     this.shadowRoot.querySelector('#prev')?.removeEventListener('click', this._onPrev);
     this.shadowRoot.querySelector('#next')?.removeEventListener('click', this._onNext);
     this.shadowRoot.querySelector('#menu-btn')?.removeEventListener('click', this._onMenuBtn);
-    this._menuDialog?.removeEventListener('close', this._onMenuClose);
-    this._menuDialog?.removeEventListener('click', this._onBackdrop);
+    this._menuDialog?.removeEventListener('modal-close', this._onMenuClose);
     this.shadowRoot.querySelector('#year-photo-btn')?.removeEventListener('click', this._onYearPhotoBtn);
     this.shadowRoot.querySelector('#year-color-btn')?.removeEventListener('click', this._onYearColorBtn);
     this._colorSheet?.removeEventListener('click', this._onColorSheetClick);
     this.shadowRoot.querySelector('#color-reset-btn')?.removeEventListener('click', this._onColorReset);
-    this._photoSheet?.removeEventListener('click', this._onPhotoSheetBackdrop);
     this.shadowRoot.querySelector('#photo-add')?.removeEventListener('click', this._onPhotoAdd);
     this.shadowRoot.querySelector('#photo-change')?.removeEventListener('click', this._onPhotoChange);
     this.shadowRoot.querySelector('#photo-remove')?.removeEventListener('click', this._onPhotoRemove);
@@ -719,18 +671,13 @@ class YearHeader extends Gestures(AppElement) {
   _setupMenu() {
     const menuBtn = this.shadowRoot.querySelector('#menu-btn');
     this._onMenuBtn = () => {
-      this._menuDialog.showModal();
+      this._menuDialog.show();
       menuBtn.setAttribute('aria-expanded', 'true');
     };
     menuBtn.addEventListener('click', this._onMenuBtn);
 
     this._onMenuClose = () => menuBtn.setAttribute('aria-expanded', 'false');
-    this._menuDialog.addEventListener('close', this._onMenuClose);
-
-    this._onBackdrop = e => {
-      if (e.target === this._menuDialog) this._menuDialog.close();
-    };
-    this._menuDialog.addEventListener('click', this._onBackdrop);
+    this._menuDialog.addEventListener('modal-close', this._onMenuClose);
   }
 
   _setupPhoto() {
@@ -740,14 +687,9 @@ class YearHeader extends Gestures(AppElement) {
     this._onYearPhotoBtn = () => {
       this._menuDialog.close();
       this._updatePhotoMenu(!!this._imagesState?.[this._year]);
-      this._photoSheet.showModal();
+      this._photoSheet.show();
     };
     this.shadowRoot.querySelector('#year-photo-btn').addEventListener('click', this._onYearPhotoBtn);
-
-    this._onPhotoSheetBackdrop = e => {
-      if (e.target === this._photoSheet) this._photoSheet.close();
-    };
-    this._photoSheet.addEventListener('click', this._onPhotoSheetBackdrop);
 
     const openPhotoPicker = () => {
       this._photoSheet.close();
@@ -799,12 +741,11 @@ class YearHeader extends Gestures(AppElement) {
     this._onYearColorBtn = () => {
       this._menuDialog.close();
       this._updateSwatches(Store.getState().accentColors?.[String(this._year)] ?? null);
-      this._colorSheet.showModal();
+      this._colorSheet.show();
     };
     this.shadowRoot.querySelector('#year-color-btn').addEventListener('click', this._onYearColorBtn);
 
     this._onColorSheetClick = e => {
-      if (e.target === this._colorSheet) { this._colorSheet.close(); return; }
       const swatch = e.target.closest('.swatch');
       if (!swatch) return;
       const hex = swatch.dataset.color;

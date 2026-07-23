@@ -108,7 +108,8 @@ async function openListDetailMenu(page) {
   await page.waitForFunction(() =>
     document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
-      ?.querySelector('#menu')?.open
+      ?.querySelector('#menu')?.shadowRoot
+      ?.querySelector('dialog')?.open
   );
 }
 
@@ -135,7 +136,8 @@ async function waitForExportSheet(page) {
     const sheet = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
       ?.querySelector('export-sheet')?.shadowRoot
-      ?.querySelector('#sheet');
+      ?.querySelector('#sheet')?.shadowRoot
+      ?.querySelector('dialog');
     return sheet?.open;
   });
 }
@@ -178,7 +180,8 @@ test.describe('Extract Markdown — list menu', () => {
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('export-sheet')?.shadowRoot
-        ?.querySelector('#sheet')?.open
+        ?.querySelector('#sheet')?.shadowRoot
+        ?.querySelector('dialog')?.open
     );
     expect(open).toBe(true);
   });
@@ -265,7 +268,8 @@ test.describe('Extract Markdown — item dialog overflow', () => {
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('export-sheet')?.shadowRoot
-        ?.querySelector('#sheet')?.open
+        ?.querySelector('#sheet')?.shadowRoot
+        ?.querySelector('dialog')?.open
     );
     expect(open).toBe(true);
   });

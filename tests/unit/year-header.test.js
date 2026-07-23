@@ -31,6 +31,11 @@ function mount(year = 2026) {
   return el;
 }
 
+// Each sheet is a <modal-dialog>; its real native <dialog> lives one shadow level in.
+function nativeDialog(modalDialogEl) {
+  return modalDialogEl.shadowRoot.querySelector('dialog');
+}
+
 beforeEach(() => {
   Store.setState('images', {});
   Store.setState('accentColors', {});
@@ -45,7 +50,7 @@ describe('year-header — menu', () => {
   it('opens the menu dialog when menu button is clicked', () => {
     const el = mount();
     el.shadowRoot.querySelector('#menu-btn').click();
-    expect(el.shadowRoot.querySelector('#menu').open).toBe(true);
+    expect(nativeDialog(el.shadowRoot.querySelector('#menu')).open).toBe(true);
   });
 
   it('sets aria-expanded="true" on menu button when menu opens', () => {
@@ -55,19 +60,14 @@ describe('year-header — menu', () => {
     expect(btn.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('closes menu on backdrop click', () => {
-    const el = mount();
-    const menu = el.shadowRoot.querySelector('#menu');
-    el.shadowRoot.querySelector('#menu-btn').click();
-    menu.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(menu.open).toBe(false);
-  });
-
-  it('resets aria-expanded when menu closes', () => {
+  // Backdrop-click-to-close is modal-dialog's own concern, covered by
+  // modal-dialog.test.js — here we just verify year-header reacts correctly
+  // to a close, regardless of what triggered it.
+  it('resets aria-expanded when the menu closes', () => {
     const el = mount();
     const btn = el.shadowRoot.querySelector('#menu-btn');
     btn.click();
-    el.shadowRoot.querySelector('#menu').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    el.shadowRoot.querySelector('#menu').close();
     expect(btn.getAttribute('aria-expanded')).toBe('false');
   });
 
@@ -129,7 +129,7 @@ describe('year-header — accent color picker', () => {
     const el = mount();
     el.shadowRoot.querySelector('#menu-btn').click();
     el.shadowRoot.querySelector('#year-color-btn').click();
-    expect(el.shadowRoot.querySelector('#color-sheet').open).toBe(true);
+    expect(nativeDialog(el.shadowRoot.querySelector('#color-sheet')).open).toBe(true);
   });
 
   it('sets .active on the swatch matching the current accent color', () => {

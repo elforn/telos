@@ -16,7 +16,8 @@ async function openMenu(page) {
     document.querySelector('app-router')?.shadowRoot
       ?.querySelector('home-page')?.shadowRoot
       ?.querySelector('year-header')?.shadowRoot
-      ?.querySelector('#menu')?.open
+      ?.querySelector('#menu')?.shadowRoot
+      ?.querySelector('dialog')?.open
   );
 }
 
@@ -139,7 +140,8 @@ test.describe('Goal tag strip — menu closes', () => {
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('home-page')?.shadowRoot
         ?.querySelector('year-header')?.shadowRoot
-        ?.querySelector('#menu')?.open ?? false
+        ?.querySelector('#menu')?.shadowRoot
+        ?.querySelector('dialog')?.open ?? false
     );
     expect(menuOpen).toBe(false);
   });

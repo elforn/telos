@@ -7,8 +7,8 @@ function mount() {
   const el = document.createElement('export-sheet');
   document.body.appendChild(el);
   const dialog = el.shadowRoot.querySelector('#sheet');
-  dialog.showModal = vi.fn();
-  dialog.close    = vi.fn();
+  dialog.show  = vi.fn();
+  dialog.close = vi.fn();
   return el;
 }
 
@@ -35,7 +35,7 @@ describe('export-sheet — show()', () => {
   it('opens the dialog', () => {
     const el = mount();
     el.show();
-    expect(el.shadowRoot.querySelector('#sheet').showModal).toHaveBeenCalledOnce();
+    expect(el.shadowRoot.querySelector('#sheet').show).toHaveBeenCalledOnce();
   });
 
   it('resets metadata checkbox to unchecked', () => {
