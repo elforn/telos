@@ -33,12 +33,12 @@ class ModalDialog extends AppElement {
           font-family: var(--font-family);
           font-size: var(--font-size-body);
           box-shadow: var(--shadow-sheet);
-          display: flex;
-          flex-direction: column;
           max-block-size: min(85vh, 600px);
         }
 
         dialog[open] {
+          display: flex;
+          flex-direction: column;
           animation: fade-in 0.2s ease-out;
         }
 

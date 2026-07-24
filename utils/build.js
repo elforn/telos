@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import * as esbuild from 'esbuild';
 
 const root      = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,15 +49,22 @@ const manifestSrc   = readFileSync(join(root, 'manifest.json'), 'utf8');
 const indexSrc      = readFileSync(join(root, 'index.html'), 'utf8');
 const cacheHash     = contentHash(jsContent + tokensContent + manifestSrc + indexSrc);
 
-// Asset list — bundle + manifest + icons + fonts (no _lib/ or app/ module files)
+// Asset list — bundle + manifest + icons (no _lib/ or app/ module files)
 const iconDir = join(root, 'app', 'icons');
-const fontDir = join(root, 'app', 'fonts');
 const assets  = [BASE_PATH, `${BASE_PATH}${mainFilename}`, `${BASE_PATH}manifest.json`];
 if (existsSync(iconDir)) {
   for (const f of readdirSync(iconDir)) assets.push(`${BASE_PATH}app/icons/${f}`);
 }
-if (existsSync(fontDir)) {
-  for (const f of readdirSync(fontDir)) assets.push(`${BASE_PATH}app/fonts/${f}`);
+
+// utils/extra-assets.js is deliberately outside the scaffold template — socle update
+// replaces _lib/ and utils/build.js but never touches other files in utils/, so
+// app-specific build extensions go there and survive library updates unchanged.
+const { extraAssetDirs = [] } = await import(pathToFileURL(join(root, 'utils', 'extra-assets.js')).href).catch(() => ({}));
+for (const rel of extraAssetDirs) {
+  const srcDir = join(root, rel);
+  if (!existsSync(srcDir)) continue;
+  for (const f of readdirSync(srcDir)) assets.push(`${BASE_PATH}${rel}/${f}`);
+  cpSync(srcDir, join(dist, rel), { recursive: true });
 }
 
 writeFileSync(join(dist, 'sw.js'), swSrc
@@ -86,9 +93,6 @@ writeFileSync(join(dist, 'manifest.json'), manifestSrc.replaceAll('%%BASE_PATH%%
 
 // 6. Copy app/icons/ — referenced by manifest
 if (existsSync(iconDir)) cpSync(iconDir, join(dist, 'app', 'icons'), { recursive: true });
-
-// 7. Copy app/fonts/ — referenced by the self-hosted @font-face rule in index.html
-if (existsSync(fontDir)) cpSync(fontDir, join(dist, 'app', 'fonts'), { recursive: true });
 
 console.log(`Built ${version} (base: ${BASE_PATH}) → dist/`);
 console.log(`  ${mainFilename} (${(jsContent.length / 1024).toFixed(1)} KB)`);

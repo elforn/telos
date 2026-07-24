@@ -167,13 +167,17 @@ describe('modal-dialog — slots and structure', () => {
     expect(css).toMatch(/\.handle::before[^}]*inline-size:\s*36px/);
   });
 
-  it('dialog is a column flex container with a max-block-size cap', () => {
+  it('dialog[open] is a column flex container with a max-block-size cap on the bare rule', () => {
     const el = mount();
     const css = el.shadowRoot.querySelector('style').textContent;
-    const dialogRule = css.slice(css.indexOf('dialog {'), css.indexOf('dialog[open]'));
-    expect(dialogRule).toMatch(/display:\s*flex/);
-    expect(dialogRule).toMatch(/flex-direction:\s*column/);
-    expect(dialogRule).toMatch(/max-block-size:/);
+    const bareRule   = css.slice(css.indexOf('dialog {'), css.indexOf('dialog[open]'));
+    const openRule   = css.slice(css.indexOf('dialog[open] {'), css.indexOf('dialog::backdrop'));
+    // flex layout only when open — bare rule must not set display (regression guard)
+    expect(bareRule).not.toMatch(/display:/);
+    expect(openRule).toMatch(/display:\s*flex/);
+    expect(openRule).toMatch(/flex-direction:\s*column/);
+    // max-block-size cap is harmless on a hidden element, lives in the bare rule
+    expect(bareRule).toMatch(/max-block-size:/);
   });
 
   it('.body has overflow-y: auto and flex sizing that allows it to shrink', () => {
