@@ -47,6 +47,7 @@ defineStrings({
   'goal-dialog.tags-label':              'Tags',
   'goal-dialog.tags-placeholder':        'Add tag…',
   'goal-dialog.duedate-toggle':          'Deadline',
+  'goal-dialog.duedate-toggle-hide':     'Hide deadline',
   'goal-dialog.duedate-clear':           'Clear deadline',
 
   'goal-dialog.more-actions':            'More actions',
@@ -161,8 +162,10 @@ defineStrings({
   'item-dialog.copy-note': 'Copy note',
   'item-dialog.url-placeholder':  'Link (https://…)',
   'item-dialog.url-toggle':       'Link',
+  'item-dialog.url-toggle-hide':  'Hide link',
   'item-dialog.url-open':         'Open',
   'item-dialog.duedate-toggle':   'Due date',
+  'item-dialog.duedate-toggle-hide': 'Hide due date',
   'item-dialog.duedate-clear':    'Clear due date',
   'item-dialog.close':            'Close',
   'item-dialog.save-and-close':   'Save and close',

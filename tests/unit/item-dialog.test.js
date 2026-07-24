@@ -114,16 +114,24 @@ describe('item-dialog — open', () => {
     expect(el.shadowRoot.querySelector('.url-row').hidden).toBe(false);
   });
 
-  it('url-toggle sets aria-expanded to true when url field is shown', () => {
+  it('url-toggle sets aria-pressed to true and label to "Hide link" when url field is shown', () => {
     const el = mount();
     el.open(ITEM);
-    expect(el.shadowRoot.querySelector('#url-toggle').getAttribute('aria-expanded')).toBe('true');
+    const btn = el.shadowRoot.querySelector('#action-url-toggle');
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+    expect(btn.textContent).toBe('Hide link');
   });
 
-  it('clicking url-toggle reveals the url field', () => {
+  it('url-toggle label is "Link" when url field is hidden', () => {
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#url-toggle').click();
+    expect(el.shadowRoot.querySelector('#action-url-toggle').textContent).toBe('Link');
+  });
+
+  it('clicking url-toggle (in the overflow menu) reveals the url field', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#action-url-toggle').click();
     expect(el.shadowRoot.querySelector('.url-row').hidden).toBe(false);
   });
 
@@ -142,27 +150,35 @@ describe('item-dialog — open', () => {
   it('due-date field is hidden by default on new item', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(true);
   });
 
   it('due-date field is shown automatically when item has a dueDate', () => {
     const el = mount();
     el.open({ ...ITEM, dueDate: '2026-08-01' });
-    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#duedate-input').value).toBe('2026-08-01');
   });
 
-  it('clicking duedate-toggle reveals the due-date field', () => {
+  it('clicking duedate-toggle (in the overflow menu) reveals the due-date field', () => {
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#duedate-toggle').click();
-    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(false);
+    el.shadowRoot.querySelector('#action-duedate-toggle').click();
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
   });
 
-  it('duedate-toggle sets aria-expanded to true when due-date field is shown', () => {
+  it('duedate-toggle sets aria-pressed to true and label to "Hide due date" when due-date field is shown', () => {
     const el = mount();
     el.open({ ...ITEM, dueDate: '2026-08-01' });
-    expect(el.shadowRoot.querySelector('#duedate-toggle').getAttribute('aria-expanded')).toBe('true');
+    const btn = el.shadowRoot.querySelector('#action-duedate-toggle');
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+    expect(btn.textContent).toBe('Hide due date');
+  });
+
+  it('duedate-toggle label is "Due date" when due-date field is hidden', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#action-duedate-toggle').textContent).toBe('Due date');
   });
 
   it('pre-selects the item status radio', () => {
@@ -828,10 +844,10 @@ const LIST_A = { id: 'la', name: 'Shopping', color: null };
 const LIST_B = { id: 'lb', name: 'Ideas',    color: '#FF0000' };
 
 describe('item-dialog — move to list', () => {
-  it('menu-btn is hidden when opened with no item (new item)', () => {
+  it('menu-btn is visible even when opened with no item (new item) — the due date/link toggles must be reachable while creating', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
   });
 
   it('menu-btn is visible when opened with an existing item', () => {

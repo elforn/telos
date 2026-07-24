@@ -69,7 +69,7 @@ class ItemDialog extends AppElement {
     this._renderTagChips();
     this._updateSuggestions();
 
-    this._menuBtn.hidden = this._isNew;
+    this._menuBtn.hidden = false;
 
     this._lastValidTitle   = item?.title ?? '';
     this._lastValidNote    = item?.note  ?? '';
@@ -227,14 +227,6 @@ class ItemDialog extends AppElement {
         /* ── Status pills ────────────────────────────────────────────────── */
         .status-field { margin-block-end: var(--space-4); }
 
-        .pills-row {
-          display: flex;
-          align-items: center;
-          column-gap: var(--space-2);
-          row-gap: var(--space-3);
-          flex-wrap: wrap;
-        }
-
         .status-options {
           display: flex;
           gap: var(--space-2);
@@ -274,56 +266,12 @@ class ItemDialog extends AppElement {
           outline-offset: 2px;
         }
 
-        /* ── URL / due-date toggles ──────────────────────────────────────── */
-        /* Fills the row like every other field, left-aligned with them.
-           min-block-size reserves the compact-field's height up front so
-           opening it doesn't grow the row / shift everything below. */
-        .toggles-end {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          flex-wrap: wrap;
-          min-block-size: var(--touch-target);
-          inline-size: 100%;
-        }
-
-        /* Muted like an unchecked status pill by default — accent only when
-           active, so these don't outcompete the status pills for attention. */
-        #url-toggle, #duedate-toggle {
-          display: inline-flex;
-          align-items: center;
-          padding: var(--space-2) var(--space-3);
-          border-radius: var(--radius-full);
-          border: 1px solid var(--color-border);
-          background: transparent;
-          color: var(--color-text-secondary);
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-medium);
-          font-family: var(--font-family);
-          cursor: pointer;
-          flex-shrink: 0;
-          min-block-size: auto;
-          line-height: normal;
-          transition: border-color 0.15s, background 0.15s, color 0.15s;
-        }
-
-        #url-toggle[aria-expanded="true"], #duedate-toggle[aria-expanded="true"] {
-          background: var(--color-accent-subtle);
-          border-color: var(--color-accent);
-          color: var(--color-accent);
-        }
-
-        #url-toggle:focus-visible, #duedate-toggle:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        /* ── URL row (full width — needs room to type/read a link) ──────── */
+        /* ── URL row — full width, matches input[type=text] styling ──────── */
         .url-row {
           display: flex;
           gap: var(--space-2);
           align-items: center;
-          margin-block-start: var(--space-3);
+          margin-block-end: var(--space-4);
         }
 
         .url-row input[type="text"] {
@@ -354,38 +302,37 @@ class ItemDialog extends AppElement {
           outline-offset: 2px;
         }
 
-        /* ── Due-date — compact, sits inline with the toggle pills. Input and
-           clear button share one bordered box so it reads as a single field,
-           not two competing controls. ───────────────────────────────────── */
-        .duedate-inline {
-          display: inline-flex;
+        /* ── Due date — full width, matches input[type=text] styling. Input
+           and clear button share one bordered box so it reads as a single
+           field, not two competing controls. ─────────────────────────── */
+        .duedate-field {
+          display: flex;
           align-items: center;
-          gap: var(--space-1);
-          block-size: var(--touch-target);
-          box-sizing: border-box;
+          gap: var(--space-2);
           background: var(--color-surface-raised);
           border: 0.5px solid var(--color-border);
           border-radius: var(--radius-sm);
-          padding-inline-start: var(--space-2);
-          padding-inline-end: var(--space-1);
+          padding: var(--space-3);
+          box-sizing: border-box;
+          margin-block-end: var(--space-4);
         }
 
-        .duedate-inline:focus-within { border-color: var(--color-accent); }
+        .duedate-field:focus-within { border-color: var(--color-accent); }
 
         #duedate-input {
-          block-size: 100%;
-          box-sizing: border-box;
+          flex: 1;
+          min-inline-size: 0;
           background: none;
           border: none;
           padding: 0;
-          font-size: var(--font-size-caption);
+          font-size: var(--font-size-body);
           font-family: var(--font-family);
           color: var(--color-text-primary);
           outline: none;
         }
 
         /* De-emphasised on purpose — clearing a date is reversible and rare
-           enough that it shouldn't compete visually with the toggle pills. */
+           enough that it shouldn't compete visually with the field itself. */
         #duedate-clear {
           flex-shrink: 0;
           min-block-size: var(--touch-target-small);
@@ -719,34 +666,13 @@ class ItemDialog extends AppElement {
             <button type="button" class="copy-btn" id="note-copy-btn" aria-label="${t('item-dialog.copy-note')}" title="${t('item-dialog.copy-note')}">${icons.copy}</button>
           </div>
           <div class="status-field">
-            <div class="pills-row">
-              <div class="status-options" role="group" aria-label="${t('item-dialog.status-label')}">
-                ${STATUSES.map(s => `
-                  <label class="status-option">
-                    <input type="radio" name="status" value="${s}" ${s === 'open' ? 'checked' : ''}>
-                    ${t('item-dialog.status-' + s)}
-                  </label>
-                `).join('')}
-              </div>
-              <div class="toggles-end">
-                <div class="duedate-inline" hidden>
-                  <input id="duedate-input"
-                         type="date"
-                         aria-label="${t('item-dialog.duedate-toggle')}" />
-                  <button type="button" id="duedate-clear" aria-label="${t('item-dialog.duedate-clear')}">${icons.xMark}</button>
-                </div>
-                <button type="button" id="duedate-toggle" aria-expanded="false">📅 ${t('item-dialog.duedate-toggle')}</button>
-                <button type="button" id="url-toggle" aria-expanded="false">🔗 ${t('item-dialog.url-toggle')}</button>
-              </div>
-            </div>
-            <div class="url-row" hidden>
-              <input id="url-input"
-                     type="text"
-                     aria-label="${t('item-dialog.url-placeholder')}"
-                     placeholder="${t('item-dialog.url-placeholder')}"
-                     autocomplete="off"
-                     inputmode="url" />
-              <button type="button" id="url-open" hidden>${t('item-dialog.url-open')}</button>
+            <div class="status-options" role="group" aria-label="${t('item-dialog.status-label')}">
+              ${STATUSES.map(s => `
+                <label class="status-option">
+                  <input type="radio" name="status" value="${s}" ${s === 'open' ? 'checked' : ''}>
+                  ${t('item-dialog.status-' + s)}
+                </label>
+              `).join('')}
             </div>
           </div>
           <div class="tag-area">
@@ -759,6 +685,21 @@ class ItemDialog extends AppElement {
                      autocomplete="off"
                      autocapitalize="none" />
             </div>
+          </div>
+          <div class="duedate-field" hidden>
+            <input id="duedate-input"
+                   type="date"
+                   aria-label="${t('item-dialog.duedate-toggle')}" />
+            <button type="button" id="duedate-clear" aria-label="${t('item-dialog.duedate-clear')}">${icons.xMark}</button>
+          </div>
+          <div class="url-row" hidden>
+            <input id="url-input"
+                   type="text"
+                   aria-label="${t('item-dialog.url-placeholder')}"
+                   placeholder="${t('item-dialog.url-placeholder')}"
+                   autocomplete="off"
+                   inputmode="url" />
+            <button type="button" id="url-open" hidden>${t('item-dialog.url-open')}</button>
           </div>
         </div>
 
@@ -801,6 +742,8 @@ class ItemDialog extends AppElement {
       </modal-dialog>
 
       <modal-dialog id="action-sheet" aria-label="${t('item-dialog.more-actions')}">
+        <button type="button" id="action-duedate-toggle" class="sheet-item" aria-pressed="false">${t('item-dialog.duedate-toggle')}</button>
+        <button type="button" id="action-url-toggle" class="sheet-item" aria-pressed="false">${t('item-dialog.url-toggle')}</button>
         <button type="button" id="action-move-btn" class="sheet-item">${t('item-dialog.move-to-list')}</button>
         <button type="button" id="action-promote-btn" class="sheet-item">${t('item-dialog.add-to-goal')}</button>
         <button type="button" id="action-export-btn" class="sheet-item">${t('item-dialog.extract-markdown')}</button>
@@ -821,12 +764,12 @@ class ItemDialog extends AppElement {
     this._noteCopyBtn = this.shadowRoot.querySelector('#note-copy-btn');
     this._urlInput = this.shadowRoot.querySelector('#url-input');
     this._urlOpen = this.shadowRoot.querySelector('#url-open');
-    this._urlToggle = this.shadowRoot.querySelector('#url-toggle');
+    this._urlToggle = this.shadowRoot.querySelector('#action-url-toggle');
     this._urlRow = this.shadowRoot.querySelector('.url-row');
     this._dueDateInput = this.shadowRoot.querySelector('#duedate-input');
     this._dueDateClear = this.shadowRoot.querySelector('#duedate-clear');
-    this._dueDateToggle = this.shadowRoot.querySelector('#duedate-toggle');
-    this._dueDateRow = this.shadowRoot.querySelector('.duedate-inline');
+    this._dueDateToggle = this.shadowRoot.querySelector('#action-duedate-toggle');
+    this._dueDateRow = this.shadowRoot.querySelector('.duedate-field');
     this._tagChipsWrap = this.shadowRoot.querySelector('#tag-chips-wrap');
     this._tagInput = this.shadowRoot.querySelector('#tag-input');
     this._tagSuggestions = this.shadowRoot.querySelector('#tag-suggestions');
@@ -878,7 +821,6 @@ class ItemDialog extends AppElement {
         this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
           t('item-dialog.title-edit'));
         this._deleteBtn.hidden = false;
-        this._menuBtn.hidden = false;
         return;
       }
       if (!v) { this._titleInput.value = this._lastValidTitle; return; }
@@ -930,11 +872,12 @@ class ItemDialog extends AppElement {
       this._announceSaved();
     };
 
+    // Triggered from the overflow menu now — doesn't close the sheet (so both
+    // toggles can be flipped in one visit) and doesn't auto-focus the revealed
+    // field (focusing right after a menu interaction would be a jarring second
+    // focus change; let the user tap in when they're ready).
     this._onUrlToggle = () => {
-      const opening = this._urlRow.hidden;
-      this._showUrlField(opening);
-      if (opening) this._urlInput.focus();
-      else this._noteInput.focus();
+      this._showUrlField(this._urlRow.hidden);
       requestAnimationFrame(() => this._syncNoteHeight());
     };
 
@@ -955,11 +898,8 @@ class ItemDialog extends AppElement {
     };
 
     this._onDueDateToggle = () => {
-      // Unlike the URL toggle, don't auto-focus the date input: focusing it
-      // dismisses the on-screen keyboard (if the title/note field had it open)
-      // and swaps in the native date picker, a jarring viewport jump the user
-      // didn't ask for. Let them tap the field when they're ready for that.
       this._showDueDateField(this._dueDateRow.hidden);
+      requestAnimationFrame(() => this._syncNoteHeight());
     };
 
     this._onDueDateClear = () => {
@@ -1064,12 +1004,8 @@ class ItemDialog extends AppElement {
     this._noteCopyBtn.addEventListener('click', this._onNoteCopy);
     this._urlInput.addEventListener('input', this._onUrlInput);
     this._urlInput.addEventListener('blur',  this._onUrlBlur);
-    this._urlToggle.addEventListener('pointerdown', e => e.preventDefault());
-    this._urlToggle.addEventListener('click', this._onUrlToggle);
     this._urlOpen.addEventListener('click', this._onUrlOpen);
     this._dueDateInput.addEventListener('change', this._onDueDateInput);
-    this._dueDateToggle.addEventListener('pointerdown', e => e.preventDefault());
-    this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
     this._dueDateClear.addEventListener('pointerdown', e => e.preventDefault());
     this._dueDateClear.addEventListener('click', this._onDueDateClear);
     this._tagInput.addEventListener('keydown', this._onTagKeyDown);
@@ -1112,6 +1048,11 @@ class ItemDialog extends AppElement {
 
     this._onMenuBtn = () => this._actionSheet.show();
     this._menuBtn.addEventListener('click', this._onMenuBtn);
+
+    // Toggles — deliberately don't close the sheet, so both can be flipped
+    // in one visit (see _onUrlToggle/_onDueDateToggle for why they don't focus).
+    this._urlToggle.addEventListener('click', this._onUrlToggle);
+    this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
 
     this._onActionMove = () => {
       this._actionSheet.close();
@@ -1427,12 +1368,14 @@ class ItemDialog extends AppElement {
 
   _showUrlField(show) {
     this._urlRow.hidden = !show;
-    this._urlToggle.setAttribute('aria-expanded', String(show));
+    this._urlToggle.setAttribute('aria-pressed', String(show));
+    this._urlToggle.textContent = show ? t('item-dialog.url-toggle-hide') : t('item-dialog.url-toggle');
   }
 
   _showDueDateField(show) {
     this._dueDateRow.hidden = !show;
-    this._dueDateToggle.setAttribute('aria-expanded', String(show));
+    this._dueDateToggle.setAttribute('aria-pressed', String(show));
+    this._dueDateToggle.textContent = show ? t('item-dialog.duedate-toggle-hide') : t('item-dialog.duedate-toggle');
   }
 
   _announceSaved() {

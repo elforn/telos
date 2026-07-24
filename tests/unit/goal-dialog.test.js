@@ -65,21 +65,35 @@ describe('goal-dialog — open', () => {
   it('deadline field is hidden by default on a new goal', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(true);
   });
 
   it('deadline field is shown automatically when goal has a dueDate', () => {
     const el = mount();
     el.open({ title: 'Grand Capstone', dueDate: '2026-12-31' });
-    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#duedate-input').value).toBe('2026-12-31');
   });
 
-  it('clicking duedate-toggle reveals the deadline field', () => {
+  it('clicking duedate-toggle (in the overflow menu) reveals the deadline field', () => {
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#duedate-toggle').click();
-    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(false);
+    el.shadowRoot.querySelector('#action-duedate-toggle').click();
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
+  });
+
+  it('duedate-toggle sets aria-pressed to true and label to "Hide deadline" when shown', () => {
+    const el = mount();
+    el.open({ title: 'Grand Capstone', dueDate: '2026-12-31' });
+    const btn = el.shadowRoot.querySelector('#action-duedate-toggle');
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+    expect(btn.textContent).toBe('Hide deadline');
+  });
+
+  it('duedate-toggle label is "Deadline" when hidden', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#action-duedate-toggle').textContent).toBe('Deadline');
   });
 });
 
@@ -586,10 +600,10 @@ describe('goal-dialog — notes', () => {
 });
 
 describe('goal-dialog — more actions (⋯ menu)', () => {
-  it('menu button is hidden when opened with no goal', () => {
+  it('menu button is visible even when opened with no goal (new goal) — the deadline toggle must be reachable while creating', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
   });
 
   it('menu button is visible when opened with an existing goal', () => {

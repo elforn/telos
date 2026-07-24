@@ -31,7 +31,7 @@ class GoalDialog extends AppElement {
     this._fromSection = section ?? 'capstone';
     this._input.value = goal?.title ?? '';
     if (this._deleteBtn) this._deleteBtn.hidden = !goal;
-    if (this._menuBtn) this._menuBtn.hidden = !goal;
+    if (this._menuBtn) this._menuBtn.hidden = false;
     if (this._archiveBtn) {
       this._archiveBtn.hidden = !goal;
       this._archiveBtn.textContent = goal?.archived ? t('goal-dialog.unarchive') : t('goal-dialog.archive');
@@ -113,81 +113,37 @@ class GoalDialog extends AppElement {
         input[type="text"]:focus { border-color: var(--color-accent); }
         input[type="text"]::placeholder { color: var(--color-text-muted); }
 
-        /* ── Deadline — compact, sits below notes, doesn't need a full row ──
-           Fills the row like every other field, left-aligned with them.
-           min-block-size reserves the compact-field's height up front so
-           opening it doesn't grow the row / shift everything below. */
+        /* ── Deadline — full width, matches input[type=text] styling. Input
+           and clear button share one bordered box so it reads as a single
+           field, not two competing controls. ─────────────────────────── */
         .duedate-field {
           display: flex;
           align-items: center;
           gap: var(--space-2);
-          flex-wrap: wrap;
-          min-block-size: var(--touch-target);
-          margin-block-end: var(--space-4);
-        }
-
-        /* Muted like an unchecked status pill by default — accent only when
-           active, so this doesn't outcompete the other controls. */
-        #duedate-toggle {
-          display: inline-flex;
-          align-items: center;
-          padding: var(--space-2) var(--space-3);
-          border-radius: var(--radius-full);
-          border: 1px solid var(--color-border);
-          background: transparent;
-          color: var(--color-text-secondary);
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-medium);
-          font-family: var(--font-family);
-          cursor: pointer;
-          flex-shrink: 0;
-          min-block-size: auto;
-          line-height: normal;
-          transition: border-color 0.15s, background 0.15s, color 0.15s;
-        }
-
-        #duedate-toggle[aria-expanded="true"] {
-          background: var(--color-accent-subtle);
-          border-color: var(--color-accent);
-          color: var(--color-accent);
-        }
-
-        #duedate-toggle:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        /* Input and clear button share one bordered box so it reads as a
-           single field, not two competing controls. */
-        .duedate-inline {
-          display: inline-flex;
-          align-items: center;
-          gap: var(--space-1);
-          block-size: var(--touch-target);
-          box-sizing: border-box;
           background: var(--color-surface-raised);
           border: 0.5px solid var(--color-border);
           border-radius: var(--radius-sm);
-          padding-inline-start: var(--space-2);
-          padding-inline-end: var(--space-1);
+          padding: var(--space-3);
+          box-sizing: border-box;
+          margin-block-end: var(--space-4);
         }
 
-        .duedate-inline:focus-within { border-color: var(--color-accent); }
+        .duedate-field:focus-within { border-color: var(--color-accent); }
 
         #duedate-input {
-          block-size: 100%;
-          box-sizing: border-box;
+          flex: 1;
+          min-inline-size: 0;
           background: none;
           border: none;
           padding: 0;
-          font-size: var(--font-size-caption);
+          font-size: var(--font-size-body);
           font-family: var(--font-family);
           color: var(--color-text-primary);
           outline: none;
         }
 
         /* De-emphasised on purpose — clearing a date is reversible and rare
-           enough that it shouldn't compete visually with the toggle pill. */
+           enough that it shouldn't compete visually with the field itself. */
         #duedate-clear {
           flex-shrink: 0;
           min-block-size: var(--touch-target-small);
@@ -589,15 +545,6 @@ class GoalDialog extends AppElement {
                       placeholder="${t('goal-dialog.notes-placeholder')}"></textarea>
             <button type="button" class="copy-btn" id="desc-copy-btn" aria-label="${t('goal-dialog.copy-notes')}" title="${t('goal-dialog.copy-notes')}">${icons.copy}</button>
           </div>
-          <div class="duedate-field">
-            <div class="duedate-inline" hidden>
-              <input id="duedate-input"
-                     type="date"
-                     aria-label="${t('goal-dialog.duedate-toggle')}" />
-              <button type="button" id="duedate-clear" aria-label="${t('goal-dialog.duedate-clear')}">${icons.xMark}</button>
-            </div>
-            <button type="button" id="duedate-toggle" aria-expanded="false">📅 ${t('goal-dialog.duedate-toggle')}</button>
-          </div>
           <div class="tag-area">
             <div id="tag-suggestions" hidden aria-label="${t('goal-dialog.tags-label')}"></div>
             <div class="tag-chips-wrap" id="tag-chips-wrap" role="group" aria-label="${t('goal-dialog.tags-label')}">
@@ -608,6 +555,12 @@ class GoalDialog extends AppElement {
                      autocomplete="off"
                      autocapitalize="none" />
             </div>
+          </div>
+          <div class="duedate-field" hidden>
+            <input id="duedate-input"
+                   type="date"
+                   aria-label="${t('goal-dialog.duedate-toggle')}" />
+            <button type="button" id="duedate-clear" aria-label="${t('goal-dialog.duedate-clear')}">${icons.xMark}</button>
           </div>
         </div>
 
@@ -651,6 +604,7 @@ class GoalDialog extends AppElement {
 
       <!-- ── Action sheet ─────────────────────────────────────────────────── -->
       <modal-dialog id="action-sheet" aria-label="${t('goal-dialog.more-actions')}">
+        <button type="button" id="action-duedate-toggle" class="sheet-item" aria-pressed="false">${t('goal-dialog.duedate-toggle')}</button>
         <button type="button" id="action-move-btn" class="sheet-item">${t('goal-dialog.move-to-year')}</button>
         <button type="button" id="action-create-btn" class="sheet-item">${t('goal-dialog.create-list-item')}</button>
       </modal-dialog>
@@ -671,8 +625,8 @@ class GoalDialog extends AppElement {
     this._descCopyBtn   = this.shadowRoot.querySelector('#desc-copy-btn');
     this._dueDateInput  = this.shadowRoot.querySelector('#duedate-input');
     this._dueDateClear  = this.shadowRoot.querySelector('#duedate-clear');
-    this._dueDateToggle = this.shadowRoot.querySelector('#duedate-toggle');
-    this._dueDateRow    = this.shadowRoot.querySelector('.duedate-inline');
+    this._dueDateToggle = this.shadowRoot.querySelector('#action-duedate-toggle');
+    this._dueDateRow    = this.shadowRoot.querySelector('.duedate-field');
     this._tagChipsWrap    = this.shadowRoot.querySelector('#tag-chips-wrap');
     this._tagInput        = this.shadowRoot.querySelector('#tag-input');
     this._tagSuggestions  = this.shadowRoot.querySelector('#tag-suggestions');
@@ -753,11 +707,14 @@ class GoalDialog extends AppElement {
       this._announceSaved();
     };
 
+    // Triggered from the overflow menu now — doesn't close the sheet and
+    // doesn't auto-focus the revealed field: focusing it right after a menu
+    // interaction would be a jarring second focus change (and would dismiss
+    // the on-screen keyboard if title/notes had it open). Let the user tap
+    // in when they're ready.
     this._onDueDateToggle = () => {
-      // Don't auto-focus: focusing the date input dismisses the on-screen
-      // keyboard (if the title/notes field had it open) and swaps in the
-      // native date picker, a jarring viewport jump the user didn't ask for.
       this._showDueDateField(this._dueDateRow.hidden);
+      requestAnimationFrame(() => this._syncDescHeight());
     };
 
     this._onDueDateClear = () => {
@@ -847,8 +804,6 @@ class GoalDialog extends AppElement {
     this._descCopyBtn.addEventListener('pointerdown', e => e.preventDefault());
     this._descCopyBtn.addEventListener('click', this._onDescCopy);
     this._dueDateInput.addEventListener('change', this._onDueDateInput);
-    this._dueDateToggle.addEventListener('pointerdown', e => e.preventDefault());
-    this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
     this._dueDateClear.addEventListener('pointerdown', e => e.preventDefault());
     this._dueDateClear.addEventListener('click', this._onDueDateClear);
     this._tagInput.addEventListener('keydown',   this._onTagKeyDown);
@@ -875,6 +830,9 @@ class GoalDialog extends AppElement {
 
     this._onMenuBtn = () => this._actionSheet.show();
     this._menuBtn.addEventListener('click', this._onMenuBtn);
+
+    // Toggle — deliberately doesn't close the sheet (see _onDueDateToggle).
+    this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
 
     this._onArchivePD = e => e.preventDefault();
     this._archiveBtn.addEventListener('pointerdown', this._onArchivePD);
@@ -1081,7 +1039,8 @@ class GoalDialog extends AppElement {
 
   _showDueDateField(show) {
     this._dueDateRow.hidden = !show;
-    this._dueDateToggle.setAttribute('aria-expanded', String(show));
+    this._dueDateToggle.setAttribute('aria-pressed', String(show));
+    this._dueDateToggle.textContent = show ? t('goal-dialog.duedate-toggle-hide') : t('goal-dialog.duedate-toggle');
   }
 
   _showView(name) {
