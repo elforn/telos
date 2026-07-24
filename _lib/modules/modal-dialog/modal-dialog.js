@@ -33,7 +33,9 @@ class ModalDialog extends AppElement {
           font-family: var(--font-family);
           font-size: var(--font-size-body);
           box-shadow: var(--shadow-sheet);
-          overscroll-behavior-y: contain;
+          display: flex;
+          flex-direction: column;
+          max-block-size: min(85vh, 600px);
         }
 
         dialog[open] {
@@ -45,7 +47,14 @@ class ModalDialog extends AppElement {
           animation: fade-in 0.2s ease-out;
         }
 
-        .handle { display: none; }
+        .handle { display: none; flex-shrink: 0; }
+
+        .body {
+          flex: 1 1 auto;
+          min-block-size: 0;
+          overflow-y: auto;
+          overscroll-behavior-y: contain;
+        }
 
         @media (max-width: ${MOBILE_BREAKPOINT}px) {
           dialog {
@@ -61,6 +70,7 @@ class ModalDialog extends AppElement {
             border-start-start-radius: var(--radius-lg);
             border-start-end-radius: var(--radius-lg);
             padding-block-end: calc(var(--space-6) + var(--safe-area-bottom, 0px));
+            max-block-size: 85vh;
           }
 
           dialog[open] {
@@ -96,11 +106,12 @@ class ModalDialog extends AppElement {
           justify-content: flex-end;
           gap: var(--space-2);
           margin-block-start: var(--space-4);
+          flex-shrink: 0;
         }
       </style>
       <dialog aria-modal="true">
         <div class="handle" aria-hidden="true"></div>
-        <slot></slot>
+        <div class="body"><slot></slot></div>
         <div class="footer"><slot name="footer"></slot></div>
       </dialog>
     `;

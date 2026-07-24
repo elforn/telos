@@ -147,6 +147,13 @@ describe('modal-dialog — slots and structure', () => {
     expect(el.shadowRoot.querySelector('.handle')).toBeTruthy();
   });
 
+  it('default slot is wrapped in a .body container', () => {
+    const el = mount();
+    const body = el.shadowRoot.querySelector('.body');
+    expect(body).toBeTruthy();
+    expect(body.querySelector('slot:not([name])')).toBeTruthy();
+  });
+
   it('handle grab zone spans full width and meets the touch-target min-size', () => {
     // Media-query rules are not applied by happy-dom getComputedStyle, so assert the
     // authored rule: the grab zone is full-width and at least --touch-target tall.
@@ -158,6 +165,33 @@ describe('modal-dialog — slots and structure', () => {
     expect(handleRule).toMatch(/touch-action:\s*none/);
     // Visible pill unchanged: 36×4 rendered on ::before.
     expect(css).toMatch(/\.handle::before[^}]*inline-size:\s*36px/);
+  });
+
+  it('dialog is a column flex container with a max-block-size cap', () => {
+    const el = mount();
+    const css = el.shadowRoot.querySelector('style').textContent;
+    const dialogRule = css.slice(css.indexOf('dialog {'), css.indexOf('dialog[open]'));
+    expect(dialogRule).toMatch(/display:\s*flex/);
+    expect(dialogRule).toMatch(/flex-direction:\s*column/);
+    expect(dialogRule).toMatch(/max-block-size:/);
+  });
+
+  it('.body has overflow-y: auto and flex sizing that allows it to shrink', () => {
+    const el = mount();
+    const css = el.shadowRoot.querySelector('style').textContent;
+    const bodyRule = css.slice(css.indexOf('.body {'), css.indexOf('.body {') + 200);
+    expect(bodyRule).toMatch(/overflow-y:\s*auto/);
+    expect(bodyRule).toMatch(/flex:\s*1 1 auto/);
+    expect(bodyRule).toMatch(/min-block-size:\s*0/);
+  });
+
+  it('.handle and .footer have flex-shrink: 0', () => {
+    const el = mount();
+    const css = el.shadowRoot.querySelector('style').textContent;
+    const handleBaseRule = css.slice(css.indexOf('.handle {'), css.indexOf('.handle {') + 80);
+    const footerRule = css.slice(css.indexOf('.footer {'), css.indexOf('.footer {') + 200);
+    expect(handleBaseRule).toMatch(/flex-shrink:\s*0/);
+    expect(footerRule).toMatch(/flex-shrink:\s*0/);
   });
 });
 
