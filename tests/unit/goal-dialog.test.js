@@ -65,13 +65,13 @@ describe('goal-dialog — open', () => {
   it('deadline field is hidden by default on a new goal', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(true);
   });
 
   it('deadline field is shown automatically when goal has a dueDate', () => {
     const el = mount();
     el.open({ title: 'Grand Capstone', dueDate: '2026-12-31' });
-    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#duedate-input').value).toBe('2026-12-31');
   });
 
@@ -79,7 +79,7 @@ describe('goal-dialog — open', () => {
     const el = mount();
     el.open(null);
     el.shadowRoot.querySelector('#duedate-toggle').click();
-    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(false);
   });
 });
 

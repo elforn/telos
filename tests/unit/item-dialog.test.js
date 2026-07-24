@@ -142,13 +142,13 @@ describe('item-dialog — open', () => {
   it('due-date field is hidden by default on new item', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(true);
   });
 
   it('due-date field is shown automatically when item has a dueDate', () => {
     const el = mount();
     el.open({ ...ITEM, dueDate: '2026-08-01' });
-    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#duedate-input').value).toBe('2026-08-01');
   });
 
@@ -156,7 +156,7 @@ describe('item-dialog — open', () => {
     const el = mount();
     el.open(null);
     el.shadowRoot.querySelector('#duedate-toggle').click();
-    expect(el.shadowRoot.querySelector('.duedate-row').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('.duedate-inline').hidden).toBe(false);
   });
 
   it('duedate-toggle sets aria-expanded to true when due-date field is shown', () => {

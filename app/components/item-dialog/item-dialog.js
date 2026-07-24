@@ -307,8 +307,8 @@ class ItemDialog extends AppElement {
           outline-offset: 2px;
         }
 
-        /* ── URL row / due-date row ──────────────────────────────────────── */
-        .url-row, .duedate-row {
+        /* ── URL row (full width — needs room to type/read a link) ──────── */
+        .url-row {
           display: flex;
           gap: var(--space-2);
           align-items: center;
@@ -320,23 +320,7 @@ class ItemDialog extends AppElement {
           margin-block-end: 0;
         }
 
-        #duedate-input {
-          flex: 1;
-          min-inline-size: 0;
-          background: var(--color-surface-raised);
-          border: 0.5px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          padding: var(--space-3);
-          font-size: var(--font-size-body);
-          font-family: var(--font-family);
-          color: var(--color-text-primary);
-          outline: none;
-          box-sizing: border-box;
-        }
-
-        #duedate-input:focus { border-color: var(--color-accent); }
-
-        #url-open, #duedate-clear {
+        #url-open {
           flex-shrink: 0;
           min-block-size: var(--touch-target);
           min-inline-size: var(--touch-target);
@@ -354,7 +338,63 @@ class ItemDialog extends AppElement {
           justify-content: center;
         }
 
-        #url-open:focus-visible, #duedate-clear:focus-visible {
+        #url-open:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        /* ── Due-date — compact, sits inline with the toggle pills. Input and
+           clear button share one bordered box so it reads as a single field,
+           not two competing controls. ───────────────────────────────────── */
+        .duedate-inline {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-1);
+          block-size: var(--touch-target);
+          box-sizing: border-box;
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding-inline-start: var(--space-2);
+          padding-inline-end: var(--space-1);
+        }
+
+        .duedate-inline:focus-within { border-color: var(--color-accent); }
+
+        #duedate-input {
+          block-size: 100%;
+          box-sizing: border-box;
+          background: none;
+          border: none;
+          padding: 0;
+          font-size: var(--font-size-caption);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          outline: none;
+        }
+
+        /* De-emphasised on purpose — clearing a date is reversible and rare
+           enough that it shouldn't compete visually with the toggle pills. */
+        #duedate-clear {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target-small);
+          min-inline-size: var(--touch-target-small);
+          padding: 0;
+          border: none;
+          border-radius: var(--radius-full);
+          background: none;
+          color: var(--color-text-secondary);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        #duedate-clear svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); }
+
+        #duedate-clear:hover { background: var(--color-surface); }
+
+        #duedate-clear:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
@@ -678,8 +718,14 @@ class ItemDialog extends AppElement {
                 `).join('')}
               </div>
               <div class="toggles-end">
-                <button type="button" id="url-toggle" aria-expanded="false">🔗 ${t('item-dialog.url-toggle')}</button>
+                <div class="duedate-inline" hidden>
+                  <input id="duedate-input"
+                         type="date"
+                         aria-label="${t('item-dialog.duedate-toggle')}" />
+                  <button type="button" id="duedate-clear" aria-label="${t('item-dialog.duedate-clear')}">${icons.xMark}</button>
+                </div>
                 <button type="button" id="duedate-toggle" aria-expanded="false">📅 ${t('item-dialog.duedate-toggle')}</button>
+                <button type="button" id="url-toggle" aria-expanded="false">🔗 ${t('item-dialog.url-toggle')}</button>
               </div>
             </div>
             <div class="url-row" hidden>
@@ -690,12 +736,6 @@ class ItemDialog extends AppElement {
                      autocomplete="off"
                      inputmode="url" />
               <button type="button" id="url-open" hidden>${t('item-dialog.url-open')}</button>
-            </div>
-            <div class="duedate-row" hidden>
-              <input id="duedate-input"
-                     type="date"
-                     aria-label="${t('item-dialog.duedate-toggle')}" />
-              <button type="button" id="duedate-clear" aria-label="${t('item-dialog.duedate-clear')}">${icons.xMark}</button>
             </div>
           </div>
           <div class="tag-area">
@@ -775,7 +815,7 @@ class ItemDialog extends AppElement {
     this._dueDateInput = this.shadowRoot.querySelector('#duedate-input');
     this._dueDateClear = this.shadowRoot.querySelector('#duedate-clear');
     this._dueDateToggle = this.shadowRoot.querySelector('#duedate-toggle');
-    this._dueDateRow = this.shadowRoot.querySelector('.duedate-row');
+    this._dueDateRow = this.shadowRoot.querySelector('.duedate-inline');
     this._tagChipsWrap = this.shadowRoot.querySelector('#tag-chips-wrap');
     this._tagInput = this.shadowRoot.querySelector('#tag-input');
     this._tagSuggestions = this.shadowRoot.querySelector('#tag-suggestions');

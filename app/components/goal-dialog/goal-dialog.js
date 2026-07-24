@@ -113,8 +113,15 @@ class GoalDialog extends AppElement {
         input[type="text"]:focus { border-color: var(--color-accent); }
         input[type="text"]::placeholder { color: var(--color-text-muted); }
 
-        /* ── Deadline toggle + row ───────────────────────────────────────── */
-        .duedate-field { margin-block-end: var(--space-4); }
+        /* ── Deadline — compact, sits below notes, doesn't need a full row ── */
+        .duedate-field {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: var(--space-2);
+          flex-wrap: wrap;
+          margin-block-end: var(--space-4);
+        }
 
         #duedate-toggle {
           display: inline-flex;
@@ -128,6 +135,7 @@ class GoalDialog extends AppElement {
           font-weight: var(--font-weight-medium);
           font-family: var(--font-family);
           cursor: pointer;
+          flex-shrink: 0;
           min-block-size: auto;
           line-height: normal;
         }
@@ -139,43 +147,55 @@ class GoalDialog extends AppElement {
           outline-offset: 2px;
         }
 
-        .duedate-row {
-          display: flex;
-          gap: var(--space-2);
+        /* Input and clear button share one bordered box so it reads as a
+           single field, not two competing controls. */
+        .duedate-inline {
+          display: inline-flex;
           align-items: center;
-          margin-block-start: var(--space-3);
-        }
-
-        #duedate-input {
-          flex: 1;
-          min-inline-size: 0;
+          gap: var(--space-1);
+          block-size: var(--touch-target);
+          box-sizing: border-box;
           background: var(--color-surface-raised);
           border: 0.5px solid var(--color-border);
           border-radius: var(--radius-sm);
-          padding: var(--space-3);
-          font-size: var(--font-size-body);
+          padding-inline-start: var(--space-2);
+          padding-inline-end: var(--space-1);
+        }
+
+        .duedate-inline:focus-within { border-color: var(--color-accent); }
+
+        #duedate-input {
+          block-size: 100%;
+          box-sizing: border-box;
+          background: none;
+          border: none;
+          padding: 0;
+          font-size: var(--font-size-caption);
           font-family: var(--font-family);
           color: var(--color-text-primary);
           outline: none;
-          box-sizing: border-box;
         }
 
-        #duedate-input:focus { border-color: var(--color-accent); }
-
+        /* De-emphasised on purpose — clearing a date is reversible and rare
+           enough that it shouldn't compete visually with the toggle pill. */
         #duedate-clear {
           flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
-          padding-inline: var(--space-3);
-          border-radius: var(--radius-sm);
-          border: 0.5px solid var(--color-border);
-          background: var(--color-surface-raised);
-          color: var(--color-accent);
+          min-block-size: var(--touch-target-small);
+          min-inline-size: var(--touch-target-small);
+          padding: 0;
+          border: none;
+          border-radius: var(--radius-full);
+          background: none;
+          color: var(--color-text-secondary);
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
         }
+
+        #duedate-clear svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); }
+
+        #duedate-clear:hover { background: var(--color-surface); }
 
         #duedate-clear:focus-visible {
           outline: 2px solid var(--color-accent);
@@ -552,21 +572,21 @@ class GoalDialog extends AppElement {
                  autocomplete="off"
                  enterkeyhint="go"
                  maxlength="80" />
-          <div class="duedate-field">
-            <button type="button" id="duedate-toggle" aria-expanded="false">📅 ${t('goal-dialog.duedate-toggle')}</button>
-            <div class="duedate-row" hidden>
-              <input id="duedate-input"
-                     type="date"
-                     aria-label="${t('goal-dialog.duedate-toggle')}" />
-              <button type="button" id="duedate-clear" aria-label="${t('goal-dialog.duedate-clear')}">${icons.xMark}</button>
-            </div>
-          </div>
           <div class="textarea-wrap">
             <div class="md-highlight" aria-hidden="true"></div>
             <textarea id="desc-input"
                       aria-label="${t('goal-dialog.notes-placeholder')}"
                       placeholder="${t('goal-dialog.notes-placeholder')}"></textarea>
             <button type="button" class="copy-btn" id="desc-copy-btn" aria-label="${t('goal-dialog.copy-notes')}" title="${t('goal-dialog.copy-notes')}">${icons.copy}</button>
+          </div>
+          <div class="duedate-field">
+            <div class="duedate-inline" hidden>
+              <input id="duedate-input"
+                     type="date"
+                     aria-label="${t('goal-dialog.duedate-toggle')}" />
+              <button type="button" id="duedate-clear" aria-label="${t('goal-dialog.duedate-clear')}">${icons.xMark}</button>
+            </div>
+            <button type="button" id="duedate-toggle" aria-expanded="false">📅 ${t('goal-dialog.duedate-toggle')}</button>
           </div>
           <div class="tag-area">
             <div id="tag-suggestions" hidden aria-label="${t('goal-dialog.tags-label')}"></div>
@@ -642,7 +662,7 @@ class GoalDialog extends AppElement {
     this._dueDateInput  = this.shadowRoot.querySelector('#duedate-input');
     this._dueDateClear  = this.shadowRoot.querySelector('#duedate-clear');
     this._dueDateToggle = this.shadowRoot.querySelector('#duedate-toggle');
-    this._dueDateRow    = this.shadowRoot.querySelector('.duedate-row');
+    this._dueDateRow    = this.shadowRoot.querySelector('.duedate-inline');
     this._tagChipsWrap    = this.shadowRoot.querySelector('#tag-chips-wrap');
     this._tagInput        = this.shadowRoot.querySelector('#tag-input');
     this._tagSuggestions  = this.shadowRoot.querySelector('#tag-suggestions');
