@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.13.0] — 2026-07-25
+
+### Changed
+- Due date (items) and Link (items) and Deadline (goals) are now toggled on from the "···" menu instead of pills in the main form — the field appears full width, matching the title field, once turned on. The menu is now reachable while creating a brand-new item or goal, not just after the first save.
+
+### Fixed
+- Dialogs (Settings, item/goal editors, action sheets, etc.) no longer pop open on app launch or fail to close — a service-worker-library update briefly broke the underlying `<dialog>` visibility toggle.
+
 ## [1.12.0] — 2026-07-24
 
 ### Added
