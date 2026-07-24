@@ -230,7 +230,8 @@ class ItemDialog extends AppElement {
         .pills-row {
           display: flex;
           align-items: center;
-          gap: var(--space-2);
+          column-gap: var(--space-2);
+          row-gap: var(--space-3);
           flex-wrap: wrap;
         }
 
@@ -274,21 +275,28 @@ class ItemDialog extends AppElement {
         }
 
         /* ── URL / due-date toggles ──────────────────────────────────────── */
+        /* Fills the row like every other field, left-aligned with them.
+           min-block-size reserves the compact-field's height up front so
+           opening it doesn't grow the row / shift everything below. */
         .toggles-end {
           display: flex;
+          align-items: center;
           gap: var(--space-2);
           flex-wrap: wrap;
-          margin-inline-start: auto;
+          min-block-size: var(--touch-target);
+          inline-size: 100%;
         }
 
+        /* Muted like an unchecked status pill by default — accent only when
+           active, so these don't outcompete the status pills for attention. */
         #url-toggle, #duedate-toggle {
           display: inline-flex;
           align-items: center;
           padding: var(--space-2) var(--space-3);
           border-radius: var(--radius-full);
-          border: 1px solid var(--color-accent);
+          border: 1px solid var(--color-border);
           background: transparent;
-          color: var(--color-accent);
+          color: var(--color-text-secondary);
           font-size: var(--font-size-caption);
           font-weight: var(--font-weight-medium);
           font-family: var(--font-family);
@@ -296,10 +304,13 @@ class ItemDialog extends AppElement {
           flex-shrink: 0;
           min-block-size: auto;
           line-height: normal;
+          transition: border-color 0.15s, background 0.15s, color 0.15s;
         }
 
         #url-toggle[aria-expanded="true"], #duedate-toggle[aria-expanded="true"] {
           background: var(--color-accent-subtle);
+          border-color: var(--color-accent);
+          color: var(--color-accent);
         }
 
         #url-toggle:focus-visible, #duedate-toggle:focus-visible {
@@ -944,9 +955,11 @@ class ItemDialog extends AppElement {
     };
 
     this._onDueDateToggle = () => {
-      const opening = this._dueDateRow.hidden;
-      this._showDueDateField(opening);
-      if (opening) this._dueDateInput.focus();
+      // Unlike the URL toggle, don't auto-focus the date input: focusing it
+      // dismisses the on-screen keyboard (if the title/note field had it open)
+      // and swaps in the native date picker, a jarring viewport jump the user
+      // didn't ask for. Let them tap the field when they're ready for that.
+      this._showDueDateField(this._dueDateRow.hidden);
     };
 
     this._onDueDateClear = () => {
