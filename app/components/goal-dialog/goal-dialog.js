@@ -822,6 +822,7 @@ class GoalDialog extends AppElement {
       if (e.key !== 'Enter') return;
       if (this._isNew) {
         if (!this._input.value.trim()) return; // require title for new goals
+        this._input.blur(); // dismiss keyboard / run blur handlers before close (matches item-dialog)
         this._modal.close();
       } else {
         this._input.blur(); // triggers _onTitleBlur before close

@@ -176,6 +176,18 @@ describe('list-dialog — edit existing (blur-save)', () => {
     );
     expect(modal.close).toHaveBeenCalledOnce();
   });
+
+  it('Enter key blurs the input before closing for a new list', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    const input = el.shadowRoot.querySelector('#input');
+    el.open(null);
+    input.value = 'Fresh list';
+    const blurSpy = vi.spyOn(input, 'blur');
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(blurSpy).toHaveBeenCalled();
+    expect(modal.close).toHaveBeenCalledOnce();
+  });
 });
 
 // ── delete ────────────────────────────────────────────────────────────────────
