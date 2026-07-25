@@ -281,7 +281,7 @@ class BottomNav extends AppElement {
 
         .modal-btn {
           min-block-size: var(--touch-target);
-          padding-inline: var(--space-4);
+          padding-inline: var(--space-2);
           background: var(--color-surface-raised);
           border: none;
           border-radius: var(--radius-md);

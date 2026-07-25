@@ -322,6 +322,7 @@ class ItemDialog extends AppElement {
         #duedate-input {
           flex: 1;
           min-inline-size: 0;
+          block-size: 1lh;
           background: none;
           border: none;
           padding: 0;
@@ -332,11 +333,17 @@ class ItemDialog extends AppElement {
         }
 
         /* De-emphasised on purpose — clearing a date is reversible and rare
-           enough that it shouldn't compete visually with the field itself. */
+           enough that it shouldn't compete visually with the field itself.
+           The visible box matches the icon so it doesn't force the row taller
+           than the title input; ::before restores the touch-target-small hit
+           area invisibly, extending past the box without affecting layout. */
         #duedate-clear {
+          position: relative;
           flex-shrink: 0;
-          min-block-size: var(--touch-target-small);
-          min-inline-size: var(--touch-target-small);
+          min-block-size: 0;
+          min-inline-size: 0;
+          inline-size: var(--icon-size-sm);
+          block-size: var(--icon-size-sm);
           padding: 0;
           border: none;
           border-radius: var(--radius-full);
@@ -346,6 +353,12 @@ class ItemDialog extends AppElement {
           display: flex;
           align-items: center;
           justify-content: center;
+        }
+
+        #duedate-clear::before {
+          content: '';
+          position: absolute;
+          inset: calc((var(--icon-size-sm) - var(--touch-target-small)) / 2);
         }
 
         #duedate-clear svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); }
@@ -504,6 +517,31 @@ class ItemDialog extends AppElement {
           outline-offset: -2px;
         }
 
+        /* Toggle-type sheet items get a leading icon and a trailing checkmark
+           (shown only when active) so they read as switches, not actions. */
+        .sheet-item-toggle { gap: var(--space-3); }
+
+        .sheet-toggle-icon {
+          display: flex;
+          flex-shrink: 0;
+          color: var(--color-text-secondary);
+        }
+
+        .sheet-toggle-icon svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); }
+
+        .sheet-toggle-label { flex: 1; }
+
+        .sheet-toggle-check {
+          display: flex;
+          flex-shrink: 0;
+          color: var(--color-accent);
+          visibility: hidden;
+        }
+
+        .sheet-toggle-check svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); }
+
+        .sheet-item-toggle[aria-pressed="true"] .sheet-toggle-check { visibility: visible; }
+
         /* ── Picker views (goal-promoter) ───────────────────────────────── */
         .picker-heading {
           font-size: var(--font-size-caption);
@@ -596,7 +634,7 @@ class ItemDialog extends AppElement {
         /* ── Shared footer / button styles ───────────────────────────────── */
         button {
           min-block-size: var(--touch-target);
-          padding-inline: var(--space-4);
+          padding-inline: var(--space-2);
           border-radius: var(--radius-sm);
           border: none;
           cursor: pointer;
@@ -742,8 +780,16 @@ class ItemDialog extends AppElement {
       </modal-dialog>
 
       <modal-dialog id="action-sheet" aria-label="${t('item-dialog.more-actions')}">
-        <button type="button" id="action-duedate-toggle" class="sheet-item" aria-pressed="false">${t('item-dialog.duedate-toggle')}</button>
-        <button type="button" id="action-url-toggle" class="sheet-item" aria-pressed="false">${t('item-dialog.url-toggle')}</button>
+        <button type="button" id="action-duedate-toggle" class="sheet-item sheet-item-toggle" aria-pressed="false">
+          <span class="sheet-toggle-icon">${icons.calendar}</span>
+          <span class="sheet-toggle-label">${t('item-dialog.duedate-toggle')}</span>
+          <span class="sheet-toggle-check">${icons.check}</span>
+        </button>
+        <button type="button" id="action-url-toggle" class="sheet-item sheet-item-toggle" aria-pressed="false">
+          <span class="sheet-toggle-icon">${icons.link}</span>
+          <span class="sheet-toggle-label">${t('item-dialog.url-toggle')}</span>
+          <span class="sheet-toggle-check">${icons.check}</span>
+        </button>
         <button type="button" id="action-move-btn" class="sheet-item">${t('item-dialog.move-to-list')}</button>
         <button type="button" id="action-promote-btn" class="sheet-item">${t('item-dialog.add-to-goal')}</button>
         <button type="button" id="action-export-btn" class="sheet-item">${t('item-dialog.extract-markdown')}</button>
@@ -1369,13 +1415,11 @@ class ItemDialog extends AppElement {
   _showUrlField(show) {
     this._urlRow.hidden = !show;
     this._urlToggle.setAttribute('aria-pressed', String(show));
-    this._urlToggle.textContent = show ? t('item-dialog.url-toggle-hide') : t('item-dialog.url-toggle');
   }
 
   _showDueDateField(show) {
     this._dueDateRow.hidden = !show;
     this._dueDateToggle.setAttribute('aria-pressed', String(show));
-    this._dueDateToggle.textContent = show ? t('item-dialog.duedate-toggle-hide') : t('item-dialog.duedate-toggle');
   }
 
   _announceSaved() {

@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.13.1] — 2026-07-25
+
+### Changed
+- The Due date/Link/Deadline toggles in the "···" overflow menu now show a leading icon and a checkmark when active, so they read clearly as switches rather than one-off actions.
+- Footer button padding (Save, Close, Delete, etc.) is now narrower, matching the visual weight of the rest of the dialog.
+
+### Fixed
+- The Due date (items) and Deadline (goals) fields are now exactly the same height as the title field — the native date picker no longer stretched the row taller.
+
 ## [1.13.0] — 2026-07-25
 
 ### Changed

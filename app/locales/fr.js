@@ -48,7 +48,6 @@ defineStrings({
   'goal-dialog.tags-label':       'Étiquettes',
   'goal-dialog.tags-placeholder': 'Ajouter une étiquette…',
   'goal-dialog.duedate-toggle':   'Échéance',
-  'goal-dialog.duedate-toggle-hide': 'Masquer l\'échéance',
   'goal-dialog.duedate-clear':    'Effacer l\'échéance',
 
   'goal-dialog.archive':                  'Archiver',
@@ -173,10 +172,8 @@ defineStrings({
   'item-dialog.copy-note': 'Copier la note',
   'item-dialog.url-placeholder':  'Lien (https://…)',
   'item-dialog.url-toggle':       'Lien',
-  'item-dialog.url-toggle-hide':  'Masquer le lien',
   'item-dialog.url-open':         'Ouvrir',
   'item-dialog.duedate-toggle':   'Échéance',
-  'item-dialog.duedate-toggle-hide': 'Masquer l\'échéance',
   'item-dialog.duedate-clear':    'Effacer l\'échéance',
   'item-dialog.close':            'Fermer',
   'item-dialog.save-and-close':   'Enregistrer et fermer',

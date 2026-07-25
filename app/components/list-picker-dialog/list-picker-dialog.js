@@ -207,7 +207,7 @@ class ListPickerDialog extends AppElement {
         /* ── Footer buttons ──────────────────────────────────────────────── */
         button {
           min-block-size: var(--touch-target);
-          padding-inline: var(--space-4);
+          padding-inline: var(--space-2);
           border-radius: var(--radius-sm);
           border: none;
           cursor: pointer;

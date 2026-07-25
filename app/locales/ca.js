@@ -48,7 +48,6 @@ defineStrings({
   'goal-dialog.tags-label':       'Etiquetes',
   'goal-dialog.tags-placeholder': 'Afegeix etiqueta…',
   'goal-dialog.duedate-toggle':   'Termini',
-  'goal-dialog.duedate-toggle-hide': 'Amaga el termini',
   'goal-dialog.duedate-clear':    'Esborra el termini',
 
   'goal-dialog.archive':                  'Arxiva',
@@ -173,10 +172,8 @@ defineStrings({
   'item-dialog.copy-note': 'Copia la nota',
   'item-dialog.url-placeholder':  'Enllaç (https://…)',
   'item-dialog.url-toggle':       'Enllaç',
-  'item-dialog.url-toggle-hide':  'Amaga l\'enllaç',
   'item-dialog.url-open':         'Obre',
   'item-dialog.duedate-toggle':   'Data límit',
-  'item-dialog.duedate-toggle-hide': 'Amaga la data límit',
   'item-dialog.duedate-clear':    'Esborra la data límit',
   'item-dialog.close':            'Tanca',
   'item-dialog.save-and-close':   'Desa i tanca',

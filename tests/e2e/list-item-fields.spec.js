@@ -129,6 +129,34 @@ function itemField(page, field) {
   }, field);
 }
 
+async function toggleUrlField(page) {
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('list-detail-page').shadowRoot
+      .querySelector('item-dialog').shadowRoot
+      .querySelector('#menu-btn').click();
+  });
+  await page.waitForFunction(() =>
+    document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('list-detail-page')?.shadowRoot
+      ?.querySelector('item-dialog')?.shadowRoot
+      ?.querySelector('#action-sheet')?.shadowRoot
+      ?.querySelector('dialog')?.open
+  );
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('list-detail-page').shadowRoot
+      .querySelector('item-dialog').shadowRoot
+      .querySelector('#action-url-toggle').click();
+  });
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('list-detail-page').shadowRoot
+      .querySelector('item-dialog').shadowRoot
+      .querySelector('#action-sheet').close();
+  });
+}
+
 // ── List item — note ──────────────────────────────────────────────────────────
 
 test.describe('List item — note', () => {
@@ -210,12 +238,7 @@ test.describe('List item — URL', () => {
     );
     expect(hiddenBefore).toBe(true);
 
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('list-detail-page').shadowRoot
-        .querySelector('item-dialog').shadowRoot
-        .querySelector('#url-toggle').click();
-    });
+    await toggleUrlField(page);
 
     await page.waitForFunction(() => {
       const row = document.querySelector('app-router')?.shadowRoot
@@ -235,12 +258,7 @@ test.describe('List item — URL', () => {
   });
 
   test('URL is saved with the item', async ({ page }) => {
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('list-detail-page').shadowRoot
-        .querySelector('item-dialog').shadowRoot
-        .querySelector('#url-toggle').click();
-    });
+    await toggleUrlField(page);
     await page.waitForFunction(() => {
       const row = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
@@ -263,12 +281,7 @@ test.describe('List item — URL', () => {
   });
 
   test('URL persists across page reload', async ({ page }) => {
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('list-detail-page').shadowRoot
-        .querySelector('item-dialog').shadowRoot
-        .querySelector('#url-toggle').click();
-    });
+    await toggleUrlField(page);
     await page.waitForFunction(() => {
       const row = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot

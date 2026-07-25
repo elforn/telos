@@ -114,18 +114,17 @@ describe('item-dialog — open', () => {
     expect(el.shadowRoot.querySelector('.url-row').hidden).toBe(false);
   });
 
-  it('url-toggle sets aria-pressed to true and label to "Hide link" when url field is shown', () => {
+  it('url-toggle sets aria-pressed to true when url field is shown', () => {
     const el = mount();
     el.open(ITEM);
     const btn = el.shadowRoot.querySelector('#action-url-toggle');
     expect(btn.getAttribute('aria-pressed')).toBe('true');
-    expect(btn.textContent).toBe('Hide link');
   });
 
-  it('url-toggle label is "Link" when url field is hidden', () => {
+  it('url-toggle sets aria-pressed to false when url field is hidden', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('#action-url-toggle').textContent).toBe('Link');
+    expect(el.shadowRoot.querySelector('#action-url-toggle').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('clicking url-toggle (in the overflow menu) reveals the url field', () => {
@@ -167,18 +166,17 @@ describe('item-dialog — open', () => {
     expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
   });
 
-  it('duedate-toggle sets aria-pressed to true and label to "Hide due date" when due-date field is shown', () => {
+  it('duedate-toggle sets aria-pressed to true when due-date field is shown', () => {
     const el = mount();
     el.open({ ...ITEM, dueDate: '2026-08-01' });
     const btn = el.shadowRoot.querySelector('#action-duedate-toggle');
     expect(btn.getAttribute('aria-pressed')).toBe('true');
-    expect(btn.textContent).toBe('Hide due date');
   });
 
-  it('duedate-toggle label is "Due date" when due-date field is hidden', () => {
+  it('duedate-toggle sets aria-pressed to false when due-date field is hidden', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('#action-duedate-toggle').textContent).toBe('Due date');
+    expect(el.shadowRoot.querySelector('#action-duedate-toggle').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('pre-selects the item status radio', () => {

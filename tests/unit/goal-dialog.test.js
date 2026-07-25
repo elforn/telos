@@ -82,18 +82,17 @@ describe('goal-dialog — open', () => {
     expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
   });
 
-  it('duedate-toggle sets aria-pressed to true and label to "Hide deadline" when shown', () => {
+  it('duedate-toggle sets aria-pressed to true when shown', () => {
     const el = mount();
     el.open({ title: 'Grand Capstone', dueDate: '2026-12-31' });
     const btn = el.shadowRoot.querySelector('#action-duedate-toggle');
     expect(btn.getAttribute('aria-pressed')).toBe('true');
-    expect(btn.textContent).toBe('Hide deadline');
   });
 
-  it('duedate-toggle label is "Deadline" when hidden', () => {
+  it('duedate-toggle sets aria-pressed to false when hidden', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('#action-duedate-toggle').textContent).toBe('Deadline');
+    expect(el.shadowRoot.querySelector('#action-duedate-toggle').getAttribute('aria-pressed')).toBe('false');
   });
 });
 

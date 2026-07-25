@@ -257,7 +257,7 @@ class ListDetailPage extends AppElement {
 
         .import-footer button {
           min-block-size: var(--touch-target);
-          padding-inline: var(--space-4);
+          padding-inline: var(--space-2);
           border-radius: var(--radius-sm);
           border: none;
           cursor: pointer;
