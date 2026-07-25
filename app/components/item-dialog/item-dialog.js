@@ -224,19 +224,21 @@ class ItemDialog extends AppElement {
 
         .copy-btn.is-copied { color: var(--color-accent); }
 
-        /* ── Status pills ────────────────────────────────────────────────── */
+        /* ── Status pills — grow together to span the full modal width, like
+           a segmented control, so the group reads as one field. ──────────── */
         .status-field { margin-block-end: var(--space-4); }
 
         .status-options {
           display: flex;
           gap: var(--space-2);
-          flex-wrap: wrap;
           align-items: center;
         }
 
         .status-option {
+          flex: 1;
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: var(--space-1);
           cursor: pointer;
           padding: var(--space-2) var(--space-3);
@@ -374,14 +376,14 @@ class ItemDialog extends AppElement {
 
         .tag-chips-wrap {
           display: flex;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
+          overflow-x: auto;
           gap: var(--space-2);
-          align-items: center;
+          align-items: stretch;
           background: var(--color-surface-raised);
           border: 0.5px solid var(--color-border);
           border-radius: var(--radius-sm);
-          padding: var(--space-2) var(--space-3);
-          min-block-size: var(--touch-target);
+          padding: var(--space-3);
           box-sizing: border-box;
           cursor: text;
           margin-block-end: var(--space-4);
@@ -391,9 +393,11 @@ class ItemDialog extends AppElement {
 
         .tag-chip {
           display: inline-flex;
+          flex-shrink: 0;
           align-items: center;
+          box-sizing: border-box;
+          min-block-size: 0;
           gap: var(--space-1);
-          padding-block: var(--space-1);
           padding-inline-start: var(--space-3);
           padding-inline-end: var(--space-1);
           color: var(--color-text-primary);
@@ -402,7 +406,6 @@ class ItemDialog extends AppElement {
           font-weight: var(--font-weight-medium);
           font-family: var(--font-family);
           white-space: nowrap;
-          min-block-size: 28px;
           border: none;
           cursor: pointer;
           touch-action: manipulation;
@@ -416,8 +419,9 @@ class ItemDialog extends AppElement {
         .tag-chip-x {
           background: var(--_chip-x-bg);
           border-radius: var(--radius-full);
-          inline-size: 20px;
-          block-size: 20px;
+          inline-size: var(--icon-size-sm);
+          block-size: var(--icon-size-sm);
+          flex-shrink: 0;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -429,7 +433,7 @@ class ItemDialog extends AppElement {
         .tag-chip:hover .tag-chip-x { background: var(--_chip-x-bg-hover); }
 
         #tag-input {
-          flex: 1;
+          flex: 1 0 80px;
           min-inline-size: 80px;
           background: none;
           border: none;
@@ -541,6 +545,12 @@ class ItemDialog extends AppElement {
         .sheet-toggle-check svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); }
 
         .sheet-item-toggle[aria-pressed="true"] .sheet-toggle-check { visibility: visible; }
+
+        .sheet-divider {
+          border: none;
+          border-block-start: 0.5px solid var(--color-border);
+          margin-block: var(--space-1);
+        }
 
         /* ── Picker views (goal-promoter) ───────────────────────────────── */
         .picker-heading {
@@ -682,6 +692,7 @@ class ItemDialog extends AppElement {
           gap: var(--space-2);
           margin-inline-start: auto;
         }
+
       </style>
 
       <modal-dialog id="modal">
@@ -695,14 +706,6 @@ class ItemDialog extends AppElement {
                  autocomplete="off"
                  enterkeyhint="go"
                  maxlength="120" />
-          <div class="textarea-wrap">
-            <div class="md-highlight" aria-hidden="true"></div>
-            <textarea id="note-input"
-                      aria-label="${t('item-dialog.note-placeholder')}"
-                      placeholder="${t('item-dialog.note-placeholder')}"
-                      enterkeyhint="newline"></textarea>
-            <button type="button" class="copy-btn" id="note-copy-btn" aria-label="${t('item-dialog.copy-note')}" title="${t('item-dialog.copy-note')}">${icons.copy}</button>
-          </div>
           <div class="status-field">
             <div class="status-options" role="group" aria-label="${t('item-dialog.status-label')}">
               ${STATUSES.map(s => `
@@ -712,6 +715,29 @@ class ItemDialog extends AppElement {
                 </label>
               `).join('')}
             </div>
+          </div>
+          <div class="textarea-wrap">
+            <div class="md-highlight" aria-hidden="true"></div>
+            <textarea id="note-input"
+                      aria-label="${t('item-dialog.note-placeholder')}"
+                      placeholder="${t('item-dialog.note-placeholder')}"
+                      enterkeyhint="newline"></textarea>
+            <button type="button" class="copy-btn" id="note-copy-btn" aria-label="${t('item-dialog.copy-note')}" title="${t('item-dialog.copy-note')}">${icons.copy}</button>
+          </div>
+          <div class="url-row" hidden>
+            <input id="url-input"
+                   type="text"
+                   aria-label="${t('item-dialog.url-placeholder')}"
+                   placeholder="${t('item-dialog.url-placeholder')}"
+                   autocomplete="off"
+                   inputmode="url" />
+            <button type="button" id="url-open" hidden>${t('item-dialog.url-open')}</button>
+          </div>
+          <div class="duedate-field" hidden>
+            <input id="duedate-input"
+                   type="date"
+                   aria-label="${t('item-dialog.duedate-toggle')}" />
+            <button type="button" id="duedate-clear" aria-label="${t('item-dialog.duedate-clear')}">${icons.xMark}</button>
           </div>
           <div class="tag-area">
             <div id="tag-suggestions" hidden aria-label="${t('item-dialog.tags-label')}"></div>
@@ -723,21 +749,6 @@ class ItemDialog extends AppElement {
                      autocomplete="off"
                      autocapitalize="none" />
             </div>
-          </div>
-          <div class="duedate-field" hidden>
-            <input id="duedate-input"
-                   type="date"
-                   aria-label="${t('item-dialog.duedate-toggle')}" />
-            <button type="button" id="duedate-clear" aria-label="${t('item-dialog.duedate-clear')}">${icons.xMark}</button>
-          </div>
-          <div class="url-row" hidden>
-            <input id="url-input"
-                   type="text"
-                   aria-label="${t('item-dialog.url-placeholder')}"
-                   placeholder="${t('item-dialog.url-placeholder')}"
-                   autocomplete="off"
-                   inputmode="url" />
-            <button type="button" id="url-open" hidden>${t('item-dialog.url-open')}</button>
           </div>
         </div>
 
@@ -790,6 +801,7 @@ class ItemDialog extends AppElement {
           <span class="sheet-toggle-label">${t('item-dialog.url-toggle')}</span>
           <span class="sheet-toggle-check">${icons.check}</span>
         </button>
+        <hr class="sheet-divider">
         <button type="button" id="action-move-btn" class="sheet-item">${t('item-dialog.move-to-list')}</button>
         <button type="button" id="action-promote-btn" class="sheet-item">${t('item-dialog.add-to-goal')}</button>
         <button type="button" id="action-export-btn" class="sheet-item">${t('item-dialog.extract-markdown')}</button>
@@ -801,6 +813,17 @@ class ItemDialog extends AppElement {
 
   subscribe() {
     this._modal = this.shadowRoot.querySelector('#modal');
+    // Tapping a button while a text field is focused would otherwise blur it
+    // first (closing the on-screen keyboard) before the button's own click
+    // handler runs. preventDefault on pointerdown stops that focus steal —
+    // the click still fires normally on pointerup — so buttons act without
+    // dismissing the keyboard mid-edit. Close/Delete end the editing session,
+    // so the keyboard closing for those is correct and expected.
+    this._onButtonPointerDown = e => {
+      const btn = e.target.closest('button');
+      if (btn && btn.id !== 'close' && btn.id !== 'delete') e.preventDefault();
+    };
+    this.shadowRoot.addEventListener('pointerdown', this._onButtonPointerDown);
     this._titleInput = this.shadowRoot.querySelector('#title-input');
     this._noteInput = this.shadowRoot.querySelector('#note-input');
     this._noteHighlight = attachMarkdownHighlight(
@@ -1074,7 +1097,9 @@ class ItemDialog extends AppElement {
     this._modal.addEventListener('modal-close', this._onModalClose);
     (window.visualViewport ?? window).addEventListener('resize', this._onResize);
     // preventDefault stops the browser's default label→radio handling so we
-    // control exactly when checked is set and fire 'change' in one step.
+    // control exactly when checked is set and fire 'change' in one step —
+    // it also keeps focus (and the on-screen keyboard) on whatever field the
+    // user was editing, since the tap never steals focus onto the radio.
     this._onStatusClick = e => {
       const label = e.target.closest('.status-option');
       if (!label) return;
@@ -1170,6 +1195,7 @@ class ItemDialog extends AppElement {
   }
 
   unsubscribe() {
+    this.shadowRoot.removeEventListener('pointerdown', this._onButtonPointerDown);
     this._noteHighlight?.detach();
     this._titleInput?.removeEventListener('keydown', this._onKeyDown);
     this._titleInput?.removeEventListener('blur',    this._onTitleBlur);

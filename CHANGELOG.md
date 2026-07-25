@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.14.0] — 2026-07-25
+
+### Changed
+- Item and goal dialogs reordered: status (items) sits right after the title as a full-width segmented control instead of a pill row further down the form; URL now sits directly under the note; due date/deadline now sits directly above tags — in both dialogs.
+- The overflow ("···") menu now shows a divider between its toggle switches (Due date, Link, Deadline) and its plain actions (Move to list, Add to goal, Extract Markdown), so the two groups read as visually distinct.
+- Tapping most buttons inside an open item/goal dialog (clear date, copy note, open link, remove tag, archive, etc.) no longer closes the on-screen keyboard on mobile if you were mid-edit elsewhere in the form. Close and Delete still close it, since those end the editing session.
+
+### Fixed
+- The tag input field no longer grows taller as tags are added — it now stays the same height as the title field regardless of tag count, with tags scrolling horizontally instead of wrapping.
+
 ## [1.13.1] — 2026-07-25
 
 ### Changed

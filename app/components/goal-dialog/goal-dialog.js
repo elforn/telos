@@ -268,14 +268,14 @@ class GoalDialog extends AppElement {
 
         .tag-chips-wrap {
           display: flex;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
+          overflow-x: auto;
           gap: var(--space-2);
-          align-items: center;
+          align-items: stretch;
           background: var(--color-surface-raised);
           border: 0.5px solid var(--color-border);
           border-radius: var(--radius-sm);
-          padding: var(--space-2) var(--space-3);
-          min-block-size: var(--touch-target);
+          padding: var(--space-3);
           box-sizing: border-box;
           cursor: text;
           margin-block-end: var(--space-4);
@@ -285,9 +285,11 @@ class GoalDialog extends AppElement {
 
         .tag-chip {
           display: inline-flex;
+          flex-shrink: 0;
           align-items: center;
+          box-sizing: border-box;
+          min-block-size: 0;
           gap: var(--space-1);
-          padding-block: var(--space-1);
           padding-inline-start: var(--space-3);
           padding-inline-end: var(--space-1);
           color: var(--color-text-primary);
@@ -296,7 +298,6 @@ class GoalDialog extends AppElement {
           font-weight: var(--font-weight-medium);
           font-family: var(--font-family);
           white-space: nowrap;
-          min-block-size: 28px;
           border: none;
           cursor: pointer;
           touch-action: manipulation;
@@ -310,8 +311,9 @@ class GoalDialog extends AppElement {
         .tag-chip-x {
           background: rgba(0,0,0,0.12);
           border-radius: var(--radius-full);
-          inline-size: 20px;
-          block-size: 20px;
+          inline-size: var(--icon-size-sm);
+          block-size: var(--icon-size-sm);
+          flex-shrink: 0;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -323,7 +325,7 @@ class GoalDialog extends AppElement {
         .tag-chip:hover .tag-chip-x { background: rgba(0,0,0,0.22); }
 
         #tag-input {
-          flex: 1;
+          flex: 1 0 80px;
           min-inline-size: 80px;
           background: none;
           border: none;
@@ -454,6 +456,12 @@ class GoalDialog extends AppElement {
 
         .sheet-item-toggle[aria-pressed="true"] .sheet-toggle-check { visibility: visible; }
 
+        .sheet-divider {
+          border: none;
+          border-block-start: 0.5px solid var(--color-border);
+          margin-block: var(--space-1);
+        }
+
         /* ── Move view ───────────────────────────────────────────────────── */
 
         .picker-heading {
@@ -583,6 +591,12 @@ class GoalDialog extends AppElement {
                       placeholder="${t('goal-dialog.notes-placeholder')}"></textarea>
             <button type="button" class="copy-btn" id="desc-copy-btn" aria-label="${t('goal-dialog.copy-notes')}" title="${t('goal-dialog.copy-notes')}">${icons.copy}</button>
           </div>
+          <div class="duedate-field" hidden>
+            <input id="duedate-input"
+                   type="date"
+                   aria-label="${t('goal-dialog.duedate-toggle')}" />
+            <button type="button" id="duedate-clear" aria-label="${t('goal-dialog.duedate-clear')}">${icons.xMark}</button>
+          </div>
           <div class="tag-area">
             <div id="tag-suggestions" hidden aria-label="${t('goal-dialog.tags-label')}"></div>
             <div class="tag-chips-wrap" id="tag-chips-wrap" role="group" aria-label="${t('goal-dialog.tags-label')}">
@@ -593,12 +607,6 @@ class GoalDialog extends AppElement {
                      autocomplete="off"
                      autocapitalize="none" />
             </div>
-          </div>
-          <div class="duedate-field" hidden>
-            <input id="duedate-input"
-                   type="date"
-                   aria-label="${t('goal-dialog.duedate-toggle')}" />
-            <button type="button" id="duedate-clear" aria-label="${t('goal-dialog.duedate-clear')}">${icons.xMark}</button>
           </div>
         </div>
 
@@ -647,6 +655,7 @@ class GoalDialog extends AppElement {
           <span class="sheet-toggle-label">${t('goal-dialog.duedate-toggle')}</span>
           <span class="sheet-toggle-check">${icons.check}</span>
         </button>
+        <hr class="sheet-divider">
         <button type="button" id="action-move-btn" class="sheet-item">${t('goal-dialog.move-to-year')}</button>
         <button type="button" id="action-create-btn" class="sheet-item">${t('goal-dialog.create-list-item')}</button>
       </modal-dialog>
@@ -658,6 +667,17 @@ class GoalDialog extends AppElement {
 
   subscribe() {
     this._modal         = this.shadowRoot.querySelector('#modal');
+    // Tapping a button while a text field is focused would otherwise blur it
+    // first (closing the on-screen keyboard) before the button's own click
+    // handler runs. preventDefault on pointerdown stops that focus steal —
+    // the click still fires normally on pointerup — so buttons act without
+    // dismissing the keyboard mid-edit. Close/Delete end the editing session,
+    // so the keyboard closing for those is correct and expected.
+    this._onButtonPointerDown = e => {
+      const btn = e.target.closest('button');
+      if (btn && btn.id !== 'close' && btn.id !== 'delete') e.preventDefault();
+    };
+    this.shadowRoot.addEventListener('pointerdown', this._onButtonPointerDown);
     this._input         = this.shadowRoot.querySelector('#input');
     this._descInput     = this.shadowRoot.querySelector('#desc-input');
     this._descHighlight = attachMarkdownHighlight(
@@ -952,6 +972,7 @@ class GoalDialog extends AppElement {
   }
 
   unsubscribe() {
+    this.shadowRoot.removeEventListener('pointerdown', this._onButtonPointerDown);
     this._descHighlight?.detach();
     this._input?.removeEventListener('keydown', this._onKeyDown);
     this._input?.removeEventListener('blur',    this._onTitleBlur);
