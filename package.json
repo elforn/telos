@@ -1,6 +1,6 @@
 {
   "name": "Telos",
-  "version": "1.14.1",
+  "version": "1.15.0",
   "type": "module",
   "scripts": {
     "build": "node utils/build.js",

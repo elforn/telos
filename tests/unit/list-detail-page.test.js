@@ -30,6 +30,11 @@ function mount(listId = 'l1') {
     const pickerModal = bulkPicker.shadowRoot.querySelector('#modal');
     if (pickerModal) { pickerModal.show = vi.fn(); pickerModal.close = vi.fn(); }
   }
+  // Stub the raw bulk <dialog> sheets so showModal()/close() don't throw in happy-dom
+  for (const id of ['#bulk-status-sheet', '#bulk-more-sheet', '#bulk-tags-sheet']) {
+    const sheet = el.shadowRoot.querySelector(id);
+    if (sheet) { sheet.showModal = vi.fn(); sheet.close = vi.fn(); }
+  }
   // Stub export-sheet internal dialog so showModal()/close() don't throw in happy-dom
   const exportSheet = el.shadowRoot.querySelector('#export-sheet');
   if (exportSheet) {
@@ -979,7 +984,7 @@ describe('list-detail-page — bulk action bar', () => {
 
     const picker = el.shadowRoot.querySelector('#bulk-picker');
     const pickerModal = picker.shadowRoot.querySelector('#modal');
-    el.shadowRoot.querySelector('#bulk-move-btn').click();
+    el.shadowRoot.querySelector('#bulk-move-menu-btn').click();
 
     expect(pickerModal.show).toHaveBeenCalledOnce();
     expect(picker.mode).toBeNull();
@@ -1079,6 +1084,97 @@ describe('list-detail-page — bulk action bar', () => {
     await vi.waitFor(() => expect(getState().lists[1].items).toHaveLength(1));
     expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(true);
+  });
+
+  it('bulk-tag-apply adds the tag to every selected item', async () => {
+    const ITEM2 = { id: 'i2', title: 'Book', status: 'open', tags: ['read'], inGoals: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM, ITEM2] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+    enterSelectionMode(el);
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-select-toggle', {
+      bubbles: true, composed: true, detail: { item: ITEM2 },
+    }));
+
+    el.shadowRoot.querySelector('#bulk-tag-editor').dispatchEvent(new CustomEvent('bulk-tag-apply', {
+      bubbles: true, composed: true, detail: { tag: 'gift' },
+    }));
+
+    await vi.waitFor(() => {
+      const items = getState().lists[0].items;
+      expect(items.find(i => i.id === 'i1').tags).toContain('gift');
+      expect(items.find(i => i.id === 'i2').tags).toEqual(expect.arrayContaining(['read', 'gift']));
+    });
+  });
+
+  it('bulk-tag-remove removes the tag from every selected item', async () => {
+    const A = { id: 'i1', title: 'A', status: 'open', tags: ['gift', 'read'], inGoals: [] };
+    const B = { id: 'i2', title: 'B', status: 'open', tags: ['gift'], inGoals: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [A, B] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+    enterSelectionMode(el, A);
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-select-toggle', {
+      bubbles: true, composed: true, detail: { item: B },
+    }));
+
+    el.shadowRoot.querySelector('#bulk-tag-editor').dispatchEvent(new CustomEvent('bulk-tag-remove', {
+      bubbles: true, composed: true, detail: { tag: 'gift' },
+    }));
+
+    await vi.waitFor(() => {
+      const items = getState().lists[0].items;
+      expect(items.find(i => i.id === 'i1').tags).toEqual(['read']);
+      expect(items.find(i => i.id === 'i2').tags).toEqual([]);
+    });
+  });
+
+  it('bulk-tag-apply leaves non-selected items untouched', async () => {
+    const ITEM2 = { id: 'i2', title: 'Book', status: 'open', tags: [], inGoals: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM, ITEM2] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+    enterSelectionMode(el); // selects only ITEM (i1)
+
+    el.shadowRoot.querySelector('#bulk-tag-editor').dispatchEvent(new CustomEvent('bulk-tag-apply', {
+      bubbles: true, composed: true, detail: { tag: 'gift' },
+    }));
+
+    await vi.waitFor(() => expect(getState().lists[0].items.find(i => i.id === 'i1').tags).toContain('gift'));
+    expect(getState().lists[0].items.find(i => i.id === 'i2').tags).toEqual([]);
+  });
+
+  it('opening the tags sheet feeds the editor the selected items’ tags', async () => {
+    const ITEM2 = { id: 'i2', title: 'Book', status: 'open', tags: ['read'], inGoals: [] };
+    const A = { ...ITEM, tags: ['read'] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [A, ITEM2] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+    enterSelectionMode(el, A);
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-select-toggle', {
+      bubbles: true, composed: true, detail: { item: ITEM2 },
+    }));
+
+    el.shadowRoot.querySelector('#bulk-tags-btn').click();
+
+    const editor = el.shadowRoot.querySelector('#bulk-tag-editor');
+    expect(editor.selectedTags).toEqual([['read'], ['read']]);
+    // 'read' is common to both → a solid chip, no partial marker
+    expect(editor.shadowRoot.querySelector('.tag-chip.partial')).toBeNull();
+    expect(editor.shadowRoot.querySelector('.tag-chip').dataset.tag).toBe('read');
+  });
+
+  it('closing the tags sheet exits selection mode', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(false);
+
+    el.shadowRoot.querySelector('#bulk-tags-sheet').dispatchEvent(new Event('close'));
+
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
   });
 });
 

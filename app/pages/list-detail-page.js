@@ -11,6 +11,7 @@ import '../components/item-dialog/item-dialog.js';
 import '../components/list-dialog/list-dialog.js';
 import '../components/add-row/add-row.js';
 import '../components/list-picker-dialog/list-picker-dialog.js';
+import '../components/bulk-tag-editor/bulk-tag-editor.js';
 import '../../_lib/modules/modal-dialog/modal-dialog.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
@@ -515,16 +516,11 @@ class ListDetailPage extends AppElement {
           border-radius: var(--radius-full);
         }
 
-        #bulk-status-btn {
+        #bulk-status-btn,
+        #bulk-tags-btn {
           background: var(--color-surface-raised);
           color: var(--color-text-primary);
           border: 1px solid var(--color-border);
-        }
-
-        #bulk-move-btn {
-          background: var(--color-surface-raised);
-          color: var(--color-text-primary);
-          border: 1.5px solid var(--color-border);
         }
 
         .bulk-btn:focus-visible {
@@ -842,8 +838,8 @@ class ListDetailPage extends AppElement {
         <span id="bulk-count"></span>
         <button type="button" id="bulk-more-btn" aria-label="${t('list-detail.bulk-more')}">${icons.dotsVertical}</button>
         <button type="button" id="bulk-delete-btn" aria-label="${t('list-detail.bulk-delete')}">${icons.trash}</button>
+        <button type="button" class="bulk-btn" id="bulk-tags-btn">${t('list-detail.bulk-tags')}</button>
         <button type="button" class="bulk-btn" id="bulk-status-btn">${t('list-detail.bulk-status')}</button>
-        <button type="button" class="bulk-btn" id="bulk-move-btn">${t('list-detail.bulk-move')}</button>
       </div>
 
       <dialog id="bulk-status-sheet" aria-label="${t('list-detail.bulk-status-label')}">
@@ -859,8 +855,20 @@ class ListDetailPage extends AppElement {
         </div>
       </dialog>
 
+      <dialog id="bulk-tags-sheet" aria-label="${t('list-detail.bulk-tags-label')}">
+        <div class="menu-handle" aria-hidden="true"></div>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('list-detail.bulk-tags-label')}</p>
+          <bulk-tag-editor id="bulk-tag-editor"></bulk-tag-editor>
+        </div>
+      </dialog>
+
       <dialog id="bulk-more-sheet" aria-label="${t('list-detail.bulk-more')}">
         <div class="menu-handle" aria-hidden="true"></div>
+        <button class="menu-item" id="bulk-move-menu-btn">
+          <span>${t('list-detail.bulk-move')}</span>
+          <span class="menu-item-value" aria-hidden="true">›</span>
+        </button>
         <button class="menu-item" id="bulk-export-btn">
           <span>${t('list-detail.bulk-extract-markdown')}</span>
           <span class="menu-item-value" aria-hidden="true">›</span>
@@ -1217,6 +1225,8 @@ class ListDetailPage extends AppElement {
     this._bulkPickerDialog = this.shadowRoot.querySelector('#bulk-picker');
     this._bulkStatusSheet  = this.shadowRoot.querySelector('#bulk-status-sheet');
     this._bulkMoreSheet    = this.shadowRoot.querySelector('#bulk-more-sheet');
+    this._bulkTagsSheet    = this.shadowRoot.querySelector('#bulk-tags-sheet');
+    this._bulkTagEditor    = this.shadowRoot.querySelector('#bulk-tag-editor');
 
     this._onBulkDelete = () => {
       const ids = [...this._selectedIds];
@@ -1241,6 +1251,24 @@ class ListDetailPage extends AppElement {
     this.listen(this.shadowRoot.querySelector('#bulk-status-paused'), 'click', this._onBulkStatusPaused);
     this.listen(this.shadowRoot.querySelector('#bulk-status-done'), 'click', this._onBulkStatusDone);
     this.listen(this.shadowRoot.querySelector('#bulk-status-closed'), 'click', this._onBulkStatusClosed);
+
+    this._onBulkTags = () => {
+      this._refreshBulkTagEditor();
+      this._bulkTagEditor.existingTags = this._collectAllTags(getState());
+      this._bulkTagsSheet.showModal();
+    };
+    this.listen(this.shadowRoot.querySelector('#bulk-tags-btn'), 'click', this._onBulkTags);
+
+    // Backdrop tap closes the sheet; closing ends selection (like Status/Move).
+    this._onBulkTagsBackdrop = e => { if (e.target === this._bulkTagsSheet) this._bulkTagsSheet.close(); };
+    this.listen(this._bulkTagsSheet, 'click', this._onBulkTagsBackdrop);
+    this._onBulkTagsClose = () => { if (this._selectionMode) this._exitSelectionMode(); };
+    this.listen(this._bulkTagsSheet, 'close', this._onBulkTagsClose);
+
+    this._onBulkTagApply  = e => this._applyBulkTag(e.detail.tag);
+    this._onBulkTagRemove = e => this._removeBulkTag(e.detail.tag);
+    this.listen(this._bulkTagEditor, 'bulk-tag-apply', this._onBulkTagApply);
+    this.listen(this._bulkTagEditor, 'bulk-tag-remove', this._onBulkTagRemove);
 
     this._onBulkMore = () => this._bulkMoreSheet.showModal();
     this._onBulkMoreBackdrop = e => { if (e.target === this._bulkMoreSheet) this._bulkMoreSheet.close(); };
@@ -1291,8 +1319,8 @@ class ListDetailPage extends AppElement {
     };
     this.listen(this.shadowRoot, 'item-export-request', this._onItemExportRequest);
 
-    this._onBulkMove = () => this._openBulkPicker();
-    this.listen(this.shadowRoot.querySelector('#bulk-move-btn'), 'click', this._onBulkMove);
+    this._onBulkMove = () => { this._bulkMoreSheet.close(); this._openBulkPicker(); };
+    this.listen(this.shadowRoot.querySelector('#bulk-move-menu-btn'), 'click', this._onBulkMove);
 
     this._onBulkListPick = e => {
       const { targetListIds, newListName, copy } = e.detail;
@@ -1835,6 +1863,33 @@ class ListDetailPage extends AppElement {
     this._bulkStatusSheet.close();
     toast(t('list-detail.bulk-status-toast', { n: ids.length }), 'success');
     this._exitSelectionMode();
+  }
+
+  // Bulk tags apply immediately (no toast) — the live chips + tag strips are the
+  // feedback, matching the blur-to-save behaviour used elsewhere. After each
+  // change the editor is re-fed so common/partial chip states restyle.
+  _applyBulkTag(tag) {
+    const ids = [...this._selectedIds];
+    this._mutateItems(items => items.map(i =>
+      ids.includes(i.id) && !(i.tags ?? []).includes(tag)
+        ? { ...i, tags: [...(i.tags ?? []), tag] } : i));
+    this._refreshBulkTagEditor();
+  }
+
+  _removeBulkTag(tag) {
+    const ids = [...this._selectedIds];
+    this._mutateItems(items => items.map(i =>
+      ids.includes(i.id) ? { ...i, tags: (i.tags ?? []).filter(t => t !== tag) } : i));
+    this._refreshBulkTagEditor();
+  }
+
+  _refreshBulkTagEditor() {
+    if (!this._bulkTagEditor) return;
+    const ids   = this._selectedIds;
+    const items = getState().lists?.find(l => l.id === this._listId)?.items ?? [];
+    this._bulkTagEditor.selectedTags = items
+      .filter(i => ids.has(i.id))
+      .map(i => i.tags ?? []);
   }
 
   _openBulkPicker() {

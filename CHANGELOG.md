@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.15.0] — 2026-07-25
+
+### Added
+- Bulk-tag your list items. In selection mode, tap the new **Tags** button to add or remove tags across every selected item at once. Tags shared by all selected items show as solid chips; tags on only some show dim — tap a dim one to apply it to the rest, or tap × to remove a tag from all. Changes save as you make them.
+
+### Changed
+- The list selection ribbon now shows **Delete · Tags · Status**, with **Move** relocated into the "···" overflow menu next to Extract Markdown.
+
 ## [1.14.1] — 2026-07-25
 
 ### Fixed

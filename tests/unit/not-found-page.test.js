@@ -4,6 +4,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 HTMLElement.prototype.setPointerCapture = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
 
+// Register English strings so t() resolves to real values regardless of which
+// other test files share this worker — otherwise the heading assertion below is
+// order-dependent (raw key when unregistered, resolved text when registered).
+import '../../app/strings.js';
+
 vi.mock('../../app/base-path.js', () => ({ BASE_PATH: '' }));
 
 let navigated;
@@ -27,7 +32,7 @@ describe('not-found-page', () => {
   });
 
   it('renders a visible 404 heading', () => {
-    expect(el.shadowRoot.querySelector('h1').textContent).toBe('not-found.heading');
+    expect(el.shadowRoot.querySelector('h1').textContent).toBe('Nothing here');
   });
 
   it('navigates to the current year on button click', () => {
