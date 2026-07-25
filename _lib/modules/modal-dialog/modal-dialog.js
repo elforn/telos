@@ -69,8 +69,8 @@ class ModalDialog extends AppElement {
             border-end-end-radius: 0;
             border-start-start-radius: var(--radius-lg);
             border-start-end-radius: var(--radius-lg);
-            padding-block-start: var(--space-4);
-          padding-block-end: calc(var(--space-6) + var(--safe-area-bottom, 0px));
+            padding-block-start: var(--space-2);
+          padding-block-end: calc(var(--space-2) + var(--safe-area-bottom, 0px));
             max-block-size: 85vh;
           }
 
@@ -106,7 +106,7 @@ class ModalDialog extends AppElement {
           display: flex;
           justify-content: flex-end;
           gap: var(--space-2);
-          margin-block-start: var(--space-4);
+          margin-block-start: var(--space-1);
           flex-shrink: 0;
         }
       </style>
