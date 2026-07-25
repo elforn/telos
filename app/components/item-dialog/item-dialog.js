@@ -196,7 +196,11 @@ class ItemDialog extends AppElement {
         }
 
         textarea::placeholder { color: var(--color-text-muted); }
-        textarea::selection   { color: var(--color-text-primary); }
+        /* The textarea glyphs are transparent (the visible text is painted by
+           .md-highlight beneath). A bare ::selection color leaves the browser
+           default background, which renders imperceptibly over transparent
+           text on Firefox — so give the band an explicit background. */
+        textarea::selection   { color: var(--color-text-on-accent); background: var(--color-accent-light); }
 
         .copy-btn {
           position: absolute;
