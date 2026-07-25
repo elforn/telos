@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.14.1] — 2026-07-25
+
+### Fixed
+- Dismissing the item "···" overflow menu by tapping the backdrop now reopens the on-screen keyboard on the field you were editing, matching swipe-to-dismiss. Previously the keyboard stayed down after a backdrop tap.
+
 ## [1.14.0] — 2026-07-25
 
 ### Changed

@@ -1117,8 +1117,39 @@ class ItemDialog extends AppElement {
 
     // ── More actions (··· menu) ───────────────────────────────────────────────
 
-    this._onMenuBtn = () => this._actionSheet.show();
+    this._onMenuBtn = () => {
+      // Remember what was focused (note/title) so a natural dismiss — swipe or
+      // backdrop tap — can re-focus it and reopen the mobile keyboard. Cleared
+      // when an action button closes the sheet itself. The pointerdown guard
+      // above stops the menu button from stealing focus, so activeElement here
+      // is still whatever text field the user was editing.
+      this._sheetReturnFocus = this.shadowRoot.activeElement;
+      this._actionSheet.show();
+    };
     this._menuBtn.addEventListener('click', this._onMenuBtn);
+
+    // A backdrop tap fires a click at the sheet's internal <dialog>
+    // (composedPath()[0] === that dialog); the library closes the sheet on the
+    // same click, and this bubbles to the host still synchronously inside the
+    // gesture. Native focus restoration already ran during close() but not in a
+    // gesture context, so the keyboard stays down — re-focusing here, still in
+    // the click's call stack, reopens it, matching swipe-to-dismiss. Action
+    // buttons close the sheet with target === the button (not the dialog), so
+    // they fall through this guard and never refocus.
+    this._onSheetBackdrop = e => {
+      const sheetDialog = this._actionSheet.shadowRoot?.querySelector('dialog');
+      if (!sheetDialog || e.composedPath()[0] !== sheetDialog) return;
+      const el = this._sheetReturnFocus;
+      if (!el) return;
+      // close() already restored focus to el programmatically, so a plain
+      // focus() is a no-op — the field has focus but the browser saw no new
+      // focus event, so the mobile keyboard stays down. Blur then re-focus
+      // synchronously inside this click forces a real gesture-driven focus
+      // transition, which reopens the keyboard.
+      el.blur();
+      el.focus();
+    };
+    this._actionSheet.addEventListener('click', this._onSheetBackdrop);
 
     // Toggles — deliberately don't close the sheet, so both can be flipped
     // in one visit (see _onUrlToggle/_onDueDateToggle for why they don't focus).
@@ -1126,6 +1157,7 @@ class ItemDialog extends AppElement {
     this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
 
     this._onActionMove = () => {
+      this._sheetReturnFocus = null;
       this._actionSheet.close();
       this._listPickerDialog.lists = this.availableLists;
       this._listPickerDialog.sourceListId = this.sourceListId;
@@ -1133,10 +1165,11 @@ class ItemDialog extends AppElement {
     };
     this.shadowRoot.querySelector('#action-move-btn').addEventListener('click', this._onActionMove);
 
-    this._onActionPromote = () => { this._actionSheet.close(); this._showView('goal-promoter'); };
+    this._onActionPromote = () => { this._sheetReturnFocus = null; this._actionSheet.close(); this._showView('goal-promoter'); };
     this.shadowRoot.querySelector('#action-promote-btn').addEventListener('click', this._onActionPromote);
 
     this._onActionExport = () => {
+      this._sheetReturnFocus = null;
       this._actionSheet.close();
       this._modal.close();
       this.dispatchEvent(new CustomEvent('item-export-request', {
@@ -1224,6 +1257,7 @@ class ItemDialog extends AppElement {
     this.shadowRoot.querySelector('.status-options')?.removeEventListener('change', this._onStatusChange);
 
     this._menuBtn?.removeEventListener('click', this._onMenuBtn);
+    this._actionSheet?.removeEventListener('click', this._onSheetBackdrop);
     this.shadowRoot.querySelector('#action-move-btn')?.removeEventListener('click', this._onActionMove);
     this.shadowRoot.querySelector('#action-promote-btn')?.removeEventListener('click', this._onActionPromote);
     this.shadowRoot.querySelector('#action-export-btn')?.removeEventListener('click', this._onActionExport);
