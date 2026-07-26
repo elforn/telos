@@ -236,6 +236,11 @@ class ListDialog extends AppElement {
         const name = this._input.value.trim();
         if (name) {
           this._snapshot?.clear(); // committed — drop any hide-time snapshot
+          // Mark committed so a blur fired *after* this close (the browser fires
+          // the dialog's close before the focused input's blur) doesn't re-create
+          // via _onNameBlur's commit-on-blur path.
+          this._isNew = false;
+          this._lastValidName = name;
           this.dispatchEvent(new CustomEvent('list-created', {
             bubbles: true, composed: true,
             detail: { name, color: this._selectedColor },

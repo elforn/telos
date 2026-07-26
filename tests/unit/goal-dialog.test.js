@@ -176,6 +176,19 @@ describe('goal-dialog — new goal creation', () => {
     expect(closed).toHaveLength(1);
   });
 
+  it('does not double-create when close fires before the input blur', () => {
+    const el = mount();
+    el.open(null);
+    const created = [];
+    el.addEventListener('goal-created', () => created.push(1));
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = 'Once';
+    // Real browser order for a focused input: dialog close first, then blur.
+    el.shadowRoot.querySelector('#modal').dispatchEvent(new CustomEvent('modal-close'));
+    input.dispatchEvent(new Event('blur'));
+    expect(created).toHaveLength(1);
+  });
+
   it('Enter key does nothing when title is empty', () => {
     const el = mount();
     const modal = el.shadowRoot.querySelector('#modal');

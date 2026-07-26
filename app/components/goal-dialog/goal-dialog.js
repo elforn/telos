@@ -821,6 +821,11 @@ class GoalDialog extends AppElement {
           const notes = this._descInput.value.trim() || undefined;
           const dueDate = this._dueDateInput.value || undefined;
           const tags  = this._getTagValues();
+          // Mark committed so a blur fired *after* this close (the browser fires
+          // the dialog's close before the focused input's blur) doesn't re-create
+          // via _onTitleBlur's commit-on-blur path.
+          this._isNew = false;
+          this._lastValidTitle = title;
           this.dispatchEvent(new CustomEvent('goal-created', {
             bubbles: true, composed: true, detail: { title, notes, dueDate, tags },
           }));

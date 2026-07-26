@@ -117,6 +117,19 @@ describe('list-dialog — new list creation', () => {
     expect(created[0].detail.name).toBe('Blur save');
   });
 
+  it('does not double-create when close fires before the input blur', () => {
+    const el = mount();
+    el.open(null);
+    const created = [];
+    el.addEventListener('list-created', () => created.push(1));
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'Once';
+    // Real browser order for a focused input: dialog close first, then blur.
+    el.shadowRoot.querySelector('#modal').dispatchEvent(new CustomEvent('modal-close'));
+    inp.dispatchEvent(new Event('blur'));
+    expect(created).toHaveLength(1);
+  });
+
   it('list-created is bubbles and composed', () => {
     const el = mount();
     el.open(null);
