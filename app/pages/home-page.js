@@ -537,7 +537,10 @@ class HomePage extends AppElement {
 
     // ── Add-line / fold ───────────────────────────────────────────────────────
 
-    const makeAddLine = (section, sectionEl) => () => {
+    // Opens the add-goal dialog for a section and keeps that section's add row
+    // expanded (`add-open`) so several goals can be added in a row. Shared by
+    // both entry points: the full add row and the collapsed add-line hairline.
+    const makeSectionAdder = (section, sectionEl) => () => {
       sectionEl.classList.add('add-open');
       this._editingSection = section;
       this._editingGoal    = null;
@@ -545,10 +548,10 @@ class HomePage extends AppElement {
     };
     const makeFold = sectionEl => () => sectionEl.classList.remove('add-open');
 
-    this._onAddLineCapstone  = makeAddLine('capstone',   this._capstoneSection);
-    this._onAddLineMilestone = makeAddLine('milestones', this._milestoneSection);
-    this._onAddLineWow       = makeAddLine('wow',        this._wowSection);
-    this._onAddLineFocus     = makeAddLine('focus',      this._focusSection);
+    this._onAddLineCapstone  = makeSectionAdder('capstone',   this._capstoneSection);
+    this._onAddLineMilestone = makeSectionAdder('milestones', this._milestoneSection);
+    this._onAddLineWow       = makeSectionAdder('wow',        this._wowSection);
+    this._onAddLineFocus     = makeSectionAdder('focus',      this._focusSection);
     this._onFoldCapstone     = makeFold(this._capstoneSection);
     this._onFoldMilestone    = makeFold(this._milestoneSection);
     this._onFoldWow          = makeFold(this._wowSection);
@@ -620,11 +623,7 @@ class HomePage extends AppElement {
     this._onMilestoneDelete = e => this._deleteGoalWithUndo('milestones', e.detail.goal.id);
     this.listen(this._milestoneList, 'goal-delete', this._onMilestoneDelete);
 
-    this._onAddMilestone = () => {
-      this._editingSection = 'milestones';
-      this._editingGoal    = null;
-      this._openGoalDialog(null);
-    };
+    this._onAddMilestone = makeSectionAdder('milestones', this._milestoneSection);
     this.listen(this.shadowRoot.querySelector('#add-milestone'), 'click', this._onAddMilestone);
 
     // ── Wow events ────────────────────────────────────────────────────────────
@@ -644,11 +643,7 @@ class HomePage extends AppElement {
     this._onWowDelete = e => this._deleteGoalWithUndo('wow', e.detail.goal.id);
     this.listen(this._wowList, 'goal-delete', this._onWowDelete);
 
-    this._onAddWow = () => {
-      this._editingSection = 'wow';
-      this._editingGoal    = null;
-      this._openGoalDialog(null);
-    };
+    this._onAddWow = makeSectionAdder('wow', this._wowSection);
     this.listen(this.shadowRoot.querySelector('#add-wow'), 'click', this._onAddWow);
 
     // ── Forward Focus events ──────────────────────────────────────────────────
@@ -668,11 +663,7 @@ class HomePage extends AppElement {
     this._onFocusDelete = e => this._deleteGoalWithUndo('focus', e.detail.goal.id);
     this.listen(this._focusList, 'goal-delete', this._onFocusDelete);
 
-    this._onAddFocus = () => {
-      this._editingSection = 'focus';
-      this._editingGoal    = null;
-      this._openGoalDialog(null);
-    };
+    this._onAddFocus = makeSectionAdder('focus', this._focusSection);
     this.listen(this.shadowRoot.querySelector('#add-focus'), 'click', this._onAddFocus);
 
     // ── Year export ───────────────────────────────────────────────────────────
@@ -755,6 +746,10 @@ class HomePage extends AppElement {
       const { title, notes, dueDate, tags } = e.detail;
       const snapshot = getState().goals;
       const goal = this._addGoal(this._editingSection, title, notes, dueDate, tags);
+      // goal-created now fires on title blur (commit-on-blur) while the dialog is
+      // still open, so track the new goal as the one being edited — later
+      // notes/tag/due-date changes in the same session update it in place.
+      this._editingGoal = goal;
       if (this._goalFilterActive() && !this._goalMatchesFilter(goal)) {
         toast(t('home.toast-goal-hidden'), 'info',
           { action: { label: t('filter.toast-show'), onClick: () => this._revealCreatedGoal(goal.id) } });

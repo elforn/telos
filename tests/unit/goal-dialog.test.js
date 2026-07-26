@@ -150,6 +150,32 @@ describe('goal-dialog — new goal creation', () => {
     expect(events[0].detail.title).toBe('Keyboard save');
   });
 
+  it('commits (goal-created) when the title blurs on a new goal', () => {
+    const el = mount();
+    el.open(null);
+    const created = [];
+    el.addEventListener('goal-created', e => created.push(e));
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = 'Blur save';
+    input.dispatchEvent(new Event('blur'));
+    expect(created).toHaveLength(1);
+    expect(created[0].detail.title).toBe('Blur save');
+  });
+
+  it('does not create a second time on close after a blur-commit (fires goal-closed)', () => {
+    const el = mount();
+    el.open(null);
+    const created = [], closed = [];
+    el.addEventListener('goal-created', () => created.push(1));
+    el.addEventListener('goal-closed', () => closed.push(1));
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = 'Once';
+    input.dispatchEvent(new Event('blur'));   // commit
+    el.shadowRoot.querySelector('#modal').dispatchEvent(new CustomEvent('modal-close'));
+    expect(created).toHaveLength(1);
+    expect(closed).toHaveLength(1);
+  });
+
   it('Enter key does nothing when title is empty', () => {
     const el = mount();
     const modal = el.shadowRoot.querySelector('#modal');

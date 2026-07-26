@@ -722,8 +722,25 @@ class GoalDialog extends AppElement {
     // ── Main view ─────────────────────────────────────────────────────────────
 
     this._onTitleBlur = () => {
-      if (this._isNew) return;
       const v = this._input.value.trim();
+      if (this._isNew) {
+        // Commit on blur (like item-dialog) so a new goal is saved the moment the
+        // title loses focus — via Enter, tapping another field, or the mobile Go
+        // key — instead of relying on the close click, which mobile can swallow
+        // while dismissing the keyboard. Once committed we're in edit mode, so
+        // modal-close dispatches goal-closed rather than a second goal-created.
+        if (!v) return;
+        const notes   = this._descInput.value.trim() || undefined;
+        const dueDate = this._dueDateInput.value || undefined;
+        const tags    = this._getTagValues();
+        this._isNew = false;
+        this._lastValidTitle = v;
+        this._snapshot?.clear();
+        this.dispatchEvent(new CustomEvent('goal-created', {
+          bubbles: true, composed: true, detail: { title: v, notes, dueDate, tags },
+        }));
+        return;
+      }
       if (!v) { this._input.value = this._lastValidTitle; return; }
       if (v === this._lastValidTitle) return;
       this._lastValidTitle = v;

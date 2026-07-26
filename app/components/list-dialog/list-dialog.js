@@ -64,6 +64,7 @@ class ListDialog extends AppElement {
           flex-wrap: wrap;
           padding-inline-start: var(--space-1);
           margin-block-end: var(--space-5);
+          padding-top: var(--space-2);
         }
 
         .swatch {
@@ -197,8 +198,22 @@ class ListDialog extends AppElement {
     this._lastValidName = '';
 
     this._onNameBlur = () => {
-      if (this._isNew) return;
       const v = this._input.value.trim();
+      if (this._isNew) {
+        // Commit on blur (like item-dialog) so a new list is saved the moment the
+        // name loses focus — via Enter or the mobile Go key — instead of relying
+        // on the close click, which mobile can swallow while dismissing the
+        // keyboard. Once committed we're in edit mode, so modal-close dispatches
+        // list-closed rather than a second list-created.
+        if (!v) return;
+        this._isNew = false;
+        this._lastValidName = v;
+        this._snapshot?.clear();
+        this.dispatchEvent(new CustomEvent('list-created', {
+          bubbles: true, composed: true, detail: { name: v, color: this._selectedColor },
+        }));
+        return;
+      }
       if (!v) { this._input.value = this._lastValidName; return; }
       if (v === this._lastValidName) return;
       this._lastValidName = v;

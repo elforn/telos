@@ -105,6 +105,18 @@ describe('list-dialog — new list creation', () => {
     expect(events[0].detail.name).toBe('Keyboard save');
   });
 
+  it('commits (list-created) when the name blurs on a new list', () => {
+    const el = mount();
+    el.open(null);
+    const created = [];
+    el.addEventListener('list-created', e => created.push(e));
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.value = 'Blur save';
+    inp.dispatchEvent(new Event('blur'));
+    expect(created).toHaveLength(1);
+    expect(created[0].detail.name).toBe('Blur save');
+  });
+
   it('list-created is bubbles and composed', () => {
     const el = mount();
     el.open(null);

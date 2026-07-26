@@ -125,6 +125,17 @@ describe('home-page — store integration', () => {
     );
   });
 
+  it('keeps the milestone add-row open after tapping add (quick-add from the first entry)', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount();
+    // stub the goal-dialog's native <dialog> so open() doesn't need real showModal
+    const dlg = el.shadowRoot.querySelector('#dialog').shadowRoot
+      .querySelector('#modal').shadowRoot.querySelector('dialog');
+    if (dlg) { dlg.showModal = () => {}; dlg.close = () => {}; }
+    el.shadowRoot.querySelector('#add-milestone').click();
+    expect(el.shadowRoot.querySelector('#milestone-section').classList.contains('add-open')).toBe(true);
+  });
+
   it('removes goal-item when milestone deleted via setState', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
