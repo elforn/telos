@@ -19,6 +19,7 @@ import '../components/export-sheet/export-sheet.js';
 import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdown.js';
 import { installDialogSnapshot } from '../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../utils/draft-toggle.js';
+import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
 
 const EXPORT_MODE_LIST      = 'list';
 const EXPORT_MODE_SELECTION = 'selection';
@@ -988,6 +989,9 @@ class ListDetailPage extends AppElement {
     this.listen(this.shadowRoot.querySelector('#status-hide-btn'), 'click', this._onStatusHide);
 
     this._onAddRow = () => {
+      // Ignore the synthesized click that follows deleting the last item — the
+      // add row shifts up under the finger and would otherwise open this dialog.
+      if (isGhostClickAfterDelete()) return;
       this._editingItem = null;
       this._createdItemId = null;
       this._itemEditSnapshot = getState().lists;

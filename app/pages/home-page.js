@@ -13,6 +13,7 @@ import '../components/add-row/add-row.js';
 import { exportGoalsMarkdown } from '../utils/export-markdown.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
+import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
 
 class HomePage extends AppElement {
   template() {
@@ -541,6 +542,9 @@ class HomePage extends AppElement {
     // expanded (`add-open`) so several goals can be added in a row. Shared by
     // both entry points: the full add row and the collapsed add-line hairline.
     const makeSectionAdder = (section, sectionEl) => () => {
+      // Ignore the synthesized click that follows deleting the last goal — the
+      // add row shifts up under the finger and would otherwise open this dialog.
+      if (isGhostClickAfterDelete()) return;
       sectionEl.classList.add('add-open');
       this._editingSection = section;
       this._editingGoal    = null;

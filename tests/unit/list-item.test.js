@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/list-item/list-item.js';
+import { _resetDeleteGuard } from '../../app/utils/delete-ghost-guard.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
@@ -26,7 +27,7 @@ function tap(el) {
   el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 50, clientY: 50, pointerId: 1, button: 0 }));
 }
 
-afterEach(() => { document.body.innerHTML = ''; });
+afterEach(() => { document.body.innerHTML = ''; _resetDeleteGuard(); });
 
 describe('list-item — structure', () => {
   it('renders the item title', () => {

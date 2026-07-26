@@ -4,6 +4,7 @@ import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { tagStrip } from '../../utils/tag-color.js';
 import { todayISO } from '../../utils/today-iso.js';
+import { markDelete } from '../../utils/delete-ghost-guard.js';
 
 const REVEAL_WIDTH = 60;
 const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
@@ -394,7 +395,9 @@ class GoalItem extends Gestures(AppElement) {
       if (useDelay) requestAnimationFrame(fire);
       else fire();
     };
-    this._onDeletePointerUp = e => { e.stopPropagation(); e.preventDefault(); this._onDeleteBtn(true); };
+    // Delete fires on pointerup; note the time so the add row (which shifts up
+    // when the last goal is removed) can ignore the touch's synthesized click.
+    this._onDeletePointerUp = e => { e.stopPropagation(); e.preventDefault(); markDelete(); this._onDeleteBtn(true); };
     this._onDeleteBtnKey = e => { e.stopPropagation(); if (e.detail === 0) this._onDeleteBtn(); };
     this._deleteEl.addEventListener('pointerdown', this._stopPointerDown);
     this._deleteEl.addEventListener('pointerup', this._onDeletePointerUp);

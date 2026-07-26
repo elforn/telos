@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/goal-item/goal-item.js';
+import { _resetDeleteGuard } from '../../app/utils/delete-ghost-guard.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
@@ -19,7 +20,7 @@ function isoDaysFromNow(days) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-afterEach(() => { document.body.innerHTML = ''; });
+afterEach(() => { document.body.innerHTML = ''; _resetDeleteGuard(); });
 
 describe('goal-item — structure', () => {
   it('renders a bar with the goal title', () => {
