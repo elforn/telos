@@ -63,6 +63,7 @@
         --sheet-handle-height: 4px;
         --letter-spacing-caps: 0.08em;
         --edge-btn-bleed:      -10px; /* right-edge icon buttons: bleed into page padding so icon aligns with content edge */
+        --toast-max-width:     min(90vw, 420px); /* keeps a long toast message on screen */
       }
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -76,6 +77,18 @@
       }
       #toast-container {
         inset-block-end: calc(var(--bottom-nav-height, 80px) + var(--space-2, 8px)) !important;
+      }
+      /* Cap toast width and ellipsis the message so a long user-entered name
+         (e.g. a deleted list's title) can't push the toast off-screen and
+         hide the Undo action — the toast module has no max-width of its own. */
+      .socle-toast {
+        max-inline-size: var(--toast-max-width) !important;
+      }
+      .socle-toast-msg {
+        display: block !important;
+        min-inline-size: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
       }
       body::before {
         content: '';

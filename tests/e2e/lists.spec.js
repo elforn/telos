@@ -823,6 +823,31 @@ test.describe('Lists — undo', () => {
     expect(name).toBe('Undo me');
   });
 
+  test('deletion toast for a very long list name stays on screen with the Undo action visible', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 }); // narrow phone width
+    const longName = 'This is a very long list name that would definitely overflow a small phone screen if left untruncated';
+    await createList(page, longName);
+    await enterFirstList(page);
+    await deleteListViaMenu(page);
+    await page.waitForFunction(() => !!document.querySelector('#toast-container .socle-toast'));
+
+    const info = await page.evaluate(() => {
+      const t = document.querySelector('#toast-container .socle-toast');
+      const r = t.getBoundingClientRect();
+      const msg = t.querySelector('.socle-toast-msg');
+      const undoBtn = t.querySelector('.socle-toast-btn');
+      const undoR = undoBtn.getBoundingClientRect();
+      return {
+        fullyOnScreen: r.left >= 0 && r.right <= window.innerWidth,
+        isTruncated: msg.scrollWidth > msg.clientWidth,
+        undoVisible: undoR.left >= 0 && undoR.right <= window.innerWidth,
+      };
+    });
+    expect(info.fullyOnScreen).toBe(true);
+    expect(info.isTruncated).toBe(true);
+    expect(info.undoVisible).toBe(true);
+  });
+
   test('undo after item deletion via dialog restores the item', async ({ page }) => {
     await createList(page, 'Undo items');
     await enterFirstList(page);
