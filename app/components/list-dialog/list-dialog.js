@@ -13,6 +13,15 @@ const SWATCHES = COLOR_PALETTE.map((color, i) => ({ color, label: SWATCH_LABELS[
 
 class ListDialog extends AppElement {
   open(list = null) {
+    this._resetForm(list);
+    this._modal.show(this._input);
+  }
+
+  // Populates the form for `list` (or blanks it for a new entry) without touching
+  // the modal's open/closed state. Reused by open() and by the Enter quick-add
+  // path, which resets in place to add another list rather than closing and
+  // reopening the native dialog.
+  _resetForm(list = null) {
     this._isNew = !list;
     this._listId = list?.id ?? null;
     this._input.value = list?.name ?? '';
@@ -34,8 +43,6 @@ class ListDialog extends AppElement {
       clearLabel: this._isNew ? t('list-dialog.draft-clear') : t('list-dialog.draft-revert'),
       undoLabel:  t('list-dialog.draft-undo'),
     });
-
-    this._modal.show(this._input);
   }
 
   template() {
@@ -258,8 +265,13 @@ class ListDialog extends AppElement {
       if (e.key !== 'Enter') return;
       if (this._isNew) {
         if (!this._input.value.trim()) return; // require name for new lists
-        this._input.blur(); // dismiss keyboard / run blur handlers before close (matches item-dialog)
-        this._modal.close();
+        this._input.blur(); // commits via _onNameBlur → _isNew = false
+        // Quick-add: reset the form in place and keep the dialog open for the
+        // next list, rather than closing — avoids a native close()/reopen()
+        // cycle (and the focus-restoration/keyboard-activation quirk that
+        // otherwise causes an inconsistent, browser-dependent auto-reopen).
+        this._resetForm(null);
+        this._input.focus();
       } else {
         this._input.blur(); // triggers _onNameBlur before close
         this._modal.close();

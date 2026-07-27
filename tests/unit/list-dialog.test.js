@@ -100,9 +100,56 @@ describe('list-dialog — new list creation', () => {
     const events = [];
     el.addEventListener('list-created', e => events.push(e));
     const inp = el.shadowRoot.querySelector('#input');
+    inp.focus(); // a real Enter keydown only targets a focused input, so blur() actually fires
     inp.value = 'Keyboard save';
     inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(events[0].detail.name).toBe('Keyboard save');
+  });
+
+  it('quick-add: Enter on a new list resets the form and keeps the dialog open', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.focus();
+    inp.value = 'First list';
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(modal.close).not.toHaveBeenCalled();
+    expect(inp.value).toBe('');
+    expect(el._isNew).toBe(true);
+  });
+
+  it('quick-add: resets the selected colour swatch — not just the name', () => {
+    const el = mount();
+    el.open(null);
+    const sr = el.shadowRoot;
+    sr.querySelector('#input').value = 'First list';
+    sr.querySelector('.swatch[data-color="#4A94D4"]').click();
+    expect(sr.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('true');
+
+    const input = sr.querySelector('#input');
+    input.focus();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(sr.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('false');
+    expect(sr.querySelector('#delete').hidden).toBe(true);
+  });
+
+  it('quick-add: a second Enter creates a second list without closing', () => {
+    const el = mount();
+    el.open(null);
+    const created = [];
+    el.addEventListener('list-created', e => created.push(e));
+    const inp = el.shadowRoot.querySelector('#input');
+    inp.focus();
+    inp.value = 'First list';
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    inp.focus();
+    inp.value = 'Second list';
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(created).toHaveLength(2);
+    expect(created[0].detail.name).toBe('First list');
+    expect(created[1].detail.name).toBe('Second list');
   });
 
   it('commits (list-created) when the name blurs on a new list', () => {
@@ -202,16 +249,17 @@ describe('list-dialog — edit existing (blur-save)', () => {
     expect(modal.close).toHaveBeenCalledOnce();
   });
 
-  it('Enter key blurs the input before closing for a new list', () => {
+  it('Enter key blurs the input for a new list (quick-add, does not close)', () => {
     const el = mount();
     const modal = el.shadowRoot.querySelector('#modal');
     const input = el.shadowRoot.querySelector('#input');
     el.open(null);
+    input.focus();
     input.value = 'Fresh list';
     const blurSpy = vi.spyOn(input, 'blur');
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(blurSpy).toHaveBeenCalled();
-    expect(modal.close).toHaveBeenCalledOnce();
+    expect(modal.close).not.toHaveBeenCalled();
   });
 });
 

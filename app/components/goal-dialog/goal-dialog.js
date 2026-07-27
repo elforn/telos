@@ -25,10 +25,24 @@ class GoalDialog extends AppElement {
   // ── Public API ────────────────────────────────────────────────────────────
 
   open(goal = null, { year, section } = {}) {
-    this._goal        = goal;
-    this._isNew       = !goal;
     this._fromYear    = year    ?? String(this.currentYear);
     this._fromSection = section ?? 'capstone';
+    this._resetForm(goal);
+    this._modal.show(this._input);
+    setTimeout(() => {
+      const len = this._input.value.length;
+      this._input.setSelectionRange(len, len);
+      requestAnimationFrame(() => this._syncDescHeight());
+    }, 0);
+  }
+
+  // Populates the form for `goal` (or blanks it for a new entry) without touching
+  // the modal's open/closed state. Reused by open() and by the Enter quick-add
+  // path, which resets in place to add another goal rather than closing and
+  // reopening the native dialog.
+  _resetForm(goal = null) {
+    this._goal        = goal;
+    this._isNew       = !goal;
     this._input.value = goal?.title ?? '';
     if (this._deleteBtn) this._deleteBtn.hidden = !goal;
     if (this._menuBtn) this._menuBtn.hidden = false;
@@ -69,12 +83,6 @@ class GoalDialog extends AppElement {
     });
 
     this._showView('main');
-    this._modal.show(this._input);
-    setTimeout(() => {
-      const len = this._input.value.length;
-      this._input.setSelectionRange(len, len);
-      requestAnimationFrame(() => this._syncDescHeight());
-    }, 0);
   }
 
   template() {
@@ -844,8 +852,14 @@ class GoalDialog extends AppElement {
       if (e.key !== 'Enter') return;
       if (this._isNew) {
         if (!this._input.value.trim()) return; // require title for new goals
-        this._input.blur(); // dismiss keyboard / run blur handlers before close (matches item-dialog)
-        this._modal.close();
+        this._input.blur(); // commits via _onTitleBlur → _isNew = false
+        // Quick-add: reset the form in place and keep the dialog open for the
+        // next goal, rather than closing — avoids a native close()/reopen()
+        // cycle (and the focus-restoration/keyboard-activation quirk that
+        // otherwise causes an inconsistent, browser-dependent auto-reopen).
+        this._resetForm(null);
+        this._input.focus();
+        requestAnimationFrame(() => this._syncDescHeight());
       } else {
         this._input.blur(); // triggers _onTitleBlur before close
         this._modal.close();

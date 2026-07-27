@@ -310,9 +310,65 @@ describe('item-dialog — new item creation', () => {
     const events = [];
     el.addEventListener('item-created', e => events.push(e));
     const inp = el.shadowRoot.querySelector('#title-input');
+    inp.focus(); // a real Enter keydown only targets a focused input, so blur() actually fires
     inp.value = 'Enter save';
     inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(events[0].detail.title).toBe('Enter save');
+  });
+
+  it('quick-add: Enter on a new item resets the form and keeps the dialog open', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(null);
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.focus();
+    inp.value = 'First item';
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(modal.close).not.toHaveBeenCalled();
+    expect(inp.value).toBe('');
+    expect(el._isNew).toBe(true);
+  });
+
+  it('quick-add: resets note, url, due date, tags and status — not just the title', () => {
+    const el = mount();
+    el.open(null);
+    const sr = el.shadowRoot;
+    sr.querySelector('#title-input').value = 'First item';
+    sr.querySelector('#note-input').value = 'A note';
+    sr.querySelector('#url-input').value = 'https://example.com';
+    sr.querySelector('#duedate-input').value = '2026-08-01';
+    const tagInput = sr.querySelector('#tag-input');
+    tagInput.value = 'work';
+    tagInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    sr.querySelector('input[name="status"][value="done"]').checked = true;
+
+    const titleInput = sr.querySelector('#title-input');
+    titleInput.focus();
+    titleInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(sr.querySelector('#note-input').value).toBe('');
+    expect(sr.querySelector('#url-input').value).toBe('');
+    expect(sr.querySelector('#duedate-input').value).toBe('');
+    expect(sr.querySelectorAll('.tag-chip')).toHaveLength(0);
+    expect(sr.querySelector('input[name="status"][value="open"]').checked).toBe(true);
+    expect(sr.querySelector('#delete').hidden).toBe(true);
+  });
+
+  it('quick-add: a second Enter creates a second item without closing', () => {
+    const el = mount();
+    el.open(null);
+    const created = [];
+    el.addEventListener('item-created', e => created.push(e));
+    const inp = el.shadowRoot.querySelector('#title-input');
+    inp.focus();
+    inp.value = 'First item';
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    inp.focus();
+    inp.value = 'Second item';
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(created).toHaveLength(2);
+    expect(created[0].detail.title).toBe('First item');
+    expect(created[1].detail.title).toBe('Second item');
   });
 
   it('Enter key does nothing when title is empty', () => {

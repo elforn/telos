@@ -145,9 +145,61 @@ describe('goal-dialog — new goal creation', () => {
     const events = [];
     el.addEventListener('goal-created', e => events.push(e));
     const input = el.shadowRoot.querySelector('#input');
+    input.focus(); // a real Enter keydown only targets a focused input, so blur() actually fires
     input.value = 'Keyboard save';
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(events[0].detail.title).toBe('Keyboard save');
+  });
+
+  it('quick-add: Enter on a new goal resets the form and keeps the dialog open', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(null);
+    const input = el.shadowRoot.querySelector('#input');
+    input.focus();
+    input.value = 'First goal';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(modal.close).not.toHaveBeenCalled();
+    expect(input.value).toBe('');
+    expect(el._isNew).toBe(true);
+  });
+
+  it('quick-add: resets notes, due date and tags — not just the title', () => {
+    const el = mount();
+    el.open(null);
+    const sr = el.shadowRoot;
+    sr.querySelector('#input').value = 'First goal';
+    sr.querySelector('#desc-input').value = 'Some notes';
+    sr.querySelector('#duedate-input').value = '2026-12-31';
+    const tagInput = sr.querySelector('#tag-input');
+    tagInput.value = 'health';
+    tagInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    const input = sr.querySelector('#input');
+    input.focus();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(sr.querySelector('#desc-input').value).toBe('');
+    expect(sr.querySelector('#duedate-input').value).toBe('');
+    expect(sr.querySelectorAll('.tag-chip')).toHaveLength(0);
+    expect(sr.querySelector('#delete').hidden).toBe(true);
+  });
+
+  it('quick-add: a second Enter creates a second goal without closing', () => {
+    const el = mount();
+    el.open(null);
+    const created = [];
+    el.addEventListener('goal-created', e => created.push(e));
+    const input = el.shadowRoot.querySelector('#input');
+    input.focus();
+    input.value = 'First goal';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    input.focus();
+    input.value = 'Second goal';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(created).toHaveLength(2);
+    expect(created[0].detail.title).toBe('First goal');
+    expect(created[1].detail.title).toBe('Second goal');
   });
 
   it('commits (goal-created) when the title blurs on a new goal', () => {
@@ -325,16 +377,17 @@ describe('goal-dialog — edit existing (blur-save)', () => {
     expect(modal.close).toHaveBeenCalledOnce();
   });
 
-  it('Enter key blurs the input before closing for a new goal', () => {
+  it('Enter key blurs the input for a new goal (quick-add, does not close)', () => {
     const el = mount();
     const modal = el.shadowRoot.querySelector('#modal');
     const input = el.shadowRoot.querySelector('#input');
     el.open(null);
+    input.focus();
     input.value = 'Fresh goal';
     const blurSpy = vi.spyOn(input, 'blur');
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(blurSpy).toHaveBeenCalled();
-    expect(modal.close).toHaveBeenCalledOnce();
+    expect(modal.close).not.toHaveBeenCalled();
   });
 });
 

@@ -42,6 +42,16 @@ class ItemDialog extends AppElement {
   // ── Public API ───────────────────────────────────────────────────────────────
 
   open(item = null) {
+    this._resetForm(item);
+    this._modal.show(item ? this._noteInput : this._titleInput);
+    requestAnimationFrame(() => requestAnimationFrame(() => this._syncNoteHeight()));
+  }
+
+  // Populates the form for `item` (or blanks it for a new entry) without touching
+  // the modal's open/closed state. Reused by open() and by the Enter quick-add
+  // path, which resets in place to add another item rather than closing and
+  // reopening the native dialog.
+  _resetForm(item = null) {
     this._item = item;
     this._isNew = !item;
     this._skipCreate = false;
@@ -91,9 +101,6 @@ class ItemDialog extends AppElement {
       clearLabel: this._isNew ? t('item-dialog.draft-clear') : t('item-dialog.draft-revert'),
       undoLabel:  t('item-dialog.draft-undo'),
     });
-
-    this._modal.show(item ? this._noteInput : this._titleInput);
-    requestAnimationFrame(() => requestAnimationFrame(() => this._syncNoteHeight()));
   }
 
   template() {
@@ -1020,7 +1027,13 @@ class ItemDialog extends AppElement {
       if (this._isNew) {
         if (!this._titleInput.value.trim()) return; // require title for new items
         this._titleInput.blur(); // commits item via _onTitleBlur → _isNew = false
-        this._modal.close();
+        // Quick-add: reset the form in place and keep the dialog open for the
+        // next item, rather than closing — avoids a native close()/reopen()
+        // cycle (and the focus-restoration/keyboard-activation quirk that
+        // otherwise causes an inconsistent, browser-dependent auto-reopen).
+        this._resetForm(null);
+        this._titleInput.focus();
+        requestAnimationFrame(() => requestAnimationFrame(() => this._syncNoteHeight()));
       } else {
         this._titleInput.blur(); // triggers _onTitleBlur before close
         this._modal.close();
