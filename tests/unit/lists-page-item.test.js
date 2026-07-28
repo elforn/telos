@@ -332,3 +332,49 @@ describe('lists-page-item — color', () => {
     expect(val).toBe('');
   });
 });
+
+// ── Urgency roll-up ───────────────────────────────────────────────────────────
+
+function isoDaysFromNow(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const item = (over) => ({ id: 'x', title: 't', status: 'open', tags: [], inGoals: [], ...over });
+
+describe('lists-page-item — urgency roll-up', () => {
+  const dot = el => el.shadowRoot.querySelector('.urgency');
+
+  it('hides the dot when no item is due soon', () => {
+    const el = mount({ ...LIST, items: [item({ dueDate: isoDaysFromNow(60) }), item({})] });
+    expect(dot(el).hidden).toBe(true);
+  });
+
+  it('shows the most-urgent colour without a count for green/yellow', () => {
+    const el = mount({ ...LIST, items: [item({ dueDate: isoDaysFromNow(20) }), item({ dueDate: isoDaysFromNow(5) })] });
+    expect(dot(el).hidden).toBe(false);
+    expect(dot(el).dataset.urgency).toBe('week');
+    expect(dot(el).dataset.count).toBeUndefined();
+    expect(dot(el).textContent).toBe('');
+  });
+
+  it('shows a count of today+overdue items when red', () => {
+    const el = mount({ ...LIST, items: [
+      item({ dueDate: isoDaysFromNow(-1) }),
+      item({ dueDate: isoDaysFromNow(0) }),
+      item({ dueDate: isoDaysFromNow(5) }),
+    ] });
+    expect(dot(el).dataset.urgency).toBe('overdue');
+    expect(dot(el).dataset.count).toBe('2');
+    expect(dot(el).textContent).toBe('2');
+  });
+
+  it('ignores done and closed items', () => {
+    const el = mount({ ...LIST, items: [
+      item({ status: 'done', dueDate: isoDaysFromNow(-1) }),
+      item({ status: 'closed', dueDate: isoDaysFromNow(0) }),
+    ] });
+    expect(dot(el).hidden).toBe(true);
+  });
+});

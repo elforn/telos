@@ -3,7 +3,7 @@ import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { tagStrip } from '../../utils/tag-color.js';
-import { todayISO } from '../../utils/today-iso.js';
+import { urgencyOf } from '../../utils/urgency.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 
 const DONE_WIDTH = 48;   // square-ish done button
@@ -171,9 +171,19 @@ class ListItem extends Gestures(AppElement) {
 
         .row[data-has-note="true"]  .note-icon { display: block; }
         .row[data-has-url="true"]   .url-icon  { display: block; }
-        .row[data-overdue="true"]   .duedate-icon {
+
+        /* Due-date calendar, tinted by how soon the date is (open/paused items
+           with a date only). Only 'overdue' gets a non-colour ring. */
+        .row[data-urgency="far"]     .duedate-icon { display: block; color: var(--color-text-muted); }
+        .row[data-urgency="month"]   .duedate-icon { display: block; color: var(--color-success); }
+        .row[data-urgency="week"]    .duedate-icon { display: block; color: var(--color-warning); }
+        .row[data-urgency="today"]   .duedate-icon { display: block; color: var(--color-danger); }
+        .row[data-urgency="overdue"] .duedate-icon {
           display: block;
-          color: var(--color-danger);
+          color: var(--color-text-inverse);
+          background: var(--color-danger);
+          border-radius: var(--radius-sm);
+          padding: 2px;
         }
 
         .badge {
@@ -469,15 +479,15 @@ class ListItem extends Gestures(AppElement) {
     const title = this._item?.title ?? '';
     const status = this._item?.status ?? 'open';
     const isDone = status === 'done';
-    const isOverdue = !!this._item?.dueDate
-      && this._item.dueDate < todayISO()
-      && status !== 'done' && status !== 'closed';
+    const active = status !== 'done' && status !== 'closed';
+    const urgency = urgencyOf(this._item?.dueDate, active);
     this._title.textContent = title;
-    this._row.setAttribute('aria-label', isOverdue ? t('list-item.overdue-aria', { title }) : title);
+    this._row.setAttribute('aria-label',
+      urgency === 'none' ? title : t('list-item.duedate-aria', { title, when: t(`urgency.${urgency}`) }));
     this._row.dataset.status = status;
     this._row.dataset.hasNote = String(!!this._item?.note);
     this._row.dataset.hasUrl = String(!!this._item?.url);
-    this._row.dataset.overdue = String(isOverdue);
+    this._row.dataset.urgency = urgency;
     this._badge.textContent = t(`item-dialog.status-${status}`);
     this._badge.dataset.status = status;
     this._doneEl.innerHTML = isDone ? icons.undo : icons.check;

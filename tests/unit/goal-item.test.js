@@ -57,46 +57,38 @@ describe('goal-item — structure', () => {
   });
 });
 
-describe('goal-item — overdue', () => {
-  it('is not overdue when there is no dueDate', () => {
-    const el = mount();
-    expect(el.dataset.overdue).toBe('false');
+describe('goal-item — deadline urgency', () => {
+  it('is none when there is no dueDate', () => {
+    expect(mount().dataset.urgency).toBe('none');
   });
 
-  it('is not overdue when dueDate is in the future', () => {
-    const el = mount({ id: 'g1', title: 'Goal', percentage: 0, dueDate: isoDaysFromNow(5) });
-    expect(el.dataset.overdue).toBe('false');
+  it('classifies the buckets by how soon the deadline is', () => {
+    expect(mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(-1) }).dataset.urgency).toBe('overdue');
+    expect(mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(0) }).dataset.urgency).toBe('today');
+    expect(mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(5) }).dataset.urgency).toBe('week');
+    expect(mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(20) }).dataset.urgency).toBe('month');
+    expect(mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(60) }).dataset.urgency).toBe('far');
   });
 
-  it('is overdue when dueDate is in the past and percentage is below 100', () => {
-    const el = mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(-1) });
-    expect(el.dataset.overdue).toBe('true');
+  it('is none when complete or archived, even with a past deadline', () => {
+    expect(mount({ id: 'g1', title: 'Goal', percentage: 100, dueDate: isoDaysFromNow(-1) }).dataset.urgency).toBe('none');
+    expect(mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(-1), archived: true }).dataset.urgency).toBe('none');
   });
 
-  it('is not overdue when percentage is 100, even if dueDate is in the past', () => {
-    const el = mount({ id: 'g1', title: 'Goal', percentage: 100, dueDate: isoDaysFromNow(-1) });
-    expect(el.dataset.overdue).toBe('false');
-  });
-
-  it('is not overdue when archived, even if dueDate is in the past', () => {
-    const el = mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(-1), archived: true });
-    expect(el.dataset.overdue).toBe('false');
-  });
-
-  it('appends overdue to the bar aria-label when overdue', () => {
+  it('describes the urgency in the bar aria-label', () => {
     const el = mount({ id: 'g1', title: 'Goal', percentage: 40, dueDate: isoDaysFromNow(-1) });
     expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-label')).toBe('Goal, overdue');
   });
 
-  it('uses the plain title as aria-label when not overdue', () => {
+  it('uses the plain title as aria-label when there is no deadline', () => {
     const el = mount({ id: 'g1', title: 'Goal', percentage: 0 });
     expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-label')).toBe('Goal');
   });
 
-  it('updates overdue state when goal property changes', () => {
+  it('updates urgency when the goal property changes', () => {
     const el = mount({ id: 'g1', title: 'Goal', percentage: 0 });
     el.goal = { id: 'g1', title: 'Goal', percentage: 0, dueDate: isoDaysFromNow(-1) };
-    expect(el.dataset.overdue).toBe('true');
+    expect(el.dataset.urgency).toBe('overdue');
   });
 });
 

@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.16.0] — 2026-07-28
+
+### Added
+- **Deadline & due-date urgency at a glance.** Goals with a deadline, and open/paused list items with a due date, now show a small calendar marker tinted by how soon they're due — grey (later), green (this month), amber (this week), red (today) — and **overdue** entries get a bold filled-red marker so they stand out. Completed, archived, done, and closed entries stay quiet.
+- **See where attention is needed without opening anything.** Each list card, and the **Years** and **Lists** tabs in the bottom bar, show a coloured dot for their most-urgent item; when something is due today or overdue it turns red and shows a count. On a supported installed device, the app icon carries that count as a badge too.
+
+### Changed
+- Goal deadline markers show for the **current year** by default; for other years they stay hidden until you turn them on from the year menu (**Deadline markers**), the same way tag colours work.
+- The **due date** field is now shown by default when adding or editing a list item (the goal *Deadline* and item *Link* fields stay tucked away in the "···" menu as before).
+
 ## [1.15.0] — 2026-07-25
 
 ### Added

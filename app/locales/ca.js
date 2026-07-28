@@ -33,7 +33,15 @@ defineStrings({
   'goal-item.add-wow':           'Afegeix un moment guau',
   'goal-item.add-focus':         'Afegeix una prioritat',
   'goal-item.drag':              'Arrossega per reordenar',
-  'goal-item.overdue-aria':      '{title}, endarrerit',
+  'goal-item.duedate-aria':      '{title}, {when}',
+
+  // Urgència dels venciments (compartit per objectius, elements, agregats).
+  'urgency.far':          'properament',
+  'urgency.month':        'venç aquest mes',
+  'urgency.week':         'venç aquesta setmana',
+  'urgency.today':        'venç avui',
+  'urgency.overdue':      'endarrerit',
+  'urgency.urgent-count': '{n} per avui o endarrerits',
 
   'home.toast-goal-saved':       'Objectiu desat',
   'home.toast-goal-hidden':      'Objectiu afegit — amagat pel filtre actiu',
@@ -220,7 +228,7 @@ defineStrings({
   'list-item.mark-done': 'Marca com a fet',
   'list-item.restore':   'Restaura',
   'list-item.drag':      'Arrossega per reordenar',
-  'list-item.overdue-aria': '{title}, endarrerit',
+  'list-item.duedate-aria': '{title}, {when}',
 
   'lists.toast-list-saved':   'Llista desada',
   'lists.toast-list-hidden':  'Llista afegida — amagada pel filtre actiu',
@@ -266,6 +274,7 @@ defineStrings({
   'settings.reminder-on':      'Mostra',
   'settings.reminder-off':     'Amaga',
   'settings.tag-strip':        'Colors d\'etiquetes',
+  'settings.deadlines':        'Marcadors de venciment',
   'settings.tags-shown':       'Mostrades',
   'settings.tags-hidden':      'Ocultes',
   'sync.backup-downloaded':    'Les teves dades s\'han guardat abans de l\'actualització.',

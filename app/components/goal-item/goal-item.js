@@ -3,7 +3,7 @@ import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { tagStrip } from '../../utils/tag-color.js';
-import { todayISO } from '../../utils/today-iso.js';
+import { urgencyOf } from '../../utils/urgency.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 
 const REVEAL_WIDTH = 60;
@@ -123,9 +123,21 @@ class GoalItem extends Gestures(AppElement) {
         }
 
         .bar[data-has-desc="true"] .desc-icon { display: block; }
-        :host([data-overdue="true"]) .deadline-icon {
-          display: block;
-          color: var(--color-danger);
+
+        /* Deadline calendar, tinted by how soon the date is. Gated by
+           --goal-deadline-display so the year menu can hide it for non-current
+           years (default on for the current year — set by year-header). Only
+           'overdue' gets a non-colour ring. */
+        :host([data-urgency="far"])     .deadline-icon { display: var(--goal-deadline-display, block); color: var(--color-text-muted); }
+        :host([data-urgency="month"])   .deadline-icon { display: var(--goal-deadline-display, block); color: var(--color-success); }
+        :host([data-urgency="week"])    .deadline-icon { display: var(--goal-deadline-display, block); color: var(--color-warning); }
+        :host([data-urgency="today"])   .deadline-icon { display: var(--goal-deadline-display, block); color: var(--color-danger); }
+        :host([data-urgency="overdue"]) .deadline-icon {
+          display: var(--goal-deadline-display, block);
+          color: var(--color-text-inverse);
+          background: var(--color-danger);
+          border-radius: var(--radius-sm);
+          padding: 2px;
         }
 
         .pct-label {
@@ -569,14 +581,14 @@ class GoalItem extends Gestures(AppElement) {
     const prevPct = this._pct;
     this._pct = Math.max(0, pct);
     const title = this._goal?.title ?? '';
-    const isOverdue = !!this._goal?.dueDate
-      && this._goal.dueDate < todayISO()
-      && this._pct < 100 && !this._goal?.archived;
+    const active = this._pct < 100 && !this._goal?.archived;
+    const urgency = urgencyOf(this._goal?.dueDate, active);
     this._title.textContent = title;
-    this._bar.setAttribute('aria-label', isOverdue ? t('goal-item.overdue-aria', { title }) : title);
+    this._bar.setAttribute('aria-label',
+      urgency === 'none' ? title : t('goal-item.duedate-aria', { title, when: t(`urgency.${urgency}`) }));
     this._bar.dataset.hasDesc = String(!!this._goal?.notes);
     this.dataset.archived = String(!!this._goal?.archived);
-    this.dataset.overdue = String(isOverdue);
+    this.dataset.urgency = urgency;
     this._setPct(this._pct);
     if (this._pct === 100 && prevPct !== undefined && prevPct < 100) this._celebrate();
     if (this._stripEl) {

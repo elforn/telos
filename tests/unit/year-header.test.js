@@ -230,3 +230,51 @@ describe('year-header — tag strip toggle', () => {
   });
 });
 
+describe('year-header — deadline markers toggle', () => {
+  const CURRENT = new Date().getFullYear();
+  const PAST = CURRENT - 1;
+  const displayVar = () => document.documentElement.style.getPropertyValue('--goal-deadline-display');
+
+  beforeEach(() => {
+    Store.setState('goalsDeadlinesVisible', {});
+  });
+
+  it('defaults ON for the current year when nothing is stored', () => {
+    const el = mount(CURRENT);
+    expect(el.shadowRoot.querySelector('#deadlines-show-btn').classList.contains('active')).toBe(true);
+    expect(displayVar()).toBe('block');
+  });
+
+  it('defaults OFF for a non-current year when nothing is stored', () => {
+    const el = mount(PAST);
+    expect(el.shadowRoot.querySelector('#deadlines-hide-btn').classList.contains('active')).toBe(true);
+    expect(displayVar()).toBe('none');
+  });
+
+  it('clicking deadlines-show-btn sets goalsDeadlinesVisible[year] to true', () => {
+    const el = mount(PAST);
+    el.shadowRoot.querySelector('#deadlines-show-btn').click();
+    expect(Store.getState().goalsDeadlinesVisible?.[String(PAST)]).toBe(true);
+  });
+
+  it('clicking deadlines-hide-btn sets goalsDeadlinesVisible[year] to false', () => {
+    const el = mount(CURRENT);
+    el.shadowRoot.querySelector('#deadlines-hide-btn').click();
+    expect(Store.getState().goalsDeadlinesVisible?.[String(CURRENT)]).toBe(false);
+  });
+
+  it('an explicit stored value overrides the year default', () => {
+    // Current year, but explicitly hidden.
+    Store.setState('goalsDeadlinesVisible', { [String(CURRENT)]: false });
+    const hidden = mount(CURRENT);
+    expect(hidden.shadowRoot.querySelector('#deadlines-hide-btn').classList.contains('active')).toBe(true);
+    expect(displayVar()).toBe('none');
+    hidden.remove();
+    // Past year, but explicitly shown.
+    Store.setState('goalsDeadlinesVisible', { [String(PAST)]: true });
+    const shown = mount(PAST);
+    expect(shown.shadowRoot.querySelector('#deadlines-show-btn').classList.contains('active')).toBe(true);
+    expect(displayVar()).toBe('block');
+  });
+});
+

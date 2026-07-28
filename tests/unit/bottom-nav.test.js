@@ -10,6 +10,7 @@ vi.mock('../../app/utils/backup-before-repair.js', () => ({
 }));
 
 import '../../app/components/bottom-nav/bottom-nav.js';
+import { setState } from '../../_lib/core/store/store.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { repairInstallation } from '../../_lib/core/sw-manager/sw-repair.js';
 import { backupBeforeRepair } from '../../app/utils/backup-before-repair.js';
@@ -457,5 +458,57 @@ describe('bottom-nav — repair button', () => {
     const modal = el.shadowRoot.querySelector('#settings-modal');
     el.shadowRoot.querySelector('#repair-btn').click();
     expect(modal.close).toHaveBeenCalledOnce();
+  });
+});
+
+// ── Urgency roll-up ─────────────────────────────────────────────────────────
+
+function isoDaysFromNow(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const YEAR = new Date().getFullYear();
+const yearGoals = goals => ({ [YEAR]: { capstone: goals, milestones: [], wow: [], focus: [] } });
+
+describe('bottom-nav — urgency roll-up', () => {
+  const yearsDot = el => el.shadowRoot.querySelector('#years-dot');
+  const listsDot = el => el.shadowRoot.querySelector('#lists-dot');
+
+  it('shows a red count on the Years pill for current-year goals due today/overdue', () => {
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', []);
+    const el = mount();
+    el.refreshUrgency();
+    expect(yearsDot(el).hidden).toBe(false);
+    expect(yearsDot(el).dataset.urgency).toBe('overdue');
+    expect(yearsDot(el).dataset.count).toBe('1');
+  });
+
+  it('shows the Lists pill colour without a count for a green/yellow item', () => {
+    setState('goals', {});
+    setState('lists', [{ id: 'l', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', tags: [], inGoals: [], dueDate: isoDaysFromNow(5) }] }]);
+    const el = mount();
+    el.refreshUrgency();
+    expect(listsDot(el).hidden).toBe(false);
+    expect(listsDot(el).dataset.urgency).toBe('week');
+    expect(listsDot(el).dataset.count).toBeUndefined();
+  });
+
+  it('ignores non-current-year goals on the Years pill', () => {
+    setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
+    setState('lists', []);
+    const el = mount();
+    el.refreshUrgency();
+    expect(yearsDot(el).hidden).toBe(true);
+  });
+
+  it('hides both pills when nothing is due soon', () => {
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(90) }]));
+    setState('lists', []);
+    const el = mount();
+    el.refreshUrgency();
+    expect(yearsDot(el).hidden).toBe(true);
+    expect(listsDot(el).hidden).toBe(true);
   });
 });

@@ -72,7 +72,8 @@ class ItemDialog extends AppElement {
     this._showUrlField(!!item?.url);
 
     this._dueDateInput.value = item?.dueDate ?? '';
-    this._showDueDateField(!!item?.dueDate);
+    // Due date is a first-class field for list items — shown by default (URL stays collapsed).
+    this._showDueDateField(true);
 
     this._tags = [...(item?.tags ?? [])];
     this._tagInput.value = '';

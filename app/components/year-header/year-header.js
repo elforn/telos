@@ -419,6 +419,13 @@ class YearHeader extends Gestures(AppElement) {
             <button class="status-pill" id="tags-hide-btn">${t('settings.reminder-off')}</button>
           </div>
         </div>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('settings.deadlines')}</p>
+          <div class="status-pill-group" role="group" aria-label="${t('settings.deadlines')}">
+            <button class="status-pill" id="deadlines-show-btn">${t('settings.reminder-on')}</button>
+            <button class="status-pill" id="deadlines-hide-btn">${t('settings.reminder-off')}</button>
+          </div>
+        </div>
         <button class="menu-item" id="year-photo-btn">
           <span>${t('year-header.photo')}</span>
           <span class="menu-item-value">›</span>
@@ -498,6 +505,17 @@ class YearHeader extends Gestures(AppElement) {
     };
     Store.subscribe('goalsTagsVisible', this._onGoalsTagsVisible);
 
+    // Deadline markers default ON for the current year, OFF for other years;
+    // an explicit per-year choice overrides the default.
+    this._onGoalsDeadlinesVisible = deadlinesVisible => {
+      const stored = deadlinesVisible?.[String(this._year)];
+      const visible = stored ?? (Number(this._year) === new Date().getFullYear());
+      document.documentElement.style.setProperty('--goal-deadline-display', visible ? 'block' : 'none');
+      this.shadowRoot?.querySelector('#deadlines-show-btn')?.classList.toggle('active', visible);
+      this.shadowRoot?.querySelector('#deadlines-hide-btn')?.classList.toggle('active', !visible);
+    };
+    Store.subscribe('goalsDeadlinesVisible', this._onGoalsDeadlinesVisible);
+
     this._updateYear();
 
     this._scrollCompacting = false;
@@ -537,6 +555,7 @@ class YearHeader extends Gestures(AppElement) {
     this._setupExport();
     this._setupFilterBtn();
     this._setupTags();
+    this._setupDeadlines();
   }
 
   onTap() {
@@ -548,8 +567,11 @@ class YearHeader extends Gestures(AppElement) {
   unsubscribe() {
     Store.unsubscribe('images', this._onImages);
     Store.unsubscribe('goalsTagsVisible', this._onGoalsTagsVisible);
+    Store.unsubscribe('goalsDeadlinesVisible', this._onGoalsDeadlinesVisible);
     this.shadowRoot?.querySelector('#tags-show-btn')?.removeEventListener('click', this._onTagsShowBtn);
     this.shadowRoot?.querySelector('#tags-hide-btn')?.removeEventListener('click', this._onTagsHideBtn);
+    this.shadowRoot?.querySelector('#deadlines-show-btn')?.removeEventListener('click', this._onDeadlinesShowBtn);
+    this.shadowRoot?.querySelector('#deadlines-hide-btn')?.removeEventListener('click', this._onDeadlinesHideBtn);
     if (this._imageUrl) URL.revokeObjectURL(this._imageUrl);
 
     ['#prev', '#next', '#menu-btn', '#filter-btn', '#year'].forEach(sel =>
@@ -805,6 +827,21 @@ class YearHeader extends Gestures(AppElement) {
     this.shadowRoot.querySelector('#tags-hide-btn').addEventListener('click', this._onTagsHideBtn);
   }
 
+  _setupDeadlines() {
+    this._onDeadlinesShowBtn = () => {
+      const year = String(this._year);
+      Store.setState('goalsDeadlinesVisible', { ...Store.getState().goalsDeadlinesVisible, [year]: true });
+      this._menuDialog.close();
+    };
+    this._onDeadlinesHideBtn = () => {
+      const year = String(this._year);
+      Store.setState('goalsDeadlinesVisible', { ...Store.getState().goalsDeadlinesVisible, [year]: false });
+      this._menuDialog.close();
+    };
+    this.shadowRoot.querySelector('#deadlines-show-btn').addEventListener('click', this._onDeadlinesShowBtn);
+    this.shadowRoot.querySelector('#deadlines-hide-btn').addEventListener('click', this._onDeadlinesHideBtn);
+  }
+
   _setupFilterBtn() {
     const btn = this.shadowRoot.querySelector('#filter-btn');
     this._onFilterBtnClick = () => {
@@ -839,6 +876,7 @@ class YearHeader extends Gestures(AppElement) {
     if (this._stripFill) this._stripFill.style.width = `${pct}%`;
     this._updateImageFor(year);
     if (this._onGoalsTagsVisible) this._onGoalsTagsVisible(Store.getState().goalsTagsVisible);
+    if (this._onGoalsDeadlinesVisible) this._onGoalsDeadlinesVisible(Store.getState().goalsDeadlinesVisible);
   }
 
   async _updateImageFor(year) {

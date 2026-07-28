@@ -6,6 +6,7 @@ import { getTheme, setTheme, onThemeChange } from '../../../_lib/core/theme/them
 import { exportData, downloadExport, readImportFile, previewImport, applyMerge, applyReplace } from '../../../_lib/modules/sync/sync.js';
 import { toast } from '../../../_lib/modules/toast/toast.js';
 import { getState } from '../../../_lib/core/store/store.js';
+import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
 import { repairInstallation } from '../../../_lib/core/sw-manager/sw-repair.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
 import { backupBeforeRepair, LAST_EXPORT_KEY } from '../../utils/backup-before-repair.js';
@@ -97,6 +98,7 @@ class BottomNav extends AppElement {
         }
 
         .pill {
+          position: relative;
           flex: 1;
           min-block-size: var(--touch-target);
           border: none;
@@ -108,6 +110,41 @@ class BottomNav extends AppElement {
           font-weight: var(--font-weight-medium);
           color: var(--color-text-secondary);
           touch-action: manipulation;
+        }
+
+        /* Most-urgent roll-up for the view behind each pill. Colour dot for
+           green/yellow/red; grows into a numbered badge (today+overdue) when red. */
+        .pill-dot {
+          position: absolute;
+          inset-block-start: 4px;
+          inset-inline-end: var(--space-3);
+          inline-size: var(--badge-size);
+          block-size: var(--badge-size);
+          border-radius: var(--radius-full);
+          pointer-events: none;
+        }
+        .pill-dot[hidden] { display: none; }
+        .pill-dot[data-urgency="month"] { background: var(--color-success); }
+        .pill-dot[data-urgency="week"]  { background: var(--color-warning); }
+        .pill-dot[data-urgency="today"],
+        .pill-dot[data-urgency="overdue"] { background: var(--color-danger); }
+        .pill-dot[data-count] {
+          box-sizing: border-box;
+          inset-block-start: 3px;
+          inline-size: auto;
+          min-inline-size: 16px;
+          block-size: 16px;
+          /* border-box + top-heavy padding pushes the digit down to optical
+             centre (this font's numerals otherwise sit high in the circle). */
+          padding-block: 2px 0;
+          padding-inline: 4px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+          color: var(--color-text-inverse);
+          font-size: var(--font-size-micro);
+          font-weight: var(--font-weight-semibold);
         }
 
         .pill.active {
@@ -305,8 +342,8 @@ class BottomNav extends AppElement {
 
       <div class="nav-row" role="navigation">
         <div class="pills">
-          <button class="pill" id="pill-years">${t('bottom-nav.years')}</button>
-          <button class="pill" id="pill-lists">${t('bottom-nav.lists')}</button>
+          <button class="pill" id="pill-years">${t('bottom-nav.years')}<span class="pill-dot" id="years-dot" hidden aria-hidden="true"></span></button>
+          <button class="pill" id="pill-lists">${t('bottom-nav.lists')}<span class="pill-dot" id="lists-dot" hidden aria-hidden="true"></span></button>
         </div>
         <button class="gear-btn" id="gear-btn" aria-label="${t('bottom-nav.settings')}">⚙<span class="gear-badge" id="gear-badge" hidden aria-hidden="true"></span></button>
       </div>
@@ -405,6 +442,7 @@ class BottomNav extends AppElement {
     this._subscribeVersion();
     this._subscribeHeight();
     this._subscribeRepairButton();
+    this._subscribeUrgency();
     this._updateGearBadge();
 
     this._onReminderGroup = e => {
@@ -691,6 +729,76 @@ class BottomNav extends AppElement {
       // Backup failure is non-fatal — import proceeds without it rather than blocking the user.
       console.error('Backup before import failed:', err);
     }
+  }
+
+  // Roll-up deadline/due-date urgency onto the nav pills and the app icon.
+  // Years reflects the current year's goals; Lists reflects all list items.
+  // watch() covers live edits; the initial load is driven by refreshUrgency()
+  // from main.js after boot() (this element mounts, and subscribes, before the
+  // store has loaded from IDB — boot doesn't re-notify existing subscribers).
+  _subscribeUrgency() {
+    this._yearsDot = this.shadowRoot.querySelector('#years-dot');
+    this._listsDot = this.shadowRoot.querySelector('#lists-dot');
+    this.watch('goals', () => this._updateUrgency());
+    this.watch('lists', () => this._updateUrgency());
+  }
+
+  // Public: recompute after the store is known to be loaded.
+  refreshUrgency() {
+    this._updateUrgency();
+  }
+
+  _updateUrgency() {
+    if (!this._yearsDot) return;
+    const goals = getState().goals ?? {};
+    // Always the actual calendar year — not the viewed year (_currentYear
+    // tracks navigation and would make the pill follow year-swipes).
+    const year = goals[new Date().getFullYear()] ?? {};
+    const goalBuckets = ['capstone', 'milestones', 'wow', 'focus']
+      .flatMap(s => year[s] ?? [])
+      .map(g => urgencyOf(g.dueDate, (g.percentage ?? 0) < 100 && !g.archived));
+
+    const itemBuckets = (getState().lists ?? [])
+      .flatMap(l => l.items ?? [])
+      .map(i => urgencyOf(i.dueDate, i.status !== 'done' && i.status !== 'closed'));
+
+    this._applyPillUrgency(this._pillYears, this._yearsDot, goalBuckets);
+    this._applyPillUrgency(this._pillLists, this._listsDot, itemBuckets);
+    this._updateAppBadge(urgentCount(goalBuckets) + urgentCount(itemBuckets));
+  }
+
+  _applyPillUrgency(pill, dot, buckets) {
+    const bucket = mostUrgent(buckets);
+    const urgent = urgentCount(buckets);
+    const show = bucket !== 'none' && bucket !== 'far';
+    dot.hidden = !show;
+    if (!show) {
+      pill.removeAttribute('aria-description');
+      delete dot.dataset.urgency;
+      delete dot.dataset.count;
+      dot.textContent = '';
+      return;
+    }
+    dot.dataset.urgency = bucket;
+    if (urgent > 0) {
+      dot.dataset.count = String(urgent);
+      dot.textContent = formatCount(urgent);
+      pill.setAttribute('aria-description', t('urgency.urgent-count', { n: urgent }));
+    } else {
+      delete dot.dataset.count;
+      dot.textContent = '';
+      pill.setAttribute('aria-description', t(`urgency.${bucket}`));
+    }
+  }
+
+  // Badging API is Chrome/installed-only (Firefox ignores it) — a pure
+  // enhancement, so failures are swallowed.
+  _updateAppBadge(total) {
+    if (!('setAppBadge' in navigator)) return;
+    try {
+      if (total > 0) navigator.setAppBadge(total);
+      else navigator.clearAppBadge();
+    } catch { /* denied or unsupported — non-fatal */ }
   }
 
   _subscribeVersion() {

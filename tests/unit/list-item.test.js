@@ -112,46 +112,39 @@ describe('list-item — structure', () => {
   });
 });
 
-describe('list-item — overdue', () => {
-  it('is not overdue when there is no dueDate', () => {
-    const el = mount();
-    expect(el.shadowRoot.querySelector('.row').dataset.overdue).toBe('false');
+describe('list-item — due-date urgency', () => {
+  const urgency = el => el.shadowRoot.querySelector('.row').dataset.urgency;
+
+  it('is none when there is no dueDate', () => {
+    expect(urgency(mount())).toBe('none');
   });
 
-  it('is not overdue when dueDate is in the future', () => {
-    const el = mount({ ...ITEM, dueDate: isoDaysFromNow(5) });
-    expect(el.shadowRoot.querySelector('.row').dataset.overdue).toBe('false');
+  it('classifies the buckets by how soon the date is', () => {
+    expect(urgency(mount({ ...ITEM, dueDate: isoDaysFromNow(-1) }))).toBe('overdue');
+    expect(urgency(mount({ ...ITEM, dueDate: isoDaysFromNow(0) }))).toBe('today');
+    expect(urgency(mount({ ...ITEM, dueDate: isoDaysFromNow(5) }))).toBe('week');
+    expect(urgency(mount({ ...ITEM, dueDate: isoDaysFromNow(20) }))).toBe('month');
+    expect(urgency(mount({ ...ITEM, dueDate: isoDaysFromNow(60) }))).toBe('far');
   });
 
-  it('is overdue when dueDate is in the past and status is open', () => {
-    const el = mount({ ...ITEM, dueDate: isoDaysFromNow(-1) });
-    expect(el.shadowRoot.querySelector('.row').dataset.overdue).toBe('true');
+  it('is none for done or closed items, even with a past date', () => {
+    expect(urgency(mount({ ...ITEM, status: 'done', dueDate: isoDaysFromNow(-1) }))).toBe('none');
+    expect(urgency(mount({ ...ITEM, status: 'closed', dueDate: isoDaysFromNow(-1) }))).toBe('none');
   });
 
-  it('is not overdue when status is done, even if dueDate is in the past', () => {
-    const el = mount({ ...ITEM, status: 'done', dueDate: isoDaysFromNow(-1) });
-    expect(el.shadowRoot.querySelector('.row').dataset.overdue).toBe('false');
-  });
-
-  it('is not overdue when status is closed, even if dueDate is in the past', () => {
-    const el = mount({ ...ITEM, status: 'closed', dueDate: isoDaysFromNow(-1) });
-    expect(el.shadowRoot.querySelector('.row').dataset.overdue).toBe('false');
-  });
-
-  it('appends overdue to the row aria-label when overdue', () => {
+  it('describes the urgency in the row aria-label', () => {
     const el = mount({ ...ITEM, dueDate: isoDaysFromNow(-1) });
     expect(el.shadowRoot.querySelector('.row').getAttribute('aria-label')).toBe('Buy flowers, overdue');
   });
 
-  it('uses the plain title as aria-label when not overdue', () => {
-    const el = mount();
-    expect(el.shadowRoot.querySelector('.row').getAttribute('aria-label')).toBe('Buy flowers');
+  it('uses the plain title as aria-label when there is no date', () => {
+    expect(mount().shadowRoot.querySelector('.row').getAttribute('aria-label')).toBe('Buy flowers');
   });
 
-  it('updates overdue state when item property changes', () => {
+  it('updates urgency when the item property changes', () => {
     const el = mount();
     el.item = { ...ITEM, dueDate: isoDaysFromNow(-1) };
-    expect(el.shadowRoot.querySelector('.row').dataset.overdue).toBe('true');
+    expect(urgency(el)).toBe('overdue');
   });
 });
 

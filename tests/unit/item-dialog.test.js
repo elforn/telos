@@ -146,10 +146,10 @@ describe('item-dialog — open', () => {
     expect(el.shadowRoot.querySelector('#url-open').hidden).toBe(false);
   });
 
-  it('due-date field is hidden by default on new item', () => {
+  it('due-date field is shown by default on new item', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
   });
 
   it('due-date field is shown automatically when item has a dueDate', () => {
@@ -159,11 +159,11 @@ describe('item-dialog — open', () => {
     expect(el.shadowRoot.querySelector('#duedate-input').value).toBe('2026-08-01');
   });
 
-  it('clicking duedate-toggle (in the overflow menu) reveals the due-date field', () => {
+  it('clicking duedate-toggle (in the overflow menu) hides the shown due-date field', () => {
     const el = mount();
     el.open(null);
     el.shadowRoot.querySelector('#action-duedate-toggle').click();
-    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(true);
   });
 
   it('duedate-toggle sets aria-pressed to true when due-date field is shown', () => {
@@ -173,9 +173,10 @@ describe('item-dialog — open', () => {
     expect(btn.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('duedate-toggle sets aria-pressed to false when due-date field is hidden', () => {
+  it('duedate-toggle sets aria-pressed to false after the field is hidden', () => {
     const el = mount();
     el.open(null);
+    el.shadowRoot.querySelector('#action-duedate-toggle').click();
     expect(el.shadowRoot.querySelector('#action-duedate-toggle').getAttribute('aria-pressed')).toBe('false');
   });
 

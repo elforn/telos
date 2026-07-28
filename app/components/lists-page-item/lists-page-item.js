@@ -2,6 +2,7 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
+import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
 
 const COLOR_WIDTH     = 48;
 const COMMIT_RATIO    = 2.0;
@@ -91,6 +92,38 @@ class ListsPageItem extends Gestures(AppElement) {
           transform: translateY(1px);
         }
 
+        /* Most-urgent roll-up: a colour dot for the soonest open/paused item.
+           Only shown for green/yellow/red (far-future and empty are quiet).
+           When red, it grows into a numbered badge counting today+overdue. */
+        .urgency {
+          flex-shrink: 0;
+          inline-size: 8px;
+          block-size: 8px;
+          border-radius: var(--radius-full);
+        }
+        .urgency[hidden] { display: none; }
+        .urgency[data-urgency="month"] { background: var(--color-success); }
+        .urgency[data-urgency="week"]  { background: var(--color-warning); }
+        .urgency[data-urgency="today"],
+        .urgency[data-urgency="overdue"] { background: var(--color-danger); }
+        .urgency[data-count] {
+          box-sizing: border-box;
+          inline-size: auto;
+          min-inline-size: 16px;
+          block-size: 16px;
+          /* border-box + top-heavy padding pushes the digit down to optical
+             centre (this font's numerals otherwise sit high in the circle). */
+          padding-block: 2px 0;
+          padding-inline: 4px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+          color: var(--color-text-inverse);
+          font-size: var(--font-size-micro);
+          font-weight: var(--font-weight-semibold);
+        }
+
         .drag-btn {
           position: relative;
           z-index: 1;
@@ -132,6 +165,7 @@ class ListsPageItem extends Gestures(AppElement) {
       <div class="row" tabindex="0" role="button" aria-label="">
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="list-name"></span>
+        <span class="urgency" aria-hidden="true" hidden></span>
         <span class="item-count"></span>
         <span class="chevron" aria-hidden="true">${icons.chevronRight}</span>
       </div>
@@ -143,6 +177,7 @@ class ListsPageItem extends Gestures(AppElement) {
     this._row        = this.shadowRoot.querySelector('.row');
     this._nameEl     = this.shadowRoot.querySelector('.list-name');
     this._countEl    = this.shadowRoot.querySelector('.item-count');
+    this._urgencyEl  = this.shadowRoot.querySelector('.urgency');
     this._colorPanel = this.shadowRoot.querySelector('#color-panel');
 
     this._update();
@@ -225,13 +260,34 @@ class ListsPageItem extends Gestures(AppElement) {
   _update() {
     if (!this._row) return;
     const name  = this._list?.name  ?? '';
-    const count = this._list?.items?.length ?? 0;
+    const items = this._list?.items ?? [];
+    const count = items.length;
     const color = this._list?.color ?? null;
     this._nameEl.textContent  = name;
     this._countEl.textContent = String(count);
     this._row.style.setProperty('--list-item-color', color ?? 'transparent');
-    this.setAttribute('aria-label', name);
-    this._row.setAttribute('aria-label', name);
+
+    // Roll-up urgency across open/paused items; quiet for far-future/empty.
+    const buckets = items.map(i => urgencyOf(i.dueDate, i.status !== 'done' && i.status !== 'closed'));
+    const bucket = mostUrgent(buckets);
+    const urgent = urgentCount(buckets);
+    const show = bucket !== 'none' && bucket !== 'far';
+    this._urgencyEl.hidden = !show;
+    let ariaLabel = name;
+    if (show) {
+      this._urgencyEl.dataset.urgency = bucket;
+      if (urgent > 0) {
+        this._urgencyEl.dataset.count = String(urgent);
+        this._urgencyEl.textContent = formatCount(urgent);
+        ariaLabel = `${name}, ${t('urgency.urgent-count', { n: urgent })}`;
+      } else {
+        delete this._urgencyEl.dataset.count;
+        this._urgencyEl.textContent = '';
+        ariaLabel = `${name}, ${t(`urgency.${bucket}`)}`;
+      }
+    }
+    this.setAttribute('aria-label', ariaLabel);
+    this._row.setAttribute('aria-label', ariaLabel);
     if (color) {
       this._colorPanel.style.setProperty('--color-panel-bg', color);
     } else {

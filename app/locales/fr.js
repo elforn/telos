@@ -33,7 +33,15 @@ defineStrings({
   'goal-item.add-wow':           'Ajouter un moment wow',
   'goal-item.add-focus':         'Ajouter une priorité',
   'goal-item.drag':              'Glisser pour réordonner',
-  'goal-item.overdue-aria':      '{title}, en retard',
+  'goal-item.duedate-aria':      '{title}, {when}',
+
+  // Urgence des échéances (partagé par objectifs, éléments, agrégats).
+  'urgency.far':          'à venir',
+  'urgency.month':        'échéance ce mois-ci',
+  'urgency.week':         'échéance cette semaine',
+  'urgency.today':        'échéance aujourd’hui',
+  'urgency.overdue':      'en retard',
+  'urgency.urgent-count': '{n} pour aujourd’hui ou en retard',
 
   'home.toast-goal-saved':       'Objectif enregistré',
   'home.toast-goal-hidden':      'Objectif ajouté — masqué par le filtre actif',
@@ -220,7 +228,7 @@ defineStrings({
   'list-item.mark-done': 'Marquer comme terminé',
   'list-item.restore':   'Restaurer',
   'list-item.drag':      'Glisser pour réordonner',
-  'list-item.overdue-aria': '{title}, en retard',
+  'list-item.duedate-aria': '{title}, {when}',
 
   'lists.toast-list-saved':   'Liste enregistrée',
   'lists.toast-list-hidden':  'Liste ajoutée — masquée par le filtre actif',
@@ -266,6 +274,7 @@ defineStrings({
   'settings.reminder-on':      'Afficher',
   'settings.reminder-off':     'Masquer',
   'settings.tag-strip':        'Couleurs des étiquettes',
+  'settings.deadlines':        'Marqueurs d’échéance',
   'settings.tags-shown':       'Affichées',
   'settings.tags-hidden':      'Masquées',
   'sync.backup-downloaded':    'Vos données ont été sauvegardées avant la mise à jour.',

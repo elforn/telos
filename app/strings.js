@@ -32,7 +32,15 @@ defineStrings({
   'goal-item.add-wow':         'Add wow moment',
   'goal-item.add-focus':       'Add to Forward Focus',
   'goal-item.drag':            'Drag to reorder',
-  'goal-item.overdue-aria':    '{title}, overdue',
+  'goal-item.duedate-aria':    '{title}, {when}',
+
+  // Deadline / due-date urgency phrasing (shared by goals, items, roll-ups).
+  'urgency.far':          'upcoming',
+  'urgency.month':        'due this month',
+  'urgency.week':         'due this week',
+  'urgency.today':        'due today',
+  'urgency.overdue':      'overdue',
+  'urgency.urgent-count': '{n} due today or overdue',
 
   'home.toast-goal-saved':   'Goal saved',
   'home.toast-goal-hidden':  'Goal added — hidden by the current filter',
@@ -211,7 +219,7 @@ defineStrings({
   'list-item.mark-done': 'Mark done',
   'list-item.restore':   'Restore',
   'list-item.drag':      'Drag to reorder',
-  'list-item.overdue-aria': '{title}, overdue',
+  'list-item.duedate-aria': '{title}, {when}',
 
   'lists.toast-list-saved':   'List saved',
   'lists.toast-list-hidden':  'List added — hidden by the current filter',
@@ -268,6 +276,7 @@ defineStrings({
   'settings.reminder-on':       'Show',
   'settings.reminder-off':      'Hide',
   'settings.tag-strip':         'Tag colours',
+  'settings.deadlines':         'Deadline markers',
   'settings.tags-shown':        'Shown',
   'settings.tags-hidden':       'Hidden',
   'sync.backup-downloaded':     'Your data has been backed up before the update.',
