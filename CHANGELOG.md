@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.18.0] — 2026-07-28
+
+### Added
+- **Filter lists by due date, too.** The Lists overview filter now has the same **Due** row (*Overdue · Week · Month · Later · None*) as the goals and item filters — a list matches if any of its items falls in the selected window(s), so you can jump straight to "which lists need attention this week."
+
 ## [1.17.0] — 2026-07-28
 
 ### Added

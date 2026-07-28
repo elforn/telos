@@ -290,7 +290,7 @@ describe('lists-page — create with active filter', () => {
     _resetToast();
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
-    el._filter = { query: '', emptyFilter: 'not-empty' }; // a new list is empty → hidden
+    el._filter = { query: '', emptyFilter: 'not-empty', dates: new Set() }; // a new list is empty → hidden
     el.shadowRoot.dispatchEvent(new CustomEvent('list-created', {
       bubbles: true, composed: true, detail: { name: 'Fresh list' },
     }));
@@ -307,5 +307,43 @@ describe('lists-page — create with active filter', () => {
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#list-container lists-page-item')?.hidden).toBe(false)
     );
+  });
+});
+
+describe('lists-page — date filter', () => {
+  const iso = d => { const x = new Date(); x.setDate(x.getDate() + d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+
+  it('shows a list containing an item in the selected date bucket', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [
+      { id: 'l1', name: 'Overdue list', items: [{ id: 'i1', title: 'x', status: 'open', tags: [], inGoals: [], dueDate: iso(-2) }] },
+      { id: 'l2', name: 'Soon list',    items: [{ id: 'i2', title: 'y', status: 'open', tags: [], inGoals: [], dueDate: iso(20) }] },
+      { id: 'l3', name: 'Undated list', items: [{ id: 'i3', title: 'z', status: 'open', tags: [], inGoals: [] }] },
+    ] } });
+    const el = mount();
+    await vi.waitFor(() => expect(getItems(el).length).toBe(3));
+    const byName = name => getItems(el).find(i => i._list?.name === name);
+
+    el._filter = { query: '', emptyFilter: null, dates: new Set(['overdue']) };
+    el._applyFilter();
+    expect(byName('Overdue list').hidden).toBe(false);
+    expect(byName('Soon list').hidden).toBe(true);
+    expect(byName('Undated list').hidden).toBe(true);
+
+    el._filter = { query: '', emptyFilter: null, dates: new Set(['none']) };
+    el._applyFilter();
+    expect(byName('Undated list').hidden).toBe(false);
+    expect(byName('Overdue list').hidden).toBe(true);
+  });
+
+  it('ignores done/closed items when matching a date bucket', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [
+      { id: 'l1', name: 'Done-overdue list', items: [{ id: 'i1', title: 'x', status: 'done', tags: [], inGoals: [], dueDate: iso(-2) }] },
+    ] } });
+    const el = mount();
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
+
+    el._filter = { query: '', emptyFilter: null, dates: new Set(['overdue']) };
+    el._applyFilter();
+    expect(getItems(el)[0].hidden).toBe(true);
   });
 });

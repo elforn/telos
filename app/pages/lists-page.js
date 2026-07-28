@@ -10,6 +10,7 @@ import '../components/list-dialog/list-dialog.js';
 import '../components/add-row/add-row.js';
 import { COLOR_PALETTE } from '../components/lists-page-item/lists-page-item.js';
 import { icons } from '../icons.js';
+import { DATE_FILTER_KEYS, matchesDateBucket } from '../utils/urgency.js';
 
 class ListsPage extends AppElement {
   template() {
@@ -243,6 +244,34 @@ class ListsPage extends AppElement {
 
         .filter-chip-row[hidden] { display: none; }
 
+        .filter-row {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          overflow-x: auto;
+          flex-wrap: nowrap;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .filter-row::-webkit-scrollbar { display: none; }
+
+        /* Date pills carry a small urgency-coloured dot so the row self-documents. */
+        .filter-date-pill::before {
+          content: '';
+          display: inline-block;
+          inline-size: 8px;
+          block-size: 8px;
+          border-radius: var(--radius-full);
+          margin-inline-end: var(--space-1);
+          vertical-align: middle;
+        }
+        .filter-date-pill[data-date="overdue"]::before { background: var(--color-danger); }
+        .filter-date-pill[data-date="week"]::before    { background: var(--color-warning); }
+        .filter-date-pill[data-date="month"]::before   { background: var(--color-success); }
+        .filter-date-pill[data-date="later"]::before   { background: var(--color-text-muted); }
+        .filter-date-pill[data-date="none"]::before    { box-shadow: inset 0 0 0 1.5px var(--color-text-muted); }
+
         .filter-chip {
           min-block-size: var(--touch-target-small);
           padding-inline: var(--space-3);
@@ -301,9 +330,18 @@ class ListsPage extends AppElement {
             <button class="filter-expand-btn" id="filter-expand-btn" aria-label="${t('lists-page.filter-expand')}" aria-expanded="false" aria-controls="filter-panel">${icons.chevronDown}<span class="filter-expand-dot" hidden aria-hidden="true"></span></button>
             <button class="filter-clear-btn" id="filter-clear-btn" aria-label="${t('lists-page.filter-clear')}">${icons.funnelX}</button>
           </div>
-          <div class="filter-chip-row" id="filter-panel" hidden>
-            <button class="filter-chip" id="empty-btn" aria-pressed="false">${t('lists-page.filter-empty-only')}</button>
-            <button class="filter-chip" id="not-empty-btn" aria-pressed="false">${t('lists-page.filter-not-empty')}</button>
+          <div id="filter-panel" hidden>
+            <div class="filter-chip-row">
+              <button class="filter-chip" id="empty-btn" aria-pressed="false">${t('lists-page.filter-empty-only')}</button>
+              <button class="filter-chip" id="not-empty-btn" aria-pressed="false">${t('lists-page.filter-not-empty')}</button>
+            </div>
+            <div class="filter-row" id="filter-date-row" role="group" aria-label="${t('filter.date-label')}">
+              <button class="filter-chip filter-date-pill" id="fdate-overdue" data-date="overdue" aria-pressed="false">${t('filter.date-overdue')}</button>
+              <button class="filter-chip filter-date-pill" id="fdate-week" data-date="week" aria-pressed="false">${t('filter.date-week')}</button>
+              <button class="filter-chip filter-date-pill" id="fdate-month" data-date="month" aria-pressed="false">${t('filter.date-month')}</button>
+              <button class="filter-chip filter-date-pill" id="fdate-later" data-date="later" aria-pressed="false">${t('filter.date-later')}</button>
+              <button class="filter-chip filter-date-pill" id="fdate-none" data-date="none" aria-pressed="false">${t('filter.date-none')}</button>
+            </div>
           </div>
         </div>
       </div>
@@ -368,7 +406,7 @@ class ListsPage extends AppElement {
     this._filterEmpty  = this.shadowRoot.querySelector('#filter-empty');
     this._filterLive   = this.shadowRoot.querySelector('#filter-live');
 
-    this._filter = { query: '', emptyFilter: null };
+    this._filter = { query: '', emptyFilter: null, dates: new Set() };
     this._barExpanded = false;
     this._panelExpanded = false;
     this._filterExpandBtn = this.shadowRoot.querySelector('#filter-expand-btn');
@@ -421,8 +459,21 @@ class ListsPage extends AppElement {
     };
     this.listen(this._notEmptyBtn, 'click', this._onNotEmptyBtn);
 
+    this._onFilterDate = e => {
+      const btn = e.target.closest('.filter-date-pill');
+      if (!btn) return;
+      const key = btn.dataset.date;
+      if (!DATE_FILTER_KEYS.includes(key)) return;
+      if (this._filter.dates.has(key)) this._filter.dates.delete(key);
+      else this._filter.dates.add(key);
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyFilter();
+    };
+    this.listen(this.shadowRoot.querySelector('#filter-date-row'), 'click', this._onFilterDate);
+
     this._onFilterClear = () => {
-      this._filter = { query: '', emptyFilter: null };
+      this._filter = { query: '', emptyFilter: null, dates: new Set() };
       this._saveFilter();
       this._syncFilterUI();
       this._applyFilter();
@@ -491,8 +542,8 @@ class ListsPage extends AppElement {
     try {
       const raw = localStorage.getItem('telos:filter:lists');
       if (raw) {
-        const { query = '', emptyFilter = null, barExpanded = false, panelExpanded = false } = JSON.parse(raw);
-        this._filter = { query, emptyFilter };
+        const { query = '', emptyFilter = null, dates = [], barExpanded = false, panelExpanded = false } = JSON.parse(raw);
+        this._filter = { query, emptyFilter, dates: new Set(dates) };
         this._barExpanded = barExpanded;
         this._panelExpanded = panelExpanded;
       }
@@ -500,9 +551,9 @@ class ListsPage extends AppElement {
   }
 
   _saveFilter() {
-    if (this._filter.query || this._filter.emptyFilter || this._barExpanded || this._panelExpanded) {
+    if (this._filter.query || this._filter.emptyFilter || this._filter.dates.size || this._barExpanded || this._panelExpanded) {
       localStorage.setItem('telos:filter:lists', JSON.stringify({
-        query: this._filter.query, emptyFilter: this._filter.emptyFilter,
+        query: this._filter.query, emptyFilter: this._filter.emptyFilter, dates: [...this._filter.dates],
         barExpanded: this._barExpanded, panelExpanded: this._panelExpanded,
       }));
     } else {
@@ -512,15 +563,15 @@ class ListsPage extends AppElement {
 
   _syncFilterUI() {
     if (this._filterSearch) this._filterSearch.value = this._filter.query;
-    const active = !!(this._filter.query || this._filter.emptyFilter);
+    const active = !!(this._filter.query || this._filter.emptyFilter || this._filter.dates.size);
     if (this._filterBtnDot) this._filterBtnDot.hidden = !active;
     this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
 
-    const panelOpen = this._panelExpanded || !!this._filter.emptyFilter;
+    const panelOpen = this._panelExpanded || !!this._filter.emptyFilter || this._filter.dates.size > 0;
     if (this._filterPanel) this._filterPanel.hidden = !panelOpen;
     if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', String(panelOpen));
     const expandDot = this._filterExpandBtn?.querySelector('.filter-expand-dot');
-    if (expandDot) expandDot.hidden = !this._filter.emptyFilter;
+    if (expandDot) expandDot.hidden = !(this._filter.emptyFilter || this._filter.dates.size);
 
     const ef = this._filter.emptyFilter;
     if (this._emptyBtn) {
@@ -530,6 +581,14 @@ class ListsPage extends AppElement {
     if (this._notEmptyBtn) {
       this._notEmptyBtn.classList.toggle('active', ef === 'not-empty');
       this._notEmptyBtn.setAttribute('aria-pressed', String(ef === 'not-empty'));
+    }
+    for (const d of DATE_FILTER_KEYS) {
+      const btn = this.shadowRoot.querySelector(`#fdate-${d}`);
+      if (btn) {
+        const on = this._filter.dates.has(d);
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', String(on));
+      }
     }
   }
 
@@ -541,12 +600,13 @@ class ListsPage extends AppElement {
   }
 
   _listFilterActive() {
-    return !!(this._filter.query.toLowerCase().trim() || this._filter.emptyFilter);
+    return !!(this._filter.query.toLowerCase().trim() || this._filter.emptyFilter || this._filter.dates.size);
   }
 
   _listMatchesFilter(list) {
     const q           = this._filter.query.toLowerCase().trim();
     const emptyFilter = this._filter.emptyFilter;
+    const dates       = this._filter.dates;
     if (q) {
       const nameMatch = list.name.toLowerCase().includes(q);
       const itemMatch = (list.items ?? []).some(item =>
@@ -559,6 +619,13 @@ class ListsPage extends AppElement {
     }
     if (emptyFilter === 'empty'     && (list.items ?? []).length !== 0) return false;
     if (emptyFilter === 'not-empty' && (list.items ?? []).length === 0) return false;
+    if (dates.size) {
+      const hasMatch = (list.items ?? []).some(item => {
+        const active = item.status !== 'done' && item.status !== 'closed';
+        return [...dates].some(key => matchesDateBucket(key, item.dueDate, active));
+      });
+      if (!hasMatch) return false;
+    }
     return true;
   }
 
