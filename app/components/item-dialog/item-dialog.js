@@ -953,13 +953,16 @@ class ItemDialog extends AppElement {
       this._announceSaved();
     };
 
-    // Triggered from the overflow menu now — doesn't close the sheet (so both
-    // toggles can be flipped in one visit) and doesn't auto-focus the revealed
-    // field (focusing right after a menu interaction would be a jarring second
-    // focus change; let the user tap in when they're ready).
+    // Triggered from the overflow menu — closes the sheet (the real use case
+    // is "turn this on and go fill it in", not toggling several fields in one
+    // visit), but still doesn't auto-focus the revealed field: focusing it
+    // right after a menu interaction would be a jarring second focus change
+    // (and would dismiss the on-screen keyboard if title/note had it open).
+    // Let the user tap in when they're ready.
     this._onUrlToggle = () => {
       this._showUrlField(this._urlRow.hidden);
       requestAnimationFrame(() => this._syncNoteHeight());
+      this._actionSheet.close();
     };
 
     this._onUrlOpen = () => {
@@ -981,6 +984,7 @@ class ItemDialog extends AppElement {
     this._onDueDateToggle = () => {
       this._showDueDateField(this._dueDateRow.hidden);
       requestAnimationFrame(() => this._syncNoteHeight());
+      this._actionSheet.close();
     };
 
     this._onDueDateClear = () => {
@@ -1169,8 +1173,6 @@ class ItemDialog extends AppElement {
     };
     this._actionSheet.addEventListener('click', this._onSheetBackdrop);
 
-    // Toggles — deliberately don't close the sheet, so both can be flipped
-    // in one visit (see _onUrlToggle/_onDueDateToggle for why they don't focus).
     this._urlToggle.addEventListener('click', this._onUrlToggle);
     this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
 

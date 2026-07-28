@@ -87,7 +87,6 @@ class ListsPage extends AppElement {
           justify-content: center;
           touch-action: manipulation;
           position: relative;
-          margin-inline-end: var(--edge-btn-bleed);
         }
 
         .filter-btn svg {
@@ -114,6 +113,7 @@ class ListsPage extends AppElement {
           align-items: center;
           justify-content: center;
           touch-action: manipulation;
+          margin-inline-end: var(--edge-btn-bleed);
         }
 
         .menu-btn svg {
@@ -395,8 +395,8 @@ class ListsPage extends AppElement {
         <div class="top-row">
           <h1>${t('lists-page.heading')}</h1>
           <div class="header-actions">
-            <button class="menu-btn" id="menu-btn" aria-label="${t('lists-page.menu')}" aria-expanded="false">${icons.dotsVertical}</button>
             <button class="filter-btn" id="filter-btn" aria-label="${t('lists-page.filter-toggle')}" aria-expanded="false">${icons.funnel}<span class="filter-btn-dot" hidden aria-hidden="true"></span></button>
+            <button class="menu-btn" id="menu-btn" aria-label="${t('lists-page.menu')}" aria-expanded="false">${icons.dotsVertical}</button>
           </div>
         </div>
         <div id="filter-bar" hidden>

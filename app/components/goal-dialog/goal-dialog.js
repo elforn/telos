@@ -798,14 +798,16 @@ class GoalDialog extends AppElement {
       this._announceSaved();
     };
 
-    // Triggered from the overflow menu now — doesn't close the sheet and
-    // doesn't auto-focus the revealed field: focusing it right after a menu
-    // interaction would be a jarring second focus change (and would dismiss
-    // the on-screen keyboard if title/notes had it open). Let the user tap
-    // in when they're ready.
+    // Triggered from the overflow menu — closes the sheet (the real use case
+    // is "turn this on and go fill it in", not toggling several fields in one
+    // visit), but still doesn't auto-focus the revealed field: focusing it
+    // right after a menu interaction would be a jarring second focus change
+    // (and would dismiss the on-screen keyboard if title/notes had it open).
+    // Let the user tap in when they're ready.
     this._onDueDateToggle = () => {
       this._showDueDateField(this._dueDateRow.hidden);
       requestAnimationFrame(() => this._syncDescHeight());
+      this._actionSheet.close();
     };
 
     this._onDueDateClear = () => {
@@ -934,7 +936,6 @@ class GoalDialog extends AppElement {
     this._onMenuBtn = () => this._actionSheet.show();
     this._menuBtn.addEventListener('click', this._onMenuBtn);
 
-    // Toggle — deliberately doesn't close the sheet (see _onDueDateToggle).
     this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
 
     this._onArchivePD = e => e.preventDefault();

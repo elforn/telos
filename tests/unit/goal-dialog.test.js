@@ -94,6 +94,13 @@ describe('goal-dialog — open', () => {
     el.open(null);
     expect(el.shadowRoot.querySelector('#action-duedate-toggle').getAttribute('aria-pressed')).toBe('false');
   });
+
+  it('duedate-toggle closes the overflow menu', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#action-duedate-toggle').click();
+    expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
+  });
 });
 
 describe('goal-dialog — new goal creation', () => {

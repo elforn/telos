@@ -533,3 +533,52 @@ describe('bottom-nav — urgency roll-up', () => {
     expect(listsDot(el).hidden).toBe(false);
   });
 });
+
+describe('bottom-nav — app icon badge', () => {
+  const realSetAppBadge = navigator.setAppBadge;
+  const realClearAppBadge = navigator.clearAppBadge;
+
+  afterEach(() => {
+    navigator.setAppBadge = realSetAppBadge;
+    navigator.clearAppBadge = realClearAppBadge;
+  });
+
+  it('calls setAppBadge with the combined urgent count', () => {
+    navigator.setAppBadge = vi.fn().mockResolvedValue(undefined);
+    navigator.clearAppBadge = vi.fn().mockResolvedValue(undefined);
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', [{ id: 'l', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', tags: [], inGoals: [], dueDate: isoDaysFromNow(0) }] }]);
+    const el = mount();
+    el.refreshUrgency();
+    expect(navigator.setAppBadge).toHaveBeenCalledWith(2);
+  });
+
+  it('calls clearAppBadge when nothing is urgent', () => {
+    navigator.setAppBadge = vi.fn().mockResolvedValue(undefined);
+    navigator.clearAppBadge = vi.fn().mockResolvedValue(undefined);
+    setState('goals', {});
+    setState('lists', []);
+    const el = mount();
+    el.refreshUrgency();
+    expect(navigator.clearAppBadge).toHaveBeenCalled();
+  });
+
+  it('logs (not throws) when setAppBadge rejects asynchronously', async () => {
+    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    navigator.setAppBadge = vi.fn().mockRejectedValue(new Error('denied'));
+    navigator.clearAppBadge = vi.fn().mockResolvedValue(undefined);
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', []);
+    expect(() => { const el = mount(); el.refreshUrgency(); }).not.toThrow();
+    await vi.waitFor(() => expect(consoleErr).toHaveBeenCalledWith('App badge update failed:', expect.any(Error)));
+  });
+
+  it('does nothing when setAppBadge is unsupported', () => {
+    const original = navigator.setAppBadge;
+    // eslint-disable-next-line no-param-reassign
+    delete navigator.setAppBadge;
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }]));
+    expect(() => { const el = mount(); el.refreshUrgency(); }).not.toThrow();
+    navigator.setAppBadge = original;
+  });
+});

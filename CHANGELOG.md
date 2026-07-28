@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.19.1] — 2026-07-28
+
+### Fixed
+- Toggling **Deadline** (goal dialog) or **Due date** / **Link** (item dialog) from the "···" overflow menu now closes the menu — the real use case is turning a field on and going to fill it in, not flipping several toggles in one visit.
+- The Lists overview's new "⋮" menu button now sits to the right of the filter icon, matching the order used on the Years and list-detail headers.
+- The app-icon badge call (`setAppBadge`/`clearAppBadge`) now properly catches asynchronous rejections and logs them — previously a bare `try/catch` only caught a synchronous throw, so a rejected promise (permission denial, unsupported context, etc.) failed silently with no visible error.
+
 ## [1.19.0] — 2026-07-28
 
 ### Added

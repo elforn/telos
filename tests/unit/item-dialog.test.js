@@ -180,6 +180,20 @@ describe('item-dialog — open', () => {
     expect(el.shadowRoot.querySelector('#action-duedate-toggle').getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('duedate-toggle closes the overflow menu', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#action-duedate-toggle').click();
+    expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
+  });
+
+  it('url-toggle closes the overflow menu', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#action-url-toggle').click();
+    expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
+  });
+
   it('pre-selects the item status radio', () => {
     const el = mount();
     el.open(ITEM);

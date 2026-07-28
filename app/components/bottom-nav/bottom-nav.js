@@ -800,13 +800,19 @@ class BottomNav extends AppElement {
   }
 
   // Badging API is Chrome/installed-only (Firefox ignores it) — a pure
-  // enhancement, so failures are swallowed.
+  // enhancement, so failures don't break anything. setAppBadge()/clearAppBadge()
+  // return a Promise — a bare try/catch here only ever caught a synchronous
+  // throw, never an async rejection (permission denial, non-standalone display
+  // context, etc.), which would otherwise surface only as an unhandled
+  // rejection. Logging it keeps the failure diagnosable without becoming fatal.
   _updateAppBadge(total) {
     if (!('setAppBadge' in navigator)) return;
     try {
-      if (total > 0) navigator.setAppBadge(total);
-      else navigator.clearAppBadge();
-    } catch { /* denied or unsupported — non-fatal */ }
+      const promise = total > 0 ? navigator.setAppBadge(total) : navigator.clearAppBadge();
+      promise?.catch(err => console.error('App badge update failed:', err));
+    } catch (err) {
+      console.error('App badge update failed:', err);
+    }
   }
 
   _subscribeVersion() {
