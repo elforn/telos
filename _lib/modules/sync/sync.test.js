@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { exportData, importData, downloadExport, readImportFile, previewImport, applyReplace, applyMerge } from './sync.js';
+import { exportData, exportSlice, importData, downloadExport, readImportFile, previewImport, applyReplace, applyMerge } from './sync.js';
 import { boot, reset, attachBlob, getBlob, getAllEvents, getState } from '../../core/store/store.js';
 import * as Store from '../../core/store/store.js';
 
@@ -383,5 +383,36 @@ describe('applyMerge', () => {
     await applyMerge(parsed, (c, i) => ({ ...c, ...i }));
     const stored = await getBlob('merge-img');
     expect(stored).toBeTruthy();
+  });
+});
+
+// ── exportSlice ───────────────────────────────────────────────────────────────
+
+describe('exportSlice', () => {
+  it('returns a Uint8Array with SCLE magic and gzip header', async () => {
+    const result = await exportSlice({ foo: 1 });
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result[0]).toBe(0x53); // S
+    expect(result[1]).toBe(0x43); // C
+    expect(result[2]).toBe(0x4c); // L
+    expect(result[3]).toBe(0x45); // E
+    expect(result[4]).toBe(0x1f); // gzip magic
+    expect(result[5]).toBe(0x8b);
+  });
+
+  it('round-trips through previewImport as type: simple with matching payload', async () => {
+    const oneList = { id: 'list-1', name: 'Shopping' };
+    const uint8 = await exportSlice({ lists: [oneList] });
+    const parsed = await previewImport(uint8);
+    expect(parsed.type).toBe('simple');
+    expect(parsed.payload).toEqual({ lists: [oneList] });
+    expect(parsed.blobs).toEqual([]);
+  });
+
+  it('produces a file that applyMerge can consume for simple-store handoff', async () => {
+    const uint8 = await exportSlice({ score: 42 });
+    const parsed = await previewImport(uint8);
+    await applyMerge(parsed, (current, imported) => ({ ...current, ...imported }));
+    expect(getState().score).toBe(42);
   });
 });

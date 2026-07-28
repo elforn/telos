@@ -1,6 +1,7 @@
 const CACHE_VERSION = '%%CACHE_VERSION%%';
 const ASSETS = %%ASSETS%%;
 const BASE_PATH = '%%BASE_PATH%%';
+const SHARE_TARGET_PATH = BASE_PATH + 'share-target';
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -42,6 +43,36 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       caches.match(BASE_PATH).then(r => r ?? fetch(BASE_PATH))
     );
+    return;
+  }
+
+  // Share Target — POST handler: store fields + files into share-inbox cache, then redirect home.
+  // The app's manifest.json must declare share_target with method: 'POST',
+  // enctype: 'multipart/form-data', and params: { title, text, url, files: [{ name: 'files', ... }] }.
+  // The 'files' param name must match fd.getAll('files') below.
+  if (event.request.method === 'POST' && new URL(event.request.url).pathname === SHARE_TARGET_PATH) {
+    event.respondWith((async () => {
+      const fd = await event.request.formData();
+      const title = fd.get('title') ?? '';
+      const text  = fd.get('text')  ?? '';
+      const sharedUrl = fd.get('url') ?? '';
+      const rawFiles = fd.getAll('files');
+      const cache = await caches.open('share-inbox');
+      const filesIndex = [];
+      for (let i = 0; i < rawFiles.length; i++) {
+        const file = rawFiles[i];
+        const key = 'file-' + i;
+        await cache.put(key, new Response(await file.arrayBuffer(), {
+          headers: { 'content-type': file.type || 'application/octet-stream', 'x-file-name': file.name },
+        }));
+        filesIndex.push({ name: file.name, type: file.type, key });
+      }
+      await cache.put('pending', new Response(
+        JSON.stringify({ title, text, url: sharedUrl, files: filesIndex }),
+        { headers: { 'content-type': 'application/json' } },
+      ));
+      return Response.redirect(BASE_PATH, 303);
+    })());
     return;
   }
 

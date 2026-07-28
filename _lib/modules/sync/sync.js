@@ -110,6 +110,21 @@ export async function exportData({ eventFilter } = {}) {
   return concat([enc.encode(MAGIC), compressed]);
 }
 
+export async function exportSlice(payload) {
+  const eventsBytes = enc.encode(JSON.stringify({
+    socleVersion: SOCLE_VERSION,
+    exportedAt: new Date().toISOString(),
+    events: [{ type: 'simple:state', payload }],
+  }));
+  const inner = concat([
+    new Uint8Array([BINARY_VERSION]),
+    u32le(eventsBytes.byteLength),
+    eventsBytes,
+    u16le(0),
+  ]);
+  return concat([enc.encode(MAGIC), await compress(inner)]);
+}
+
 // ── Import ────────────────────────────────────────────────────────────────────
 
 async function importBinary(uint8) {
