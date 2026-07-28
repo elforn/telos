@@ -137,6 +137,8 @@ defineStrings({
   'lists-page.heading':   'Listes',
   'lists-page.add':       'Nouvelle liste',
   'lists-page.drag':     'Glisser pour réordonner',
+  'lists-page.menu':           'Menu',
+  'lists-page.rollup-toggle':  'Indicateurs de date',
 
   'list-detail.back':        'Listes',
   'list-detail.add':         'Nouvel élément',

@@ -511,4 +511,25 @@ describe('bottom-nav — urgency roll-up', () => {
     expect(yearsDot(el).hidden).toBe(true);
     expect(listsDot(el).hidden).toBe(true);
   });
+
+  it('mutes the Lists pill (not Years) when listsRollupVisible is false', () => {
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', [{ id: 'l', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', tags: [], inGoals: [], dueDate: isoDaysFromNow(-1) }] }]);
+    setState('listsRollupVisible', false);
+    const el = mount();
+    el.refreshUrgency();
+    expect(listsDot(el).hidden).toBe(true);
+    expect(yearsDot(el).hidden).toBe(false);
+    setState('listsRollupVisible', true);
+  });
+
+  it('restores the Lists pill when listsRollupVisible is toggled back on', () => {
+    setState('lists', [{ id: 'l', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', tags: [], inGoals: [], dueDate: isoDaysFromNow(0) }] }]);
+    setState('listsRollupVisible', false);
+    const el = mount();
+    el.refreshUrgency();
+    expect(listsDot(el).hidden).toBe(true);
+    setState('listsRollupVisible', true);
+    expect(listsDot(el).hidden).toBe(false);
+  });
 });

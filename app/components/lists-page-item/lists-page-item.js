@@ -17,6 +17,13 @@ class ListsPageItem extends Gestures(AppElement) {
     if (this.shadowRoot) this._update();
   }
 
+  // Global (page-level) show/hide for the roll-up urgency dot — property-in,
+  // no store knowledge (this is a UI-tier component; the page reads the toggle).
+  set rollupVisible(value) {
+    this._rollupVisible = value;
+    if (this.shadowRoot) this._update();
+  }
+
   template() {
     return `
       <style>
@@ -268,7 +275,10 @@ class ListsPageItem extends Gestures(AppElement) {
     this._row.style.setProperty('--list-item-color', color ?? 'transparent');
 
     // Roll-up urgency across open/paused items; quiet for far-future/empty.
-    const buckets = items.map(i => urgencyOf(i.dueDate, i.status !== 'done' && i.status !== 'closed'));
+    // Suppressed entirely when the page-level toggle is off (default on).
+    const buckets = this._rollupVisible === false
+      ? []
+      : items.map(i => urgencyOf(i.dueDate, i.status !== 'done' && i.status !== 'closed'));
     const bucket = mostUrgent(buckets);
     const urgent = urgentCount(buckets);
     const show = bucket !== 'none' && bucket !== 'far';

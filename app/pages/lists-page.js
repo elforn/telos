@@ -8,6 +8,7 @@ import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/list-dialog/list-dialog.js';
 import '../components/add-row/add-row.js';
+import '../../_lib/modules/modal-dialog/modal-dialog.js';
 import { COLOR_PALETTE } from '../components/lists-page-item/lists-page-item.js';
 import { icons } from '../icons.js';
 import { DATE_FILTER_KEYS, matchesDateBucket } from '../utils/urgency.js';
@@ -38,6 +39,11 @@ class ListsPage extends AppElement {
           align-items: center;
           justify-content: space-between;
           min-block-size: 64px;
+        }
+
+        .header-actions {
+          display: flex;
+          align-items: center;
         }
 
         h1 {
@@ -91,6 +97,75 @@ class ListsPage extends AppElement {
         }
 
         .filter-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .menu-btn {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--color-text-secondary);
+          border-radius: var(--radius-full);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          touch-action: manipulation;
+        }
+
+        .menu-btn svg {
+          inline-size: 22px;
+          block-size: 22px;
+          pointer-events: none;
+        }
+
+        .menu-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        /* Menu dialog — Date indicators toggle */
+        .menu-section-label {
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-text-muted);
+          text-transform: uppercase;
+          letter-spacing: var(--letter-spacing-caps);
+          margin: 0 0 var(--space-2);
+        }
+
+        .status-pill-group {
+          display: flex;
+          gap: var(--space-1);
+          background: var(--color-surface-raised);
+          border-radius: var(--radius-full);
+          padding: var(--pill-inset);
+        }
+
+        .status-pill {
+          flex: 1;
+          min-block-size: var(--touch-target);
+          border: none;
+          border-radius: var(--radius-full);
+          background: none;
+          cursor: pointer;
+          font-family: var(--font-family);
+          font-size: var(--font-size-body);
+          font-weight: var(--font-weight-medium);
+          color: var(--color-text-secondary);
+          text-align: center;
+        }
+
+        .status-pill.active {
+          background: var(--color-surface);
+          color: var(--color-text-primary);
+          box-shadow: var(--shadow-card);
+        }
+
+        .status-pill:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
@@ -319,7 +394,10 @@ class ListsPage extends AppElement {
       <div class="page-header">
         <div class="top-row">
           <h1>${t('lists-page.heading')}</h1>
-          <button class="filter-btn" id="filter-btn" aria-label="${t('lists-page.filter-toggle')}" aria-expanded="false">${icons.funnel}<span class="filter-btn-dot" hidden aria-hidden="true"></span></button>
+          <div class="header-actions">
+            <button class="menu-btn" id="menu-btn" aria-label="${t('lists-page.menu')}" aria-expanded="false">${icons.dotsVertical}</button>
+            <button class="filter-btn" id="filter-btn" aria-label="${t('lists-page.filter-toggle')}" aria-expanded="false">${icons.funnel}<span class="filter-btn-dot" hidden aria-hidden="true"></span></button>
+          </div>
         </div>
         <div id="filter-bar" hidden>
           <div class="filter-bar-row">
@@ -352,6 +430,14 @@ class ListsPage extends AppElement {
         <add-row id="add-row">+ ${t('lists-page.add')}</add-row>
       </main>
       <list-dialog id="dialog"></list-dialog>
+
+      <modal-dialog id="menu" aria-label="${t('lists-page.menu')}">
+        <p class="menu-section-label">${t('lists-page.rollup-toggle')}</p>
+        <div class="status-pill-group" role="group" aria-label="${t('lists-page.rollup-toggle')}">
+          <button class="status-pill" id="rollup-show-btn">${t('settings.reminder-on')}</button>
+          <button class="status-pill" id="rollup-hide-btn">${t('settings.reminder-off')}</button>
+        </div>
+      </modal-dialog>
     `;
   }
 
@@ -485,6 +571,12 @@ class ListsPage extends AppElement {
       filterBtn.setAttribute('aria-expanded', 'true');
     }
 
+    // ── Menu — date-indicator roll-up toggle ─────────────────────────────────
+
+    this._menuDialog = this.shadowRoot.querySelector('#menu');
+    this._setupMenu();
+    this._setupRollupToggle();
+
     // ── Store ─────────────────────────────────────────────────────────────────
 
     this._onLists = lists => {
@@ -501,6 +593,46 @@ class ListsPage extends AppElement {
       toast(t('lists.toast-list-deleted', { name: listName }), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
     };
     this.watch('pendingListUndo', this._onPendingListUndo);
+  }
+
+  _setupMenu() {
+    const menuBtn = this.shadowRoot.querySelector('#menu-btn');
+    this._onMenuBtn = () => {
+      this._menuDialog.show();
+      menuBtn.setAttribute('aria-expanded', 'true');
+    };
+    this.listen(menuBtn, 'click', this._onMenuBtn);
+
+    this._onMenuClose = () => menuBtn.setAttribute('aria-expanded', 'false');
+    this.listen(this._menuDialog, 'modal-close', this._onMenuClose);
+  }
+
+  // Global (not per-list) show/hide for the roll-up urgency dot on list cards
+  // and the bottom-nav Lists tab badge — per-item due-date markers inside a
+  // list are unaffected and always show.
+  _setupRollupToggle() {
+    this._rollupShowBtn = this.shadowRoot.querySelector('#rollup-show-btn');
+    this._rollupHideBtn = this.shadowRoot.querySelector('#rollup-hide-btn');
+
+    this._onRollupShowBtn = () => {
+      setState('listsRollupVisible', true);
+      this._menuDialog.close();
+    };
+    this.listen(this._rollupShowBtn, 'click', this._onRollupShowBtn);
+
+    this._onRollupHideBtn = () => {
+      setState('listsRollupVisible', false);
+      this._menuDialog.close();
+    };
+    this.listen(this._rollupHideBtn, 'click', this._onRollupHideBtn);
+
+    this.watch('listsRollupVisible', visible => {
+      this._rollupVisible = visible ?? true;
+      this._rollupShowBtn?.classList.toggle('active', this._rollupVisible);
+      this._rollupHideBtn?.classList.toggle('active', !this._rollupVisible);
+      // Re-push the flag to existing cards (syncChildren reuses elements, no full re-render).
+      this._renderLists(getState().lists ?? []);
+    });
   }
 
   _initDrag() {
@@ -651,7 +783,10 @@ class ListsPage extends AppElement {
   // ── Rendering ─────────────────────────────────────────────────────────────
 
   _renderLists(lists) {
-    syncChildren(this._container, lists, 'lists-page-item', (el, list) => { el.list = list; });
+    syncChildren(this._container, lists, 'lists-page-item', (el, list) => {
+      el.list = list;
+      el.rollupVisible = this._rollupVisible;
+    });
   }
 }
 

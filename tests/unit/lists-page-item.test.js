@@ -377,4 +377,19 @@ describe('lists-page-item — urgency roll-up', () => {
     ] });
     expect(dot(el).hidden).toBe(true);
   });
+
+  it('suppresses the dot when rollupVisible is set to false', () => {
+    const el = mount({ ...LIST, items: [item({ dueDate: isoDaysFromNow(-1) })] });
+    expect(dot(el).hidden).toBe(false);
+    el.rollupVisible = false;
+    expect(dot(el).hidden).toBe(true);
+  });
+
+  it('shows the dot again when rollupVisible is set back to true', () => {
+    const el = mount({ ...LIST, items: [item({ dueDate: isoDaysFromNow(-1) })] });
+    el.rollupVisible = false;
+    el.rollupVisible = true;
+    expect(dot(el).hidden).toBe(false);
+    expect(dot(el).dataset.urgency).toBe('overdue');
+  });
 });

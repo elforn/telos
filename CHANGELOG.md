@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.19.0] — 2026-07-28
+
+### Added
+- **Hide the urgency roll-ups from the Lists overview.** A new "⋮" menu on the Lists page has a **Date indicators** Show/Hide toggle — turning it off mutes the coloured roll-up dot on every list card *and* the Lists tab badge in the bottom nav (shown by default). The calendar markers on individual items inside a list are unaffected either way.
+
 ## [1.18.0] — 2026-07-28
 
 ### Added

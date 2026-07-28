@@ -347,3 +347,70 @@ describe('lists-page — date filter', () => {
     expect(getItems(el)[0].hidden).toBe(true);
   });
 });
+
+// Each menu is a <modal-dialog>; happy-dom supports native <dialog> well enough
+// to test show()/close() directly, without stubbing (mirrors year-header.test.js).
+function nativeDialog(modalDialogEl) {
+  return modalDialogEl.shadowRoot.querySelector('dialog');
+}
+
+describe('lists-page — menu', () => {
+  it('opens the menu on menu-btn click', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    expect(nativeDialog(el.shadowRoot.querySelector('#menu')).open).toBe(true);
+  });
+
+  it('resets aria-expanded on the menu button when the dialog closes', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    const el = mount();
+    const btn = el.shadowRoot.querySelector('#menu-btn');
+    btn.click();
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+    el.shadowRoot.querySelector('#menu').close();
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+  });
+});
+
+describe('lists-page — date-indicator roll-up toggle', () => {
+  it('defaults to shown when nothing is stored', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#rollup-show-btn').classList.contains('active')).toBe(true);
+    expect(el.shadowRoot.querySelector('#rollup-hide-btn').classList.contains('active')).toBe(false);
+  });
+
+  it('clicking rollup-hide-btn sets listsRollupVisible to false and closes the menu', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#rollup-hide-btn').click();
+    expect(getState().listsRollupVisible).toBe(false);
+    expect(nativeDialog(el.shadowRoot.querySelector('#menu')).open).toBe(false);
+  });
+
+  it('clicking rollup-show-btn sets listsRollupVisible back to true', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    setState('listsRollupVisible', false);
+    const el = mount();
+    el.shadowRoot.querySelector('#rollup-show-btn').click();
+    expect(getState().listsRollupVisible).toBe(true);
+  });
+
+  it('suppresses the roll-up dot on every list card when hidden', async () => {
+    const iso = d => { const x = new Date(); x.setDate(x.getDate() + d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    await boot({ dbName: freshName(), initialState: { lists: [
+      { id: 'l1', name: 'Overdue list', items: [{ id: 'i1', title: 'x', status: 'open', tags: [], inGoals: [], dueDate: iso(-2) }] },
+    ] } });
+    const el = mount();
+    const dot = () => getItems(el)[0].shadowRoot.querySelector('.urgency');
+    expect(dot().hidden).toBe(false);
+
+    setState('listsRollupVisible', false);
+    expect(dot().hidden).toBe(true);
+
+    setState('listsRollupVisible', true);
+    expect(dot().hidden).toBe(false);
+  });
+});

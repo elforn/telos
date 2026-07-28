@@ -741,6 +741,13 @@ class BottomNav extends AppElement {
     this._listsDot = this.shadowRoot.querySelector('#lists-dot');
     this.watch('goals', () => this._updateUrgency());
     this.watch('lists', () => this._updateUrgency());
+    // Lists-page menu toggle — mutes the Lists pill (and the app badge's list
+    // contribution) alongside the list-card dots; per-item markers unaffected.
+    // Read fresh from getState() in _updateUrgency() rather than caching from
+    // this callback — this element mounts (and its watches fire) before boot()
+    // loads persisted state, so a cached value here could go stale; see
+    // refreshUrgency() below, which re-derives everything from getState().
+    this.watch('listsRollupVisible', () => this._updateUrgency());
   }
 
   // Public: recompute after the store is known to be loaded.
@@ -758,7 +765,8 @@ class BottomNav extends AppElement {
       .flatMap(s => year[s] ?? [])
       .map(g => urgencyOf(g.dueDate, (g.percentage ?? 0) < 100 && !g.archived));
 
-    const itemBuckets = (getState().lists ?? [])
+    const rollupVisible = getState().listsRollupVisible ?? true;
+    const itemBuckets = !rollupVisible ? [] : (getState().lists ?? [])
       .flatMap(l => l.items ?? [])
       .map(i => urgencyOf(i.dueDate, i.status !== 'done' && i.status !== 'closed'));
 

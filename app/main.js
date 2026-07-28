@@ -18,7 +18,7 @@ import './components/bottom-nav/bottom-nav.js';
 
 initTheme();
 
-await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, lists: [], goalsTagsVisible: {}, goalsDeadlinesVisible: {}, listsTagsVisible: {} } });
+await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, lists: [], goalsTagsVisible: {}, goalsDeadlinesVisible: {}, listsTagsVisible: {}, listsRollupVisible: true } });
 
 // bottom-nav mounts (and subscribes) before boot loads state, and boot doesn't
 // re-notify existing subscribers — refresh its urgency roll-up once state is in.
