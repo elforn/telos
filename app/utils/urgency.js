@@ -58,3 +58,20 @@ export function urgentCount(buckets) {
 export function formatCount(n) {
   return n > 99 ? '+' : String(n);
 }
+
+// The date-filter pill keys, in display order.
+export const DATE_FILTER_KEYS = ['overdue', 'week', 'month', 'later', 'none'];
+
+// Whether a `dueDate` (with its `active` state) belongs to a date-filter bucket.
+// The four dated buckets reuse urgencyOf so the filter matches exactly what the
+// calendar marker shows (active-only). 'none' means "no date at all", regardless
+// of status — the "what haven't I dated?" case.
+export function matchesDateBucket(key, dueDate, active) {
+  if (key === 'none') return !dueDate;
+  const bucket = urgencyOf(dueDate, active);
+  if (key === 'overdue') return bucket === 'overdue';
+  if (key === 'week') return bucket === 'today' || bucket === 'week';
+  if (key === 'month') return bucket === 'month';
+  if (key === 'later') return bucket === 'far';
+  return false;
+}

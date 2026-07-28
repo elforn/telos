@@ -43,6 +43,14 @@ defineStrings({
   'urgency.overdue':      'endarrerit',
   'urgency.urgent-count': '{n} per avui o endarrerits',
 
+  // Filtres per venciment (objectius + elements)
+  'filter.date-label':   'Venciment',
+  'filter.date-overdue': 'Endarrerit',
+  'filter.date-week':    'Setmana',
+  'filter.date-month':   'Mes',
+  'filter.date-later':   'Més tard',
+  'filter.date-none':    'Sense data',
+
   'home.toast-goal-saved':       'Objectiu desat',
   'home.toast-goal-hidden':      'Objectiu afegit — amagat pel filtre actiu',
   'home.toast-goal-deleted':     'Objectiu eliminat',

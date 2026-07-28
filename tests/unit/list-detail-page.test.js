@@ -1661,7 +1661,7 @@ describe('list-detail-page — _applyFilter', () => {
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
 
-    el._filter = { query: 'done', statuses: new Set(), tags: new Set() };
+    el._filter = { query: 'done', statuses: new Set(), dates: new Set(), tags: new Set() };
     el._applyFilter();
 
     const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
@@ -1674,7 +1674,7 @@ describe('list-detail-page — _applyFilter', () => {
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
 
-    el._filter = { query: '', statuses: new Set(), tags: new Set() };
+    el._filter = { query: '', statuses: new Set(), dates: new Set(), tags: new Set() };
     el._applyFilter();
 
     const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
@@ -1686,7 +1686,7 @@ describe('list-detail-page — _applyFilter', () => {
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
 
-    el._filter = { query: '', statuses: new Set(['paused']), tags: new Set() };
+    el._filter = { query: '', statuses: new Set(['paused']), dates: new Set(), tags: new Set() };
     el._applyFilter();
 
     const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
@@ -1700,7 +1700,7 @@ describe('list-detail-page — _applyFilter', () => {
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
 
-    el._filter = { query: '', statuses: new Set(), tags: new Set(['health']) };
+    el._filter = { query: '', statuses: new Set(), dates: new Set(), tags: new Set(['health']) };
     el._applyFilter();
 
     const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
@@ -1713,7 +1713,7 @@ describe('list-detail-page — _applyFilter', () => {
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
 
-    el._filter = { query: '', statuses: new Set(), tags: new Set() };
+    el._filter = { query: '', statuses: new Set(), dates: new Set(), tags: new Set() };
     el._applyFilter();
 
     const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
@@ -1726,7 +1726,7 @@ describe('list-detail-page — _applyFilter', () => {
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
 
-    el._filter = { query: '', statuses: new Set(['closed']), tags: new Set() };
+    el._filter = { query: '', statuses: new Set(['closed']), dates: new Set(), tags: new Set() };
     el._applyFilter();
 
     const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
@@ -1739,13 +1739,35 @@ describe('list-detail-page — _applyFilter', () => {
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
 
-    el._filter = { query: 'task', statuses: new Set(['open']), tags: new Set() };
+    el._filter = { query: 'task', statuses: new Set(['open']), dates: new Set(), tags: new Set() };
     el._applyFilter();
 
     const items = [...el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item')];
     expect(items.find(i => i._item.status === 'open').hidden).toBe(false);
     expect(items.find(i => i._item.status === 'done').hidden).toBe(true);
     expect(items.find(i => i._item.status === 'paused').hidden).toBe(true);
+  });
+
+  it('filters by due date: "overdue" and "none" pills', async () => {
+    const iso = d => { const x = new Date(); x.setDate(x.getDate() + d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    const overdue = { id: 'o', title: 'Overdue', status: 'open', tags: [], inGoals: [], dueDate: iso(-2) };
+    const soon    = { id: 's', title: 'Soon',    status: 'open', tags: [], inGoals: [], dueDate: iso(20) };
+    const undated = { id: 'u', title: 'Undated', status: 'open', tags: [], inGoals: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [overdue, soon, undated] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(3));
+    const byTitle = t => [...el.shadowRoot.querySelectorAll('list-item')].find(i => i._item.title === t);
+
+    el._filter = { query: '', statuses: new Set(), dates: new Set(['overdue']), tags: new Set() };
+    el._applyFilter();
+    expect(byTitle('Overdue').hidden).toBe(false);
+    expect(byTitle('Soon').hidden).toBe(true);
+    expect(byTitle('Undated').hidden).toBe(true);
+
+    el._filter = { query: '', statuses: new Set(), dates: new Set(['none']), tags: new Set() };
+    el._applyFilter();
+    expect(byTitle('Undated').hidden).toBe(false);
+    expect(byTitle('Overdue').hidden).toBe(true);
   });
 });
 
@@ -1837,7 +1859,7 @@ describe('list-detail-page — create with active filter', () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#add-row')).not.toBeNull());
-    el._filter = { query: '', statuses: new Set(['done']), tags: new Set() };
+    el._filter = { query: '', statuses: new Set(['done']), dates: new Set(), tags: new Set() };
     el.shadowRoot.querySelector('#add-row').click();
     el.shadowRoot.dispatchEvent(new CustomEvent('item-created', {
       bubbles: true, composed: true, detail: { id: 'n1', title: 'Invisible item', status: 'open' },
@@ -1866,7 +1888,7 @@ describe('list-detail-page — create with active filter', () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#add-row')).not.toBeNull());
-    el._filter = { query: '', statuses: new Set(['open']), tags: new Set() };
+    el._filter = { query: '', statuses: new Set(['open']), dates: new Set(), tags: new Set() };
     el.shadowRoot.querySelector('#add-row').click();
     el.shadowRoot.dispatchEvent(new CustomEvent('item-created', {
       bubbles: true, composed: true, detail: { id: 'n2', title: 'Visible item', status: 'open' },

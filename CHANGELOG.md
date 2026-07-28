@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.17.0] — 2026-07-28
+
+### Added
+- **Filter by due date.** The goals filter (per year) and each list's filter now have a **Due** row — *Overdue · Week · Month · Later · None* — each with a colour dot matching the deadline markers. Tap any combination to narrow to what's due in that window; **None** finds entries that have no date set. The dated pills follow what you see (open/active entries only), so "Overdue" shows exactly the items wearing the red marker.
+
 ## [1.16.0] — 2026-07-28
 
 ### Added

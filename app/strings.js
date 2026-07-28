@@ -42,6 +42,14 @@ defineStrings({
   'urgency.overdue':      'overdue',
   'urgency.urgent-count': '{n} due today or overdue',
 
+  // Date filter pills (goals + list items)
+  'filter.date-label':   'Due date',
+  'filter.date-overdue': 'Overdue',
+  'filter.date-week':    'Week',
+  'filter.date-month':   'Month',
+  'filter.date-later':   'Later',
+  'filter.date-none':    'None',
+
   'home.toast-goal-saved':   'Goal saved',
   'home.toast-goal-hidden':  'Goal added — hidden by the current filter',
   'home.toast-goal-deleted': 'Goal deleted',

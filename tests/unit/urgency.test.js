@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { daysUntil, urgencyOf, mostUrgent, urgentCount, formatCount, URGENCY_ORDER } from '../../app/utils/urgency.js';
+import { daysUntil, urgencyOf, mostUrgent, urgentCount, formatCount, matchesDateBucket, DATE_FILTER_KEYS, URGENCY_ORDER } from '../../app/utils/urgency.js';
 
 // Local YYYY-MM-DD offset from today, matching todayISO()'s local-calendar basis.
 function isoDaysFromNow(days) {
@@ -79,6 +79,38 @@ describe('urgency — urgentCount', () => {
     expect(urgentCount(['week', 'month', 'far'])).toBe(0);
     expect(urgentCount([])).toBe(0);
     expect(urgentCount(['none'])).toBe(0);
+  });
+});
+
+describe('urgency — matchesDateBucket', () => {
+  it('exposes the five filter keys in order', () => {
+    expect(DATE_FILTER_KEYS).toEqual(['overdue', 'week', 'month', 'later', 'none']);
+  });
+
+  it('overdue matches only past dates on active entries', () => {
+    expect(matchesDateBucket('overdue', isoDaysFromNow(-1), true)).toBe(true);
+    expect(matchesDateBucket('overdue', isoDaysFromNow(0), true)).toBe(false);
+    expect(matchesDateBucket('overdue', isoDaysFromNow(-1), false)).toBe(false); // inactive → not matched
+  });
+
+  it('week matches today through 7 days', () => {
+    expect(matchesDateBucket('week', isoDaysFromNow(0), true)).toBe(true);
+    expect(matchesDateBucket('week', isoDaysFromNow(7), true)).toBe(true);
+    expect(matchesDateBucket('week', isoDaysFromNow(8), true)).toBe(false);
+  });
+
+  it('month matches 8–30 days; later matches beyond 30', () => {
+    expect(matchesDateBucket('month', isoDaysFromNow(20), true)).toBe(true);
+    expect(matchesDateBucket('month', isoDaysFromNow(31), true)).toBe(false);
+    expect(matchesDateBucket('later', isoDaysFromNow(31), true)).toBe(true);
+    expect(matchesDateBucket('later', isoDaysFromNow(20), true)).toBe(false);
+  });
+
+  it('none matches only entries without a date, regardless of status', () => {
+    expect(matchesDateBucket('none', undefined, true)).toBe(true);
+    expect(matchesDateBucket('none', undefined, false)).toBe(true);
+    expect(matchesDateBucket('none', isoDaysFromNow(-1), true)).toBe(false);
+    expect(matchesDateBucket('none', isoDaysFromNow(5), false)).toBe(false); // dated but done → still not "none"
   });
 });
 

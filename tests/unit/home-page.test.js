@@ -493,7 +493,7 @@ describe('home-page — _applyGoalFilter', () => {
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
     );
 
-    el._filter = { query: 'piano', states: new Set(), tags: new Set() };
+    el._filter = { query: 'piano', states: new Set(), dates: new Set(), tags: new Set() };
     el._applyGoalFilter();
 
     const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
@@ -514,7 +514,7 @@ describe('home-page — _applyGoalFilter', () => {
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
     );
 
-    el._filter = { query: '', states: new Set(), tags: new Set() };
+    el._filter = { query: '', states: new Set(), dates: new Set(), tags: new Set() };
     el._applyGoalFilter();
 
     const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
@@ -533,7 +533,7 @@ describe('home-page — _applyGoalFilter', () => {
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
     );
 
-    el._filter = { query: '', states: new Set(['done']), tags: new Set() };
+    el._filter = { query: '', states: new Set(['done']), dates: new Set(), tags: new Set() };
     el._applyGoalFilter();
 
     const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
@@ -554,7 +554,7 @@ describe('home-page — _applyGoalFilter', () => {
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
     );
 
-    el._filter = { query: '', states: new Set(['not-started']), tags: new Set() };
+    el._filter = { query: '', states: new Set(['not-started']), dates: new Set(), tags: new Set() };
     el._applyGoalFilter();
 
     const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
@@ -574,7 +574,7 @@ describe('home-page — _applyGoalFilter', () => {
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
     );
 
-    el._filter = { query: '', states: new Set(), tags: new Set(['health']) };
+    el._filter = { query: '', states: new Set(), dates: new Set(), tags: new Set(['health']) };
     el._applyGoalFilter();
 
     const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
@@ -593,7 +593,7 @@ describe('home-page — _applyGoalFilter', () => {
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
     );
 
-    el._filter = { query: '', states: new Set(), tags: new Set() };
+    el._filter = { query: '', states: new Set(), dates: new Set(), tags: new Set() };
     el._applyGoalFilter();
 
     const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
@@ -612,7 +612,7 @@ describe('home-page — _applyGoalFilter', () => {
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
     );
 
-    el._filter = { query: '', states: new Set(['archived']), tags: new Set() };
+    el._filter = { query: '', states: new Set(['archived']), dates: new Set(), tags: new Set() };
     el._applyGoalFilter();
 
     const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
@@ -632,7 +632,7 @@ describe('home-page — _applyGoalFilter', () => {
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
     );
 
-    el._filter = { query: '', states: new Set(['done', 'archived']), tags: new Set() };
+    el._filter = { query: '', states: new Set(['done', 'archived']), dates: new Set(), tags: new Set() };
     el._applyGoalFilter();
 
     const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
@@ -653,13 +653,40 @@ describe('home-page — _applyGoalFilter', () => {
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
     );
 
-    el._filter = { query: 'run', states: new Set(), tags: new Set(['health']) };
+    el._filter = { query: 'run', states: new Set(), dates: new Set(), tags: new Set(['health']) };
     el._applyGoalFilter();
 
     const items = [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
     expect(items.find(i => i._goal.title === 'Run daily').hidden).toBe(false);
     expect(items.find(i => i._goal.title === 'Run finances').hidden).toBe(true);
     expect(items.find(i => i._goal.title === 'Piano').hidden).toBe(true);
+  });
+
+  it('filters by deadline: "overdue" and "none" pills', async () => {
+    const iso = d => { const x = new Date(); x.setDate(x.getDate() + d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    setState('goals', { '2026': { capstone: [
+      { id: 'c1', title: 'Overdue goal', percentage: 20, tags: [], dueDate: iso(-2) },
+      { id: 'c2', title: 'Soon goal',    percentage: 20, tags: [], dueDate: iso(20) },
+      { id: 'c3', title: 'No-date goal', percentage: 20, tags: [] },
+    ], milestones: [], wow: [], focus: [] } });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
+    );
+    const items = () => [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')];
+    const byTitle = t => items().find(i => i._goal.title === t);
+
+    el._filter = { query: '', states: new Set(), dates: new Set(['overdue']), tags: new Set() };
+    el._applyGoalFilter();
+    expect(byTitle('Overdue goal').hidden).toBe(false);
+    expect(byTitle('Soon goal').hidden).toBe(true);
+    expect(byTitle('No-date goal').hidden).toBe(true);
+
+    el._filter = { query: '', states: new Set(), dates: new Set(['none']), tags: new Set() };
+    el._applyGoalFilter();
+    expect(byTitle('No-date goal').hidden).toBe(false);
+    expect(byTitle('Overdue goal').hidden).toBe(true);
   });
 });
 
@@ -668,7 +695,7 @@ describe('home-page — create with active filter', () => {
     _resetToast();
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
-    el._filter = { query: '', states: new Set(['done']), tags: new Set() };
+    el._filter = { query: '', states: new Set(['done']), dates: new Set(), tags: new Set() };
     el.shadowRoot.querySelector('#add-capstone').click();
     el.shadowRoot.dispatchEvent(new CustomEvent('goal-created', {
       bubbles: true, composed: true, detail: { title: 'Invisible goal' },
@@ -692,7 +719,7 @@ describe('home-page — create with active filter', () => {
     _resetToast();
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
-    el._filter = { query: '', states: new Set(['not-started']), tags: new Set() };
+    el._filter = { query: '', states: new Set(['not-started']), dates: new Set(), tags: new Set() };
     el.shadowRoot.querySelector('#add-capstone').click();
     el.shadowRoot.dispatchEvent(new CustomEvent('goal-created', {
       bubbles: true, composed: true, detail: { title: 'Visible goal' },

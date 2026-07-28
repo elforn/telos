@@ -43,6 +43,14 @@ defineStrings({
   'urgency.overdue':      'en retard',
   'urgency.urgent-count': '{n} pour aujourd’hui ou en retard',
 
+  // Filtres par échéance (objectifs + éléments)
+  'filter.date-label':   'Échéance',
+  'filter.date-overdue': 'En retard',
+  'filter.date-week':    'Semaine',
+  'filter.date-month':   'Mois',
+  'filter.date-later':   'Plus tard',
+  'filter.date-none':    'Sans date',
+
   'home.toast-goal-saved':       'Objectif enregistré',
   'home.toast-goal-hidden':      'Objectif ajouté — masqué par le filtre actif',
   'home.toast-goal-deleted':     'Objectif supprimé',

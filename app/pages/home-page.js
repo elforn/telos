@@ -14,6 +14,7 @@ import { exportGoalsMarkdown } from '../utils/export-markdown.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
 import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
+import { DATE_FILTER_KEYS, matchesDateBucket } from '../utils/urgency.js';
 
 class HomePage extends AppElement {
   template() {
@@ -295,6 +296,22 @@ class HomePage extends AppElement {
           color: var(--color-text-on-accent);
         }
 
+        /* Date pills carry a small urgency-coloured dot so the row self-documents. */
+        .filter-date-pill::before {
+          content: '';
+          display: inline-block;
+          inline-size: 8px;
+          block-size: 8px;
+          border-radius: var(--radius-full);
+          margin-inline-end: var(--space-1);
+          vertical-align: middle;
+        }
+        .filter-date-pill[data-date="overdue"]::before { background: var(--color-danger); }
+        .filter-date-pill[data-date="week"]::before    { background: var(--color-warning); }
+        .filter-date-pill[data-date="month"]::before   { background: var(--color-success); }
+        .filter-date-pill[data-date="later"]::before   { background: var(--color-text-muted); }
+        .filter-date-pill[data-date="none"]::before    { box-shadow: inset 0 0 0 1.5px var(--color-text-muted); }
+
         .filter-tag-chip {
           border-color: var(--tag-color, var(--color-border));
         }
@@ -346,6 +363,13 @@ class HomePage extends AppElement {
               <button class="filter-pill" id="fstate-ongoing" aria-pressed="false">${t('home-page.filter-ongoing')}</button>
               <button class="filter-pill" id="fstate-not-started" aria-pressed="false">${t('home-page.filter-not-started')}</button>
               <button class="filter-pill" id="fstate-archived" aria-pressed="false">${t('home-page.filter-archived')}</button>
+            </div>
+            <div class="filter-row" id="filter-date-row" role="group" aria-label="${t('filter.date-label')}">
+              <button class="filter-pill filter-date-pill" id="fdate-overdue" data-date="overdue" aria-pressed="false">${t('filter.date-overdue')}</button>
+              <button class="filter-pill filter-date-pill" id="fdate-week" data-date="week" aria-pressed="false">${t('filter.date-week')}</button>
+              <button class="filter-pill filter-date-pill" id="fdate-month" data-date="month" aria-pressed="false">${t('filter.date-month')}</button>
+              <button class="filter-pill filter-date-pill" id="fdate-later" data-date="later" aria-pressed="false">${t('filter.date-later')}</button>
+              <button class="filter-pill filter-date-pill" id="fdate-none" data-date="none" aria-pressed="false">${t('filter.date-none')}</button>
             </div>
             <div class="filter-row" id="filter-tag-row" hidden></div>
           </div>
@@ -430,7 +454,7 @@ class HomePage extends AppElement {
     this._filterLive     = this.shadowRoot.querySelector('#filter-live');
     this._filterExpandBtn = this.shadowRoot.querySelector('#filter-expand-btn');
 
-    this._filter = { query: '', states: new Set(), tags: new Set() };
+    this._filter = { query: '', states: new Set(), dates: new Set(), tags: new Set() };
     this._panelExpanded = false;
     this._barExpanded = false;
     this._loadFilter();
@@ -486,8 +510,21 @@ class HomePage extends AppElement {
     };
     this.listen(this.shadowRoot.querySelector('#filter-states-row'), 'click', this._onFilterState);
 
+    this._onFilterDate = e => {
+      const btn = e.target.closest('.filter-date-pill');
+      if (!btn) return;
+      const key = btn.dataset.date;
+      if (!DATE_FILTER_KEYS.includes(key)) return;
+      if (this._filter.dates.has(key)) this._filter.dates.delete(key);
+      else this._filter.dates.add(key);
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyGoalFilter();
+    };
+    this.listen(this.shadowRoot.querySelector('#filter-date-row'), 'click', this._onFilterDate);
+
     this._onFilterClear = () => {
-      this._filter = { query: '', states: new Set(), tags: new Set() };
+      this._filter = { query: '', states: new Set(), dates: new Set(), tags: new Set() };
       this._filterSearch.value = '';
       this._saveFilter();
       this._syncFilterUI();
@@ -924,8 +961,8 @@ class HomePage extends AppElement {
     try {
       const raw = localStorage.getItem(`telos:filter:goals:${this._year}`);
       if (raw) {
-        const { query = '', states = [], tags = [], panelExpanded = false, barExpanded = false } = JSON.parse(raw);
-        this._filter = { query, states: new Set(states), tags: new Set(tags) };
+        const { query = '', states = [], dates = [], tags = [], panelExpanded = false, barExpanded = false } = JSON.parse(raw);
+        this._filter = { query, states: new Set(states), dates: new Set(dates), tags: new Set(tags) };
         this._panelExpanded = panelExpanded;
         this._barExpanded = barExpanded;
       }
@@ -933,18 +970,18 @@ class HomePage extends AppElement {
   }
 
   _saveFilter() {
-    const { query, states, tags } = this._filter;
-    if (query || states.size || tags.size || this._barExpanded || this._panelExpanded) {
+    const { query, states, dates, tags } = this._filter;
+    if (query || states.size || dates.size || tags.size || this._barExpanded || this._panelExpanded) {
       localStorage.setItem(`telos:filter:goals:${this._year}`,
-        JSON.stringify({ query, states: [...states], tags: [...tags], panelExpanded: this._panelExpanded, barExpanded: this._barExpanded }));
+        JSON.stringify({ query, states: [...states], dates: [...dates], tags: [...tags], panelExpanded: this._panelExpanded, barExpanded: this._barExpanded }));
     } else {
       localStorage.removeItem(`telos:filter:goals:${this._year}`);
     }
   }
 
   _isFilterActive() {
-    const { query, states, tags } = this._filter;
-    return !!(query || states.size || tags.size);
+    const { query, states, dates, tags } = this._filter;
+    return !!(query || states.size || dates.size || tags.size);
   }
 
   _syncFilterUI() {
@@ -960,16 +997,24 @@ class HomePage extends AppElement {
         btn.setAttribute('aria-pressed', String(on));
       }
     }
+    for (const d of DATE_FILTER_KEYS) {
+      const btn = this.shadowRoot.querySelector(`#fdate-${d}`);
+      if (btn) {
+        const on = this._filter.dates.has(d);
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', String(on));
+      }
+    }
     this._header.filterDot = active;
     this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
     const expandDot = this._filterExpandBtn?.querySelector('.filter-expand-dot');
-    if (expandDot) expandDot.hidden = !(this._filter.states.size || this._filter.tags.size);
+    if (expandDot) expandDot.hidden = !(this._filter.states.size || this._filter.dates.size || this._filter.tags.size);
     this._filterTagRow?.querySelectorAll('.filter-tag-chip').forEach(chip => {
       const on = this._filter.tags.has(chip.dataset.tag);
       chip.classList.toggle('active', on);
       chip.setAttribute('aria-pressed', String(on));
     });
-    const panelOpen = this._panelExpanded || this._filter.states.size > 0 || this._filter.tags.size > 0;
+    const panelOpen = this._panelExpanded || this._filter.states.size > 0 || this._filter.dates.size > 0 || this._filter.tags.size > 0;
     if (this._filterPanel) this._filterPanel.hidden = !panelOpen;
     if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', String(panelOpen));
   }
@@ -1011,12 +1056,12 @@ class HomePage extends AppElement {
   }
 
   _goalFilterActive() {
-    const { query, states, tags } = this._filter;
-    return !!(query.toLowerCase().trim() || states.size || tags.size);
+    const { query, states, dates, tags } = this._filter;
+    return !!(query.toLowerCase().trim() || states.size || dates.size || tags.size);
   }
 
   _goalMatchesFilter(goal) {
-    const { query, states, tags } = this._filter;
+    const { query, states, dates, tags } = this._filter;
     const q = query.toLowerCase().trim();
     if (goal.archived) {
       // Archived goals: only shown when 'archived' state pill is active
@@ -1040,6 +1085,10 @@ class HomePage extends AppElement {
     if (tags.size) {
       const gtags = goal.tags ?? [];
       if (![...tags].some(tag => gtags.includes(tag))) return false;
+    }
+    if (dates.size) {
+      const active = !goal.archived && (goal.percentage ?? 0) < 100;
+      if (![...dates].some(key => matchesDateBucket(key, goal.dueDate, active))) return false;
     }
     return true;
   }

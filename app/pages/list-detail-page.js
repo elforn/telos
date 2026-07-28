@@ -15,6 +15,7 @@ import '../components/bulk-tag-editor/bulk-tag-editor.js';
 import '../../_lib/modules/modal-dialog/modal-dialog.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
+import { DATE_FILTER_KEYS, matchesDateBucket } from '../utils/urgency.js';
 import '../components/export-sheet/export-sheet.js';
 import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdown.js';
 import { installDialogSnapshot } from '../utils/dialog-snapshot.js';
@@ -734,6 +735,22 @@ class ListDetailPage extends AppElement {
           color: var(--color-text-on-accent);
         }
 
+        /* Date pills carry a small urgency-coloured dot so the row self-documents. */
+        .filter-date-pill::before {
+          content: '';
+          display: inline-block;
+          inline-size: 8px;
+          block-size: 8px;
+          border-radius: var(--radius-full);
+          margin-inline-end: var(--space-1);
+          vertical-align: middle;
+        }
+        .filter-date-pill[data-date="overdue"]::before { background: var(--color-danger); }
+        .filter-date-pill[data-date="week"]::before    { background: var(--color-warning); }
+        .filter-date-pill[data-date="month"]::before   { background: var(--color-success); }
+        .filter-date-pill[data-date="later"]::before   { background: var(--color-text-muted); }
+        .filter-date-pill[data-date="none"]::before    { box-shadow: inset 0 0 0 1.5px var(--color-text-muted); }
+
         .filter-tag-chip {
           border-color: var(--tag-color, var(--color-border));
         }
@@ -790,6 +807,13 @@ class ListDetailPage extends AppElement {
               <button class="filter-pill" id="fstatus-paused" aria-pressed="false">${t('item-dialog.status-paused')}</button>
               <button class="filter-pill" id="fstatus-done" aria-pressed="false">${t('item-dialog.status-done')}</button>
               <button class="filter-pill" id="fstatus-closed" aria-pressed="false">${t('item-dialog.status-closed')}</button>
+            </div>
+            <div class="filter-row" id="filter-date-row" role="group" aria-label="${t('filter.date-label')}">
+              <button class="filter-pill filter-date-pill" id="fdate-overdue" data-date="overdue" aria-pressed="false">${t('filter.date-overdue')}</button>
+              <button class="filter-pill filter-date-pill" id="fdate-week" data-date="week" aria-pressed="false">${t('filter.date-week')}</button>
+              <button class="filter-pill filter-date-pill" id="fdate-month" data-date="month" aria-pressed="false">${t('filter.date-month')}</button>
+              <button class="filter-pill filter-date-pill" id="fdate-later" data-date="later" aria-pressed="false">${t('filter.date-later')}</button>
+              <button class="filter-pill filter-date-pill" id="fdate-none" data-date="none" aria-pressed="false">${t('filter.date-none')}</button>
             </div>
             <div class="filter-row" id="filter-tag-row" hidden></div>
           </div>
@@ -1471,7 +1495,7 @@ class ListDetailPage extends AppElement {
     this._filterExpandBtn = this.shadowRoot.querySelector('#filter-expand-btn');
     this._filterBtnEl     = this.shadowRoot.querySelector('#filter-btn');
 
-    this._filter = { query: '', statuses: new Set(), tags: new Set() };
+    this._filter = { query: '', statuses: new Set(), dates: new Set(), tags: new Set() };
     this._panelExpanded = false;
     this._barExpanded = false;
     this._loadFilter();
@@ -1532,8 +1556,21 @@ class ListDetailPage extends AppElement {
     };
     this.listen(this.shadowRoot.querySelector('#filter-status-row'), 'click', this._onFilterStatus);
 
+    this._onFilterDate = e => {
+      const btn = e.target.closest('.filter-date-pill');
+      if (!btn) return;
+      const key = btn.dataset.date;
+      if (!DATE_FILTER_KEYS.includes(key)) return;
+      if (this._filter.dates.has(key)) this._filter.dates.delete(key);
+      else this._filter.dates.add(key);
+      this._saveFilter();
+      this._syncFilterUI();
+      this._applyFilter();
+    };
+    this.listen(this.shadowRoot.querySelector('#filter-date-row'), 'click', this._onFilterDate);
+
     this._onFilterClear = () => {
-      this._filter = { query: '', statuses: new Set(), tags: new Set() };
+      this._filter = { query: '', statuses: new Set(), dates: new Set(), tags: new Set() };
       this._filterSearch.value = '';
       this._saveFilter();
       this._syncFilterUI();
@@ -1730,8 +1767,8 @@ class ListDetailPage extends AppElement {
     try {
       const raw = localStorage.getItem(`telos:filter:list:${this._listId}`);
       if (raw) {
-        const { query = '', statuses = [], tags = [], panelExpanded = false, barExpanded = false } = JSON.parse(raw);
-        this._filter = { query, statuses: new Set(statuses), tags: new Set(tags) };
+        const { query = '', statuses = [], dates = [], tags = [], panelExpanded = false, barExpanded = false } = JSON.parse(raw);
+        this._filter = { query, statuses: new Set(statuses), dates: new Set(dates), tags: new Set(tags) };
         this._panelExpanded = panelExpanded;
         this._barExpanded = barExpanded;
       }
@@ -1739,18 +1776,18 @@ class ListDetailPage extends AppElement {
   }
 
   _saveFilter() {
-    const { query, statuses, tags } = this._filter;
-    if (query || statuses.size || tags.size || this._barExpanded || this._panelExpanded) {
+    const { query, statuses, dates, tags } = this._filter;
+    if (query || statuses.size || dates.size || tags.size || this._barExpanded || this._panelExpanded) {
       localStorage.setItem(`telos:filter:list:${this._listId}`,
-        JSON.stringify({ query, statuses: [...statuses], tags: [...tags], panelExpanded: this._panelExpanded, barExpanded: this._barExpanded }));
+        JSON.stringify({ query, statuses: [...statuses], dates: [...dates], tags: [...tags], panelExpanded: this._panelExpanded, barExpanded: this._barExpanded }));
     } else {
       localStorage.removeItem(`telos:filter:list:${this._listId}`);
     }
   }
 
   _isFilterActive() {
-    const { query, statuses, tags } = this._filter;
-    return !!(query || statuses.size || tags.size);
+    const { query, statuses, dates, tags } = this._filter;
+    return !!(query || statuses.size || dates.size || tags.size);
   }
 
   _syncFilterUI() {
@@ -1765,17 +1802,25 @@ class ListDetailPage extends AppElement {
         btn.setAttribute('aria-pressed', String(on));
       }
     }
+    for (const d of DATE_FILTER_KEYS) {
+      const btn = this.shadowRoot.querySelector(`#fdate-${d}`);
+      if (btn) {
+        const on = this._filter.dates.has(d);
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', String(on));
+      }
+    }
     const dot = this._filterBtnEl?.querySelector('.filter-btn-dot');
     if (dot) dot.hidden = !active;
     this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
     const expandDot = this._filterExpandBtn?.querySelector('.filter-expand-dot');
-    if (expandDot) expandDot.hidden = !(this._filter.statuses.size || this._filter.tags.size);
+    if (expandDot) expandDot.hidden = !(this._filter.statuses.size || this._filter.dates.size || this._filter.tags.size);
     this._filterTagRow?.querySelectorAll('.filter-tag-chip').forEach(chip => {
       const on = this._filter.tags.has(chip.dataset.tag);
       chip.classList.toggle('active', on);
       chip.setAttribute('aria-pressed', String(on));
     });
-    const panelOpen = this._panelExpanded || this._filter.statuses.size > 0 || this._filter.tags.size > 0;
+    const panelOpen = this._panelExpanded || this._filter.statuses.size > 0 || this._filter.dates.size > 0 || this._filter.tags.size > 0;
     if (this._filterPanel) this._filterPanel.hidden = !panelOpen;
     if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', String(panelOpen));
   }
@@ -1816,12 +1861,12 @@ class ListDetailPage extends AppElement {
   }
 
   _itemFilterActive() {
-    const { query, statuses, tags } = this._filter;
-    return !!(query.toLowerCase().trim() || statuses.size || tags.size);
+    const { query, statuses, dates, tags } = this._filter;
+    return !!(query.toLowerCase().trim() || statuses.size || dates.size || tags.size);
   }
 
   _itemMatchesFilter(item) {
-    const { query, statuses, tags } = this._filter;
+    const { query, statuses, dates, tags } = this._filter;
     const q = query.toLowerCase().trim();
     if (q) {
       const hay = `${item.title ?? ''} ${item.note ?? ''} ${(item.tags ?? []).join(' ')}`.toLowerCase();
@@ -1831,6 +1876,10 @@ class ListDetailPage extends AppElement {
       if (!statuses.has(item.status)) return false;
     } else if (item.status === 'closed') {
       return false;
+    }
+    if (dates.size) {
+      const active = item.status !== 'done' && item.status !== 'closed';
+      if (![...dates].some(key => matchesDateBucket(key, item.dueDate, active))) return false;
     }
     if (tags.size) {
       const itags = item.tags ?? [];
