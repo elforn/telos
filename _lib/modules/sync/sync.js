@@ -54,7 +54,10 @@ export async function exportSlice(payload) {
     exportedAt: new Date().toISOString(),
     events: [{ type: 'simple:state', payload }],
   }));
-  return zipEntries([{ filename: 'data.json', bytes: jsonBytes }]);
+  // compress: false — must stay stored (method 0). deflate() crosses the task queue
+  // via CompressionStream/Response.arrayBuffer(), which expires the transient user
+  // activation required by navigator.share(). Stored entries resolve via microtasks only.
+  return zipEntries([{ filename: 'data.json', bytes: jsonBytes, compress: false }]);
 }
 
 // ── Import ────────────────────────────────────────────────────────────────────
@@ -194,7 +197,13 @@ export async function applyMerge(parsed, mergeStrategy) {
 // ── Download / file read ──────────────────────────────────────────────────────
 
 export function downloadExport(uint8, filename) {
-  const blob = new Blob([uint8], { type: 'application/zip' });
+  // application/octet-stream, not application/zip — Android's download manager maps
+  // application/zip to its canonical extension (.zip) and appends it, turning
+  // "export.telos" into "export.telos.zip". octet-stream has no canonical extension
+  // so the download attribute's filename is preserved as-is.
+  // (The share path in app code uses application/zip independently, as required by
+  // navigator.share's file-type safelist — that constraint does not apply here.)
+  const blob = new Blob([uint8], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
