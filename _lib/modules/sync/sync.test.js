@@ -29,17 +29,13 @@ afterEach(() => reset());
 // ── Binary export ─────────────────────────────────────────────────────────────
 
 describe('exportData (binary)', () => {
-  it('returns a Uint8Array starting with SCLE magic', async () => {
+  it('returns a valid zip file (PK signature)', async () => {
     const result = await exportData();
     expect(result).toBeInstanceOf(Uint8Array);
-    // first 4 bytes are uncompressed SCLE magic: S=0x53 C=0x43 L=0x4C E=0x45
-    expect(result[0]).toBe(0x53); // S
-    expect(result[1]).toBe(0x43); // C
-    expect(result[2]).toBe(0x4c); // L
-    expect(result[3]).toBe(0x45); // E
-    // bytes [4..] are gzip compressed
-    expect(result[4]).toBe(0x1f);
-    expect(result[5]).toBe(0x8b);
+    expect(result[0]).toBe(0x50); // P
+    expect(result[1]).toBe(0x4B); // K
+    expect(result[2]).toBe(0x03);
+    expect(result[3]).toBe(0x04);
   });
 
   it.skipIf(!dispatch)('binary round-trip: events survive export → import', async () => {
@@ -97,13 +93,12 @@ describe('exportData (binary)', () => {
 
 describe('importData (binary validation)', () => {
   it('throws on bad magic bytes', async () => {
-    // Does not start with SCLE — rejected before any decompression attempt
     const bad = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04]);
-    await expect(importData(bad)).rejects.toThrow('Invalid file (bad magic bytes)');
+    await expect(importData(bad)).rejects.toThrow('Invalid file');
   });
 
   it('throws on too-short input', async () => {
-    await expect(importData(new Uint8Array([1, 2, 3]))).rejects.toThrow('Invalid file (bad magic bytes)');
+    await expect(importData(new Uint8Array([1, 2, 3]))).rejects.toThrow('Invalid file');
   });
 });
 
@@ -188,11 +183,9 @@ describe('downloadExport', () => {
 // ── readImportFile ────────────────────────────────────────────────────────────
 
 describe('readImportFile', () => {
-  it('returns Uint8Array for a binary file (SCLE magic)', async () => {
-    // Build a minimal valid binary payload: compress(SCLE + version + ...)
-    // Easier: just check detection works by mocking the first 4 bytes
-    const exportedBytes = await exportData(); // real gzip with SCLE inside
-    const file = new File([exportedBytes], 'data.youryear', { type: 'application/octet-stream' });
+  it('returns Uint8Array for a zip file (PK magic)', async () => {
+    const exportedBytes = await exportData();
+    const file = new File([exportedBytes], 'data.youryear', { type: 'application/zip' });
     const result = await readImportFile(file);
     expect(result).toBeInstanceOf(Uint8Array);
   });
@@ -214,7 +207,7 @@ describe('readImportFile', () => {
 
 describe('previewImport', () => {
   it('throws on bad magic bytes', async () => {
-    await expect(previewImport(new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04]))).rejects.toThrow('Invalid file (bad magic bytes)');
+    await expect(previewImport(new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04]))).rejects.toThrow('Invalid file');
   });
 
   it('throws for invalid socleVersion in legacy JSON', async () => {
@@ -389,15 +382,13 @@ describe('applyMerge', () => {
 // ── exportSlice ───────────────────────────────────────────────────────────────
 
 describe('exportSlice', () => {
-  it('returns a Uint8Array with SCLE magic and gzip header', async () => {
+  it('returns a valid zip file (PK signature)', async () => {
     const result = await exportSlice({ foo: 1 });
     expect(result).toBeInstanceOf(Uint8Array);
-    expect(result[0]).toBe(0x53); // S
-    expect(result[1]).toBe(0x43); // C
-    expect(result[2]).toBe(0x4c); // L
-    expect(result[3]).toBe(0x45); // E
-    expect(result[4]).toBe(0x1f); // gzip magic
-    expect(result[5]).toBe(0x8b);
+    expect(result[0]).toBe(0x50); // P
+    expect(result[1]).toBe(0x4B); // K
+    expect(result[2]).toBe(0x03);
+    expect(result[3]).toBe(0x04);
   });
 
   it('round-trips through previewImport as type: simple with matching payload', async () => {
