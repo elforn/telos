@@ -48,18 +48,6 @@ export async function exportData({ eventFilter } = {}) {
   return zipEntries(entries);
 }
 
-export async function exportSlice(payload) {
-  const jsonBytes = enc.encode(JSON.stringify({
-    socleVersion: SOCLE_VERSION,
-    exportedAt: new Date().toISOString(),
-    events: [{ type: 'simple:state', payload }],
-  }));
-  // compress: false — must stay stored (method 0). deflate() crosses the task queue
-  // via CompressionStream/Response.arrayBuffer(), which expires the transient user
-  // activation required by navigator.share(). Stored entries resolve via microtasks only.
-  return zipEntries([{ filename: 'data.json', bytes: jsonBytes, compress: false }]);
-}
-
 // ── Import ────────────────────────────────────────────────────────────────────
 
 async function importBinary(uint8) {

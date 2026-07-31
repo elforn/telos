@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { exportData, exportSlice, importData, downloadExport, readImportFile, previewImport, applyReplace, applyMerge } from './sync.js';
+import { exportData, importData, downloadExport, readImportFile, previewImport, applyReplace, applyMerge } from './sync.js';
 import { boot, reset, attachBlob, getBlob, getAllEvents, getState } from '../../core/store/store.js';
 import * as Store from '../../core/store/store.js';
 
@@ -404,40 +404,3 @@ describe('applyMerge', () => {
   });
 });
 
-// ── exportSlice ───────────────────────────────────────────────────────────────
-
-describe('exportSlice', () => {
-  it('returns a valid zip file (PK signature)', async () => {
-    const result = await exportSlice({ foo: 1 });
-    expect(result).toBeInstanceOf(Uint8Array);
-    expect(result[0]).toBe(0x50); // P
-    expect(result[1]).toBe(0x4B); // K
-    expect(result[2]).toBe(0x03);
-    expect(result[3]).toBe(0x04);
-  });
-
-  it('round-trips through previewImport as type: simple with matching payload', async () => {
-    const oneList = { id: 'list-1', name: 'Shopping' };
-    const uint8 = await exportSlice({ lists: [oneList] });
-    const parsed = await previewImport(uint8);
-    expect(parsed.type).toBe('simple');
-    expect(parsed.payload).toEqual({ lists: [oneList] });
-    expect(parsed.blobs).toEqual([]);
-  });
-
-  it('produces a file that applyMerge can consume for simple-store handoff', async () => {
-    const uint8 = await exportSlice({ score: 42 });
-    const parsed = await previewImport(uint8);
-    await applyMerge(parsed, (current, imported) => ({ ...current, ...imported }));
-    expect(getState().score).toBe(42);
-  });
-
-  it('data.json entry is stored (compression method 0), not deflated (method 8)', async () => {
-    // Must stay stored — deflate() crosses the task queue via CompressionStream/Response,
-    // which expires the transient user activation that navigator.share() requires.
-    const uint8 = await exportSlice({ x: 1 });
-    // Compression method is at byte offset 8 of the first local file header (LE uint16).
-    const method = new DataView(uint8.buffer).getUint16(8, true);
-    expect(method).toBe(0); // 0 = stored, 8 = deflated
-  });
-});
