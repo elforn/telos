@@ -670,6 +670,8 @@ class GoalDialog extends AppElement {
         <hr class="sheet-divider">
         <button type="button" id="action-move-btn" class="sheet-item">${t('goal-dialog.move-to-year')}</button>
         <button type="button" id="action-create-btn" class="sheet-item">${t('goal-dialog.create-list-item')}</button>
+        <button type="button" id="action-export-btn" class="sheet-item">${t('goal-dialog.extract-markdown')}</button>
+        <button type="button" id="action-share-btn" class="sheet-item">${t('goal-dialog.share-goal')}</button>
       </modal-dialog>
 
       <!-- ── List picker (opens as sub-modal for Create list item) ──────── -->
@@ -961,6 +963,24 @@ class GoalDialog extends AppElement {
     };
     this.shadowRoot.querySelector('#action-create-btn').addEventListener('click', this._onActionCreate);
 
+    this._onActionExport = () => {
+      this._actionSheet.close();
+      this._modal.close();
+      this.dispatchEvent(new CustomEvent('goal-export-request', {
+        bubbles: true, composed: true, detail: { goal: this._goal },
+      }));
+    };
+    this.shadowRoot.querySelector('#action-export-btn').addEventListener('click', this._onActionExport);
+
+    this._onActionShare = () => {
+      this._actionSheet.close();
+      this._modal.close();
+      this.dispatchEvent(new CustomEvent('goal-share-request', {
+        bubbles: true, composed: true, detail: { goal: this._goal },
+      }));
+    };
+    this.shadowRoot.querySelector('#action-share-btn').addEventListener('click', this._onActionShare);
+
     // ── Move view ─────────────────────────────────────────────────────────────
 
     this._onMoveBack = () => this._showView('main');
@@ -1039,6 +1059,8 @@ class GoalDialog extends AppElement {
     this._archiveBtn?.removeEventListener('click', this._onActionArchive);
     this.shadowRoot.querySelector('#action-move-btn')?.removeEventListener('click', this._onActionMove);
     this.shadowRoot.querySelector('#action-create-btn')?.removeEventListener('click', this._onActionCreate);
+    this.shadowRoot.querySelector('#action-export-btn')?.removeEventListener('click', this._onActionExport);
+    this.shadowRoot.querySelector('#action-share-btn')?.removeEventListener('click', this._onActionShare);
     this.shadowRoot.querySelector('#move-back')?.removeEventListener('click', this._onMoveBack);
     this._moveYearSel?.removeEventListener('change', this._onMoveChange);
     this._moveSectionGrp?.removeEventListener('change', this._onMoveChange);

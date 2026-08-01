@@ -5,6 +5,15 @@ import '../../app/strings.js';
 import '../../app/pages/list-detail-page.js';
 import { _resetToast } from '../../_lib/modules/toast/toast.js';
 
+vi.mock('../../app/utils/handoff.js', () => ({
+  buildListHandoff: vi.fn(list => ({ __telosHandoff: true, kind: 'list', lists: [list] })),
+  buildItemHandoff: vi.fn(item => ({ __telosHandoff: true, kind: 'item', item })),
+  buildItemsHandoff: vi.fn(items => ({ __telosHandoff: true, kind: 'items', items })),
+  shareHandoff: vi.fn().mockResolvedValue(true),
+}));
+
+import { buildListHandoff, buildItemHandoff, buildItemsHandoff, shareHandoff } from '../../app/utils/handoff.js';
+
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
 
@@ -56,7 +65,7 @@ beforeEach(() => {
   reset();
   localStorage.clear();
 });
-afterEach(() => { document.body.innerHTML = ''; });
+afterEach(() => { document.body.innerHTML = ''; vi.clearAllMocks(); });
 
 // ── Structure ─────────────────────────────────────────────────────────────────
 
@@ -1408,6 +1417,38 @@ describe('list-detail-page — extract-confirm', () => {
     expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(true);
   });
+
+  it('extract-confirm after an item-export-request writes just that item to clipboard', async () => {
+    const other = { id: 'i2', title: 'Chocolates', status: 'open', tags: [], inGoals: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM, other] }] } });
+    const el = mount();
+    el.shadowRoot.dispatchEvent(new CustomEvent('item-export-request', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#export-sheet').dispatchEvent(new CustomEvent('extract-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false },
+    }));
+
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText.mock.calls[0][0]).toContain('Flowers');
+    expect(writeText.mock.calls[0][0]).not.toContain('Chocolates');
+  });
+
+  it('toasts an error if the clipboard write rejects', async () => {
+    _resetToast();
+    writeText.mockRejectedValueOnce(new Error('denied'));
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+
+    el.shadowRoot.querySelector('#export-sheet').dispatchEvent(new CustomEvent('extract-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false },
+    }));
+
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-error');
+      expect(toastEl).not.toBeNull();
+    });
+  });
 });
 
 // ── list-detail-page — _parseImportText ──────────────────────────────────────
@@ -1901,6 +1942,89 @@ describe('list-detail-page — create with active filter', () => {
     await vi.waitFor(() => {
       const toastEl = document.querySelector('#toast-container .socle-toast-success');
       expect(toastEl?.textContent).toContain('Item saved');
+    });
+  });
+});
+
+describe('list-detail-page — share', () => {
+  it('shares the whole current list via the ⋮ menu', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#share-list-menu-btn')).not.toBeNull());
+    el.shadowRoot.querySelector('#share-list-menu-btn').click();
+    await vi.waitFor(() => expect(shareHandoff).toHaveBeenCalledOnce());
+    expect(buildListHandoff).toHaveBeenCalledWith(expect.objectContaining({ id: 'l1', name: 'Gift ideas' }));
+    expect(shareHandoff.mock.calls[0][1]).toBe('Gift ideas');
+  });
+
+  it('shares a single item via item-share-request', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    el.shadowRoot.dispatchEvent(new CustomEvent('item-share-request', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    await vi.waitFor(() => expect(shareHandoff).toHaveBeenCalledOnce());
+    expect(buildItemHandoff).toHaveBeenCalledWith(ITEM);
+    expect(shareHandoff.mock.calls[0][1]).toBe('Flowers');
+  });
+
+  it('toasts an error if sharing the list fails', async () => {
+    _resetToast();
+    shareHandoff.mockRejectedValueOnce(new Error('share failed'));
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#share-list-menu-btn')).not.toBeNull());
+    el.shadowRoot.querySelector('#share-list-menu-btn').click();
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-error');
+      expect(toastEl).not.toBeNull();
+    });
+  });
+
+  it('toasts an error if sharing a single item fails', async () => {
+    _resetToast();
+    shareHandoff.mockRejectedValueOnce(new Error('share failed'));
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    el.shadowRoot.dispatchEvent(new CustomEvent('item-share-request', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-error');
+      expect(toastEl).not.toBeNull();
+    });
+  });
+
+  it('shares the bulk-selected items via the bulk ⋮ menu', async () => {
+    const ITEM2 = { id: 'i2', title: 'Book', status: 'open', tags: [], inGoals: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM, ITEM2] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+    enterSelectionMode(el);
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-select-toggle', {
+      bubbles: true, composed: true, detail: { item: ITEM2 },
+    }));
+
+    el.shadowRoot.querySelector('#bulk-share-btn').click();
+
+    await vi.waitFor(() => expect(shareHandoff).toHaveBeenCalledOnce());
+    expect(buildItemsHandoff).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ id: 'i1' }), expect.objectContaining({ id: 'i2' }),
+    ]));
+    expect(shareHandoff.mock.calls[0][1]).toBe('Gift ideas');
+  });
+
+  it('toasts an error if sharing the bulk selection fails', async () => {
+    _resetToast();
+    shareHandoff.mockRejectedValueOnce(new Error('share failed'));
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el);
+    el.shadowRoot.querySelector('#bulk-share-btn').click();
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-error');
+      expect(toastEl).not.toBeNull();
     });
   });
 });

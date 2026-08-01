@@ -21,6 +21,8 @@ import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdow
 import { installDialogSnapshot } from '../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../utils/draft-toggle.js';
 import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
+import { buildListHandoff, buildItemHandoff, buildItemsHandoff, shareHandoff } from '../utils/handoff.js';
+import { shareMarkdown } from '../utils/share-markdown.js';
 
 const EXPORT_MODE_LIST      = 'list';
 const EXPORT_MODE_SELECTION = 'selection';
@@ -850,6 +852,10 @@ class ListDetailPage extends AppElement {
           <span>${t('list-detail.extract-markdown')}</span>
           <span class="menu-item-value" aria-hidden="true">›</span>
         </button>
+        <button class="menu-item" id="share-list-menu-btn">
+          <span>${t('list-detail.share-list')}</span>
+          <span class="menu-item-value" aria-hidden="true">›</span>
+        </button>
         <div class="menu-delete-section">
           <button class="menu-delete-btn" id="list-delete-btn">${t('list-detail.delete-list')}</button>
         </div>
@@ -896,6 +902,10 @@ class ListDetailPage extends AppElement {
         </button>
         <button class="menu-item" id="bulk-export-btn">
           <span>${t('list-detail.bulk-extract-markdown')}</span>
+          <span class="menu-item-value" aria-hidden="true">›</span>
+        </button>
+        <button class="menu-item" id="bulk-share-btn">
+          <span>${t('list-detail.bulk-share')}</span>
           <span class="menu-item-value" aria-hidden="true">›</span>
         </button>
       </dialog>
@@ -1313,6 +1323,19 @@ class ListDetailPage extends AppElement {
     };
     this.listen(this.shadowRoot.querySelector('#export-menu-btn'), 'click', this._onExportMenuBtn);
 
+    this._onShareListMenuBtn = async () => {
+      this._menuDialog.close();
+      const list = (getState().lists ?? []).find(l => l.id === this._listId);
+      if (!list) return;
+      try {
+        await shareHandoff(buildListHandoff(list), list.name);
+      } catch (err) {
+        console.error('Share list failed:', err);
+        toast(t('share.error'), 'error');
+      }
+    };
+    this.listen(this.shadowRoot.querySelector('#share-list-menu-btn'), 'click', this._onShareListMenuBtn);
+
     this._onBulkExportBtn = () => {
       this._bulkMoreSheet.close();
       this._exportMode = EXPORT_MODE_SELECTION;
@@ -1320,23 +1343,47 @@ class ListDetailPage extends AppElement {
     };
     this.listen(this.shadowRoot.querySelector('#bulk-export-btn'), 'click', this._onBulkExportBtn);
 
-    this._onExportConfirm = e => {
+    this._onBulkShareBtn = async () => {
+      this._bulkMoreSheet.close();
+      const list = (getState().lists ?? []).find(l => l.id === this._listId);
+      if (!list) return;
+      const ids   = [...this._selectedIds];
+      const items = (list.items ?? []).filter(i => ids.includes(i.id));
+      if (!items.length) return;
+      try {
+        await shareHandoff(buildItemsHandoff(items), list.name);
+      } catch (err) {
+        console.error('Share selection failed:', err);
+        toast(t('share.error'), 'error');
+      }
+    };
+    this.listen(this.shadowRoot.querySelector('#bulk-share-btn'), 'click', this._onBulkShareBtn);
+
+    this._onExportConfirm = async e => {
       const { metadata, notes } = e.detail;
       const lists = getState().lists ?? [];
       const list  = lists.find(l => l.id === this._listId);
       if (!list) return;
-      let md;
+      let md, title;
       if (this._exportMode === EXPORT_MODE_SELECTION) {
         const ids   = [...this._selectedIds];
         const items = (list.items ?? []).filter(i => ids.includes(i.id));
         md = exportItemsMarkdown(items, list.name, { metadata, notes });
+        title = list.name;
       } else if (this._exportMode === EXPORT_MODE_ITEM) {
         md = exportItemsMarkdown([this._exportItem], list.name, { metadata, notes });
+        title = this._exportItem.title;
       } else {
         md = exportListMarkdown(list, { metadata, notes });
+        title = list.name;
       }
-      navigator.clipboard.writeText(md).catch(() => {});
-      toast(t('export.copied'), 'success');
+      try {
+        const result = await shareMarkdown(md, title);
+        if (result === 'copied') toast(t('export.copied'), 'success');
+      } catch (err) {
+        console.error('Export failed:', err);
+        toast(t('share.error'), 'error');
+      }
     };
     this.listen(this._exportSheet, 'extract-confirm', this._onExportConfirm);
 
@@ -1346,6 +1393,16 @@ class ListDetailPage extends AppElement {
       this._exportSheet.show();
     };
     this.listen(this.shadowRoot, 'item-export-request', this._onItemExportRequest);
+
+    this._onItemShareRequest = async e => {
+      try {
+        await shareHandoff(buildItemHandoff(e.detail.item), e.detail.item.title);
+      } catch (err) {
+        console.error('Share item failed:', err);
+        toast(t('share.error'), 'error');
+      }
+    };
+    this.listen(this.shadowRoot, 'item-share-request', this._onItemShareRequest);
 
     this._onBulkMove = () => { this._bulkMoreSheet.close(); this._openBulkPicker(); };
     this.listen(this.shadowRoot.querySelector('#bulk-move-menu-btn'), 'click', this._onBulkMove);

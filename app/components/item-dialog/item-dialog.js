@@ -24,6 +24,7 @@ const SNAPSHOT_KEY = 'telos:snapshot.new-item';
 //   item-delete
 //   item-move            { title, status, note, url, tags, dueDate, targetListIds, newListName, copy }
 //   item-promote         { title, status, note, url, tags, dueDate, year, section }
+//   item-share-request   { item }
 //   item-export-request  { item }
 class ItemDialog extends AppElement {
   // ── Public properties ────────────────────────────────────────────────────────
@@ -817,6 +818,7 @@ class ItemDialog extends AppElement {
         <button type="button" id="action-move-btn" class="sheet-item">${t('item-dialog.move-to-list')}</button>
         <button type="button" id="action-promote-btn" class="sheet-item">${t('item-dialog.add-to-goal')}</button>
         <button type="button" id="action-export-btn" class="sheet-item">${t('item-dialog.extract-markdown')}</button>
+        <button type="button" id="action-share-btn" class="sheet-item">${t('item-dialog.share-item')}</button>
       </modal-dialog>
 
       <list-picker-dialog id="list-picker"></list-picker-dialog>
@@ -1198,6 +1200,16 @@ class ItemDialog extends AppElement {
     };
     this.shadowRoot.querySelector('#action-export-btn').addEventListener('click', this._onActionExport);
 
+    this._onActionShare = () => {
+      this._sheetReturnFocus = null;
+      this._actionSheet.close();
+      this._modal.close();
+      this.dispatchEvent(new CustomEvent('item-share-request', {
+        bubbles: true, composed: true, detail: { item: this._item },
+      }));
+    };
+    this.shadowRoot.querySelector('#action-share-btn').addEventListener('click', this._onActionShare);
+
     // ── Move to list ──────────────────────────────────────────────────────────
 
     this._onListPick = e => {
@@ -1281,6 +1293,7 @@ class ItemDialog extends AppElement {
     this.shadowRoot.querySelector('#action-move-btn')?.removeEventListener('click', this._onActionMove);
     this.shadowRoot.querySelector('#action-promote-btn')?.removeEventListener('click', this._onActionPromote);
     this.shadowRoot.querySelector('#action-export-btn')?.removeEventListener('click', this._onActionExport);
+    this.shadowRoot.querySelector('#action-share-btn')?.removeEventListener('click', this._onActionShare);
     this._listPickerDialog?.removeEventListener('list-pick', this._onListPick);
 
     this.shadowRoot.querySelector('#promote-back')?.removeEventListener('click', this._onPromoteBack);

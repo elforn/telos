@@ -219,7 +219,7 @@ test.describe('Sync — export', () => {
     expect(download.suggestedFilename()).toMatch(/^\d{12}_telos-all\.telos$/);
   });
 
-  test('exported file starts with SCLE magic bytes', async ({ page }) => {
+  test('exported file starts with ZIP local-file-header magic bytes', async ({ page }) => {
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       (async () => {
@@ -230,12 +230,10 @@ test.describe('Sync — export', () => {
     const tmpPath = path.join(os.tmpdir(), download.suggestedFilename());
     await download.saveAs(tmpPath);
     const bytes = fs.readFileSync(tmpPath);
-    expect(bytes[0]).toBe(0x53); // S
-    expect(bytes[1]).toBe(0x43); // C
-    expect(bytes[2]).toBe(0x4c); // L
-    expect(bytes[3]).toBe(0x45); // E
-    expect(bytes[4]).toBe(0x1f); // gzip magic
-    expect(bytes[5]).toBe(0x8b);
+    expect(bytes[0]).toBe(0x50); // P
+    expect(bytes[1]).toBe(0x4b); // K
+    expect(bytes[2]).toBe(0x03);
+    expect(bytes[3]).toBe(0x04);
     fs.unlinkSync(tmpPath);
   });
 });
@@ -542,5 +540,116 @@ test.describe('Sync — round-trip', () => {
       document.querySelector('bottom-nav').shadowRoot.querySelector('#import-replace').textContent.trim()
     );
     expect(resetLabel).toBe('Replace all');
+  });
+});
+
+test.describe('Sync — slice handoff', () => {
+  test('picking a shared list file via Import adds it, hides Replace, and preserves existing lists', async ({ page }) => {
+    // Exercises the manual file-picker arrival path (Settings → Import → choose file) —
+    // distinct from the "Sync — share target" test below, which exercises the
+    // share-target POST arrival path. Both use the real plain-text handoff format
+    // (shareHandoff() in app/utils/handoff.js never produces ZIP — see CLAUDE.md's
+    // Sharing section for why).
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    await navToLists(page);
+    await createList(page, 'My own list');
+    expect(await listCount(page)).toBe(1);
+
+    const sliceFile = {
+      socleVersion: 1,
+      exportedAt: new Date().toISOString(),
+      events: [{
+        type: 'simple:state',
+        payload: {
+          __telosHandoff: true,
+          kind: 'list',
+          lists: [{ id: 'shared-1', name: 'Shared list', items: [
+            { id: 'shared-item-1', title: 'Shared item', status: 'open', tags: [], inGoals: [] },
+          ] }],
+        },
+      }],
+    };
+
+    await openSettings(page);
+    await clickInBottomNav(page, '#import-btn');
+    await injectImportFile(page, sliceFile);
+    await waitForImportModal(page);
+
+    const state = await importModalState(page);
+    expect(state.open).toBe(true);
+    expect(state.mergeHidden).toBe(false);
+    expect(state.replaceHidden).toBe(true); // never offer Replace for a slice — it would wipe "My own list"
+
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-merge').click()
+    );
+    await waitForListsPage(page);
+
+    expect(await listCount(page)).toBe(2);
+    const names = await page.evaluate(() =>
+      [...document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelectorAll('lists-page-item')]
+        .map(el => el.shadowRoot.querySelector('.list-name')?.textContent)
+    );
+    expect(names).toContain('My own list');
+    expect(names).toContain('Shared list');
+  });
+});
+
+test.describe('Sync — share target', () => {
+  test('POSTing a shared .txt handoff file lands as a pending import on next load', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    const payload = {
+      __telosHandoff: true,
+      kind: 'list',
+      lists: [{ id: 'shared-target-1', name: 'Shared via target', items: [] }],
+    };
+    const json = JSON.stringify({
+      socleVersion: 1,
+      exportedAt: new Date().toISOString(),
+      events: [{ type: 'simple:state', payload }],
+    });
+
+    // Posting via an in-page fetch (not Playwright's own request API) so the
+    // request actually goes through the registered service worker's fetch
+    // handler — that's what intercepts /share-target and stores the pending
+    // share, exactly as a real "Share..." from another app would.
+    await page.evaluate(async text => {
+      const fd = new FormData();
+      fd.append('files', new File([text], 'shared.txt', { type: 'text/plain' }));
+      await fetch('/share-target', { method: 'POST', body: fd });
+    }, json);
+
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    await waitForImportModal(page);
+
+    const state = await importModalState(page);
+    expect(state.open).toBe(true);
+    expect(state.mergeHidden).toBe(false);
+    expect(state.replaceHidden).toBe(true); // list-kind handoff hides Replace
+
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#import-merge').click()
+    );
+    await waitForPage(page);
+
+    // Reloading again must not re-apply the same share — readShareInbox() consumes it once.
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    const reopened = await page.evaluate(() =>
+      document.querySelector('bottom-nav')?.shadowRoot
+        ?.querySelector('#import-modal')?.shadowRoot?.querySelector('dialog')?.open ?? false
+    );
+    expect(reopened).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { boot, setState, getState, reset } from '../../_lib/core/store/store.js';
 import '../../app/strings.js';
 import '../../app/pages/home-page.js';
@@ -7,6 +7,14 @@ import '../../app/components/goal-item/goal-item.js';
 import '../../app/components/year-header/year-header.js';
 import '../../app/components/goal-dialog/goal-dialog.js';
 import { _resetToast } from '../../_lib/modules/toast/toast.js';
+
+vi.mock('../../app/utils/handoff.js', () => ({
+  buildGoalHandoff: vi.fn(goal => ({ __telosHandoff: true, kind: 'goal', goal })),
+  buildYearHandoff: vi.fn((year, yearGoals) => ({ __telosHandoff: true, kind: 'year', goals: { [year]: yearGoals } })),
+  shareHandoff: vi.fn().mockResolvedValue(true),
+}));
+
+import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../../app/utils/handoff.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
@@ -25,10 +33,14 @@ function mount(year = 2026) {
       d.close    = () => {};
     });
   }
+  // export-sheet's native <dialog> lives two shadow levels in (export-sheet -> modal-dialog -> dialog).
+  const goalExportSheet = el.shadowRoot.querySelector('#goal-export-sheet');
+  const innerDialog = goalExportSheet?.shadowRoot?.querySelector('#sheet')?.shadowRoot?.querySelector('dialog');
+  if (innerDialog) { innerDialog.showModal = () => {}; innerDialog.close = () => {}; }
   return el;
 }
 
-afterEach(() => { document.body.innerHTML = ''; reset(); });
+afterEach(() => { document.body.innerHTML = ''; reset(); vi.clearAllMocks(); });
 
 describe('home-page — structure', () => {
   it('renders a <main> landmark', () => {
@@ -730,5 +742,176 @@ describe('home-page — create with active filter', () => {
       expect(toastEl?.textContent).toContain('Goal saved');
     });
     expect(el.shadowRoot.querySelector('#capstone-list goal-item')?.hidden).toBe(false);
+  });
+});
+
+describe('home-page — share goal', () => {
+  it('shares the goal via goal-share-request from the dialog', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tags: [], percentage: 40 }], milestones: [], wow: [] },
+    } } });
+    const el = mount(2026);
+    const goal = { id: 'c1', title: 'Goal', tags: [], percentage: 40 };
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-share-request', {
+      bubbles: true, composed: true, detail: { goal },
+    }));
+    await vi.waitFor(() => expect(shareHandoff).toHaveBeenCalledOnce());
+    expect(buildGoalHandoff).toHaveBeenCalledWith(goal);
+    expect(shareHandoff.mock.calls[0][1]).toBe('Goal');
+  });
+
+  it('toasts an error if sharing the goal fails', async () => {
+    _resetToast();
+    shareHandoff.mockRejectedValueOnce(new Error('share failed'));
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-share-request', {
+      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Goal', tags: [], percentage: 0 } },
+    }));
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-error');
+      expect(toastEl).not.toBeNull();
+    });
+  });
+});
+
+describe('home-page — share goal markdown', () => {
+  let writeText;
+  beforeEach(() => {
+    writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  });
+
+  it('builds markdown for the goal and copies it (no navigator.share in this environment)', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    const goal = { id: 'c1', title: 'Run a 5k', tags: [], percentage: 40 };
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-export-request', {
+      bubbles: true, composed: true, detail: { goal },
+    }));
+    el.shadowRoot.querySelector('#goal-export-sheet').dispatchEvent(new CustomEvent('extract-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false },
+    }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText.mock.calls[0][0]).toContain('Run a 5k');
+  });
+
+  it('shows the copied toast after the clipboard fallback', async () => {
+    _resetToast();
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    const goal = { id: 'c1', title: 'Run a 5k', tags: [], percentage: 40 };
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-export-request', {
+      bubbles: true, composed: true, detail: { goal },
+    }));
+    el.shadowRoot.querySelector('#goal-export-sheet').dispatchEvent(new CustomEvent('extract-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false },
+    }));
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-success');
+      expect(toastEl?.textContent).toContain('Copied to clipboard');
+    });
+  });
+
+  it('does nothing if extract-confirm fires without a prior goal-export-request', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#goal-export-sheet').dispatchEvent(new CustomEvent('extract-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false },
+    }));
+    await new Promise(r => setTimeout(r, 0));
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('toasts an error if the clipboard write rejects', async () => {
+    _resetToast();
+    writeText.mockRejectedValueOnce(new Error('denied'));
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    const goal = { id: 'c1', title: 'Run a 5k', tags: [], percentage: 40 };
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-export-request', {
+      bubbles: true, composed: true, detail: { goal },
+    }));
+    el.shadowRoot.querySelector('#goal-export-sheet').dispatchEvent(new CustomEvent('extract-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false },
+    }));
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-error');
+      expect(toastEl).not.toBeNull();
+    });
+  });
+});
+
+describe('home-page — share year', () => {
+  it('shares the whole current year via year-share-request from year-header', async () => {
+    const yearGoals = { capstone: [{ id: 'c1', title: 'Goal', tags: [], percentage: 40 }], milestones: [], wow: [], focus: [] };
+    await boot({ dbName: freshName(), initialState: { goals: { '2026': yearGoals } } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('year-header').dispatchEvent(new CustomEvent('year-share-request', {
+      bubbles: true, composed: true,
+    }));
+    await vi.waitFor(() => expect(shareHandoff).toHaveBeenCalledOnce());
+    expect(buildYearHandoff).toHaveBeenCalledWith(2026, expect.objectContaining({ capstone: yearGoals.capstone }));
+    expect(shareHandoff.mock.calls[0][1]).toBe('2026');
+  });
+
+  it('toasts an error if sharing the year fails', async () => {
+    _resetToast();
+    shareHandoff.mockRejectedValueOnce(new Error('share failed'));
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('year-header').dispatchEvent(new CustomEvent('year-share-request', {
+      bubbles: true, composed: true,
+    }));
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-error');
+      expect(toastEl).not.toBeNull();
+    });
+  });
+});
+
+describe('home-page — export year markdown', () => {
+  let writeText;
+  beforeEach(() => {
+    writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  });
+
+  it('builds markdown for the whole year and copies it (no navigator.share in this environment)', async () => {
+    const yearGoals = { capstone: [{ id: 'c1', title: 'Run a 5k', tags: [], percentage: 40 }], milestones: [], wow: [], focus: [] };
+    await boot({ dbName: freshName(), initialState: { goals: { '2026': yearGoals } } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('year-header').dispatchEvent(new CustomEvent('year-export-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false },
+    }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText.mock.calls[0][0]).toContain('Run a 5k');
+  });
+
+  it('shows the copied toast after the clipboard fallback', async () => {
+    _resetToast();
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('year-header').dispatchEvent(new CustomEvent('year-export-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false },
+    }));
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-success');
+      expect(toastEl?.textContent).toContain('Copied to clipboard');
+    });
+  });
+
+  it('toasts an error if the clipboard write rejects', async () => {
+    _resetToast();
+    writeText.mockRejectedValueOnce(new Error('denied'));
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('year-header').dispatchEvent(new CustomEvent('year-export-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false },
+    }));
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-error');
+      expect(toastEl).not.toBeNull();
+    });
   });
 });

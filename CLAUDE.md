@@ -2,8 +2,8 @@
 
 A yearly goal planner
 
-Scaffolded from Socle 0.2.5 on 2026-06-06. Now on 0.14.2.
-Installed modules: core, gestures, sync, images, app-header, modal-dialog, toast
+Scaffolded from Socle 0.2.5 on 2026-06-06. Now on 0.15.3.
+Installed modules: core, gestures, sync, images, app-header, modal-dialog, toast, reorder
 
 ---
 
@@ -26,6 +26,7 @@ Used for year-start planning sessions and periodic (weekly or monthly) check-ins
 5. **Upload a year photo** — a photo displays as the header background and acts as a visual anchor for the year.
 6. **Create and manage lists** — create trans-year lists (ideas, improvements, gift ideas, identity anchors, etc.), add items, filter by status or tag.
 7. **Promote a list item to a goal** — link a list item into any year + section; the item stays in the list with `inGoals` updated. A single item can feed goals in multiple years. Progress is **not** synced — each side tracks independently.
+8. **Share a list, item, goal, or year with another person's Telos install** — "Share to Telos" sends a re-importable handoff via the native share sheet (Android Chrome) or a file download (fallback, and always on Firefox); "Share Markdown" sends human-readable, one-way text. See **Sharing** below.
 
 ### Data model
 All state lives in a **simple store** (setState/getState — no event log, no reducer). Top-level keys:
@@ -62,8 +63,22 @@ All state lives in a **simple store** (setState/getState — no event log, no re
 
 **Not store keys:** `theme` (`'light' | 'dark' | 'system'`) and locale live in **localStorage by design** (`_lib/core/theme/theme.js`, `_lib/core/strings.js`) — device-local preferences deliberately excluded from export/import. Never move them into the store.
 
+### Sharing
+Two outbound actions send content out of the app, for different purposes — don't conflate them:
+
+- **"Share to Telos"** (list ⋮ menu, bulk-select ⋮ menu, item/goal action sheets, year menu) — hands a single list, item, group of bulk-selected items, goal, or year to **another person's own independent Telos install**; a one-time transport, not sync — no ongoing link back to the sender, each side tracks independently from then on. Builds `{ __telosHandoff: true, kind: 'list'|'item'|'items'|'goal'|'year', lists/item/items/goal/goals }` (`app/utils/handoff.js`), wraps it in the envelope Socle's sync module already reads (`{ socleVersion, exportedAt, events: [{ type: 'simple:state', payload }] }`), and shares it as a **plain-text `.txt`** file via `navigator.share({files})` — never ZIP. Falls back to a plain-text download when share is unavailable or fails for a real reason (a user-cancelled share does nothing, no fallback). `kind: 'items'` (a bulk selection from a list) is a separate payload shape from `kind: 'item'` — always an array — rather than making `item` polymorphic, so the single-item payload contract stays unchanged.
+- **"Share Markdown"** (year/list/selection/item export-sheet, goal action sheet) — human-readable markdown via `navigator.share({title, text})`, falls back to clipboard copy. One-way, not re-importable — no `__telosHandoff` marker, just prose (`app/utils/share-markdown.js`).
+
+**Why plain text, not ZIP, for "Share to Telos."** Confirmed via Chromium source (`chrome/browser/webshare/share_service_impl.cc`, `IsDangerousFilename`/`IsDangerousMimeType`): `navigator.share({files})` validates every shared file's extension *and* MIME type against a hardcoded allowlist covering only images, audio, video, PDF, and plain text/csv/html/css — **archives are excluded outright, under any MIME label, permanently.** `canShare()` doesn't run this deeper check (always optimistically returns `true`); `share()` itself does, rejecting with `NotAllowedError: Permission denied`. Never attempt to ZIP a payload meant for `navigator.share({files})` — relabeling the MIME type doesn't help, the check is real and unconditional.
+
+**Receiving.** `previewImport()` already reads the handoff envelope through its pre-existing (pre-ZIP) legacy-JSON path, so no bespoke parser was needed — the plain-text format was chosen specifically so this stayed true. `mergeStrategy` ignores `__telosHandoff`/`kind`, reading only `lists`/`goals`, so the marker is safe to leave in the payload. Inbound routing lives in `bottom-nav.js`: `kind: 'list'|'year'` merges straight in with **Replace hidden** (merging a slice must never expose the destructive full-replace option — `mergeStrategy` already handles partial payloads defensively, but `applyReplace` would still wipe every other list/goal); `kind: 'item'|'items'` both show `<list-picker-dialog>` for destination (routed to the same landing, just with a one- vs many-item array); `kind: 'goal'` shows a year+section picker. Two reception paths, both registered in `manifest.json`:
+- **`share_target`** — Chromium-only, requires the PWA installed, currently accepts only `text/plain`/`.txt` (not `.telos`/ZIP — full backups can't arrive this way). `app/main.js` reads Socle's `readShareInbox()` once on boot and dispatches the same `telos-import-file` event the file-open path already fires — zero bespoke routing code.
+- **`file_handlers`** (`.telos` + `.txt`) — **does not work on Android at all, ever** (File Handling API is desktop-only per Chrome's own documentation, not a bug or a caching issue). Works on desktop Chrome/Chromium only. `share_target` is the real phone-side reception mechanism — don't assume tap-to-open reaches phone users, the app's primary platform.
+
+Full-backup export/import (Settings → Export/Import) is unrelated to all of the above — always ZIP, always a direct file download/picker, never goes through `navigator.share`, so none of the file-share-allowlist or `file_handlers` constraints apply to it.
+
 ### Constraints
-- Local only: no accounts, no cloud sync. Export/import via the sync module is the only data-transfer mechanism.
+- Local only: no accounts, no cloud sync. Export/import (full backup) and the two "Share..." actions above are the only data-transfer mechanisms.
 - Keep it simple: no unnecessary settings, no complexity for its own sake.
 
 ### Common mistakes
@@ -77,8 +92,10 @@ All state lives in a **simple store** (setState/getState — no event log, no re
 - **Frequency goals use `entries: string[]` of unique ISO dates.** One entry per calendar day maximum — do not allow duplicate dates. Past dates are allowed.
 - **"Every day" is not a goal type.** It is `weekly` with `target=7`, offered as a UI preset. Do not add a `daily` type to the schema.
 - **Frequency goal `entries` data grows over time.** Keep it as a flat array of date strings (YYYY-MM-DD). Do not store counts, times, or any per-entry metadata — just the date of each completion.
-- **Deadline/due-date urgency lives in `app/utils/urgency.js`.** All buckets and aggregation come from `urgencyOf` / `mostUrgent` / `urgentCount` — never re-derive "overdue" or day-diff logic inline. Leaf goals/items show a **tinted calendar**; roll-ups (list cards, bottom-nav Years/Lists pills, app icon badge) show a **colour dot** for green/yellow/red only (quiet for `far`/`none`), plus a **count of today+overdue** when red. The app-icon badge uses `navigator.setAppBadge(n)` — Chrome/installed only (Firefox ignores it), so it's a pure enhancement, never the sole signal. The **date filter** (a `dates` Set in each page's `_filter`, pills *Overdue/Week/Month/Later/None*) reuses `matchesDateBucket` / `DATE_FILTER_KEYS` from the same module — the dated pills mirror the markers (active-only), `none` means `!dueDate`. Present on the home (goals), list-detail (items), and lists-overview (matches if any item in the list falls in the bucket) filters.
+- **Deadline/due-date urgency lives in `app/utils/urgency.js`.** All buckets and aggregation come from `urgencyOf` / `mostUrgent` / `urgentCount` — never re-derive "overdue" or day-diff logic inline. Leaf goals/items show a **tinted calendar**; roll-ups (list cards, bottom-nav Years/Lists pills, app icon badge) show a **colour dot** for green/yellow/red only (quiet for `far`/`none`), plus a **count of today+overdue** when red. The app-icon badge uses `navigator.setAppBadge(n)` — Chrome/installed only (Firefox ignores it), so it's a pure enhancement, never the sole signal. Whether it actually *renders* on Android is out of the app's control even when the call succeeds with no error — confirmed via a raw manual `setAppBadge(5)` in a remote-debug session that resolved fine but showed nothing on the icon; this is a launcher/OS rendering gap, not a code bug (see `_updateAppBadge`'s error logging, added v1.19.1, for diagnosing a genuine failure vs. this). The **date filter** (a `dates` Set in each page's `_filter`, pills *Overdue/Week/Month/Later/None*) reuses `matchesDateBucket` / `DATE_FILTER_KEYS` from the same module — the dated pills mirror the markers (active-only), `none` means `!dueDate`. Present on the home (goals), list-detail (items), and lists-overview (matches if any item in the list falls in the bucket) filters.
 - **Never edit `_lib/` directly** — it is replaced wholesale by `npx socle update`.
+- **Never ZIP (or otherwise binary-encode) a payload meant for `navigator.share({files})`.** Chromium's file-share allowlist excludes archives outright, confirmed via source — see **Sharing** above. Plain text is the only format that actually reaches the native share sheet.
+- **`file_handlers` does not work on Android, period.** Desktop Chrome/Chromium only. `share_target` is the real phone-side file-reception mechanism — see **Sharing** above.
 
 ---
 

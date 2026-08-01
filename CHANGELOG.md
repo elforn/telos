@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.20.0] — 2026-08-01
+
+### Added
+- **Share to another Telos install.** A new "Share to Telos" action on lists, items, bulk-selected items, goals, and years sends a re-importable copy to someone else's independent Telos install via the native share sheet (or a file download as a fallback) — a one-time handoff, not a sync; each side tracks progress independently from then on.
+- **Receiving a share.** Telos now appears as a share target on Android Chrome for files shared from other apps, and still opens shared/imported files directly on desktop. A shared list or year merges straight in; a shared item, group of items, or goal lets you pick which list, or which year and section, to land it in.
+- **Share Markdown**, the existing clipboard-copy export for years/lists/selections/items, now also offers the native share sheet where available.
+
 ## [1.19.1] — 2026-07-28
 
 ### Fixed

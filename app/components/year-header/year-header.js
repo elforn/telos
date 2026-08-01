@@ -438,6 +438,10 @@ class YearHeader extends Gestures(AppElement) {
           <span>${t('year-header.extract-markdown')}</span>
           <span class="menu-item-value">›</span>
         </button>
+        <button class="menu-item" id="year-share-btn">
+          <span>${t('year-header.share-year')}</span>
+          <span class="menu-item-value">›</span>
+        </button>
       </modal-dialog>
 
       <export-sheet id="export-sheet"></export-sheet>
@@ -592,6 +596,7 @@ class YearHeader extends Gestures(AppElement) {
     this.shadowRoot.querySelector('#photo-input')?.removeEventListener('change', this._onPhotoInput);
     this.shadowRoot.querySelector('#year-export-btn')?.removeEventListener('click', this._onYearExportBtn);
     this.shadowRoot.querySelector('#export-sheet')?.removeEventListener('extract-confirm', this._onExportConfirm);
+    this.shadowRoot.querySelector('#year-share-btn')?.removeEventListener('click', this._onYearShareBtn);
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--year-header-height');
     document.documentElement.style.overflowAnchor = '';
@@ -810,6 +815,12 @@ class YearHeader extends Gestures(AppElement) {
       }));
     };
     this._exportSheet.addEventListener('extract-confirm', this._onExportConfirm);
+
+    this._onYearShareBtn = () => {
+      this._menuDialog.close();
+      this.dispatchEvent(new CustomEvent('year-share-request', { bubbles: true, composed: true }));
+    };
+    this.shadowRoot.querySelector('#year-share-btn').addEventListener('click', this._onYearShareBtn);
   }
 
   _setupTags() {

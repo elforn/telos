@@ -16,6 +16,12 @@ class ListPickerDialog extends AppElement {
   set sourceListId(val) { this._sourceListId = val ?? null; }
   get sourceListId()    { return this._sourceListId ?? null; }
 
+  // Overrides the default "Move to list" heading — e.g. "Add to list" when the
+  // picker is landing a freshly-received item rather than moving/copying an
+  // existing one. Falls back to the default when unset.
+  set heading(val) { this._headingOverride = val ?? null; }
+  get heading()    { return this._headingOverride ?? null; }
+
   // ── Public API ───────────────────────────────────────────────────────────────
 
   show() {
@@ -25,6 +31,10 @@ class ListPickerDialog extends AppElement {
       this._newListForm.hidden = true;
       this._newListBtn.hidden  = false;
     }
+    const heading = this.heading ?? t('item-dialog.move-to-list');
+    this._headingEl.textContent = heading;
+    this._modal.setAttribute('aria-label', heading);
+    this._itemsEl.setAttribute('aria-label', heading);
     this._renderRows();
     this._updateCtaState();
     this._modal.show();
@@ -282,6 +292,7 @@ class ListPickerDialog extends AppElement {
 
   subscribe() {
     this._modal     = this.shadowRoot.querySelector('#modal');
+    this._headingEl = this.shadowRoot.querySelector('.heading');
     this._itemsEl   = this.shadowRoot.querySelector('#items');
     this._noListsEl = this.shadowRoot.querySelector('#no-lists-msg');
     this._countRow  = this.shadowRoot.querySelector('#count-row');

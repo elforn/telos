@@ -11,6 +11,9 @@ import { repairInstallation } from '../../../_lib/core/sw-manager/sw-repair.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
 import { backupBeforeRepair, LAST_EXPORT_KEY } from '../../utils/backup-before-repair.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
+import '../list-picker-dialog/list-picker-dialog.js';
+
+const GOAL_SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
 
 function _countGoals(goalsObj) {
   if (!goalsObj) return 0;
@@ -316,6 +319,74 @@ class BottomNav extends AppElement {
           margin-block-end: var(--space-2);
         }
 
+        /* ── Goal-handoff landing (year + section pick) ──────────────────── */
+
+        .picker-heading {
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-text-muted);
+          text-transform: uppercase;
+          letter-spacing: var(--letter-spacing-caps);
+          margin: var(--space-3) 0 var(--space-2);
+        }
+
+        #goal-landing-year-select {
+          display: block;
+          inline-size: 100%;
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding: var(--space-3);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          outline: none;
+          box-sizing: border-box;
+          margin-block-end: var(--space-4);
+          cursor: pointer;
+        }
+
+        #goal-landing-year-select:focus { border-color: var(--color-accent); }
+
+        #goal-landing-section-group {
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          margin-block-end: var(--space-2);
+        }
+
+        .section-option {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-1);
+          cursor: pointer;
+          padding: var(--space-2) var(--space-3);
+          border-radius: var(--radius-full);
+          border: 1px solid var(--color-border);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-medium);
+          font-family: var(--font-family);
+          color: var(--color-text-secondary);
+          transition: border-color 0.15s, background 0.15s, color 0.15s;
+        }
+
+        .section-option:has(input:checked) {
+          background: var(--color-accent-subtle);
+          border-color: var(--color-accent);
+          color: var(--color-accent);
+        }
+
+        .section-option input {
+          position: absolute;
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        .section-option:has(input:focus-visible) {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
         .modal-btn {
           min-block-size: var(--touch-target);
           padding-inline: var(--space-2);
@@ -409,13 +480,28 @@ class BottomNav extends AppElement {
       <modal-dialog id="import-modal" aria-label="${t('sync.import')}">
         <h2 class="modal-title">${t('sync.import')}</h2>
         <p id="import-message" class="import-message" aria-live="polite"></p>
+        <div id="goal-landing" hidden>
+          <label class="picker-heading" for="goal-landing-year-select">${t('sync.handoff-goal-year-label')}</label>
+          <select id="goal-landing-year-select"></select>
+          <div id="goal-landing-section-group" role="group" aria-label="${t('sync.handoff-goal-section-label')}">
+            ${GOAL_SECTIONS.map((s, i) => `
+              <label class="section-option">
+                <input type="radio" name="handoff-goal-section" value="${s}" ${i === 0 ? 'checked' : ''}>
+                ${t('goal-dialog.move-section-' + s)}
+              </label>
+            `).join('')}
+          </div>
+        </div>
         <button slot="footer" class="modal-btn" id="import-cancel"  hidden>${t('sync.import-cancel')}</button>
         <button slot="footer" class="modal-btn" id="import-replace" hidden>${t('sync.import-replace')}</button>
         <button slot="footer" class="modal-btn accent" id="import-merge"   hidden>${t('sync.import-merge')}</button>
+        <button slot="footer" class="modal-btn accent" id="import-goal-confirm" hidden>${t('sync.import-merge')}</button>
         <button slot="footer" class="modal-btn" id="import-close"   hidden>${t('sync.import-close')}</button>
       </modal-dialog>
 
-      <input type="file" id="import-input" accept=".telos,.json" hidden>
+      <list-picker-dialog id="handoff-list-picker"></list-picker-dialog>
+
+      <input type="file" id="import-input" accept=".telos,.json,.txt,application/zip,text/plain" hidden>
     `;
   }
 
@@ -582,6 +668,11 @@ class BottomNav extends AppElement {
     this._replaceBtn = this.shadowRoot.querySelector('#import-replace');
     this._closeBtn   = this.shadowRoot.querySelector('#import-close');
 
+    this._goalLanding      = this.shadowRoot.querySelector('#goal-landing');
+    this._goalYearSelect   = this.shadowRoot.querySelector('#goal-landing-year-select');
+    this._goalConfirmBtn   = this.shadowRoot.querySelector('#import-goal-confirm');
+    this._handoffListPicker = this.shadowRoot.querySelector('#handoff-list-picker');
+
     this._onImportInput = async e => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -644,6 +735,50 @@ class BottomNav extends AppElement {
     this.shadowRoot.querySelector('#import-close').addEventListener('click', this._onImportClose);
     this._onImportModalClose = () => this._resetReplace();
     this._importModal.addEventListener('modal-close', this._onImportModalClose);
+
+    // ── Slice-handoff landing (received a shared list/item/goal, not a full backup) ──
+    // A slice merge is purely additive (mergeStrategy only ever adds — see its own
+    // comments), so unlike the full-backup paths above it skips the pre-merge backup
+    // download: that safety net exists for risky operations, not for accepting one
+    // shared item or goal.
+
+    this._onGoalLandingConfirm = async () => {
+      if (!this._parsed) return;
+      const year = this._goalYearSelect.value;
+      const section = this.shadowRoot.querySelector('input[name="handoff-goal-section"]:checked')?.value ?? 'focus';
+      const goal = { ...this._parsed.payload.goal, id: crypto.randomUUID() };
+      try {
+        const imported = { goals: { [year]: { [section]: [goal] } } };
+        await applyMerge({ type: 'simple', payload: imported, blobs: [] }, mergeStrategy);
+        this._showDone(t('sync.handoff-goal-confirm', { title: goal.title }));
+      } catch (err) {
+        console.error('Import failed:', err);
+        this._showDone(t('sync.import-error'));
+      }
+    };
+    this._goalConfirmBtn.addEventListener('click', this._onGoalLandingConfirm);
+
+    this._onHandoffListPick = async e => {
+      const items = this._pendingHandoffItems;
+      this._pendingHandoffItems = null;
+      if (!items?.length) return;
+      const { targetListIds, newListName } = e.detail;
+      const freshItems = () => items.map(item => ({ ...item, id: crypto.randomUUID() }));
+      const lists = targetListIds.map(id => ({ id, items: freshItems() }));
+      if (newListName) lists.push({ id: crypto.randomUUID(), name: newListName, items: freshItems() });
+      if (!lists.length) return;
+      try {
+        await applyMerge({ type: 'simple', payload: { lists }, blobs: [] }, mergeStrategy);
+        const msg = items.length === 1
+          ? t('sync.handoff-item-confirm', { title: items[0].title })
+          : t('sync.handoff-items-confirm', { count: items.length });
+        toast(msg, 'success');
+      } catch (err) {
+        console.error('Import failed:', err);
+        toast(t('sync.import-error'), 'error');
+      }
+    };
+    this._handoffListPicker.addEventListener('list-pick', this._onHandoffListPick);
   }
 
   async _openImportFile(file, { closeSettings = false } = {}) {
@@ -659,10 +794,61 @@ class BottomNav extends AppElement {
       return;
     }
     this._parsed = parsed;
-    this._msgEl.textContent = _buildPreviewMsg(parsed);
-    this._showPreview();
+    // A slice handoff carries a __telosHandoff marker (never present in a real full
+    // backup or event-log export) — mergeStrategy itself ignores it, this component
+    // just uses it to route to a lighter, kind-specific landing instead of the
+    // generic Merge/Replace sheet.
+    const handoffKind = parsed.type === 'simple' && parsed.payload?.__telosHandoff ? parsed.payload.kind : null;
+
+    if (handoffKind === 'item' || handoffKind === 'items') {
+      if (closeSettings) this._settingsModal.close();
+      const items = handoffKind === 'items' ? parsed.payload.items : [parsed.payload.item];
+      this._showItemHandoffPicker(items);
+      return;
+    }
+
+    if (handoffKind === 'goal') {
+      this._msgEl.textContent = t('sync.handoff-goal-message', { title: parsed.payload.goal.title });
+      this._showGoalLanding();
+    } else {
+      // handoffKind === 'list' or a plain full-backup/event-log file.
+      this._msgEl.textContent = _buildPreviewMsg(parsed);
+      this._showPreview({ allowReplace: !handoffKind });
+    }
     if (closeSettings) this._settingsModal.close();
     this._importModal.show();
+  }
+
+  _showItemHandoffPicker(items) {
+    this._pendingHandoffItems = items;
+    this._handoffListPicker.lists = getState().lists ?? [];
+    this._handoffListPicker.mode = 'copy'; // nothing existing is being moved
+    this._handoffListPicker.sourceListId = null;
+    this._handoffListPicker.heading = t('sync.handoff-add-to-list');
+    this._handoffListPicker.show();
+  }
+
+  _showGoalLanding() {
+    this._cancelBtn.hidden      = false;
+    this._mergeBtn.hidden       = true;
+    this._replaceBtn.hidden     = true;
+    this._closeBtn.hidden       = true;
+    this._goalLanding.hidden    = false;
+    this._goalConfirmBtn.hidden = false;
+    this._populateGoalYearSelect();
+  }
+
+  _populateGoalYearSelect() {
+    const years = Object.keys(getState().goals ?? {});
+    const currentYear = String(new Date().getFullYear());
+    const allYears = [...new Set([...years, currentYear])].sort();
+    this._goalYearSelect.replaceChildren(...allYears.map(y => {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      return opt;
+    }));
+    this._goalYearSelect.value = currentYear;
   }
 
   _resetReplace() {
@@ -671,19 +857,23 @@ class BottomNav extends AppElement {
     this._replaceBtn.removeAttribute('aria-label');
   }
 
-  _showPreview() {
-    this._cancelBtn.hidden  = false;
-    this._mergeBtn.hidden   = false;
-    this._replaceBtn.hidden = false;
-    this._closeBtn.hidden   = true;
+  _showPreview({ allowReplace = true } = {}) {
+    this._cancelBtn.hidden      = false;
+    this._mergeBtn.hidden       = false;
+    this._replaceBtn.hidden     = !allowReplace;
+    this._closeBtn.hidden       = true;
+    this._goalLanding.hidden    = true;
+    this._goalConfirmBtn.hidden = true;
   }
 
   _showDone(msg) {
     this._msgEl.textContent = msg;
-    this._cancelBtn.hidden  = true;
-    this._mergeBtn.hidden   = true;
-    this._replaceBtn.hidden = true;
-    this._closeBtn.hidden   = false;
+    this._cancelBtn.hidden      = true;
+    this._mergeBtn.hidden       = true;
+    this._replaceBtn.hidden     = true;
+    this._goalLanding.hidden    = true;
+    this._goalConfirmBtn.hidden = true;
+    this._closeBtn.hidden       = false;
   }
 
   _subscribeRepairButton() {
@@ -855,6 +1045,8 @@ class BottomNav extends AppElement {
     this.shadowRoot?.querySelector('#import-replace')?.removeEventListener('click', this._onImportReplace);
     this.shadowRoot?.querySelector('#import-close')?.removeEventListener('click', this._onImportClose);
     this._importModal?.removeEventListener('modal-close', this._onImportModalClose);
+    this._goalConfirmBtn?.removeEventListener('click', this._onGoalLandingConfirm);
+    this._handoffListPicker?.removeEventListener('list-pick', this._onHandoffListPick);
     this.shadowRoot?.querySelector('#repair-btn')?.removeEventListener('click', this._onRepairBtn);
     this.shadowRoot?.querySelector('#reminder-group')?.removeEventListener('click', this._onReminderGroup);
     this._ro?.disconnect();

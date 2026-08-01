@@ -10,10 +10,12 @@ vi.mock('../../app/utils/backup-before-repair.js', () => ({
 }));
 
 import '../../app/components/bottom-nav/bottom-nav.js';
-import { setState } from '../../_lib/core/store/store.js';
+import { boot, setState, getState } from '../../_lib/core/store/store.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { repairInstallation } from '../../_lib/core/sw-manager/sw-repair.js';
 import { backupBeforeRepair } from '../../app/utils/backup-before-repair.js';
+import * as syncModule from '../../_lib/modules/sync/sync.js';
+import { _resetToast } from '../../_lib/modules/toast/toast.js';
 
 // happy-dom does not implement ResizeObserver
 globalThis.ResizeObserver = class {
@@ -25,7 +27,7 @@ globalThis.ResizeObserver = class {
 globalThis.fetch = () => Promise.reject(new Error('no network in tests'));
 
 function stubModals(el) {
-  for (const id of ['#settings-modal', '#import-modal']) {
+  for (const id of ['#settings-modal', '#import-modal', '#handoff-list-picker']) {
     const m = el.shadowRoot.querySelector(id);
     if (m) { m.show = vi.fn(); m.close = vi.fn(); }
   }
@@ -580,5 +582,272 @@ describe('bottom-nav — app icon badge', () => {
     setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }]));
     expect(() => { const el = mount(); el.refreshUrgency(); }).not.toThrow();
     navigator.setAppBadge = original;
+  });
+});
+
+// ── Slice-handoff import routing ──────────────────────────────────────────────
+
+function fakeFile() { return new File([], 'shared.telos'); }
+
+let sliceHandoffDbSeq = 0;
+
+describe('bottom-nav — slice-handoff import routing', () => {
+  beforeEach(async () => {
+    // applyMerge() always calls getAllBlobs() (even with an empty blobs array), which
+    // throws unless Store.boot() has run — this file otherwise never boots the store,
+    // so without this these tests would silently depend on IDB state left behind by
+    // whichever other test file the shared vitest worker (isolate: false) happened to
+    // run beforehand. A fresh dbName per test keeps them isolated from each other too.
+    await boot({ dbName: `bottom-nav-slice-handoff-${sliceHandoffDbSeq++}`, initialState: {} });
+    setState('goals', {});
+    setState('lists', []);
+    vi.spyOn(syncModule, 'readImportFile').mockResolvedValue(new Uint8Array());
+  });
+
+  it('a plain full-backup file shows the generic Merge/Replace sheet', async () => {
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple', payload: { goals: {}, lists: [] }, blobs: [],
+    });
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    expect(el.shadowRoot.querySelector('#import-merge').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#import-replace').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#goal-landing').hidden).toBe(true);
+  });
+
+  it('a list-kind handoff hides Replace but keeps Merge', async () => {
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'list', lists: [{ id: 'l1', name: 'Groceries', items: [] }] },
+      blobs: [],
+    });
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    expect(el.shadowRoot.querySelector('#import-merge').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#import-replace').hidden).toBe(true);
+  });
+
+  it('a year-kind handoff hides Replace but keeps Merge, and merges via the generic goals path', async () => {
+    const yearGoals = { capstone: [{ id: 'c1', title: 'Shared goal', tags: [], percentage: 40 }], milestones: [], wow: [], focus: [] };
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'year', goals: { '2027': yearGoals } },
+      blobs: [],
+    });
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    expect(el.shadowRoot.querySelector('#import-merge').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#import-replace').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#goal-landing').hidden).toBe(true); // no picker needed — the year is already in the payload
+
+    el.shadowRoot.querySelector('#import-merge').click();
+    await vi.waitFor(() => {
+      expect(getState().goals['2027'].capstone).toHaveLength(1);
+      expect(getState().goals['2027'].capstone[0].title).toBe('Shared goal');
+    });
+  });
+
+  it('an item-kind handoff opens the list picker instead of the generic sheet', async () => {
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'item', item: { id: 'i1', title: 'Milk', status: 'open', tags: [], inGoals: [] } },
+      blobs: [],
+    });
+    const el = mount();
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    const modal  = el.shadowRoot.querySelector('#import-modal');
+    await el._openImportFile(fakeFile());
+    expect(picker.show).toHaveBeenCalledOnce();
+    expect(modal.show).not.toHaveBeenCalled();
+  });
+
+  it('picking an existing list for an item-kind handoff merges the item into it', async () => {
+    setState('lists', [{ id: 'L1', name: 'Existing', items: [] }]);
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'item', item: { id: 'i1', title: 'Milk', status: 'open', tags: [], inGoals: [] } },
+      blobs: [],
+    });
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    picker.dispatchEvent(new CustomEvent('list-pick', { detail: { targetListIds: ['L1'], newListName: null, copy: true } }));
+    await vi.waitFor(() => {
+      const list = getState().lists.find(l => l.id === 'L1');
+      expect(list.items).toHaveLength(1);
+      expect(list.items[0].title).toBe('Milk');
+      expect(list.items[0].id).not.toBe('i1'); // fresh id assigned on receipt
+    });
+  });
+
+  it('typing a new list name for an item-kind handoff creates the list', async () => {
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'item', item: { id: 'i1', title: 'Milk', status: 'open', tags: [], inGoals: [] } },
+      blobs: [],
+    });
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    picker.dispatchEvent(new CustomEvent('list-pick', { detail: { targetListIds: [], newListName: 'Fresh List', copy: true } }));
+    await vi.waitFor(() => {
+      const list = getState().lists.find(l => l.name === 'Fresh List');
+      expect(list).toBeTruthy();
+      expect(list.items[0].title).toBe('Milk');
+    });
+  });
+
+  it('an items-kind (bulk selection) handoff opens the list picker instead of the generic sheet', async () => {
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'items', items: [
+        { id: 'i1', title: 'Milk', status: 'open', tags: [], inGoals: [] },
+        { id: 'i2', title: 'Eggs', status: 'open', tags: [], inGoals: [] },
+      ] },
+      blobs: [],
+    });
+    const el = mount();
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    const modal  = el.shadowRoot.querySelector('#import-modal');
+    await el._openImportFile(fakeFile());
+    expect(picker.show).toHaveBeenCalledOnce();
+    expect(modal.show).not.toHaveBeenCalled();
+  });
+
+  it('picking an existing list for an items-kind handoff merges all items into it with fresh ids', async () => {
+    setState('lists', [{ id: 'L1', name: 'Existing', items: [] }]);
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'items', items: [
+        { id: 'i1', title: 'Milk', status: 'open', tags: [], inGoals: [] },
+        { id: 'i2', title: 'Eggs', status: 'open', tags: [], inGoals: [] },
+      ] },
+      blobs: [],
+    });
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    picker.dispatchEvent(new CustomEvent('list-pick', { detail: { targetListIds: ['L1'], newListName: null, copy: true } }));
+    await vi.waitFor(() => {
+      const list = getState().lists.find(l => l.id === 'L1');
+      expect(list.items).toHaveLength(2);
+      expect(list.items.map(i => i.title)).toEqual(['Milk', 'Eggs']);
+      expect(list.items.map(i => i.id)).not.toEqual(['i1', 'i2']); // fresh ids assigned on receipt
+    });
+  });
+
+  it('shows a pluralized confirmation toast when receiving multiple items', async () => {
+    _resetToast();
+    setState('lists', [{ id: 'L1', name: 'Existing', items: [] }]);
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'items', items: [
+        { id: 'i1', title: 'Milk', status: 'open', tags: [], inGoals: [] },
+        { id: 'i2', title: 'Eggs', status: 'open', tags: [], inGoals: [] },
+      ] },
+      blobs: [],
+    });
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    picker.dispatchEvent(new CustomEvent('list-pick', { detail: { targetListIds: ['L1'], newListName: null, copy: true } }));
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-success');
+      expect(toastEl?.textContent).toBe('Added 2 items.');
+    });
+  });
+
+  it('a goal-kind handoff shows the year/section landing view, hiding Merge/Replace', async () => {
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'goal', goal: { id: 'g1', title: 'Run a marathon', tags: [], percentage: 0 } },
+      blobs: [],
+    });
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    expect(el.shadowRoot.querySelector('#goal-landing').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#import-goal-confirm').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#import-merge').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#import-replace').hidden).toBe(true);
+    const yearSelect = el.shadowRoot.querySelector('#goal-landing-year-select');
+    expect([...yearSelect.options].some(o => o.value === String(new Date().getFullYear()))).toBe(true);
+  });
+
+  it('confirming the goal landing merges the goal into the chosen year and section', async () => {
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'goal', goal: { id: 'g1', title: 'Run a marathon', tags: [], percentage: 0 } },
+      blobs: [],
+    });
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    const yearSelect = el.shadowRoot.querySelector('#goal-landing-year-select');
+    const opt = document.createElement('option');
+    opt.value = '2027'; opt.textContent = '2027';
+    yearSelect.appendChild(opt);
+    yearSelect.value = '2027';
+    el.shadowRoot.querySelector('input[name="handoff-goal-section"][value="wow"]').checked = true;
+    el.shadowRoot.querySelector('#import-goal-confirm').click();
+    await vi.waitFor(() => {
+      const wow = getState().goals['2027']?.wow ?? [];
+      expect(wow).toHaveLength(1);
+      expect(wow[0].title).toBe('Run a marathon');
+      expect(wow[0].id).not.toBe('g1'); // fresh id assigned on receipt
+    });
+  });
+
+  it('shows an import-error message if merging the goal landing fails', async () => {
+    _resetToast();
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'goal', goal: { id: 'g1', title: 'Run a marathon', tags: [], percentage: 0 } },
+      blobs: [],
+    });
+    vi.spyOn(syncModule, 'applyMerge').mockRejectedValueOnce(new Error('boom'));
+    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    el.shadowRoot.querySelector('#import-goal-confirm').click();
+    await vi.waitFor(() => {
+      expect(el.shadowRoot.querySelector('#import-message').textContent).toBe('Invalid or incompatible export file.');
+      expect(el.shadowRoot.querySelector('#import-close').hidden).toBe(false);
+    });
+    expect(consoleErr).toHaveBeenCalled();
+  });
+
+  it('toasts an error if merging a picked item-handoff list fails', async () => {
+    _resetToast();
+    setState('lists', [{ id: 'L1', name: 'Existing', items: [] }]);
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'item', item: { id: 'i1', title: 'Milk', status: 'open', tags: [], inGoals: [] } },
+      blobs: [],
+    });
+    vi.spyOn(syncModule, 'applyMerge').mockRejectedValueOnce(new Error('boom'));
+    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    picker.dispatchEvent(new CustomEvent('list-pick', { detail: { targetListIds: ['L1'], newListName: null, copy: true } }));
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-error');
+      expect(toastEl).not.toBeNull();
+    });
+    expect(consoleErr).toHaveBeenCalled();
+  });
+
+  it('does nothing if the list picker reports no target lists and no new list name', async () => {
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'item', item: { id: 'i1', title: 'Milk', status: 'open', tags: [], inGoals: [] } },
+      blobs: [],
+    });
+    const applyMergeSpy = vi.spyOn(syncModule, 'applyMerge');
+    const el = mount();
+    await el._openImportFile(fakeFile());
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    picker.dispatchEvent(new CustomEvent('list-pick', { detail: { targetListIds: [], newListName: '', copy: true } }));
+    await new Promise(r => setTimeout(r, 0));
+    expect(applyMergeSpy).not.toHaveBeenCalled();
   });
 });

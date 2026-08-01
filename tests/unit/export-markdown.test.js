@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   exportGoalsMarkdown,
+  exportGoalMarkdown,
   exportListMarkdown,
   exportItemsMarkdown,
 } from '../../app/utils/export-markdown.js';
@@ -176,6 +177,54 @@ describe('goals, notes, metadata', () => {
     const out = exportGoalsMarkdown(GOALS_WITH_NOTES, YEAR, { notes: true, metadata: true });
     expect(out).toContain('[50%]');
     expect(out).not.toMatch(/\[50%\] - \(/);
+  });
+});
+
+// ── Single goal ───────────────────────────────────────────────────────────────
+
+describe('exportGoalMarkdown', () => {
+  const GOAL = { id: '1', title: 'Ship it', percentage: 60, tags: ['work'], dueDate: '2026-07-03' };
+  const GOAL_DONE = { id: '2', title: 'Done goal', percentage: 100, tags: [] };
+  const GOAL_WITH_NOTES = { id: '3', title: 'Ship it', percentage: 100, tags: ['work'], notes: 'Make it happen', dueDate: '2026-07-03' };
+
+  it('uses the goal title as the top-level heading', () => {
+    const out = exportGoalMarkdown(GOAL, {});
+    expect(out.split('\n')[0]).toBe('# Ship it');
+  });
+
+  it('no notes, no metadata: heading plus a plain bullet line', () => {
+    const out = exportGoalMarkdown(GOAL, {});
+    expect(out).toBe('# Ship it\n\n- Ship it');
+  });
+
+  it('marks a completed goal with a checkmark on the heading and bullet', () => {
+    const out = exportGoalMarkdown(GOAL_DONE, {});
+    expect(out).toContain('# ✅ Done goal');
+    expect(out).toContain('- ✅ Done goal');
+  });
+
+  it('metadata adds percentage, tags, and due date to the bullet line', () => {
+    const out = exportGoalMarkdown(GOAL, { metadata: true });
+    expect(out).toContain('- [60%] Ship it (work) Due: 2026.07.03');
+  });
+
+  it('notes mode includes the notes body between --- separators', () => {
+    const out = exportGoalMarkdown(GOAL_WITH_NOTES, { notes: true });
+    expect(out).toBe('# ✅ Ship it\n---\n\nMake it happen\n\n---');
+  });
+
+  it('notes + metadata includes both the metadata line and the notes body', () => {
+    const out = exportGoalMarkdown(GOAL_WITH_NOTES, { notes: true, metadata: true });
+    expect(out).toContain('[100%] - (work) - Due: 2026.07.03');
+    expect(out).toContain('Make it happen');
+    // Only one checkmark — in the heading, not duplicated in the metadata line
+    const metaLine = out.split('\n').find(l => l.startsWith('[100%]'));
+    expect(metaLine).not.toContain('✅');
+  });
+
+  it('notes mode with no notes and no metadata has no closing --- (no body)', () => {
+    const out = exportGoalMarkdown({ ...GOAL, notes: undefined }, { notes: true });
+    expect(out).toBe('# Ship it\n---');
   });
 });
 

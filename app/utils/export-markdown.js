@@ -75,6 +75,35 @@ export function exportGoalsMarkdown(yearGoals, year, { metadata = false, notes =
   return lines.join('\n');
 }
 
+// Single-goal export (mirrors exportItemsMarkdown's single-item shape: the goal's
+// own title becomes the top-level heading, since there's no container title like
+// a list name to use instead).
+export function exportGoalMarkdown(goal, { metadata = false, notes = false } = {}) {
+  const done    = goal.percentage === 100;
+  const prefix  = done ? '✅ ' : '';
+  const heading = `# ${prefix}${goal.title}`;
+
+  if (!notes) {
+    return [heading, '', _goalListLine(goal, metadata)].join('\n');
+  }
+
+  const lines = [heading, '---'];
+  let hasBody = false;
+
+  if (metadata) {
+    const pct  = `[${goal.percentage}%]`;
+    const tags = _tags(goal.tags);
+    const due  = goal.dueDate ? `Due: ${_formatDate(goal.dueDate)}` : null;
+    const parts = [tags, due].filter(Boolean);
+    lines.push('', `${pct}${parts.length ? ` - ${parts.join(' - ')}` : ''}`);
+    hasBody = true;
+  }
+
+  if (goal.notes) { lines.push('', goal.notes); hasBody = true; }
+  if (hasBody) lines.push('', '---');
+  return lines.join('\n');
+}
+
 // ── Lists ─────────────────────────────────────────────────────────────────────
 
 function _itemListLine(item, metadata) {

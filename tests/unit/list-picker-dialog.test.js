@@ -450,3 +450,31 @@ describe('list-picker-dialog — mode prop', () => {
     expect(el.shadowRoot.querySelector('#copy-btn').hidden).toBe(false);
   });
 });
+
+describe('list-picker-dialog — heading override', () => {
+  it('uses the default "Move to list" heading when unset', () => {
+    const el = mount();
+    el.lists = [LIST_A];
+    el.show();
+    expect(el.shadowRoot.querySelector('.heading').textContent).toBe('Move to list');
+  });
+
+  it('uses a custom heading when set', () => {
+    const el = mount();
+    el.lists = [LIST_A];
+    el.heading = 'Add to list';
+    el.show();
+    expect(el.shadowRoot.querySelector('.heading').textContent).toBe('Add to list');
+    expect(el.shadowRoot.querySelector('#modal').getAttribute('aria-label')).toBe('Add to list');
+  });
+
+  it('reverts to the default heading on the next show() when the override is cleared', () => {
+    const el = mount();
+    el.lists = [LIST_A];
+    el.heading = 'Add to list';
+    el.show();
+    el.heading = null;
+    el.show();
+    expect(el.shadowRoot.querySelector('.heading').textContent).toBe('Move to list');
+  });
+});

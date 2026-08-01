@@ -1114,3 +1114,51 @@ describe('goal-dialog — tag chip aria-labels', () => {
   });
 });
 
+describe('goal-dialog — share markdown', () => {
+  const goal = { id: '1', title: 'Run a 5k', notes: 'My desc', tags: [], percentage: 40 };
+
+  it('dispatches goal-export-request with the current goal on Share Markdown', () => {
+    const el = mount();
+    el.open(goal);
+    const events = [];
+    el.addEventListener('goal-export-request', e => events.push(e));
+    el.shadowRoot.querySelector('#action-export-btn').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.goal).toEqual(goal);
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
+  });
+
+  it('closes the action sheet and the modal on Share Markdown', () => {
+    const el = mount();
+    el.open(goal);
+    el.shadowRoot.querySelector('#action-export-btn').click();
+    expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
+    expect(el.shadowRoot.querySelector('#modal').close).toHaveBeenCalled();
+  });
+});
+
+describe('goal-dialog — share goal', () => {
+  const goal = { id: '1', title: 'Run a 5k', notes: 'My desc', tags: [], percentage: 40 };
+
+  it('dispatches goal-share-request with the current goal on Share', () => {
+    const el = mount();
+    el.open(goal);
+    const events = [];
+    el.addEventListener('goal-share-request', e => events.push(e));
+    el.shadowRoot.querySelector('#action-share-btn').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.goal).toEqual(goal);
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
+  });
+
+  it('closes the action sheet and the modal on Share', () => {
+    const el = mount();
+    el.open(goal);
+    el.shadowRoot.querySelector('#action-share-btn').click();
+    expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
+    expect(el.shadowRoot.querySelector('#modal').close).toHaveBeenCalled();
+  });
+});
+

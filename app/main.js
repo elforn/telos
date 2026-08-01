@@ -5,6 +5,7 @@ import './locales/fr.js';
 import './locales/ca.js';
 import './init-locale.js';
 import { boot } from '../_lib/core/store/store.js';
+import { readShareInbox } from '../_lib/core/share-inbox.js';
 import '../_lib/core/router/app-router.js';
 import '../_lib/core/sw-manager/sw-manager.js';
 import '../_lib/core/components/update-banner/update-banner.js';
@@ -37,6 +38,16 @@ if ('launchQueue' in window) {
     }
   });
 }
+
+// A share-target POST (see manifest.json's share_target + Socle's share-inbox
+// primitive) lands here as a pending inbox entry, consumed at most once. Treat
+// a shared file exactly like an opened/launched one — same event, same existing
+// routing in bottom-nav.js, which already reads both the plain-text envelope
+// shareHandoff() writes and the ZIP format exportData() writes.
+readShareInbox().then(share => {
+  if (!share?.files?.length) return;
+  window.dispatchEvent(new CustomEvent('telos-import-file', { detail: { file: share.files[0].blob } }));
+}).catch(err => console.error('Failed to read share inbox:', err));
 
 const swm = document.createElement('sw-manager');
 swm.setAttribute('base-path', BASE_PATH);

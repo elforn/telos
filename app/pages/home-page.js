@@ -10,11 +10,14 @@ import '../components/year-header/year-header.js';
 import '../components/goal-item/goal-item.js';
 import '../components/goal-dialog/goal-dialog.js';
 import '../components/add-row/add-row.js';
-import { exportGoalsMarkdown } from '../utils/export-markdown.js';
+import '../components/export-sheet/export-sheet.js';
+import { exportGoalsMarkdown, exportGoalMarkdown } from '../utils/export-markdown.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
 import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
 import { DATE_FILTER_KEYS, matchesDateBucket } from '../utils/urgency.js';
+import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
+import { shareMarkdown } from '../utils/share-markdown.js';
 
 class HomePage extends AppElement {
   template() {
@@ -414,6 +417,7 @@ class HomePage extends AppElement {
       </main>
 
       <goal-dialog id="dialog"></goal-dialog>
+      <export-sheet id="goal-export-sheet"></export-sheet>
     `;
   }
 
@@ -709,11 +713,16 @@ class HomePage extends AppElement {
 
     // ── Year export ───────────────────────────────────────────────────────────
 
-    this._onYearExportConfirm = e => {
+    this._onYearExportConfirm = async e => {
       const { metadata, notes } = e.detail;
       const md = exportGoalsMarkdown(this._yearGoals(), this._year, { metadata, notes });
-      navigator.clipboard.writeText(md).catch(() => {});
-      toast(t('export.copied'), 'success');
+      try {
+        const result = await shareMarkdown(md, `Telos — ${this._year}`);
+        if (result === 'copied') toast(t('export.copied'), 'success');
+      } catch (err) {
+        console.error('Export year failed:', err);
+        toast(t('share.error'), 'error');
+      }
     };
     this.listen(this.shadowRoot, 'year-export-confirm', this._onYearExportConfirm);
 
@@ -883,6 +892,48 @@ class HomePage extends AppElement {
       );
     };
     this.listen(this._dialog, 'goal-create-item', this._onGoalCreateItem);
+
+    this._onGoalShareRequest = async e => {
+      try {
+        await shareHandoff(buildGoalHandoff(e.detail.goal), e.detail.goal.title);
+      } catch (err) {
+        console.error('Share goal failed:', err);
+        toast(t('share.error'), 'error');
+      }
+    };
+    this.listen(this._dialog, 'goal-share-request', this._onGoalShareRequest);
+
+    this._goalExportSheet = this.shadowRoot.querySelector('#goal-export-sheet');
+
+    this._onGoalExportRequest = e => {
+      this._exportGoal = e.detail.goal;
+      this._goalExportSheet.show();
+    };
+    this.listen(this._dialog, 'goal-export-request', this._onGoalExportRequest);
+
+    this._onGoalExportConfirm = async e => {
+      if (!this._exportGoal) return;
+      const { metadata, notes } = e.detail;
+      const md = exportGoalMarkdown(this._exportGoal, { metadata, notes });
+      try {
+        const result = await shareMarkdown(md, this._exportGoal.title);
+        if (result === 'copied') toast(t('export.copied'), 'success');
+      } catch (err) {
+        console.error('Export goal failed:', err);
+        toast(t('share.error'), 'error');
+      }
+    };
+    this.listen(this._goalExportSheet, 'extract-confirm', this._onGoalExportConfirm);
+
+    this._onYearShareRequest = async () => {
+      try {
+        await shareHandoff(buildYearHandoff(this._year, this._yearGoals()), String(this._year));
+      } catch (err) {
+        console.error('Share year failed:', err);
+        toast(t('share.error'), 'error');
+      }
+    };
+    this.listen(this.shadowRoot, 'year-share-request', this._onYearShareRequest);
   }
 
   unsubscribe() {

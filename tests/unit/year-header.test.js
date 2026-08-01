@@ -75,6 +75,23 @@ describe('year-header — menu', () => {
     const el = mount();
     expect(el.shadowRoot.querySelector('#year-export-btn')).not.toBeNull();
   });
+
+  it('renders a Share year button in the menu', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#year-share-btn')).not.toBeNull();
+  });
+
+  it('dispatches year-share-request and closes the menu when Share year is clicked', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    const events = [];
+    el.addEventListener('year-share-request', e => events.push(e));
+    el.shadowRoot.querySelector('#year-share-btn').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
+    expect(nativeDialog(el.shadowRoot.querySelector('#menu')).open).toBe(false);
+  });
 });
 
 describe('year-header — year navigation', () => {

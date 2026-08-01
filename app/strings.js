@@ -70,6 +70,8 @@ defineStrings({
   'goal-dialog.unarchive':               'Unarchive',
   'goal-dialog.move-to-year':            'Move to year',
   'goal-dialog.create-list-item':        'Create list item',
+  'goal-dialog.extract-markdown':        'Share Markdown',
+  'goal-dialog.share-goal':              'Share to Telos',
   'goal-dialog.move-year-label':         'Year',
   'goal-dialog.move-section-label':      'Section',
   'goal-dialog.move-section-capstone':   'Capstone',
@@ -105,7 +107,8 @@ defineStrings({
   'year-header.theme-light':  'Light',
   'year-header.theme-dark':   'Dark',
   'year-header.theme-system': 'System',
-  'year-header.extract-markdown': 'Extract Markdown',
+  'year-header.extract-markdown': 'Share Markdown',
+  'year-header.share-year':       'Share to Telos',
 
   'not-found.heading': 'Nothing here',
   'not-found.body':    "This page doesn't exist — but your goals are waiting.",
@@ -132,6 +135,15 @@ defineStrings({
   'sync.import-replace-confirm': 'All data replaced.',
   'sync.import-close':           'Close',
   'sync.import-error':           'Invalid or incompatible export file.',
+  'sync.handoff-goal-year-label':    'Year',
+  'sync.handoff-goal-section-label': 'Section',
+  'sync.handoff-goal-message':       '"{title}" was shared with you. Choose where to add it:',
+  'sync.handoff-goal-confirm':       'Added "{title}".',
+  'sync.handoff-item-confirm':       'Added "{title}".',
+  'sync.handoff-items-confirm':      'Added {count} items.',
+  'sync.handoff-add-to-list':        'Add to list',
+
+  'share.error': "Couldn't share. Try again.",
 
   'lists-page.heading':   'Lists',
   'lists-page.add':       'New list',
@@ -157,8 +169,10 @@ defineStrings({
   'list-detail.bulk-status-label':  'Set Status',
   'list-detail.bulk-tags-label':    'Add Tags',
   'list-detail.bulk-tag-apply-all': 'Apply {tag} to all',
-  'list-detail.extract-markdown':      'Extract Markdown',
-  'list-detail.bulk-extract-markdown': 'Extract Markdown',
+  'list-detail.extract-markdown':      'Share Markdown',
+  'list-detail.share-list':            'Share to Telos',
+  'list-detail.bulk-extract-markdown': 'Share Markdown',
+  'list-detail.bulk-share':            'Share to Telos',
   'list-detail.bulk-delete-toast':  'Deleted {n} items',
   'list-detail.bulk-status-toast':  'Updated {n} items',
 
@@ -197,7 +211,8 @@ defineStrings({
 
   'item-dialog.move-to-list':           'Move to list',
   'item-dialog.add-to-goal':            'Add to goal',
-  'item-dialog.extract-markdown':       'Extract Markdown',
+  'item-dialog.extract-markdown':       'Share Markdown',
+  'item-dialog.share-item':             'Share to Telos',
   'item-dialog.picker-back':            'Back',
   'item-dialog.move-cta':               'Move',
   'item-dialog.copy-cta':               'Copy',
@@ -294,7 +309,7 @@ defineStrings({
 
   'export-sheet.metadata': 'Metadata',
   'export-sheet.notes':    'Notes',
-  'export-sheet.extract':  'Extract Markdown',
+  'export-sheet.extract':  'Share Markdown',
   'export.copied':         'Copied to clipboard',
 
   'undo.button':  'Undo',

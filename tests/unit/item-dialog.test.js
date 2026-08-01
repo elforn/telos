@@ -51,6 +51,11 @@ function openGoalPromoter(el) {
   el.shadowRoot.querySelector('#action-promote-btn').click();
 }
 
+function shareItem(el) {
+  el.shadowRoot.querySelector('#menu-btn').click();
+  el.shadowRoot.querySelector('#action-share-btn').click();
+}
+
 afterEach(() => { document.body.innerHTML = ''; localStorage.clear(); vi.restoreAllMocks(); });
 
 // ── open() ────────────────────────────────────────────────────────────────────
@@ -1317,5 +1322,27 @@ describe('item-dialog — add to goal', () => {
     el.shadowRoot.querySelector('#add-to-goal-cta').click();
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
+  });
+});
+
+describe('item-dialog — share item', () => {
+  it('dispatches item-share-request with the current item on Share', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-share-request', e => events.push(e));
+    shareItem(el);
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.item).toEqual(ITEM);
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
+  });
+
+  it('closes the action sheet and the modal on Share', () => {
+    const el = mount();
+    el.open(ITEM);
+    shareItem(el);
+    expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
+    expect(el.shadowRoot.querySelector('#modal').close).toHaveBeenCalled();
   });
 });
