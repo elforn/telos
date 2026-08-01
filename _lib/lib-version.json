@@ -8,7 +8,8 @@
     "app-header",
     "modal-dialog",
     "toast",
-    "reorder"
+    "reorder",
+    "filter-state"
   ],
   "store": "simple",
   "scaffolded": "2026-06-06"

@@ -12,6 +12,17 @@ import '../../_lib/modules/modal-dialog/modal-dialog.js';
 import { COLOR_PALETTE } from '../components/lists-page-item/lists-page-item.js';
 import { icons } from '../icons.js';
 import { DATE_FILTER_KEYS, matchesDateBucket } from '../utils/urgency.js';
+import { FilterState } from '../../_lib/modules/filter-state/filter-state.js';
+
+const FILTER_SHAPE = {
+  query:          { kind: 'string' },
+  emptyFilter:    { kind: 'enum', values: [null, 'empty', 'not-empty'] },
+  dates:          { kind: 'set' },
+  panelExpanded:  { kind: 'boolean' },
+  barExpanded:    { kind: 'boolean' },
+};
+
+const listsFilterState = FilterState('telos:filter:lists', FILTER_SHAPE);
 
 class ListsPage extends AppElement {
   template() {
@@ -671,31 +682,23 @@ class ListsPage extends AppElement {
   // ── Filter helpers ────────────────────────────────────────────────────────
 
   _loadFilter() {
-    try {
-      const raw = localStorage.getItem('telos:filter:lists');
-      if (raw) {
-        const { query = '', emptyFilter = null, dates = [], barExpanded = false, panelExpanded = false } = JSON.parse(raw);
-        this._filter = { query, emptyFilter, dates: new Set(dates) };
-        this._barExpanded = barExpanded;
-        this._panelExpanded = panelExpanded;
-      }
-    } catch { /* ignore */ }
+    const { query, emptyFilter, dates, panelExpanded, barExpanded } = listsFilterState.load();
+    this._filter = { query, emptyFilter, dates };
+    this._barExpanded = barExpanded;
+    this._panelExpanded = panelExpanded;
   }
 
   _saveFilter() {
-    if (this._filter.query || this._filter.emptyFilter || this._filter.dates.size || this._barExpanded || this._panelExpanded) {
-      localStorage.setItem('telos:filter:lists', JSON.stringify({
-        query: this._filter.query, emptyFilter: this._filter.emptyFilter, dates: [...this._filter.dates],
-        barExpanded: this._barExpanded, panelExpanded: this._panelExpanded,
-      }));
-    } else {
-      localStorage.removeItem('telos:filter:lists');
-    }
+    listsFilterState.save({ ...this._filter, panelExpanded: this._panelExpanded, barExpanded: this._barExpanded });
+  }
+
+  _isFilterActive() {
+    return listsFilterState.isActive({ ...this._filter, panelExpanded: this._panelExpanded, barExpanded: this._barExpanded });
   }
 
   _syncFilterUI() {
     if (this._filterSearch) this._filterSearch.value = this._filter.query;
-    const active = !!(this._filter.query || this._filter.emptyFilter || this._filter.dates.size);
+    const active = this._isFilterActive();
     if (this._filterBtnDot) this._filterBtnDot.hidden = !active;
     this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
 

@@ -6,6 +6,8 @@ import { syncChildren } from '../../_lib/core/dom/sync-children.js';
 import { Reorder } from '../../_lib/modules/reorder/reorder.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
+import { withUndo } from '../../_lib/modules/toast/undo.js';
+import { FilterState } from '../../_lib/modules/filter-state/filter-state.js';
 import '../components/list-item/list-item.js';
 import '../components/item-dialog/item-dialog.js';
 import '../components/list-dialog/list-dialog.js';
@@ -28,6 +30,15 @@ const EXPORT_MODE_LIST      = 'list';
 const EXPORT_MODE_SELECTION = 'selection';
 const EXPORT_MODE_ITEM      = 'item';
 const IMPORT_SNAPSHOT_KEY   = 'telos:snapshot.import-text';
+
+const FILTER_SHAPE = {
+  query:          { kind: 'string' },
+  statuses:       { kind: 'set' },
+  dates:          { kind: 'set' },
+  tags:           { kind: 'set' },
+  panelExpanded:  { kind: 'boolean' },
+  barExpanded:    { kind: 'boolean' },
+};
 
 class ListDetailPage extends AppElement {
   template() {
@@ -1045,9 +1056,13 @@ class ListDetailPage extends AppElement {
     this.listen(this._itemList, 'item-tap', this._onItemTap);
 
     this._onItemDelete = e => {
-      const snapshot = getState().lists;
-      this._deleteItem(e.detail.item.id);
-      toast(t('lists.toast-item-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
+      withUndo({
+        getSnapshot: () => getState().lists,
+        apply:       () => this._deleteItem(e.detail.item.id),
+        restore:     snapshot => setState('lists', snapshot),
+        message:     t('lists.toast-item-deleted'),
+        undoLabel:   t('undo.button'),
+      });
     };
     this.listen(this._itemList, 'item-delete', this._onItemDelete);
 
@@ -1110,10 +1125,16 @@ class ListDetailPage extends AppElement {
 
     this._onDialogDelete = () => {
       if (this._editingItem) {
-        const snapshot = getState().lists;
-        this._itemEditSnapshot = null; // suppress item-closed undo toast — delete has its own
-        this._deleteItem(this._editingItem.id);
-        toast(t('lists.toast-item-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
+        withUndo({
+          getSnapshot: () => getState().lists,
+          apply:       () => {
+            this._itemEditSnapshot = null; // suppress item-closed undo toast — delete has its own
+            this._deleteItem(this._editingItem.id);
+          },
+          restore:     snapshot => setState('lists', snapshot),
+          message:     t('lists.toast-item-deleted'),
+          undoLabel:   t('undo.button'),
+        });
       }
     };
     this.listen(this._dialog, 'item-delete', this._onDialogDelete);
@@ -1268,10 +1289,16 @@ class ListDetailPage extends AppElement {
 
     this._onBulkDelete = () => {
       const ids = [...this._selectedIds];
-      const snapshot = getState().lists;
-      this._mutateItems(items => items.filter(i => !ids.includes(i.id)));
-      this._exitSelectionMode();
-      toast(t('list-detail.bulk-delete-toast', { n: ids.length }), 'info', { action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) } });
+      withUndo({
+        getSnapshot: () => getState().lists,
+        apply:       () => {
+          this._mutateItems(items => items.filter(i => !ids.includes(i.id)));
+          this._exitSelectionMode();
+        },
+        restore:     snapshot => setState('lists', snapshot),
+        message:     t('list-detail.bulk-delete-toast', { n: ids.length }),
+        undoLabel:   t('undo.button'),
+      });
     };
     this.listen(this.shadowRoot.querySelector('#bulk-delete-btn'), 'click', this._onBulkDelete);
 
@@ -1552,6 +1579,7 @@ class ListDetailPage extends AppElement {
     this._filterExpandBtn = this.shadowRoot.querySelector('#filter-expand-btn');
     this._filterBtnEl     = this.shadowRoot.querySelector('#filter-btn');
 
+    this._filterState = FilterState(`telos:filter:list:${this._listId}`, FILTER_SHAPE);
     this._filter = { query: '', statuses: new Set(), dates: new Set(), tags: new Set() };
     this._panelExpanded = false;
     this._barExpanded = false;
@@ -1821,30 +1849,18 @@ class ListDetailPage extends AppElement {
   // ── Filter helpers ────────────────────────────────────────────────────────
 
   _loadFilter() {
-    try {
-      const raw = localStorage.getItem(`telos:filter:list:${this._listId}`);
-      if (raw) {
-        const { query = '', statuses = [], dates = [], tags = [], panelExpanded = false, barExpanded = false } = JSON.parse(raw);
-        this._filter = { query, statuses: new Set(statuses), dates: new Set(dates), tags: new Set(tags) };
-        this._panelExpanded = panelExpanded;
-        this._barExpanded = barExpanded;
-      }
-    } catch { /* ignore */ }
+    const { query, statuses, dates, tags, panelExpanded, barExpanded } = this._filterState.load();
+    this._filter = { query, statuses, dates, tags };
+    this._panelExpanded = panelExpanded;
+    this._barExpanded = barExpanded;
   }
 
   _saveFilter() {
-    const { query, statuses, dates, tags } = this._filter;
-    if (query || statuses.size || dates.size || tags.size || this._barExpanded || this._panelExpanded) {
-      localStorage.setItem(`telos:filter:list:${this._listId}`,
-        JSON.stringify({ query, statuses: [...statuses], dates: [...dates], tags: [...tags], panelExpanded: this._panelExpanded, barExpanded: this._barExpanded }));
-    } else {
-      localStorage.removeItem(`telos:filter:list:${this._listId}`);
-    }
+    this._filterState.save({ ...this._filter, panelExpanded: this._panelExpanded, barExpanded: this._barExpanded });
   }
 
   _isFilterActive() {
-    const { query, statuses, dates, tags } = this._filter;
-    return !!(query || statuses.size || dates.size || tags.size);
+    return this._filterState.isActive({ ...this._filter, panelExpanded: this._panelExpanded, barExpanded: this._barExpanded });
   }
 
   _syncFilterUI() {

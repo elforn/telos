@@ -3,7 +3,7 @@
 A yearly goal planner
 
 Scaffolded from Socle 0.2.5 on 2026-06-06. Now on 0.15.3.
-Installed modules: core, gestures, sync, images, app-header, modal-dialog, toast, reorder
+Installed modules: core, gestures, sync, images, app-header, modal-dialog, toast, reorder, filter-state
 
 ---
 

@@ -6,6 +6,8 @@ import { syncChildren } from '../../_lib/core/dom/sync-children.js';
 import { Reorder } from '../../_lib/modules/reorder/reorder.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
+import { withUndo } from '../../_lib/modules/toast/undo.js';
+import { FilterState } from '../../_lib/modules/filter-state/filter-state.js';
 import '../components/year-header/year-header.js';
 import '../components/goal-item/goal-item.js';
 import '../components/goal-dialog/goal-dialog.js';
@@ -18,6 +20,15 @@ import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
 import { DATE_FILTER_KEYS, matchesDateBucket } from '../utils/urgency.js';
 import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
 import { shareMarkdown } from '../utils/share-markdown.js';
+
+const FILTER_SHAPE = {
+  query:          { kind: 'string' },
+  states:         { kind: 'set' },
+  dates:          { kind: 'set' },
+  tags:           { kind: 'set' },
+  panelExpanded:  { kind: 'boolean' },
+  barExpanded:    { kind: 'boolean' },
+};
 
 class HomePage extends AppElement {
   template() {
@@ -458,6 +469,7 @@ class HomePage extends AppElement {
     this._filterLive     = this.shadowRoot.querySelector('#filter-live');
     this._filterExpandBtn = this.shadowRoot.querySelector('#filter-expand-btn');
 
+    this._filterState = FilterState(`telos:filter:goals:${this._year}`, FILTER_SHAPE);
     this._filter = { query: '', states: new Set(), dates: new Set(), tags: new Set() };
     this._panelExpanded = false;
     this._barExpanded = false;
@@ -812,9 +824,13 @@ class HomePage extends AppElement {
 
     this._onDialogDelete = () => {
       if (this._editingGoal) {
-        const snapshot = getState().goals;
-        this._deleteGoal(this._editingSection, this._editingGoal.id);
-        toast(t('home.toast-goal-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
+        withUndo({
+          getSnapshot: () => getState().goals,
+          apply:       () => this._deleteGoal(this._editingSection, this._editingGoal.id),
+          restore:     snapshot => setState('goals', snapshot),
+          message:     t('home.toast-goal-deleted'),
+          undoLabel:   t('undo.button'),
+        });
       }
     };
     this.listen(this._dialog, 'goal-delete', this._onDialogDelete);
@@ -997,9 +1013,13 @@ class HomePage extends AppElement {
   }
 
   _deleteGoalWithUndo(section, id) {
-    const snapshot = getState().goals;
-    this._deleteGoal(section, id);
-    toast(t('home.toast-goal-deleted'), 'info', { action: { label: t('undo.button'), onClick: () => setState('goals', snapshot) } });
+    withUndo({
+      getSnapshot: () => getState().goals,
+      apply:       () => this._deleteGoal(section, id),
+      restore:     snapshot => setState('goals', snapshot),
+      message:     t('home.toast-goal-deleted'),
+      undoLabel:   t('undo.button'),
+    });
   }
 
   // ── Filter helpers ────────────────────────────────────────────────────────
@@ -1009,30 +1029,18 @@ class HomePage extends AppElement {
   // nothing to hook this removal to.
 
   _loadFilter() {
-    try {
-      const raw = localStorage.getItem(`telos:filter:goals:${this._year}`);
-      if (raw) {
-        const { query = '', states = [], dates = [], tags = [], panelExpanded = false, barExpanded = false } = JSON.parse(raw);
-        this._filter = { query, states: new Set(states), dates: new Set(dates), tags: new Set(tags) };
-        this._panelExpanded = panelExpanded;
-        this._barExpanded = barExpanded;
-      }
-    } catch { /* ignore */ }
+    const { query, states, dates, tags, panelExpanded, barExpanded } = this._filterState.load();
+    this._filter = { query, states, dates, tags };
+    this._panelExpanded = panelExpanded;
+    this._barExpanded = barExpanded;
   }
 
   _saveFilter() {
-    const { query, states, dates, tags } = this._filter;
-    if (query || states.size || dates.size || tags.size || this._barExpanded || this._panelExpanded) {
-      localStorage.setItem(`telos:filter:goals:${this._year}`,
-        JSON.stringify({ query, states: [...states], dates: [...dates], tags: [...tags], panelExpanded: this._panelExpanded, barExpanded: this._barExpanded }));
-    } else {
-      localStorage.removeItem(`telos:filter:goals:${this._year}`);
-    }
+    this._filterState.save({ ...this._filter, panelExpanded: this._panelExpanded, barExpanded: this._barExpanded });
   }
 
   _isFilterActive() {
-    const { query, states, dates, tags } = this._filter;
-    return !!(query || states.size || dates.size || tags.size);
+    return this._filterState.isActive({ ...this._filter, panelExpanded: this._panelExpanded, barExpanded: this._barExpanded });
   }
 
   _syncFilterUI() {
