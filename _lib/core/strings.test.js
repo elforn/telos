@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { defineStrings, setLocale, getLocale, t, reset } from './strings.js';
 
 const _ls = (() => {
@@ -14,6 +14,10 @@ const _ls = (() => {
 beforeEach(() => {
   vi.stubGlobal('localStorage', _ls);
   _ls.clear();
+  reset();
+});
+
+afterEach(() => {
   reset();
 });
 
