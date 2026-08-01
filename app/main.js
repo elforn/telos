@@ -10,6 +10,7 @@ import '../_lib/core/router/app-router.js';
 import '../_lib/core/sw-manager/sw-manager.js';
 import '../_lib/core/components/update-banner/update-banner.js';
 import { backupBeforeRepair } from './utils/backup-before-repair.js';
+import { combineSharedText } from './utils/combine-shared-text.js';
 import './pages/year-redirect.js';
 import './pages/home-page.js';
 import './pages/not-found-page.js';
@@ -44,9 +45,19 @@ if ('launchQueue' in window) {
 // a shared file exactly like an opened/launched one — same event, same existing
 // routing in bottom-nav.js, which already reads both the plain-text envelope
 // shareHandoff() writes and the ZIP format exportData() writes.
+//
+// A share with no files (text/URL shared from another app, not a .telos
+// handoff) lands as raw title/text/url fields instead — combine them into one
+// string and route it to bottom-nav's list-independent import-text-dialog,
+// same event pattern as the file case.
 readShareInbox().then(share => {
-  if (!share?.files?.length) return;
-  window.dispatchEvent(new CustomEvent('telos-import-file', { detail: { file: share.files[0].blob } }));
+  if (!share) return;
+  if (share.files?.length) {
+    window.dispatchEvent(new CustomEvent('telos-import-file', { detail: { file: share.files[0].blob } }));
+    return;
+  }
+  const text = combineSharedText(share);
+  if (text) window.dispatchEvent(new CustomEvent('telos-share-text', { detail: { text } }));
 }).catch(err => console.error('Failed to read share inbox:', err));
 
 const swm = document.createElement('sw-manager');

@@ -652,4 +652,83 @@ test.describe('Sync — share target', () => {
     );
     expect(reopened).toBe(false);
   });
+
+  test('POSTing shared title/text/url (no file) lands as pre-filled import-text-dialog, and creates a new list on confirm', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    // Posting via an in-page fetch (not Playwright's own request API) so the
+    // request actually goes through the registered service worker's fetch
+    // handler — same reasoning as the file-based share-target test above.
+    await page.evaluate(async () => {
+      const fd = new FormData();
+      fd.append('title', 'Cool article');
+      fd.append('url', 'https://example.com/cool');
+      await fetch('/share-target', { method: 'POST', body: fd });
+    });
+
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    await page.waitForFunction(() =>
+      document.querySelector('bottom-nav')?.shadowRoot
+        ?.querySelector('#share-text-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog')?.open
+    );
+
+    const textareaValue = await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot
+        .querySelector('#share-text-dialog').shadowRoot
+        .querySelector('#textarea').value
+    );
+    expect(textareaValue).toBe('Cool article\n  https://example.com/cool');
+
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot
+        .querySelector('#share-text-dialog').shadowRoot
+        .querySelector('#cta-btn').click()
+    );
+
+    await page.waitForFunction(() =>
+      document.querySelector('bottom-nav')?.shadowRoot
+        ?.querySelector('#handoff-list-picker')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog')?.open
+    );
+
+    await page.evaluate(() => {
+      const sr = document.querySelector('bottom-nav').shadowRoot
+        .querySelector('#handoff-list-picker').shadowRoot;
+      sr.querySelector('#new-list-btn').click();
+      const input = sr.querySelector('#new-list-input');
+      input.value = 'From share';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      sr.querySelector('#copy-btn').click();
+    });
+
+    await page.waitForFunction(() => document.querySelector('#toast-container .socle-toast-msg'));
+
+    // Reloading again must not re-show the same share — readShareInbox() consumes it once.
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    const reopened = await page.evaluate(() =>
+      document.querySelector('bottom-nav')?.shadowRoot
+        ?.querySelector('#share-text-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog')?.open ?? false
+    );
+    expect(reopened).toBe(false);
+
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#pill-lists').click()
+    );
+    await waitForListsPage(page);
+    const listNames = await page.evaluate(() =>
+      [...document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelectorAll('lists-page-item')].map(el => el._list?.name)
+    );
+    expect(listNames).toContain('From share');
+  });
 });

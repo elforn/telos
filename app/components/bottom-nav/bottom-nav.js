@@ -12,6 +12,7 @@ import { mergeStrategy } from '../../utils/merge-strategy.js';
 import { backupBeforeRepair, LAST_EXPORT_KEY } from '../../utils/backup-before-repair.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
+import '../import-text-dialog/import-text-dialog.js';
 
 const GOAL_SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
 
@@ -501,6 +502,8 @@ class BottomNav extends AppElement {
 
       <list-picker-dialog id="handoff-list-picker"></list-picker-dialog>
 
+      <import-text-dialog id="share-text-dialog"></import-text-dialog>
+
       <input type="file" id="import-input" accept=".telos,.json,.txt,application/zip,text/plain" hidden>
     `;
   }
@@ -672,6 +675,8 @@ class BottomNav extends AppElement {
     this._goalYearSelect   = this.shadowRoot.querySelector('#goal-landing-year-select');
     this._goalConfirmBtn   = this.shadowRoot.querySelector('#import-goal-confirm');
     this._handoffListPicker = this.shadowRoot.querySelector('#handoff-list-picker');
+    this._shareTextDialog   = this.shadowRoot.querySelector('#share-text-dialog');
+    this._shareTextDialog.draftKey = 'share-target';
 
     this._onImportInput = async e => {
       const file = e.target.files?.[0];
@@ -759,11 +764,26 @@ class BottomNav extends AppElement {
     this._goalConfirmBtn.addEventListener('click', this._onGoalLandingConfirm);
 
     this._onHandoffListPick = async e => {
-      const items = this._pendingHandoffItems;
-      this._pendingHandoffItems = null;
+      const handoffItems = this._pendingHandoffItems;
+      const shareItems   = this._pendingShareTextItems;
+      this._pendingHandoffItems   = null;
+      this._pendingShareTextItems = null;
+
+      const items = handoffItems ?? shareItems;
       if (!items?.length) return;
+      // A real handoff item already carries the full ListItem shape (status/tags/
+      // inGoals/...) — only needs a fresh id. A share-text row is just the raw
+      // { title, note, url } parse output, so it needs the rest of the shape built
+      // (mirrors list-detail-page's own _addItems for the identical menu-driven flow).
+      const buildItem = handoffItems
+        ? item => ({ ...item, id: crypto.randomUUID() })
+        : ({ title, note, url }) => ({
+            id: crypto.randomUUID(), title, status: 'open',
+            note, url, dueDate: undefined, tags: [], inGoals: [],
+          });
+
       const { targetListIds, newListName } = e.detail;
-      const freshItems = () => items.map(item => ({ ...item, id: crypto.randomUUID() }));
+      const freshItems = () => items.map(buildItem);
       const lists = targetListIds.map(id => ({ id, items: freshItems() }));
       if (newListName) lists.push({ id: crypto.randomUUID(), name: newListName, items: freshItems() });
       if (!lists.length) return;
@@ -779,6 +799,25 @@ class BottomNav extends AppElement {
       }
     };
     this._handoffListPicker.addEventListener('list-pick', this._onHandoffListPick);
+
+    // ── Share Target text/URL landing (shared from any other app, not a .telos
+    // handoff) — see app/utils/combine-shared-text.js for how title/text/url get
+    // folded into one string. Lands in the same list-independent import-text-dialog
+    // used nowhere else, then the same list-picker-dialog + merge as item handoff.
+
+    this._onShareText = e => this._shareTextDialog.open(e.detail.text);
+    window.addEventListener('telos-share-text', this._onShareText);
+
+    this._onShareTextConfirm = e => {
+      this._pendingShareTextItems = e.detail.items;
+      this._pendingHandoffItems = null; // the two flows share one picker — an abandoned session of the other must not win
+      this._handoffListPicker.lists = getState().lists ?? [];
+      this._handoffListPicker.mode = 'copy'; // nothing existing is being moved
+      this._handoffListPicker.sourceListId = null;
+      this._handoffListPicker.heading = t('sync.handoff-add-to-list');
+      this._handoffListPicker.show();
+    };
+    this._shareTextDialog.addEventListener('import-text-confirm', this._onShareTextConfirm);
   }
 
   async _openImportFile(file, { closeSettings = false } = {}) {
@@ -821,6 +860,7 @@ class BottomNav extends AppElement {
 
   _showItemHandoffPicker(items) {
     this._pendingHandoffItems = items;
+    this._pendingShareTextItems = null; // the two flows share one picker — an abandoned session of the other must not win
     this._handoffListPicker.lists = getState().lists ?? [];
     this._handoffListPicker.mode = 'copy'; // nothing existing is being moved
     this._handoffListPicker.sourceListId = null;
@@ -1032,6 +1072,8 @@ class BottomNav extends AppElement {
     window.removeEventListener('list-tap', this._onListTapCapture, { capture: true });
     window.removeEventListener('year-navigate', this._onYearNavigateCapture, { capture: true });
     window.removeEventListener('telos-import-file', this._onImportFile);
+    window.removeEventListener('telos-share-text', this._onShareText);
+    this._shareTextDialog?.removeEventListener('import-text-confirm', this._onShareTextConfirm);
     this.shadowRoot?.querySelector('#gear-btn')?.removeEventListener('pointerup', this._onGear);
     this.shadowRoot?.querySelector('#gear-btn')?.removeEventListener('click', this._onGearKey);
     this.shadowRoot?.querySelector('#theme-group')?.removeEventListener('click', this._onThemeGroup);

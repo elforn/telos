@@ -31,6 +31,10 @@ function stubModals(el) {
     const m = el.shadowRoot.querySelector(id);
     if (m) { m.show = vi.fn(); m.close = vi.fn(); }
   }
+  // import-text-dialog exposes open()/no bare show()/close() — stub its inner
+  // modal-dialog instead, same pattern as import-text-dialog's own tests.
+  const shareTextModal = el.shadowRoot.querySelector('#share-text-dialog')?.shadowRoot.querySelector('#modal');
+  if (shareTextModal) { shareTextModal.show = vi.fn(); shareTextModal.close = vi.fn(); }
 }
 
 function mount() {
@@ -849,5 +853,97 @@ describe('bottom-nav — slice-handoff import routing', () => {
     picker.dispatchEvent(new CustomEvent('list-pick', { detail: { targetListIds: [], newListName: '', copy: true } }));
     await new Promise(r => setTimeout(r, 0));
     expect(applyMergeSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ── bottom-nav — Share Target text/URL landing ───────────────────────────────
+
+let shareTextDbSeq = 0;
+
+describe('bottom-nav — share-text landing', () => {
+  beforeEach(async () => {
+    await boot({ dbName: `bottom-nav-share-text-${shareTextDbSeq++}`, initialState: {} });
+    setState('goals', {});
+    setState('lists', []);
+  });
+
+  it('a telos-share-text event opens the dialog with the given text', () => {
+    const el = mount();
+    const dialog = el.shadowRoot.querySelector('#share-text-dialog');
+    const openSpy = vi.spyOn(dialog, 'open');
+    window.dispatchEvent(new CustomEvent('telos-share-text', { detail: { text: 'Shared text' } }));
+    expect(openSpy).toHaveBeenCalledWith('Shared text');
+  });
+
+  it('confirming the share-text dialog opens the list picker instead of the generic sheet', () => {
+    const el = mount();
+    const dialog = el.shadowRoot.querySelector('#share-text-dialog');
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    const modal  = el.shadowRoot.querySelector('#import-modal');
+    dialog.dispatchEvent(new CustomEvent('import-text-confirm', { detail: { items: [{ title: 'Milk' }] } }));
+    expect(picker.show).toHaveBeenCalledOnce();
+    expect(modal.show).not.toHaveBeenCalled();
+  });
+
+  it('picking an existing list merges the parsed items into it, building the full item shape', async () => {
+    setState('lists', [{ id: 'L1', name: 'Existing', items: [] }]);
+    const el = mount();
+    const dialog = el.shadowRoot.querySelector('#share-text-dialog');
+    dialog.dispatchEvent(new CustomEvent('import-text-confirm', {
+      detail: { items: [{ title: 'Milk', note: 'From the corner shop', url: undefined }] },
+    }));
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    picker.dispatchEvent(new CustomEvent('list-pick', { detail: { targetListIds: ['L1'], newListName: null, copy: true } }));
+
+    await vi.waitFor(() => {
+      const list = getState().lists.find(l => l.id === 'L1');
+      expect(list.items).toHaveLength(1);
+      const item = list.items[0];
+      expect(item.title).toBe('Milk');
+      expect(item.note).toBe('From the corner shop');
+      expect(item.status).toBe('open');
+      expect(item.tags).toEqual([]);
+      expect(item.inGoals).toEqual([]);
+      expect(item.id).toBeTruthy();
+    });
+  });
+
+  it('typing a new list name creates the list with the parsed items', async () => {
+    const el = mount();
+    const dialog = el.shadowRoot.querySelector('#share-text-dialog');
+    dialog.dispatchEvent(new CustomEvent('import-text-confirm', {
+      detail: { items: [{ title: 'Milk' }, { title: 'Eggs' }] },
+    }));
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    picker.dispatchEvent(new CustomEvent('list-pick', { detail: { targetListIds: [], newListName: 'Fresh List', copy: true } }));
+
+    await vi.waitFor(() => {
+      const list = getState().lists.find(l => l.name === 'Fresh List');
+      expect(list).toBeTruthy();
+      expect(list.items.map(i => i.title)).toEqual(['Milk', 'Eggs']);
+    });
+  });
+
+  it('an abandoned item-handoff picker session does not win over a later share-text pick (shared picker, two flows)', async () => {
+    // Simulate an item-handoff picker opened and abandoned (backdrop/back, no list-pick
+    // fired) — _pendingHandoffItems is left set, same as it would be on a real dismiss.
+    vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
+      type: 'simple',
+      payload: { __telosHandoff: true, kind: 'item', item: { id: 'i1', title: 'Stale item', status: 'open', tags: [], inGoals: [] } },
+      blobs: [],
+    });
+    const el = mount();
+    await el._openImportFile(fakeFile()); // sets _pendingHandoffItems, picker never confirmed
+
+    const dialog = el.shadowRoot.querySelector('#share-text-dialog');
+    dialog.dispatchEvent(new CustomEvent('import-text-confirm', { detail: { items: [{ title: 'Fresh item' }] } }));
+    const picker = el.shadowRoot.querySelector('#handoff-list-picker');
+    picker.dispatchEvent(new CustomEvent('list-pick', { detail: { targetListIds: [], newListName: 'Target list', copy: true } }));
+
+    await vi.waitFor(() => {
+      const list = getState().lists.find(l => l.name === 'Target list');
+      expect(list).toBeTruthy();
+      expect(list.items.map(i => i.title)).toEqual(['Fresh item']);
+    });
   });
 });

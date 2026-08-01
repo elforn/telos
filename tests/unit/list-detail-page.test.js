@@ -50,12 +50,13 @@ function mount(listId = 'l1') {
     const exportDialog = exportSheet.shadowRoot?.querySelector('#sheet');
     if (exportDialog) { exportDialog.showModal = vi.fn(); exportDialog.close = vi.fn(); }
   }
-  // Stub import-dialog's modal-dialog so show()/close() are synchronous and close() fires modal-close
+  // Stub import-text-dialog's inner modal-dialog so show()/close() are synchronous and close() fires modal-close
   const importDialog = el.shadowRoot.querySelector('#import-dialog');
   if (importDialog) {
-    importDialog.show  = vi.fn();
-    importDialog.close = vi.fn(() => {
-      importDialog.dispatchEvent(new CustomEvent('modal-close', { bubbles: true, composed: true }));
+    const importModal = importDialog.shadowRoot.querySelector('#modal');
+    importModal.show  = vi.fn();
+    importModal.close = vi.fn(() => {
+      importModal.dispatchEvent(new CustomEvent('modal-close', { bubbles: true, composed: true }));
     });
   }
   return el;
@@ -1451,241 +1452,47 @@ describe('list-detail-page — extract-confirm', () => {
   });
 });
 
-// ── list-detail-page — _parseImportText ──────────────────────────────────────
-
-describe('list-detail-page — _parseImportText', () => {
-  let el;
-  beforeEach(() => { el = document.createElement('list-detail-page'); });
-
-  it('parses non-empty lines as separate items', () => {
-    const items = el._parseImportText('Alpha\nBeta\nGamma');
-    expect(items.map(i => i.title)).toEqual(['Alpha', 'Beta', 'Gamma']);
-  });
-
-  it('skips empty lines between items', () => {
-    const items = el._parseImportText('Alpha\n\nBeta');
-    expect(items).toHaveLength(2);
-    expect(items[0].title).toBe('Alpha');
-    expect(items[1].title).toBe('Beta');
-  });
-
-  it('strips leading bullet (- )', () => {
-    const items = el._parseImportText('- Buy milk\n* Read book\n• Exercise');
-    expect(items[0].title).toBe('Buy milk');
-    expect(items[1].title).toBe('Read book');
-    expect(items[2].title).toBe('Exercise');
-  });
-
-  it('attaches indented lines as a note on the preceding item', () => {
-    const items = el._parseImportText('Alpha\n  a continuation line\nBeta');
-    expect(items[0].title).toBe('Alpha');
-    expect(items[0].note).toBe('a continuation line');
-    expect(items[1].note).toBeUndefined();
-  });
-
-  it('joins multiple indented lines with newline in note', () => {
-    const items = el._parseImportText('Alpha\n  line one\n  line two');
-    expect(items[0].note).toBe('line one\nline two');
-  });
-
-  it('truncates title at 120 chars at a word boundary', () => {
-    const long = 'word '.repeat(30).trim(); // 149 chars
-    const items = el._parseImportText(long);
-    expect(items[0].title.length).toBeLessThanOrEqual(120);
-    expect(items[0].title.endsWith(' ')).toBe(false);
-  });
-
-  it('overflowed title text goes into note', () => {
-    const long = 'word '.repeat(30).trim();
-    const items = el._parseImportText(long);
-    expect(items[0].note).toBe(long);
-  });
-
-  it('extracts a URL from the title text', () => {
-    const items = el._parseImportText('Read this https://example.com article');
-    expect(items[0].url).toBe('https://example.com');
-  });
-
-  it('extracts a URL from an indented continuation line', () => {
-    const items = el._parseImportText('Check docs\n  see https://docs.example.com for details');
-    expect(items[0].url).toBe('https://docs.example.com');
-  });
-
-  it('uses the last URL when multiple URLs appear in text', () => {
-    const items = el._parseImportText('See https://first.com and https://second.com');
-    expect(items[0].url).toBe('https://second.com');
-  });
-
-  it('strips trailing punctuation from extracted URL', () => {
-    const items = el._parseImportText('Read https://example.com.');
-    expect(items[0].url).toBe('https://example.com');
-  });
-
-  it('returns undefined url when no URL is present', () => {
-    const items = el._parseImportText('No link here');
-    expect(items[0].url).toBeUndefined();
-  });
-
-  it('returns empty array for blank input', () => {
-    expect(el._parseImportText('')).toHaveLength(0);
-    expect(el._parseImportText('   \n\n  ')).toHaveLength(0);
-  });
-});
-
-// ── list-detail-page — import draft recovery ─────────────────────────────────
-
-const IMPORT_SNAPSHOT_KEY = 'telos:snapshot.import-text';
-function snapshotKey(id) { return `${IMPORT_SNAPSHOT_KEY}:${id}`; }
-const LIST_2 = { id: 'l2', name: 'Other list', items: [] };
+// ── list-detail-page — import from text (wiring) ─────────────────────────────
+//
+// Draft-recovery/toggle mechanics now live in import-text-dialog and are
+// tested there (tests/unit/import-text-dialog.test.js). This just checks
+// list-detail-page's own wiring: the menu button opens the dialog scoped to
+// this list, and a confirm event actually adds the items with an undo toast.
 
 function openImportDialog(el) {
   el.shadowRoot.querySelector('#import-menu-btn').click();
 }
 
-describe('list-detail-page — import draft recovery', () => {
-  it('keeps unsaved text as a draft when the import dialog is cancelled', async () => {
+describe('list-detail-page — import from text', () => {
+  it('scopes the dialog draftKey to the current list', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount('l1');
-    openImportDialog(el);
-    el.shadowRoot.querySelector('#import-textarea').value = 'Buy flowers';
-    el.shadowRoot.querySelector('#import-cancel-btn').click();
-
-    const snap = JSON.parse(localStorage.getItem(snapshotKey('l1')));
-    expect(snap.text).toBe('Buy flowers');
+    expect(el.shadowRoot.querySelector('#import-dialog').draftKey).toBe('l1');
   });
 
-  it('keeps unsaved text as a draft on backdrop/swipe dismissal (any modal-close)', async () => {
+  it('opens the import-text-dialog from the menu button', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount('l1');
+    const dialog = el.shadowRoot.querySelector('#import-dialog');
+    const openSpy = vi.spyOn(dialog, 'open');
     openImportDialog(el);
-    el.shadowRoot.querySelector('#import-textarea').value = 'Call the vet';
-    el.shadowRoot.querySelector('#import-dialog').close();
-
-    const snap = JSON.parse(localStorage.getItem(snapshotKey('l1')));
-    expect(snap.text).toBe('Call the vet');
+    expect(openSpy).toHaveBeenCalledOnce();
   });
 
-  it('does not save an empty draft, and clears any existing one', async () => {
-    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ text: 'stale' }));
+  it('adds the confirmed items to this list and shows an undo toast', async () => {
+    _resetToast();
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount('l1');
-    openImportDialog(el);
-    el.shadowRoot.querySelector('#import-textarea').value = '   ';
-    el.shadowRoot.querySelector('#import-cancel-btn').click();
+    const dialog = el.shadowRoot.querySelector('#import-dialog');
+    dialog.dispatchEvent(new CustomEvent('import-text-confirm', {
+      detail: { items: [{ title: 'Buy flowers', note: undefined, url: undefined }] },
+    }));
 
-    expect(localStorage.getItem(snapshotKey('l1'))).toBeNull();
-  });
-
-  it('restores the draft and re-parses it when reopening the same list', async () => {
-    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ text: 'Milk\nBread' }));
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
-    const el = mount('l1');
-    openImportDialog(el);
-
-    expect(el.shadowRoot.querySelector('#import-textarea').value).toBe('Milk\nBread');
-    expect(el.shadowRoot.querySelector('#import-cta-btn').disabled).toBe(false);
-  });
-
-  it('does not restore a draft that belongs to a different list', async () => {
-    localStorage.setItem(snapshotKey('l2'), JSON.stringify({ text: 'For the other list' }));
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
-    const el = mount('l1');
-    openImportDialog(el);
-
-    expect(el.shadowRoot.querySelector('#import-textarea').value).toBe('');
-  });
-
-  it('clears the draft after a successful import instead of re-capturing the imported text', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
-    const el = mount('l1');
-    openImportDialog(el);
-    el.shadowRoot.querySelector('#import-textarea').value = 'Buy flowers';
-    el.shadowRoot.querySelector('#import-textarea').dispatchEvent(new Event('input'));
-    el.shadowRoot.querySelector('#import-cta-btn').click();
-
-    expect(el.shadowRoot.querySelector('#import-textarea').value).toBe('');
-    expect(localStorage.getItem(snapshotKey('l1'))).toBeNull();
-  });
-
-  it('reopening a second list does not see the first list\'s draft', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST_2] } });
-    const el = mount('l1');
-    openImportDialog(el);
-    el.shadowRoot.querySelector('#import-textarea').value = 'For list one';
-    el.shadowRoot.querySelector('#import-cancel-btn').click();
-
-    const el2 = mount('l2');
-    openImportDialog(el2);
-    expect(el2.shadowRoot.querySelector('#import-textarea').value).toBe('');
-  });
-
-  it('a draft for one list is not overwritten by a draft captured for a different list', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST_2] } });
-    const el1 = mount('l1');
-    openImportDialog(el1);
-    el1.shadowRoot.querySelector('#import-textarea').value = 'For list one';
-    el1.shadowRoot.querySelector('#import-cancel-btn').click();
-
-    const el2 = mount('l2');
-    openImportDialog(el2);
-    el2.shadowRoot.querySelector('#import-textarea').value = 'For list two';
-    el2.shadowRoot.querySelector('#import-cancel-btn').click();
-
-    expect(JSON.parse(localStorage.getItem(snapshotKey('l1'))).text).toBe('For list one');
-    expect(JSON.parse(localStorage.getItem(snapshotKey('l2'))).text).toBe('For list two');
-  });
-});
-
-// ── list-detail-page — import draft recovery toggle ──────────────────────────
-
-describe('list-detail-page — import draft recovery toggle', () => {
-  it('hides the toggle button when no draft was restored', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
-    const el = mount('l1');
-    openImportDialog(el);
-    expect(el.shadowRoot.querySelector('#import-draft-toggle-btn').hidden).toBe(true);
-  });
-
-  it('shows a Clear toggle when a draft is restored', async () => {
-    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ text: 'Milk\nBread' }));
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
-    const el = mount('l1');
-    openImportDialog(el);
-    const btn = el.shadowRoot.querySelector('#import-draft-toggle-btn');
-    expect(btn.hidden).toBe(false);
-    expect(btn.textContent).toBe('Clear');
-  });
-
-  it('clicking Clear blanks the textarea and flips the button to Undo', async () => {
-    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ text: 'Milk\nBread' }));
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
-    const el = mount('l1');
-    openImportDialog(el);
-    el.shadowRoot.querySelector('#import-draft-toggle-btn').click();
-    expect(el.shadowRoot.querySelector('#import-textarea').value).toBe('');
-    expect(el.shadowRoot.querySelector('#import-draft-toggle-btn').textContent).toBe('Undo');
-  });
-
-  it('clicking Undo after Clear restores the draft again', async () => {
-    localStorage.setItem(snapshotKey('l1'), JSON.stringify({ text: 'Milk\nBread' }));
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
-    const el = mount('l1');
-    openImportDialog(el);
-    const btn = el.shadowRoot.querySelector('#import-draft-toggle-btn');
-    btn.click(); // Clear
-    btn.click(); // Undo
-    expect(el.shadowRoot.querySelector('#import-textarea').value).toBe('Milk\nBread');
-    expect(btn.textContent).toBe('Clear');
-  });
-
-  it('does not store a _savedAt field any more (TTL removed)', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
-    const el = mount('l1');
-    openImportDialog(el);
-    el.shadowRoot.querySelector('#import-textarea').value = 'Buy flowers';
-    el.shadowRoot.querySelector('#import-cancel-btn').click();
-    const snap = JSON.parse(localStorage.getItem(snapshotKey('l1')));
-    expect(snap._savedAt).toBeUndefined();
+    await vi.waitFor(() => {
+      const lists = getState().lists;
+      expect(lists.find(l => l.id === 'l1').items.map(i => i.title)).toEqual(['Buy flowers']);
+    });
+    expect(document.querySelector('.socle-toast-msg')?.textContent).toBe('Imported 1 items');
   });
 });
 

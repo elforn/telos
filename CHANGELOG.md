@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.21.0] — 2026-08-01
+
+### Added
+- **Share text or a link from any app straight into a list.** Telos now appears as a Share Target destination for plain text and URLs shared from any other app on Android Chrome, not just other Telos installs — sharing a webpage, a note, or a block of text lands in a pre-filled, fully editable "Add from text" dialog (the same one used by the existing per-list menu action), then lets you pick which list — existing or new — to add the resulting item(s) to.
+- The "Add from text" dialog itself moved from `list-detail-page` into a shared, reusable `<import-text-dialog>` component so both the per-list menu action and the new Share Target landing use the identical dialog.
+
 ## [1.20.0] — 2026-08-01
 
 ### Added

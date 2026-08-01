@@ -85,6 +85,7 @@ async function openImportDialog(page) {
     const d = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
       ?.querySelector('#import-dialog')?.shadowRoot
+      ?.querySelector('#modal')?.shadowRoot
       ?.querySelector('dialog');
     return d?.open;
   });
@@ -94,7 +95,8 @@ async function typeInImportTextarea(page, text) {
   await page.evaluate(t => {
     const ta = document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
-      .querySelector('#import-textarea');
+      .querySelector('#import-dialog').shadowRoot
+      .querySelector('#textarea');
     ta.value = t;
     ta.dispatchEvent(new Event('input', { bubbles: true }));
   }, text);
@@ -104,12 +106,14 @@ async function confirmImport(page) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
-      .querySelector('#import-cta-btn').click();
+      .querySelector('#import-dialog').shadowRoot
+      .querySelector('#cta-btn').click();
   });
   await page.waitForFunction(() => {
     const d = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
       ?.querySelector('#import-dialog')?.shadowRoot
+      ?.querySelector('#modal')?.shadowRoot
       ?.querySelector('dialog');
     return !d?.open;
   });
@@ -151,6 +155,7 @@ test.describe('Bulk import — dialog', () => {
       document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('#import-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot
         ?.querySelector('dialog')?.open
     );
     expect(open).toBe(true);
@@ -161,7 +166,8 @@ test.describe('Bulk import — dialog', () => {
     const disabled = await page.evaluate(() =>
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
-        .querySelector('#import-cta-btn').disabled
+        .querySelector('#import-dialog').shadowRoot
+        .querySelector('#cta-btn').disabled
     );
     expect(disabled).toBe(true);
   });
@@ -173,16 +179,18 @@ test.describe('Bulk import — dialog', () => {
     await page.waitForFunction(() => {
       const el = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('#import-count');
+        ?.querySelector('#import-dialog')?.shadowRoot
+        ?.querySelector('#count');
       return !el?.hidden;
     });
 
     const [countText, ctaDisabled] = await page.evaluate(() => {
       const sr = document.querySelector('app-router').shadowRoot
-        .querySelector('list-detail-page').shadowRoot;
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#import-dialog').shadowRoot;
       return [
-        sr.querySelector('#import-count').textContent,
-        sr.querySelector('#import-cta-btn').disabled,
+        sr.querySelector('#count').textContent,
+        sr.querySelector('#cta-btn').disabled,
       ];
     });
     expect(countText).toContain('3');
@@ -195,12 +203,14 @@ test.describe('Bulk import — dialog', () => {
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
-        .querySelector('#import-cancel-btn').click();
+        .querySelector('#import-dialog').shadowRoot
+        .querySelector('#cancel-btn').click();
     });
     await page.waitForFunction(() => {
       const d = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('#import-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot
         ?.querySelector('dialog');
       return !d?.open;
     });

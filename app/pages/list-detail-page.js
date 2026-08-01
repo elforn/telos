@@ -15,13 +15,12 @@ import '../components/add-row/add-row.js';
 import '../components/list-picker-dialog/list-picker-dialog.js';
 import '../components/bulk-tag-editor/bulk-tag-editor.js';
 import '../../_lib/modules/modal-dialog/modal-dialog.js';
+import '../components/import-text-dialog/import-text-dialog.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
 import { DATE_FILTER_KEYS, matchesDateBucket } from '../utils/urgency.js';
 import '../components/export-sheet/export-sheet.js';
 import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdown.js';
-import { installDialogSnapshot } from '../utils/dialog-snapshot.js';
-import { installDraftToggle } from '../utils/draft-toggle.js';
 import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
 import { buildListHandoff, buildItemHandoff, buildItemsHandoff, shareHandoff } from '../utils/handoff.js';
 import { shareMarkdown } from '../utils/share-markdown.js';
@@ -29,7 +28,6 @@ import { shareMarkdown } from '../utils/share-markdown.js';
 const EXPORT_MODE_LIST      = 'list';
 const EXPORT_MODE_SELECTION = 'selection';
 const EXPORT_MODE_ITEM      = 'item';
-const IMPORT_SNAPSHOT_KEY   = 'telos:snapshot.import-text';
 
 const FILTER_SHAPE = {
   query:          { kind: 'string' },
@@ -223,85 +221,6 @@ class ListDetailPage extends AppElement {
         .menu-item-value {
           font-size: var(--font-size-body);
           color: var(--color-text-muted);
-        }
-
-        /* ── Import dialog ───────────────────────────────────────────────── */
-
-        #import-dialog textarea {
-          display: block;
-          inline-size: 100%;
-          min-block-size: 9rem;
-          background: var(--color-surface-raised);
-          border: 0.5px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          padding: var(--space-3);
-          font-size: var(--font-size-body);
-          font-family: var(--font-family);
-          color: var(--color-text-primary);
-          outline: none;
-          box-sizing: border-box;
-          resize: vertical;
-          margin-block-end: 0;
-        }
-
-        #import-dialog textarea:focus {
-          border-color: var(--color-accent);
-        }
-
-        #import-dialog textarea::placeholder {
-          color: var(--color-text-muted);
-        }
-
-        .import-footer {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-        }
-
-        .import-footer-end {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          margin-inline-start: auto;
-        }
-
-        #import-count {
-          font-size: var(--font-size-caption);
-          color: var(--color-text-muted);
-          white-space: nowrap;
-        }
-
-        .import-footer button {
-          min-block-size: var(--touch-target);
-          padding-inline: var(--space-2);
-          border-radius: var(--radius-sm);
-          border: none;
-          cursor: pointer;
-          font-family: var(--font-family);
-          font-size: var(--font-size-body);
-          font-weight: var(--font-weight-medium);
-          touch-action: manipulation;
-        }
-
-        .import-footer button:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        #import-cancel-btn, #import-draft-toggle-btn {
-          background: none;
-          color: var(--color-text-secondary);
-        }
-
-        #import-cta-btn {
-          background: var(--color-accent);
-          color: var(--color-text-inverse);
-          flex-shrink: 0;
-        }
-
-        #import-cta-btn:disabled {
-          opacity: 0.4;
-          cursor: default;
         }
 
         /* ── Main content ────────────────────────────────────────────────── */
@@ -925,21 +844,7 @@ class ListDetailPage extends AppElement {
 
       <list-picker-dialog id="bulk-picker"></list-picker-dialog>
 
-      <modal-dialog id="import-dialog" aria-label="${t('list-detail.import-heading')}">
-        <p class="menu-section-label">${t('list-detail.import-heading')}</p>
-        <textarea id="import-textarea"
-                  placeholder="${t('list-detail.import-placeholder')}"
-                  rows="6"
-                  enterkeyhint="enter"></textarea>
-        <div slot="footer" class="import-footer">
-          <button type="button" id="import-cancel-btn">${t('list-detail.import-cancel')}</button>
-          <button type="button" id="import-draft-toggle-btn" hidden></button>
-          <div class="import-footer-end">
-            <span id="import-count" hidden></span>
-            <button type="button" id="import-cta-btn" disabled>${t('list-detail.import-cta')}</button>
-          </div>
-        </div>
-      </modal-dialog>
+      <import-text-dialog id="import-dialog"></import-text-dialog>
     `;
   }
 
@@ -1489,84 +1394,26 @@ class ListDetailPage extends AppElement {
 
     // ── Import from text ──────────────────────────────────────────────────────
 
-    this._importDialog   = this.shadowRoot.querySelector('#import-dialog');
-    this._importTextarea = this.shadowRoot.querySelector('#import-textarea');
-    this._importCountEl  = this.shadowRoot.querySelector('#import-count');
-    this._importCtaBtn   = this.shadowRoot.querySelector('#import-cta-btn');
-    this._importDraftToggleBtn = this.shadowRoot.querySelector('#import-draft-toggle-btn');
-    this._importParsed   = [];
-
-    // Draft recovery, scoped per list (mirrors item/goal/list dialogs) — a paste
-    // typed for one list should never resurface when importing into another.
-    this._importSnapshot = installDialogSnapshot(this, {
-      key:      IMPORT_SNAPSHOT_KEY,
-      isOpen:   () => !!this._importDialog.shadowRoot?.querySelector('dialog')?.open,
-      recordId: () => this._listId,
-      snapshot: () => {
-        const text = this._importTextarea.value;
-        return text.trim() ? { text } : null;
-      },
-      restore: ({ text }) => {
-        this._importTextarea.value = text ?? '';
-        this._importParsed = this._parseImportText(this._importTextarea.value);
-        this._updateImportUI();
-      },
-    });
-
-    this._importDraftToggle = installDraftToggle(this, {
-      button: this._importDraftToggleBtn,
-      applyValues: ({ text }) => {
-        this._importTextarea.value = text ?? '';
-        this._importParsed = this._parseImportText(this._importTextarea.value);
-        this._updateImportUI();
-      },
-    });
+    this._importDialog = this.shadowRoot.querySelector('#import-dialog');
+    // Scoped per list (mirrors item/goal/list dialogs) — a paste typed for
+    // one list should never resurface when importing into another.
+    this._importDialog.draftKey = this._listId;
 
     this._onImportMenuBtn = () => {
       this._menuDialog.close();
-      this._importTextarea.value = '';
-      this._importParsed = [];
-      this._updateImportUI();
-      this._importDraftToggle.reset({
-        draft: this._importSnapshot.restoreFor(),
-        target: { text: '' },
-        clearLabel: t('list-detail.import-draft-clear'),
-        undoLabel:  t('list-detail.import-draft-undo'),
-      });
-      this._importDialog.show(this._importTextarea);
+      this._importDialog.open();
     };
     this.listen(this.shadowRoot.querySelector('#import-menu-btn'), 'click', this._onImportMenuBtn);
 
-    this._onImportTextarea = () => {
-      this._importParsed = this._parseImportText(this._importTextarea.value);
-      this._updateImportUI();
-    };
-    this.listen(this._importTextarea, 'input', this._onImportTextarea);
-
-    this._onImportCancel = () => this._importDialog.close();
-    this.listen(this.shadowRoot.querySelector('#import-cancel-btn'), 'click', this._onImportCancel);
-
-    // Any dismissal (Cancel, backdrop, swipe-down) keeps unsaved text as a draft;
-    // a successful import clears the textarea first so nothing is re-captured.
-    this._onImportDialogClose = () => {
-      if (this._importTextarea.value.trim()) this._importSnapshot.capture();
-      else this._importSnapshot.clear();
-    };
-    this.listen(this._importDialog, 'modal-close', this._onImportDialogClose);
-
-    this._onImportCta = () => {
-      if (!this._importParsed.length) return;
+    this._onImportConfirm = e => {
+      const items = e.detail.items;
       const snapshot = getState().lists;
-      const n = this._importParsed.length;
-      this._addItems(this._importParsed);
-      this._importTextarea.value = '';
-      this._importParsed = [];
-      this._importDialog.close();
-      toast(t('list-detail.import-toast', { n }), 'success', {
+      this._addItems(items);
+      toast(t('list-detail.import-toast', { n: items.length }), 'success', {
         action: { label: t('undo.button'), onClick: () => setState('lists', snapshot) },
       });
     };
-    this.listen(this._importCtaBtn, 'click', this._onImportCta);
+    this.listen(this._importDialog, 'import-text-confirm', this._onImportConfirm);
 
     // ── Filter bar ────────────────────────────────────────────────────────────
 
@@ -2026,67 +1873,6 @@ class ListDetailPage extends AppElement {
   }
 
   // ── Import ────────────────────────────────────────────────────────────────
-
-  _parseImportText(text) {
-    const TITLE_MAX = 120;
-    const BULLET_RE = /^[\-\*\•]\s+/;
-    const URL_RE    = /https?:\/\/\S+/g;
-
-    const rawItems = [];
-    let current = null;
-
-    for (const line of text.split('\n')) {
-      const isIndented = /^[ \t]/.test(line) && line.trim() !== '';
-      if (isIndented) {
-        if (current) {
-          current.continuationLines.push(line.trim().replace(BULLET_RE, ''));
-        }
-      } else {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        if (current) rawItems.push(current);
-        current = { titleRaw: trimmed.replace(BULLET_RE, '').trim(), continuationLines: [] };
-      }
-    }
-    if (current) rawItems.push(current);
-
-    return rawItems.map(({ titleRaw, continuationLines }) => {
-      const tooLong = titleRaw.length > TITLE_MAX;
-      let title = titleRaw;
-      if (tooLong) {
-        const candidate = titleRaw.slice(0, TITLE_MAX);
-        const lastSpace = candidate.lastIndexOf(' ');
-        title = lastSpace > TITLE_MAX / 2 ? candidate.slice(0, lastSpace) : candidate;
-      }
-
-      const noteParts = [];
-      if (tooLong) noteParts.push(titleRaw);
-      noteParts.push(...continuationLines);
-      const note = noteParts.length ? noteParts.join('\n') : undefined;
-
-      const allText = [titleRaw, ...continuationLines].join('\n');
-      const urls = allText.match(URL_RE) ?? [];
-      const url  = urls.length ? urls[urls.length - 1].replace(/[.,;:!?)"']+$/, '') : undefined;
-
-      return { title, note, url };
-    });
-  }
-
-  _updateImportUI() {
-    const n = this._importParsed.length;
-    const m = this._importParsed.filter(i => i.note || i.url).length;
-
-    if (n === 0) {
-      this._importCountEl.hidden = true;
-      this._importCountEl.textContent = '';
-    } else {
-      this._importCountEl.hidden = false;
-      this._importCountEl.textContent = m > 0
-        ? t('list-detail.import-count-extras', { n, m })
-        : t('list-detail.import-count', { n });
-    }
-    this._importCtaBtn.disabled = n === 0;
-  }
 
   _addItems(newItems) {
     this._mutateItems(items => [
