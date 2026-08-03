@@ -731,4 +731,66 @@ test.describe('Sync — share target', () => {
     );
     expect(listNames).toContain('From share');
   });
+
+  test('a genuine navigate-mode POST (real form submission) reaches the share-target handler', async ({ page }) => {
+    // Every test above POSTs via an in-page fetch() call — fetch() is never
+    // mode: 'navigate', so it can't reproduce the bug that shipped in v1.21.0:
+    // sw.js checked mode === 'navigate' before the share-target POST check, and
+    // a real OS share-sheet invocation IS a top-level navigation, so the
+    // generic navigate branch always won first and silently discarded the
+    // share (fixed in Socle 0.15.6, see CHANGELOG v1.21.1). A real <form>
+    // submission is a genuine top-level navigation and the only way to
+    // exercise that exact code path from a test — this is the regression
+    // guard for that class of bug specifically.
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    await page.evaluate(() => {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.enctype = 'multipart/form-data';
+      form.action = '/share-target';
+      // Left visible (not display:none) — Playwright's click() needs a real
+      // layout box to click, and this page navigates away immediately after.
+
+      const title = document.createElement('input');
+      title.name = 'title';
+      title.value = 'Real navigation test';
+      form.appendChild(title);
+
+      const url = document.createElement('input');
+      url.name = 'url';
+      url.value = 'https://example.com/real-nav';
+      form.appendChild(url);
+
+      const submitBtn = document.createElement('button');
+      submitBtn.type = 'submit';
+      submitBtn.id = 'e2e-real-nav-submit';
+      form.appendChild(submitBtn);
+
+      document.body.appendChild(form);
+    });
+
+    // A real Playwright click, not another evaluate()/form.submit() — Playwright's
+    // click() natively waits out the resulting navigation, avoiding the
+    // "execution context destroyed" race a bare form.submit() inside evaluate() risks.
+    await page.click('#e2e-real-nav-submit');
+
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    await page.waitForFunction(() =>
+      document.querySelector('bottom-nav')?.shadowRoot
+        ?.querySelector('#share-text-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog')?.open
+    );
+
+    const textareaValue = await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot
+        .querySelector('#share-text-dialog').shadowRoot
+        .querySelector('#textarea').value
+    );
+    expect(textareaValue).toBe('Real navigation test\n  https://example.com/real-nav');
+  });
 });
