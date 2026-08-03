@@ -39,14 +39,10 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      caches.match(BASE_PATH).then(r => r ?? fetch(BASE_PATH))
-    );
-    return;
-  }
-
   // Share Target — POST handler: store fields + files into share-inbox cache, then redirect home.
+  // MUST come before the mode === 'navigate' check: a real OS share-sheet invocation is a
+  // top-level navigation (mode === 'navigate'), so the navigate branch would win first otherwise,
+  // serve the cached homepage, and silently discard the share payload.
   // The app's manifest.json must declare share_target with method: 'POST',
   // enctype: 'multipart/form-data', and params: { title, text, url, files: [{ name: 'files', ... }] }.
   // The 'files' param name must match fd.getAll('files') below.
@@ -73,6 +69,13 @@ self.addEventListener('fetch', event => {
       ));
       return Response.redirect(BASE_PATH, 303);
     })());
+    return;
+  }
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      caches.match(BASE_PATH).then(r => r ?? fetch(BASE_PATH))
+    );
     return;
   }
 
