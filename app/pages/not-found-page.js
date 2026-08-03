@@ -119,7 +119,7 @@ class NotFoundPage extends AppElement {
   }
 
   subscribe() {
-    this._onHome = () => navigate(`${BASE_PATH}/${new Date().getFullYear()}`);
+    this._onHome = () => navigate(`${BASE_PATH}${new Date().getFullYear()}`);
     this.shadowRoot.querySelector('#home-btn').addEventListener('click', this._onHome);
   }
 

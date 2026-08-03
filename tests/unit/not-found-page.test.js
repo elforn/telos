@@ -9,7 +9,12 @@ HTMLElement.prototype.releasePointerCapture = () => {};
 // order-dependent (raw key when unregistered, resolved text when registered).
 import '../../app/strings.js';
 
-vi.mock('../../app/base-path.js', () => ({ BASE_PATH: '' }));
+// BASE_PATH always carries a trailing slash in real builds (utils/build.js
+// defaults it to '/', and the GH Pages deploy sets it to '/<repo>/') — mock it
+// as such rather than '' so a stray extra '/' in the navigate call (a real bug
+// found on 2026-08-03 — it produced a double slash the router couldn't match)
+// actually fails this test instead of accidentally canceling out.
+vi.mock('../../app/base-path.js', () => ({ BASE_PATH: '/telos/' }));
 
 let navigated;
 vi.mock('../../_lib/core/router/router.js', () => ({
@@ -37,6 +42,6 @@ describe('not-found-page', () => {
 
   it('navigates to the current year on button click', () => {
     el.shadowRoot.querySelector('#home-btn').click();
-    expect(navigated).toBe(`/${new Date().getFullYear()}`);
+    expect(navigated).toBe(`/telos/${new Date().getFullYear()}`);
   });
 });

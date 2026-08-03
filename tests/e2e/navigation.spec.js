@@ -15,6 +15,21 @@ test.describe('Router — forward navigation', () => {
       !!document.querySelector('app-router')?.shadowRoot?.querySelector('not-found-page')
     );
   });
+
+  test('the "go to current year" button on not-found-page actually navigates there', async ({ page }) => {
+    const currentYear = new Date().getFullYear();
+    await page.goto('/foo/bar');
+    await page.waitForFunction(() =>
+      !!document.querySelector('app-router')?.shadowRoot?.querySelector('not-found-page')
+    );
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('not-found-page').shadowRoot
+        .querySelector('#home-btn').click();
+    });
+    await waitForHomePage(page);
+    await expect(page).toHaveURL(new RegExp(`/${currentYear}$`));
+  });
 });
 
 test.describe('Router — back navigation', () => {

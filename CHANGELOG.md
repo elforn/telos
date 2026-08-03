@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.21.1] — 2026-08-03
+
+### Fixed
+- **Share Target (both "Share to Telos" and the generic text/URL capture) never actually worked on a real device**, despite passing its automated tests. Root cause, found via on-device testing: `_lib/core/sw.js`'s `fetch` handler checked `mode === 'navigate'` before checking for a Share Target POST — but a real OS share-sheet invocation *is* a top-level navigation, so that branch always won first and silently served the cached app shell without ever reading the share's data. The existing tests never caught this because they POST via an in-page `fetch()` call, which is never `mode: 'navigate'`. Fixed upstream in Socle 0.15.6 (`core/sw.js` — Share Target check now runs first) and pulled in via `npx socle update`.
+- **404 page's "go to current year" button navigated to a broken URL.** `not-found-page.js` built the target as `` `${BASE_PATH}/${year}` `` — since `BASE_PATH` already carries a trailing slash, this produced a double slash (`/telos//2026`) that the router couldn't match, landing back on the 404 page. One-character fix; the unit test's `BASE_PATH` mock was `''` (no trailing slash), which accidentally canceled the bug out and let it ship — the mock now uses a realistic value (`/telos/`), and a new e2e test clicks the actual button end-to-end.
+
 ## [1.21.0] — 2026-08-01
 
 ### Added
