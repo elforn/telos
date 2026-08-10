@@ -528,7 +528,6 @@ class BottomNav extends AppElement {
     this._subscribeNav();
     this._subscribeSettings();
     this._subscribeSync();
-    this._subscribeVersion();
     this._subscribeHeight();
     this._subscribeRepairButton();
     this._subscribeUrgency();
@@ -623,6 +622,13 @@ class BottomNav extends AppElement {
     this._onGear = () => {
       this._updateSettingsPills();
       this._settingsModal.show();
+      // Deferred off the boot critical path — sw-manager already does its own
+      // version.json fetch for update detection; this one is only for the
+      // buildHash shown here, so it can wait until Settings is actually opened.
+      if (!this._versionFetched) {
+        this._versionFetched = true;
+        this._subscribeVersion();
+      }
     };
     this._onGearKey = e => { if (e.detail === 0) this._onGear(); };
     this.shadowRoot.querySelector('#gear-btn').addEventListener('pointerup', this._onGear);
