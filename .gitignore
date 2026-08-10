@@ -7,4 +7,5 @@ TODO.md
 .vscode/settings.json
 brand/
 tests/results/
+tests/results-perf/
 tests/playwright-report/
