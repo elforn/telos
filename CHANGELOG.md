@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.21.3] — 2026-08-11
+
+### Fixed
+- **`<modal-dialog>` instances carried a prohibited `aria-label`.** Lighthouse's accessibility audit flagged every menu/action-sheet/dialog in the app: the component correctly forwards its host's `aria-label` onto the internal `<dialog>` element (which has an implicit `dialog` role and legitimately supports a label), but left the same attribute sitting on the light-DOM host too — which has no ARIA role of its own, making a name-giving attribute there a spec violation, even though no screen reader user was actually affected (the real accessible name was always correctly present on the inner element). Fixed upstream in Socle 0.15.6→0.15.8 (`modules/modal-dialog/modal-dialog.js` now removes the attribute from the host after forwarding it) and pulled in via `npx socle update`.
+- **Page was missing explicit `noindex` guidance for search engines.** Telos is a personal tool, not content meant to be discovered via search — added `<meta name="robots" content="noindex, nofollow">` to `index.html`. (A companion Lighthouse "robots.txt" finding turned out to be about `elforn.github.io`'s domain root, which this repo's deploy doesn't control — the meta tag is the actual fix, since it's per-page and covers every route through the single app shell.)
+
 ## [1.21.2] — 2026-08-11
 
 ### Fixed
