@@ -251,6 +251,12 @@ describe('modal-dialog — accessibility attributes', () => {
     expect(el.shadowRoot.querySelector('dialog').getAttribute('aria-label')).toBe('Edit goal');
   });
 
+  it('removes aria-label from the host after forwarding it (role-less element must not carry aria-label)', () => {
+    const el = mount({ 'aria-label': 'Edit goal' });
+    expect(el.hasAttribute('aria-label')).toBe(false);
+    expect(el.shadowRoot.querySelector('dialog').getAttribute('aria-label')).toBe('Edit goal');
+  });
+
   it('does not set aria-label on the inner dialog when the attribute is absent', () => {
     const el = mount();
     expect(el.shadowRoot.querySelector('dialog').hasAttribute('aria-label')).toBe(false);

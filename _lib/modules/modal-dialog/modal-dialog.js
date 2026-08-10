@@ -122,7 +122,10 @@ class ModalDialog extends AppElement {
     this._dialog = this.shadowRoot.querySelector('dialog');
     this._handle = this.shadowRoot.querySelector('.handle');
     const label = this.getAttribute('aria-label');
-    if (label) this._dialog.setAttribute('aria-label', label);
+    if (label) {
+      this._dialog.setAttribute('aria-label', label);
+      this.removeAttribute('aria-label');
+    }
 
     this._onClose = () => {
       this._teardownDrag(); // tear down any in-flight handle drag when closed by any route
