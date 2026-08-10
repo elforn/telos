@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.21.2] — 2026-08-11
+
+### Fixed
+- **LCP image (year header photo) missing `fetchpriority="high"`.** Lighthouse's "LCP request discovery" audit flagged this; the image's `src` is still only assigned after an async IndexedDB blob read (inherent to local-only photo storage, not fixable), but the static attribute still tells the browser to prioritize the fetch once that happens.
+- **`version.json` fetched twice on every boot.** `sw-manager`'s update-detection fetch (load-bearing, stays as-is) and `bottom-nav`'s separate fetch — only used to display the buildHash string in Settings — both ran unconditionally at boot. The Settings-only fetch is now deferred to the first time Settings is actually opened, dropping it out of the critical path entirely for sessions that never open it.
+
 ## [1.21.1] — 2026-08-03
 
 ### Fixed
