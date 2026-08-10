@@ -383,7 +383,7 @@ class YearHeader extends Gestures(AppElement) {
       </style>
 
       <div class="header-bg" aria-hidden="true">
-        <img class="header-image" id="header-img" alt="" aria-hidden="true">
+        <img class="header-image" id="header-img" alt="" aria-hidden="true" fetchpriority="high">
         <div class="image-overlay"></div>
       </div>
 
