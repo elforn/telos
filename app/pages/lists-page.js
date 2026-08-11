@@ -16,9 +16,8 @@ import { FilterState } from '../../_lib/modules/filter-state/filter-state.js';
 
 const FILTER_SHAPE = {
   query:          { kind: 'string' },
-  emptyFilter:    { kind: 'enum', values: [null, 'empty', 'not-empty'] },
+  states:         { kind: 'set' },
   dates:          { kind: 'set' },
-  archived:       { kind: 'enum', values: [false, true] },
   panelExpanded:  { kind: 'boolean' },
   barExpanded:    { kind: 'boolean' },
 };
@@ -423,10 +422,10 @@ class ListsPage extends AppElement {
             <button class="filter-clear-btn" id="filter-clear-btn" aria-label="${t('lists-page.filter-clear')}">${icons.funnelX}</button>
           </div>
           <div id="filter-panel" hidden>
-            <div class="filter-chip-row">
-              <button class="filter-chip" id="empty-btn" aria-pressed="false">${t('lists-page.filter-empty-only')}</button>
-              <button class="filter-chip" id="not-empty-btn" aria-pressed="false">${t('lists-page.filter-not-empty')}</button>
-              <button class="filter-chip" id="archived-btn" aria-pressed="false">${t('lists-page.filter-archived')}</button>
+            <div class="filter-chip-row" id="filter-states-row" role="group" aria-label="${t('lists-page.filter-toggle')}">
+              <button class="filter-chip" id="fstate-empty" data-state="empty" aria-pressed="false">${t('lists-page.filter-empty-only')}</button>
+              <button class="filter-chip" id="fstate-not-empty" data-state="not-empty" aria-pressed="false">${t('lists-page.filter-not-empty')}</button>
+              <button class="filter-chip" id="fstate-archived" data-state="archived" aria-pressed="false">${t('lists-page.filter-archived')}</button>
             </div>
             <div class="filter-row" id="filter-date-row" role="group" aria-label="${t('filter.date-label')}">
               <button class="filter-chip filter-date-pill" id="fdate-overdue" data-date="overdue" aria-pressed="false">${t('filter.date-overdue')}</button>
@@ -507,14 +506,11 @@ class ListsPage extends AppElement {
     this._filterEmpty  = this.shadowRoot.querySelector('#filter-empty');
     this._filterLive   = this.shadowRoot.querySelector('#filter-live');
 
-    this._filter = { query: '', emptyFilter: null, dates: new Set(), archived: false };
+    this._filter = { query: '', states: new Set(), dates: new Set() };
     this._barExpanded = false;
     this._panelExpanded = false;
     this._filterExpandBtn = this.shadowRoot.querySelector('#filter-expand-btn');
     this._filterPanel     = this.shadowRoot.querySelector('#filter-panel');
-    this._emptyBtn        = this.shadowRoot.querySelector('#empty-btn');
-    this._notEmptyBtn     = this.shadowRoot.querySelector('#not-empty-btn');
-    this._archivedBtn     = this.shadowRoot.querySelector('#archived-btn');
     this._loadFilter();
 
     const filterBtn = this.shadowRoot.querySelector('#filter-btn');
@@ -545,29 +541,18 @@ class ListsPage extends AppElement {
     };
     this.listen(this._filterExpandBtn, 'click', this._onFilterExpand);
 
-    this._onEmptyBtn = () => {
-      this._filter.emptyFilter = this._filter.emptyFilter === 'empty' ? null : 'empty';
+    this._onFilterState = e => {
+      const btn = e.target.closest('.filter-chip');
+      if (!btn) return;
+      const state = btn.dataset.state;
+      if (!state) return;
+      if (this._filter.states.has(state)) this._filter.states.delete(state);
+      else this._filter.states.add(state);
       this._saveFilter();
       this._syncFilterUI();
       this._applyFilter();
     };
-    this.listen(this._emptyBtn, 'click', this._onEmptyBtn);
-
-    this._onNotEmptyBtn = () => {
-      this._filter.emptyFilter = this._filter.emptyFilter === 'not-empty' ? null : 'not-empty';
-      this._saveFilter();
-      this._syncFilterUI();
-      this._applyFilter();
-    };
-    this.listen(this._notEmptyBtn, 'click', this._onNotEmptyBtn);
-
-    this._onArchivedBtn = () => {
-      this._filter.archived = !this._filter.archived;
-      this._saveFilter();
-      this._syncFilterUI();
-      this._applyFilter();
-    };
-    this.listen(this._archivedBtn, 'click', this._onArchivedBtn);
+    this.listen(this.shadowRoot.querySelector('#filter-states-row'), 'click', this._onFilterState);
 
     this._onFilterDate = e => {
       const btn = e.target.closest('.filter-date-pill');
@@ -583,7 +568,7 @@ class ListsPage extends AppElement {
     this.listen(this.shadowRoot.querySelector('#filter-date-row'), 'click', this._onFilterDate);
 
     this._onFilterClear = () => {
-      this._filter = { query: '', emptyFilter: null, dates: new Set(), archived: false };
+      this._filter = { query: '', states: new Set(), dates: new Set() };
       this._saveFilter();
       this._syncFilterUI();
       this._applyFilter();
@@ -695,8 +680,8 @@ class ListsPage extends AppElement {
   // ── Filter helpers ────────────────────────────────────────────────────────
 
   _loadFilter() {
-    const { query, emptyFilter, dates, archived, panelExpanded, barExpanded } = listsFilterState.load();
-    this._filter = { query, emptyFilter, dates, archived };
+    const { query, states, dates, panelExpanded, barExpanded } = listsFilterState.load();
+    this._filter = { query, states, dates };
     this._barExpanded = barExpanded;
     this._panelExpanded = panelExpanded;
   }
@@ -715,24 +700,19 @@ class ListsPage extends AppElement {
     if (this._filterBtnDot) this._filterBtnDot.hidden = !active;
     this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);
 
-    const panelOpen = this._panelExpanded || !!this._filter.emptyFilter || this._filter.dates.size > 0 || this._filter.archived;
+    const panelOpen = this._panelExpanded || this._filter.states.size > 0 || this._filter.dates.size > 0;
     if (this._filterPanel) this._filterPanel.hidden = !panelOpen;
     if (this._filterExpandBtn) this._filterExpandBtn.setAttribute('aria-expanded', String(panelOpen));
     const expandDot = this._filterExpandBtn?.querySelector('.filter-expand-dot');
-    if (expandDot) expandDot.hidden = !(this._filter.emptyFilter || this._filter.dates.size || this._filter.archived);
+    if (expandDot) expandDot.hidden = !(this._filter.states.size || this._filter.dates.size);
 
-    const ef = this._filter.emptyFilter;
-    if (this._emptyBtn) {
-      this._emptyBtn.classList.toggle('active', ef === 'empty');
-      this._emptyBtn.setAttribute('aria-pressed', String(ef === 'empty'));
-    }
-    if (this._notEmptyBtn) {
-      this._notEmptyBtn.classList.toggle('active', ef === 'not-empty');
-      this._notEmptyBtn.setAttribute('aria-pressed', String(ef === 'not-empty'));
-    }
-    if (this._archivedBtn) {
-      this._archivedBtn.classList.toggle('active', this._filter.archived);
-      this._archivedBtn.setAttribute('aria-pressed', String(this._filter.archived));
+    for (const s of ['empty', 'not-empty', 'archived']) {
+      const btn = this.shadowRoot.querySelector(`#fstate-${s}`);
+      if (btn) {
+        const on = this._filter.states.has(s);
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', String(on));
+      }
     }
     for (const d of DATE_FILTER_KEYS) {
       const btn = this.shadowRoot.querySelector(`#fdate-${d}`);
@@ -752,16 +732,30 @@ class ListsPage extends AppElement {
   }
 
   _listFilterActive() {
-    return !!(this._filter.query.toLowerCase().trim() || this._filter.emptyFilter || this._filter.dates.size || this._filter.archived);
+    return !!(this._filter.query.toLowerCase().trim() || this._filter.states.size || this._filter.dates.size);
   }
 
   _listMatchesFilter(list) {
-    const q           = this._filter.query.toLowerCase().trim();
-    const emptyFilter = this._filter.emptyFilter;
-    const dates       = this._filter.dates;
-    // Archived lists are hidden by default; the Archived pill flips this into
-    // an exclusive view (mirrors goal.archived handling in home-page.js).
-    if (!!list.archived !== !!this._filter.archived) return false;
+    const q      = this._filter.query.toLowerCase().trim();
+    const states = this._filter.states;
+    const dates  = this._filter.dates;
+    // Archived lists are governed solely by the Archived pill — hidden by
+    // default, shown only when it's selected, regardless of Empty/Not empty.
+    // Non-archived lists ignore the Archived pill and are OR-filtered by
+    // Empty/Not empty when either is selected (mirrors goal.archived +
+    // progress-state handling in home-page.js).
+    if (list.archived) {
+      if (!states.has('archived')) return false;
+    } else if (states.size) {
+      const emptyStates = [...states].filter(s => s !== 'archived');
+      if (emptyStates.length > 0) {
+        const lstate = (list.items ?? []).length === 0 ? 'empty' : 'not-empty';
+        if (!emptyStates.includes(lstate)) return false;
+      } else {
+        // Only 'archived' was selected — non-archived lists don't match
+        return false;
+      }
+    }
     if (q) {
       const nameMatch = list.name.toLowerCase().includes(q);
       const itemMatch = (list.items ?? []).some(item =>
@@ -772,8 +766,6 @@ class ListsPage extends AppElement {
       );
       if (!nameMatch && !itemMatch) return false;
     }
-    if (emptyFilter === 'empty'     && (list.items ?? []).length !== 0) return false;
-    if (emptyFilter === 'not-empty' && (list.items ?? []).length === 0) return false;
     if (dates.size) {
       const hasMatch = (list.items ?? []).some(item => {
         const active = item.status !== 'done' && item.status !== 'closed';

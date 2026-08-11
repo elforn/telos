@@ -59,7 +59,9 @@ Markdown / Share to Telos / Delete actions below it.
 To find an archived list again, open the filter panel on the Lists overview and tap the
 **Archived** chip. This flips the view to show *only* archived lists (matching any other
 active filters, like a text search), the same exclusive-reveal behaviour goals already
-use for their own **Archived** filter.
+use for their own **Archived** filter. The **Empty** and **Not empty** chips are additive
+with each other — selecting both shows every list regardless of item count — but neither
+one reveals an archived list, empty or not; only the **Archived** chip does that.
 
 A small dot next to the list's name is the only visual cue that a list is archived —
 useful once the Archived filter has revealed it, since otherwise it looks identical to

@@ -134,7 +134,15 @@ async function clickArchivedPill(page) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('lists-page').shadowRoot
-      .querySelector('#archived-btn').click();
+      .querySelector('#fstate-archived').click();
+  });
+}
+
+async function clickEmptyPill(page) {
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('lists-page').shadowRoot
+      .querySelector('#fstate-empty').click();
   });
 }
 
@@ -199,5 +207,19 @@ test.describe('List archive', () => {
 
     await openListMenu(page);
     expect(await archivedPillActive(page)).toBe(true);
+  });
+
+  test('the Empty pill does not reveal an archived (empty) list — only Archived does', async ({ page }) => {
+    await openFirstList(page);
+    await openListMenu(page);
+    await clickArchivedPillInMenu(page); // "Archive me" has 0 items and is now archived
+    await goBackToLists(page);
+
+    await openFilterBarAndPanel(page);
+    await clickEmptyPill(page);
+    expect(await listVisibility(page, 'Archive me')).toBe(false);
+
+    await clickArchivedPill(page); // now Empty + Archived both active
+    expect(await listVisibility(page, 'Archive me')).toBe(true);
   });
 });

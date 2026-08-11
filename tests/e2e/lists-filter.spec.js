@@ -152,7 +152,7 @@ async function clickEmptyPill(page) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('lists-page').shadowRoot
-      .querySelector('#empty-btn').click();
+      .querySelector('#fstate-empty').click();
   });
 }
 
@@ -160,7 +160,7 @@ async function clickNotEmptyPill(page) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('lists-page').shadowRoot
-      .querySelector('#not-empty-btn').click();
+      .querySelector('#fstate-not-empty').click();
   });
 }
 
@@ -406,24 +406,27 @@ test.describe('Lists — Empty and Not empty filter pills', () => {
     const pressed = await page.evaluate(() =>
       document.querySelector('app-router').shadowRoot
         .querySelector('lists-page').shadowRoot
-        .querySelector('#empty-btn').getAttribute('aria-pressed')
+        .querySelector('#fstate-empty').getAttribute('aria-pressed')
     );
     expect(pressed).toBe('true');
   });
 
-  test('selecting Empty deactivates Not empty', async ({ page }) => {
+  test('Empty and Not empty are additive — selecting both shows every list', async ({ page }) => {
     await clickNotEmptyPill(page);
     await clickEmptyPill(page);
     const [emptyPressed, notEmptyPressed] = await page.evaluate(() => {
       const sr = document.querySelector('app-router').shadowRoot
         .querySelector('lists-page').shadowRoot;
       return [
-        sr.querySelector('#empty-btn').getAttribute('aria-pressed'),
-        sr.querySelector('#not-empty-btn').getAttribute('aria-pressed'),
+        sr.querySelector('#fstate-empty').getAttribute('aria-pressed'),
+        sr.querySelector('#fstate-not-empty').getAttribute('aria-pressed'),
       ];
     });
     expect(emptyPressed).toBe('true');
-    expect(notEmptyPressed).toBe('false');
+    expect(notEmptyPressed).toBe('true');
+    const items = await getListVisibility(page);
+    expect(items.find(v => v.name === 'Full List')?.hidden).toBe(false);
+    expect(items.find(v => v.name === 'Empty List')?.hidden).toBe(false);
   });
 
   test('clicking active Empty pill again deactivates it', async ({ page }) => {
@@ -432,7 +435,7 @@ test.describe('Lists — Empty and Not empty filter pills', () => {
     const pressed = await page.evaluate(() =>
       document.querySelector('app-router').shadowRoot
         .querySelector('lists-page').shadowRoot
-        .querySelector('#empty-btn').getAttribute('aria-pressed')
+        .querySelector('#fstate-empty').getAttribute('aria-pressed')
     );
     expect(pressed).toBe('false');
   });
@@ -471,7 +474,7 @@ test.describe('Lists — Empty and Not empty filter pills', () => {
       const sr = document.querySelector('app-router').shadowRoot
         .querySelector('lists-page').shadowRoot;
       return [
-        sr.querySelector('#empty-btn').getAttribute('aria-pressed'),
+        sr.querySelector('#fstate-empty').getAttribute('aria-pressed'),
         sr.querySelector('#filter-panel').hidden,
       ];
     });

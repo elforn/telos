@@ -290,7 +290,7 @@ describe('lists-page — create with active filter', () => {
     _resetToast();
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
-    el._filter = { query: '', emptyFilter: 'not-empty', dates: new Set() }; // a new list is empty → hidden
+    el._filter = { query: '', states: new Set(['not-empty']), dates: new Set() }; // a new list is empty → hidden
     el.shadowRoot.dispatchEvent(new CustomEvent('list-created', {
       bubbles: true, composed: true, detail: { name: 'Fresh list' },
     }));
@@ -323,13 +323,13 @@ describe('lists-page — date filter', () => {
     await vi.waitFor(() => expect(getItems(el).length).toBe(3));
     const byName = name => getItems(el).find(i => i._list?.name === name);
 
-    el._filter = { query: '', emptyFilter: null, dates: new Set(['overdue']) };
+    el._filter = { query: '', states: new Set(), dates: new Set(['overdue']) };
     el._applyFilter();
     expect(byName('Overdue list').hidden).toBe(false);
     expect(byName('Soon list').hidden).toBe(true);
     expect(byName('Undated list').hidden).toBe(true);
 
-    el._filter = { query: '', emptyFilter: null, dates: new Set(['none']) };
+    el._filter = { query: '', states: new Set(), dates: new Set(['none']) };
     el._applyFilter();
     expect(byName('Undated list').hidden).toBe(false);
     expect(byName('Overdue list').hidden).toBe(true);
@@ -342,13 +342,13 @@ describe('lists-page — date filter', () => {
     const el = mount();
     await vi.waitFor(() => expect(getItems(el).length).toBe(1));
 
-    el._filter = { query: '', emptyFilter: null, dates: new Set(['overdue']) };
+    el._filter = { query: '', states: new Set(), dates: new Set(['overdue']) };
     el._applyFilter();
     expect(getItems(el)[0].hidden).toBe(true);
   });
 });
 
-describe('lists-page — archived filter', () => {
+describe('lists-page — state filter (Empty / Not empty / Archived, additive)', () => {
   afterEach(() => localStorage.removeItem('telos:filter:lists'));
 
   it('hides archived lists by default', async () => {
@@ -363,18 +363,62 @@ describe('lists-page — archived filter', () => {
     expect(byName('Old').hidden).toBe(true);
   });
 
-  it('shows only archived lists when the archived filter is active', async () => {
+  it('shows only archived lists when the Archived pill alone is active', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [
       { id: 'l1', name: 'Active', items: [] },
       { id: 'l2', name: 'Old', items: [], archived: true },
     ] } });
     const el = mount();
     await vi.waitFor(() => expect(getItems(el).length).toBe(2));
-    el._filter = { query: '', emptyFilter: null, dates: new Set(), archived: true };
+    el._filter = { query: '', states: new Set(['archived']), dates: new Set() };
     el._applyFilter();
     const byName = name => getItems(el).find(i => i._list?.name === name);
     expect(byName('Old').hidden).toBe(false);
     expect(byName('Active').hidden).toBe(true);
+  });
+
+  it('Empty excludes archived lists regardless of their own emptiness', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [
+      { id: 'l1', name: 'Empty active', items: [] },
+      { id: 'l2', name: 'Empty archived', items: [], archived: true },
+    ] } });
+    const el = mount();
+    await vi.waitFor(() => expect(getItems(el).length).toBe(2));
+    el._filter = { query: '', states: new Set(['empty']), dates: new Set() };
+    el._applyFilter();
+    const byName = name => getItems(el).find(i => i._list?.name === name);
+    expect(byName('Empty active').hidden).toBe(false);
+    expect(byName('Empty archived').hidden).toBe(true);
+  });
+
+  it('Empty and Not empty are OR: selecting both shows every non-archived list', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [
+      { id: 'l1', name: 'Empty list', items: [] },
+      { id: 'l2', name: 'Full list', items: [{ id: 'i1', title: 'x', status: 'open', tags: [], inGoals: [] }] },
+    ] } });
+    const el = mount();
+    await vi.waitFor(() => expect(getItems(el).length).toBe(2));
+    el._filter = { query: '', states: new Set(['empty', 'not-empty']), dates: new Set() };
+    el._applyFilter();
+    const byName = name => getItems(el).find(i => i._list?.name === name);
+    expect(byName('Empty list').hidden).toBe(false);
+    expect(byName('Full list').hidden).toBe(false);
+  });
+
+  it('Archived + Empty pills are OR: shows archived lists and empty non-archived lists', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [
+      { id: 'l1', name: 'Empty active', items: [] },
+      { id: 'l2', name: 'Full active', items: [{ id: 'i1', title: 'x', status: 'open', tags: [], inGoals: [] }] },
+      { id: 'l3', name: 'Full archived', items: [{ id: 'i2', title: 'y', status: 'open', tags: [], inGoals: [] }], archived: true },
+    ] } });
+    const el = mount();
+    await vi.waitFor(() => expect(getItems(el).length).toBe(3));
+    el._filter = { query: '', states: new Set(['empty', 'archived']), dates: new Set() };
+    el._applyFilter();
+    const byName = name => getItems(el).find(i => i._list?.name === name);
+    expect(byName('Empty active').hidden).toBe(false);
+    expect(byName('Full active').hidden).toBe(true);
+    expect(byName('Full archived').hidden).toBe(false); // archived pill shows it regardless of emptiness
   });
 
   it('clicking the Archived chip reveals archived lists and sets aria-pressed', async () => {
@@ -384,7 +428,7 @@ describe('lists-page — archived filter', () => {
     ] } });
     const el = mount();
     await vi.waitFor(() => expect(getItems(el).length).toBe(2));
-    const btn = el.shadowRoot.querySelector('#archived-btn');
+    const btn = el.shadowRoot.querySelector('#fstate-archived');
     btn.click();
     expect(btn.classList.contains('active')).toBe(true);
     expect(btn.getAttribute('aria-pressed')).toBe('true');
@@ -396,17 +440,17 @@ describe('lists-page — archived filter', () => {
   it('shows the filter-dot indicator when the archived filter alone is active', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [] } });
     const el = mount();
-    el.shadowRoot.querySelector('#archived-btn').click();
+    el.shadowRoot.querySelector('#fstate-archived').click();
     expect(el.shadowRoot.querySelector('.filter-btn-dot').hidden).toBe(false);
   });
 
-  it('resets the archived filter on Clear filters', async () => {
+  it('resets the state filter on Clear filters', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [
       { id: 'l2', name: 'Old', items: [], archived: true },
     ] } });
     const el = mount();
     await vi.waitFor(() => expect(getItems(el).length).toBe(1));
-    el.shadowRoot.querySelector('#archived-btn').click();
+    el.shadowRoot.querySelector('#fstate-archived').click();
     expect(getItems(el)[0].hidden).toBe(false);
     el.shadowRoot.querySelector('#filter-clear-btn').click();
     expect(getItems(el)[0].hidden).toBe(true);
