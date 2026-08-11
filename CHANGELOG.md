@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.22.1] — 2026-08-12
+
+### Changed
+- **Internal refactor, no user-facing change.** Consolidated duplicated tag-editing UI (goal/item dialogs) and the due-date filter row (home, lists, list detail) into shared components, and unified the deadline/due-date badge so goals and list items can't silently drift apart in behaviour. Same events, same visuals — see `ComponentDuplicationReport.md` for the full rationale.
+
 ## [1.22.0] — 2026-08-11
 
 ### Added
