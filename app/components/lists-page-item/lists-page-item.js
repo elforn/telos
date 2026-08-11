@@ -90,6 +90,20 @@ class ListsPageItem extends Gestures(AppElement) {
           text-overflow: ellipsis;
         }
 
+        .archive-dot {
+          display: none;
+          flex-shrink: 0;
+          inline-size: var(--space-1);
+          block-size: var(--space-1);
+          border-radius: var(--radius-full);
+          background: var(--color-accent);
+          opacity: 0.5;
+        }
+
+        :host([data-archived="true"]) .archive-dot {
+          display: block;
+        }
+
         .item-count {
           flex-shrink: 0;
           font-size: var(--font-size-caption);
@@ -172,6 +186,7 @@ class ListsPageItem extends Gestures(AppElement) {
       <div class="row" tabindex="0" role="button" aria-label="">
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="list-name"></span>
+        <span class="archive-dot" aria-hidden="true"></span>
         <span class="urgency" aria-hidden="true" hidden></span>
         <span class="item-count"></span>
         <span class="chevron" aria-hidden="true">${icons.chevronRight}</span>
@@ -273,6 +288,7 @@ class ListsPageItem extends Gestures(AppElement) {
     this._nameEl.textContent  = name;
     this._countEl.textContent = String(count);
     this._row.style.setProperty('--list-item-color', color ?? 'transparent');
+    this.dataset.archived = String(!!this._list?.archived);
 
     // Roll-up urgency across open/paused items; quiet for far-future/empty.
     // Suppressed entirely when the page-level toggle is off (default on).

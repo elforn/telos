@@ -85,6 +85,33 @@ describe('lists-page-item — structure', () => {
   });
 });
 
+// ── Archived indicator ────────────────────────────────────────────────────────
+
+describe('lists-page-item — archived indicator', () => {
+  it('sets data-archived to false for a non-archived list', () => {
+    const el = mount();
+    expect(el.dataset.archived).toBe('false');
+  });
+
+  it('sets data-archived to true for an archived list', () => {
+    const el = mount({ ...LIST, archived: true });
+    expect(el.dataset.archived).toBe('true');
+  });
+
+  it('updates data-archived when the list property changes', () => {
+    const el = mount();
+    el.list = { ...LIST, archived: true };
+    expect(el.dataset.archived).toBe('true');
+  });
+
+  it('renders a decorative archive-dot element', () => {
+    const el = mount();
+    const dot = el.shadowRoot.querySelector('.archive-dot');
+    expect(dot).not.toBeNull();
+    expect(dot.getAttribute('aria-hidden')).toBe('true');
+  });
+});
+
 // ── list-tap event (tap on row) ───────────────────────────────────────────────
 
 describe('lists-page-item — list-tap event', () => {

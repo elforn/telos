@@ -1384,6 +1384,73 @@ describe('list-detail-page — list-color-changed (immediate commit)', () => {
   });
 });
 
+// ── Archive (immediate commit) ────────────────────────────────────────────────
+
+describe('list-detail-page — list-archived-changed (immediate commit)', () => {
+  it('sets archived:true on the list when list-archived-changed fires with true', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-archived-changed', {
+      bubbles: true, composed: true, detail: { archived: true },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].archived).toBe(true));
+    expect(getState().lists[0].name).toBe('Gift ideas');
+  });
+
+  it('sets archived:false when list-archived-changed fires with false', async () => {
+    const archivedList = { ...LIST, archived: true };
+    await boot({ dbName: freshName(), initialState: { lists: [archivedList] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-archived-changed', {
+      bubbles: true, composed: true, detail: { archived: false },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].archived).toBe(false));
+  });
+
+  it('does not affect other lists when archiving', async () => {
+    const LIST2 = { id: 'l2', name: 'Books', items: [] };
+    await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST2] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-archived-changed', {
+      bubbles: true, composed: true, detail: { archived: true },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].archived).toBe(true));
+    expect(getState().lists[1].archived).toBeUndefined();
+  });
+
+  it('shows a success toast when a list is archived', async () => {
+    _resetToast();
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-archived-changed', {
+      bubbles: true, composed: true, detail: { archived: true },
+    }));
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-success');
+      expect(toastEl?.textContent).toContain('List archived');
+    });
+  });
+
+  it('shows a success toast when a list is unarchived', async () => {
+    _resetToast();
+    const archivedList = { ...LIST, archived: true };
+    await boot({ dbName: freshName(), initialState: { lists: [archivedList] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#list-dialog').dispatchEvent(new CustomEvent('list-archived-changed', {
+      bubbles: true, composed: true, detail: { archived: false },
+    }));
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-success');
+      expect(toastEl?.textContent).toContain('List unarchived');
+    });
+  });
+});
+
 // ── Export (extract-confirm) ───────────────────────────────────────────────────
 
 describe('list-detail-page — extract-confirm', () => {

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForPage as waitForHomePage, waitForIDBFlush } from './helpers.js';
+import { waitForPage as waitForHomePage, waitForListsPage, waitForListDetailPage, waitForIDBFlush } from './helpers.js';
 
 const currentYear = new Date().getFullYear();
 
@@ -172,5 +172,113 @@ test.describe('Data persistence', () => {
     const val = await handle.jsonValue();
     expect(val.urgency).toBe('overdue');
     expect(val.count).toBe('1');
+  });
+
+  // Guards the new archived field's round-trip through the real IDB boot path
+  // (unit tests use fake-indexeddb; this exercises the genuine browser store).
+  test('archiving a list persists across a cold reload from IDB', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForHomePage(page);
+
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#pill-lists').click()
+    );
+    await waitForListsPage(page);
+
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#add-row').click();
+    });
+    await page.waitForFunction(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('list-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open;
+    });
+    await page.evaluate(() => {
+      const inp = document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('list-dialog').shadowRoot
+        .querySelector('#input');
+      inp.value = 'Persist archive test';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('list-dialog').shadowRoot
+        .querySelector('#close').click();
+    });
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('#list-container')?.querySelectorAll('lists-page-item').length ?? 0) >= 1
+    );
+
+    await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container lists-page-item');
+      const row = item.shadowRoot.querySelector('.row');
+      row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+      row.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+    });
+    await waitForListDetailPage(page);
+
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#name-edit-btn').click();
+    });
+    await page.waitForFunction(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('list-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open;
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('list-dialog').shadowRoot
+        .querySelector('#archive').click();
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('list-dialog').shadowRoot
+        .querySelector('#close').click();
+    });
+    // Navigate back to the Lists overview so the reload below lands on that
+    // route (page.reload() reloads whatever URL we're currently on).
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#back-btn').click();
+    });
+    await waitForListsPage(page);
+
+    await waitForIDBFlush(page);
+    await page.reload();
+    await waitForListsPage(page);
+
+    const archived = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container lists-page-item');
+      return item?._list?.archived ?? null;
+    });
+    expect(archived).toBe(true);
+
+    // Hidden by default on the overview after the cold reload, same as a live session.
+    const hidden = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container lists-page-item')?.hidden
+    );
+    expect(hidden).toBe(true);
   });
 });

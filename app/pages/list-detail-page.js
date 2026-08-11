@@ -919,6 +919,15 @@ class ListDetailPage extends AppElement {
     this._onListDialogDelete = () => this._deleteCurrentList();
     this.listen(this._listDialog, 'list-delete', this._onListDialogDelete);
 
+    this._onListArchivedChanged = e => {
+      const { archived } = e.detail;
+      setState('lists', (getState().lists ?? []).map(l =>
+        l.id === this._listId ? { ...l, archived } : l
+      ));
+      toast(t(archived ? 'lists.toast-list-archived' : 'lists.toast-list-unarchived'), 'success');
+    };
+    this.listen(this._listDialog, 'list-archived-changed', this._onListArchivedChanged);
+
     // ── Delete list (menu) ────────────────────────────────────────────────────
     this._onListDeleteBtn = () => { this._menuDialog.close(); this._deleteCurrentList(); };
     this.listen(this.shadowRoot.querySelector('#list-delete-btn'), 'click', this._onListDeleteBtn);

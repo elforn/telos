@@ -348,6 +348,71 @@ describe('lists-page — date filter', () => {
   });
 });
 
+describe('lists-page — archived filter', () => {
+  afterEach(() => localStorage.removeItem('telos:filter:lists'));
+
+  it('hides archived lists by default', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [
+      { id: 'l1', name: 'Active', items: [] },
+      { id: 'l2', name: 'Old', items: [], archived: true },
+    ] } });
+    const el = mount();
+    await vi.waitFor(() => expect(getItems(el).length).toBe(2));
+    const byName = name => getItems(el).find(i => i._list?.name === name);
+    expect(byName('Active').hidden).toBe(false);
+    expect(byName('Old').hidden).toBe(true);
+  });
+
+  it('shows only archived lists when the archived filter is active', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [
+      { id: 'l1', name: 'Active', items: [] },
+      { id: 'l2', name: 'Old', items: [], archived: true },
+    ] } });
+    const el = mount();
+    await vi.waitFor(() => expect(getItems(el).length).toBe(2));
+    el._filter = { query: '', emptyFilter: null, dates: new Set(), archived: true };
+    el._applyFilter();
+    const byName = name => getItems(el).find(i => i._list?.name === name);
+    expect(byName('Old').hidden).toBe(false);
+    expect(byName('Active').hidden).toBe(true);
+  });
+
+  it('clicking the Archived chip reveals archived lists and sets aria-pressed', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [
+      { id: 'l1', name: 'Active', items: [] },
+      { id: 'l2', name: 'Old', items: [], archived: true },
+    ] } });
+    const el = mount();
+    await vi.waitFor(() => expect(getItems(el).length).toBe(2));
+    const btn = el.shadowRoot.querySelector('#archived-btn');
+    btn.click();
+    expect(btn.classList.contains('active')).toBe(true);
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+    const byName = name => getItems(el).find(i => i._list?.name === name);
+    expect(byName('Old').hidden).toBe(false);
+    expect(byName('Active').hidden).toBe(true);
+  });
+
+  it('shows the filter-dot indicator when the archived filter alone is active', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    const el = mount();
+    el.shadowRoot.querySelector('#archived-btn').click();
+    expect(el.shadowRoot.querySelector('.filter-btn-dot').hidden).toBe(false);
+  });
+
+  it('resets the archived filter on Clear filters', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [
+      { id: 'l2', name: 'Old', items: [], archived: true },
+    ] } });
+    const el = mount();
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
+    el.shadowRoot.querySelector('#archived-btn').click();
+    expect(getItems(el)[0].hidden).toBe(false);
+    el.shadowRoot.querySelector('#filter-clear-btn').click();
+    expect(getItems(el)[0].hidden).toBe(true);
+  });
+});
+
 // Each menu is a <modal-dialog>; happy-dom supports native <dialog> well enough
 // to test show()/close() directly, without stubbing (mirrors year-header.test.js).
 function nativeDialog(modalDialogEl) {

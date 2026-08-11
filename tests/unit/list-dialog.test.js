@@ -295,6 +295,88 @@ describe('list-dialog — delete', () => {
 });
 
 
+// ── archive ───────────────────────────────────────────────────────────────────
+
+describe('list-dialog — archive', () => {
+  it('hides the archive button when opened with no list', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#archive').hidden).toBe(true);
+  });
+
+  it('shows the archive button when opened with an existing list', () => {
+    const el = mount();
+    el.open(LIST);
+    expect(el.shadowRoot.querySelector('#archive').hidden).toBe(false);
+  });
+
+  it('labels the button "Archive" for a non-archived list', () => {
+    const el = mount();
+    el.open(LIST);
+    const btn = el.shadowRoot.querySelector('#archive');
+    expect(btn.textContent).toBe('Archive');
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('labels the button "Unarchive" for an already-archived list', () => {
+    const el = mount();
+    el.open({ ...LIST, archived: true });
+    const btn = el.shadowRoot.querySelector('#archive');
+    expect(btn.textContent).toBe('Unarchive');
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('dispatches list-archived-changed with archived:true on click', () => {
+    const el = mount();
+    el.open(LIST);
+    const events = [];
+    el.addEventListener('list-archived-changed', e => events.push(e));
+    el.shadowRoot.querySelector('#archive').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.archived).toBe(true);
+  });
+
+  it('flips the button label and aria-pressed immediately on click', () => {
+    const el = mount();
+    el.open(LIST);
+    const btn = el.shadowRoot.querySelector('#archive');
+    btn.click();
+    expect(btn.textContent).toBe('Unarchive');
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('a second click toggles back to archived:false', () => {
+    const el = mount();
+    el.open(LIST);
+    const events = [];
+    el.addEventListener('list-archived-changed', e => events.push(e));
+    const btn = el.shadowRoot.querySelector('#archive');
+    btn.click();
+    btn.click();
+    expect(events).toHaveLength(2);
+    expect(events[1].detail.archived).toBe(false);
+    expect(btn.textContent).toBe('Archive');
+  });
+
+  it('list-archived-changed bubbles and is composed', () => {
+    const el = mount();
+    el.open(LIST);
+    const events = [];
+    el.addEventListener('list-archived-changed', e => events.push(e));
+    el.shadowRoot.querySelector('#archive').click();
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
+  });
+
+  it('does not close the dialog on click', () => {
+    const el = mount();
+    const modal = el.shadowRoot.querySelector('#modal');
+    el.open(LIST);
+    el.shadowRoot.querySelector('#archive').click();
+    expect(modal.close).not.toHaveBeenCalled();
+  });
+});
+
 // ── hide-time snapshot ──────────────────────────────────────────────────────────
 
 const SNAPSHOT_KEY = 'telos:snapshot.new-list';
