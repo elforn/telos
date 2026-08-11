@@ -43,24 +43,31 @@ items' tag arrays via `selectedTags`, the known-tag list via `existingTags`, and
 
 ## Archiving lists
 
-Open a list, tap the pencil next to its name (the same dialog you use to rename it or
-pick its colour), then tap **Archive** at the bottom. The list disappears from the Lists
-overview immediately — archiving only declutters that page, the list itself stays fully
-functional: its items, colour, and status are untouched, and it's still a valid
-destination when moving, copying, or promoting items from elsewhere in the app.
+Open a list, tap the **⋮** menu, then tap **Archived**. The list disappears from the
+Lists overview immediately — archiving only declutters that page, the list itself stays
+fully functional: its items, colour, and status are untouched, and it's still a valid
+destination when moving, copying, or promoting items from elsewhere in the app. Tapping
+**Archived** again un-archives it. The item shows a checkmark when the list is currently
+archived (the menu closes on tap, so the checkmark is confirmation for next time you
+open it — the toast right after tapping is the immediate feedback).
+
+Archiving deliberately lives in the **⋮ menu**, not the rename dialog (which only edits
+the list's name/colour) — it sits alongside the list's other lifecycle actions (Share,
+Extract Markdown, Delete), just above Delete.
 
 To find an archived list again, open the filter panel on the Lists overview and tap the
 **Archived** chip. This flips the view to show *only* archived lists (matching any other
 active filters, like a text search), the same exclusive-reveal behaviour goals already
-use for their own **Archived** filter. Tap **Unarchive** in the same rename dialog to
-bring a list back into the default view.
+use for their own **Archived** filter.
 
 A small dot next to the list's name is the only visual cue that a list is archived —
 useful once the Archived filter has revealed it, since otherwise it looks identical to
 any other list card.
 
-This mirrors `goal.archived` (`app/pages/home-page.js`) end to end: same hide-by-default,
-filter-pill-reveal semantics, same toggle-from-the-edit-dialog interaction. See the
-`List` schema entry in `CLAUDE.md` for the exact field shape
-(`archived?: boolean`) and the `list-archived-changed` event contract between
-`list-dialog.js` and `list-detail-page.js`.
+This mirrors `goal.archived` (`app/pages/home-page.js`) in its data-model semantics
+(hide-by-default, filter-pill-reveal) but *not* its interaction — goals toggle archived
+from within `goal-dialog.js`'s own footer, since that dialog already carries a "more
+actions" overflow sheet; `list-dialog.js` has no such sheet, so list archiving lives in
+`list-detail-page.js`'s own "⋮" menu instead (`#archive-menu-btn`, directly wired to
+`setState('lists', ...)` — no cross-component event needed). See the `List` schema entry
+in `CLAUDE.md` for the exact field shape (`archived?: boolean`).

@@ -26,10 +26,6 @@ class ListDialog extends AppElement {
     this._listId = list?.id ?? null;
     this._input.value = list?.name ?? '';
     this._deleteBtn.hidden = !list;
-    this._archiveBtn.hidden = !list;
-    this._archived = !!list?.archived;
-    this._archiveBtn.textContent = this._archived ? t('list-dialog.unarchive') : t('list-dialog.archive');
-    this._archiveBtn.setAttribute('aria-pressed', String(this._archived));
     this._selectColor(list?.color ?? null);
     this._lastValidName = list?.name ?? '';
     this._closeBtn?.setAttribute('aria-label',
@@ -137,11 +133,6 @@ class ListDialog extends AppElement {
           flex: 1;
         }
 
-        .actions-start {
-          display: flex;
-          gap: var(--space-2);
-        }
-
         .actions-end {
           display: flex;
           gap: var(--space-2);
@@ -164,9 +155,8 @@ class ListDialog extends AppElement {
           outline-offset: 2px;
         }
 
-        #delete  { background: none; color: var(--color-danger); }
-        #archive { background: none; color: var(--color-text-secondary); }
-        #close   { background: none; color: var(--color-text-secondary); }
+        #delete { background: none; color: var(--color-danger); }
+        #close  { background: none; color: var(--color-text-secondary); }
         #draft-toggle-btn { background: none; color: var(--color-text-secondary); }
       </style>
 
@@ -190,10 +180,7 @@ class ListDialog extends AppElement {
                enterkeyhint="go"
                maxlength="60" />
         <div slot="footer" class="actions">
-          <div class="actions-start">
-            <button type="button" id="delete" hidden>${t('list-dialog.delete')}</button>
-            <button type="button" id="archive" hidden></button>
-          </div>
+          <button type="button" id="delete" hidden>${t('list-dialog.delete')}</button>
           <button type="button" id="draft-toggle-btn" hidden></button>
           <div class="actions-end">
             <button type="button" id="close" aria-label="${t('list-dialog.close')}">${t('list-dialog.close')}</button>
@@ -210,14 +197,12 @@ class ListDialog extends AppElement {
     this._input         = this.shadowRoot.querySelector('#input');
     this._colorSwatches = this.shadowRoot.querySelector('.color-swatches');
     this._deleteBtn     = this.shadowRoot.querySelector('#delete');
-    this._archiveBtn    = this.shadowRoot.querySelector('#archive');
     this._closeBtn      = this.shadowRoot.querySelector('#close');
     this._draftToggleBtn = this.shadowRoot.querySelector('#draft-toggle-btn');
     this._saveStatus    = this.shadowRoot.querySelector('#save-status');
     this._selectedColor = null;
     this._isNew         = false;
     this._lastValidName = '';
-    this._archived       = false;
 
     this._onNameBlur = () => {
       const v = this._input.value.trim();
@@ -305,19 +290,9 @@ class ListDialog extends AppElement {
       }
     };
 
-    this._onArchive = () => {
-      this._archived = !this._archived;
-      this._archiveBtn.textContent = this._archived ? t('list-dialog.unarchive') : t('list-dialog.archive');
-      this._archiveBtn.setAttribute('aria-pressed', String(this._archived));
-      this.dispatchEvent(new CustomEvent('list-archived-changed', {
-        bubbles: true, composed: true, detail: { archived: this._archived },
-      }));
-    };
-
     this._input.addEventListener('keydown', this._onKeyDown);
     this._input.addEventListener('blur',    this._onNameBlur);
     this._deleteBtn.addEventListener('click', this._onDelete);
-    this._archiveBtn.addEventListener('click', this._onArchive);
     this._closeBtn.addEventListener('click', this._onClose);
     this._draftToggle = installDraftToggle(this, {
       button: this._draftToggleBtn,
@@ -348,7 +323,6 @@ class ListDialog extends AppElement {
     this._input?.removeEventListener('keydown', this._onKeyDown);
     this._input?.removeEventListener('blur',    this._onNameBlur);
     this._deleteBtn?.removeEventListener('click', this._onDelete);
-    this._archiveBtn?.removeEventListener('click', this._onArchive);
     this._closeBtn?.removeEventListener('click', this._onClose);
     this._colorSwatches?.removeEventListener('pointerdown', this._onSwatchPointerDown);
     this._colorSwatches?.removeEventListener('click', this._onSwatchClick);

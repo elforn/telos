@@ -8,7 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.22.0] — 2026-08-11
 
 ### Added
-- **Lists can now be archived.** Open a list, tap the pencil next to its name, then tap **Archive** — the list drops out of the Lists overview immediately, but stays fully functional (items, colour, and status untouched; still a valid destination for moving, copying, or promoting items). Tap **Unarchive** in the same dialog to bring it back. A new **Archived** filter chip on the Lists overview reveals archived lists on demand (mirrors how archived goals already work), and a small dot marks an archived list once it's shown.
+- **Lists can now be archived.** Open a list, tap the **⋮** menu, then tap **Archived** — the list drops out of the Lists overview immediately, but stays fully functional (items, colour, and status untouched; still a valid destination for moving, copying, or promoting items). Tap **Archived** again to bring it back. A new **Archived** filter chip on the Lists overview reveals archived lists on demand (mirrors how archived goals already work), and a small dot marks an archived list once it's shown.
 
 ## [1.21.3] — 2026-08-11
 

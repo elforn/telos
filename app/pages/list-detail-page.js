@@ -223,6 +223,23 @@ class ListDetailPage extends AppElement {
           color: var(--color-text-muted);
         }
 
+        .menu-item-check {
+          display: flex;
+          align-items: center;
+          color: var(--color-accent);
+          visibility: hidden;
+        }
+
+        .menu-item-check svg {
+          inline-size: var(--icon-size-sm);
+          block-size: var(--icon-size-sm);
+          pointer-events: none;
+        }
+
+        #archive-menu-btn[aria-pressed="true"] .menu-item-check {
+          visibility: visible;
+        }
+
         /* ── Main content ────────────────────────────────────────────────── */
 
         main {
@@ -786,6 +803,10 @@ class ListDetailPage extends AppElement {
           <span>${t('list-detail.share-list')}</span>
           <span class="menu-item-value" aria-hidden="true">›</span>
         </button>
+        <button class="menu-item" id="archive-menu-btn" aria-pressed="false">
+          <span>${t('list-detail.archived-toggle')}</span>
+          <span class="menu-item-check" aria-hidden="true">${icons.check}</span>
+        </button>
         <div class="menu-delete-section">
           <button class="menu-delete-btn" id="list-delete-btn">${t('list-detail.delete-list')}</button>
         </div>
@@ -919,14 +940,17 @@ class ListDetailPage extends AppElement {
     this._onListDialogDelete = () => this._deleteCurrentList();
     this.listen(this._listDialog, 'list-delete', this._onListDialogDelete);
 
-    this._onListArchivedChanged = e => {
-      const { archived } = e.detail;
+    // ── Archive list (menu) ───────────────────────────────────────────────────
+    this._archiveMenuBtn = this.shadowRoot.querySelector('#archive-menu-btn');
+    this._onArchiveMenuBtn = () => {
+      this._menuDialog.close();
+      const archived = !(getState().lists ?? []).find(l => l.id === this._listId)?.archived;
       setState('lists', (getState().lists ?? []).map(l =>
         l.id === this._listId ? { ...l, archived } : l
       ));
       toast(t(archived ? 'lists.toast-list-archived' : 'lists.toast-list-unarchived'), 'success');
     };
-    this.listen(this._listDialog, 'list-archived-changed', this._onListArchivedChanged);
+    this.listen(this._archiveMenuBtn, 'click', this._onArchiveMenuBtn);
 
     // ── Delete list (menu) ────────────────────────────────────────────────────
     this._onListDeleteBtn = () => { this._menuDialog.close(); this._deleteCurrentList(); };
@@ -1532,6 +1556,7 @@ class ListDetailPage extends AppElement {
       this._nameEl.textContent = list.name;
       this.shadowRoot.querySelector('#name-edit-btn')?.setAttribute('aria-label', `${t('list-detail.edit-name')}: ${list.name}`);
       this._pageHeader.style.borderBlockEndColor = list.color ?? '';
+      this._archiveMenuBtn?.setAttribute('aria-pressed', String(!!list.archived));
       this._showStatus = list.showStatus ?? true;
       this._applyStatusPref();
       this._renderItems(list.items ?? []);

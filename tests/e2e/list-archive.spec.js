@@ -58,46 +58,44 @@ async function openFirstList(page) {
   await waitForListDetailPage(page);
 }
 
-async function openRenameDialog(page) {
+async function openListMenu(page) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
-      .querySelector('#name-edit-btn').click();
+      .querySelector('#menu-btn').click();
   });
   await page.waitForFunction(() => {
     const d = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
-      ?.querySelector('list-dialog')?.shadowRoot
-      ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      ?.querySelector('#menu')?.shadowRoot?.querySelector('dialog');
     return d?.open;
   });
 }
 
-async function clickArchiveInDetailDialog(page) {
+async function clickArchiveMenuItem(page) {
+  // Clicking this item also closes the menu (app behaviour), so no separate close step.
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
-      .querySelector('list-dialog').shadowRoot
-      .querySelector('#archive').click();
+      .querySelector('#archive-menu-btn').click();
+  });
+  await page.waitForFunction(() => {
+    const d = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('list-detail-page')?.shadowRoot
+      ?.querySelector('#menu')?.shadowRoot?.querySelector('dialog');
+    return d?.open === false;
   });
 }
 
-function archiveButtonText(page) {
+function archiveMenuPressed(page) {
   return page.evaluate(() =>
     document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
-      .querySelector('list-dialog').shadowRoot
-      .querySelector('#archive').textContent
+      .querySelector('#archive-menu-btn').getAttribute('aria-pressed')
   );
 }
 
-async function closeDetailDialogAndGoBack(page) {
-  await page.evaluate(() => {
-    document.querySelector('app-router').shadowRoot
-      .querySelector('list-detail-page').shadowRoot
-      .querySelector('list-dialog').shadowRoot
-      .querySelector('#close').click();
-  });
+async function goBackToLists(page) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
@@ -159,21 +157,20 @@ test.describe('List archive', () => {
     await createList(page, 'Archive me');
   });
 
-  test('archiving a list from the rename dialog hides it from the overview by default', async ({ page }) => {
+  test('archiving a list from the ⋮ menu hides it from the overview by default', async ({ page }) => {
     await openFirstList(page);
-    await openRenameDialog(page);
-    await clickArchiveInDetailDialog(page);
-    expect(await archiveButtonText(page)).toBe('Unarchive');
-    await closeDetailDialogAndGoBack(page);
+    await openListMenu(page);
+    await clickArchiveMenuItem(page);
+    await goBackToLists(page);
 
     expect(await listVisibility(page, 'Archive me')).toBe(false);
   });
 
   test('the Archived filter pill reveals an archived list', async ({ page }) => {
     await openFirstList(page);
-    await openRenameDialog(page);
-    await clickArchiveInDetailDialog(page);
-    await closeDetailDialogAndGoBack(page);
+    await openListMenu(page);
+    await clickArchiveMenuItem(page);
+    await goBackToLists(page);
 
     await openFilterBarAndPanel(page);
     await clickArchivedPill(page);
@@ -182,12 +179,22 @@ test.describe('List archive', () => {
 
   test('unarchiving restores default visibility', async ({ page }) => {
     await openFirstList(page);
-    await openRenameDialog(page);
-    await clickArchiveInDetailDialog(page); // archive
-    await clickArchiveInDetailDialog(page); // unarchive
-    expect(await archiveButtonText(page)).toBe('Archive');
-    await closeDetailDialogAndGoBack(page);
+    await openListMenu(page);
+    await clickArchiveMenuItem(page); // archive
+    await openListMenu(page);
+    await clickArchiveMenuItem(page); // unarchive
+    await goBackToLists(page);
 
     expect(await listVisibility(page, 'Archive me')).toBe(true);
+  });
+
+  test('the menu item reflects archived state via aria-pressed', async ({ page }) => {
+    await openFirstList(page);
+    await openListMenu(page);
+    expect(await archiveMenuPressed(page)).toBe('false');
+    await clickArchiveMenuItem(page);
+
+    await openListMenu(page);
+    expect(await archiveMenuPressed(page)).toBe('true');
   });
 });

@@ -231,26 +231,18 @@ test.describe('Data persistence', () => {
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
-        .querySelector('#name-edit-btn').click();
+        .querySelector('#menu-btn').click();
     });
     await page.waitForFunction(() => {
       const d = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('list-dialog')?.shadowRoot
-        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+        ?.querySelector('#menu')?.shadowRoot?.querySelector('dialog');
       return d?.open;
     });
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
-        .querySelector('list-dialog').shadowRoot
-        .querySelector('#archive').click();
-    });
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('list-detail-page').shadowRoot
-        .querySelector('list-dialog').shadowRoot
-        .querySelector('#close').click();
+        .querySelector('#archive-menu-btn').click();
     });
     // Navigate back to the Lists overview so the reload below lands on that
     // route (page.reload() reloads whatever URL we're currently on).
