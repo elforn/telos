@@ -360,6 +360,7 @@ class ListsPage extends AppElement {
         .filter-date-pill[data-date="none"]::before    { box-shadow: inset 0 0 0 1.5px var(--color-text-muted); }
 
         .filter-chip {
+          flex-shrink: 0;
           min-block-size: var(--touch-target-small);
           padding-inline: var(--space-3);
           border-radius: var(--radius-full);
@@ -370,6 +371,7 @@ class ListsPage extends AppElement {
           font-size: var(--font-size-caption);
           font-weight: var(--font-weight-medium);
           color: var(--color-text-secondary);
+          white-space: nowrap;
           touch-action: manipulation;
         }
 
