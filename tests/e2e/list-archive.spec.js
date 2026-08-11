@@ -72,13 +72,13 @@ async function openListMenu(page) {
   });
 }
 
-async function clickArchiveMenuItem(page) {
-  // Clicking this item also closes the menu (app behaviour), so no separate close step.
-  await page.evaluate(() => {
+// Clicking either pill also closes the menu (app behaviour), so no separate close step.
+async function clickArchivePill(page, selector) {
+  await page.evaluate(sel => {
     document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
-      .querySelector('#archive-menu-btn').click();
-  });
+      .querySelector(sel).click();
+  }, selector);
   await page.waitForFunction(() => {
     const d = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
@@ -87,11 +87,14 @@ async function clickArchiveMenuItem(page) {
   });
 }
 
-function archiveMenuPressed(page) {
+const clickArchivedPillInMenu = page => clickArchivePill(page, '#archive-archived-btn');
+const clickActivePillInMenu   = page => clickArchivePill(page, '#archive-active-btn');
+
+function archivedPillActive(page) {
   return page.evaluate(() =>
     document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
-      .querySelector('#archive-menu-btn').getAttribute('aria-pressed')
+      .querySelector('#archive-archived-btn').classList.contains('active')
   );
 }
 
@@ -160,16 +163,16 @@ test.describe('List archive', () => {
   test('archiving a list from the ⋮ menu hides it from the overview by default', async ({ page }) => {
     await openFirstList(page);
     await openListMenu(page);
-    await clickArchiveMenuItem(page);
+    await clickArchivedPillInMenu(page);
     await goBackToLists(page);
 
     expect(await listVisibility(page, 'Archive me')).toBe(false);
   });
 
-  test('the Archived filter pill reveals an archived list', async ({ page }) => {
+  test('the Archived filter pill on the overview reveals an archived list', async ({ page }) => {
     await openFirstList(page);
     await openListMenu(page);
-    await clickArchiveMenuItem(page);
+    await clickArchivedPillInMenu(page);
     await goBackToLists(page);
 
     await openFilterBarAndPanel(page);
@@ -180,21 +183,21 @@ test.describe('List archive', () => {
   test('unarchiving restores default visibility', async ({ page }) => {
     await openFirstList(page);
     await openListMenu(page);
-    await clickArchiveMenuItem(page); // archive
+    await clickArchivedPillInMenu(page); // archive
     await openListMenu(page);
-    await clickArchiveMenuItem(page); // unarchive
+    await clickActivePillInMenu(page);   // unarchive
     await goBackToLists(page);
 
     expect(await listVisibility(page, 'Archive me')).toBe(true);
   });
 
-  test('the menu item reflects archived state via aria-pressed', async ({ page }) => {
+  test('the segmented switch reflects archived state', async ({ page }) => {
     await openFirstList(page);
     await openListMenu(page);
-    expect(await archiveMenuPressed(page)).toBe('false');
-    await clickArchiveMenuItem(page);
+    expect(await archivedPillActive(page)).toBe(false);
+    await clickArchivedPillInMenu(page);
 
     await openListMenu(page);
-    expect(await archiveMenuPressed(page)).toBe('true');
+    expect(await archivedPillActive(page)).toBe(true);
   });
 });

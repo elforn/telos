@@ -43,13 +43,13 @@ items' tag arrays via `selectedTags`, the known-tag list via `existingTags`, and
 
 ## Archiving lists
 
-Open a list, tap the **⋮** menu, then tap **Archived**. The list disappears from the
-Lists overview immediately — archiving only declutters that page, the list itself stays
-fully functional: its items, colour, and status are untouched, and it's still a valid
-destination when moving, copying, or promoting items from elsewhere in the app. Tapping
-**Archived** again un-archives it. The item shows a checkmark when the list is currently
-archived (the menu closes on tap, so the checkmark is confirmation for next time you
-open it — the toast right after tapping is the immediate feedback).
+Open a list, tap the **⋮** menu, then use the **Archive** segmented switch — the same
+Active/Archived pill-group style as the Status and Tag-colour toggles right above it in
+the same menu. The list disappears from the Lists overview immediately — archiving only
+declutters that page, the list itself stays fully functional: its items, colour, and
+status are untouched, and it's still a valid destination when moving, copying, or
+promoting items from elsewhere in the app. Which pill is highlighted always shows the
+current state at a glance; a toast confirms the change right after you tap.
 
 Archiving deliberately lives in the **⋮ menu**, not the rename dialog (which only edits
 the list's name/colour) — it sits alongside the list's other lifecycle actions (Share,
@@ -68,6 +68,6 @@ This mirrors `goal.archived` (`app/pages/home-page.js`) in its data-model semant
 (hide-by-default, filter-pill-reveal) but *not* its interaction — goals toggle archived
 from within `goal-dialog.js`'s own footer, since that dialog already carries a "more
 actions" overflow sheet; `list-dialog.js` has no such sheet, so list archiving lives in
-`list-detail-page.js`'s own "⋮" menu instead (`#archive-menu-btn`, directly wired to
-`setState('lists', ...)` — no cross-component event needed). See the `List` schema entry
-in `CLAUDE.md` for the exact field shape (`archived?: boolean`).
+`list-detail-page.js`'s own "⋮" menu instead (`#archive-active-btn` / `#archive-archived-btn`,
+directly wired to `setState('lists', ...)` — no cross-component event needed). See the
+`List` schema entry in `CLAUDE.md` for the exact field shape (`archived?: boolean`).

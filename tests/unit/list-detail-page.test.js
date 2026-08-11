@@ -1384,25 +1384,51 @@ describe('list-detail-page — list-color-changed (immediate commit)', () => {
   });
 });
 
-// ── Archive (menu) ──────────────────────────────────────────────────────────
+// ── Archive (menu segmented switch) ─────────────────────────────────────────
 
 describe('list-detail-page — archive list (menu)', () => {
-  it('archives a non-archived list on click', async () => {
+  it('defaults to Active for a non-archived list', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#archive-active-btn').classList.contains('active')).toBe(true));
+    expect(el.shadowRoot.querySelector('#archive-archived-btn').classList.contains('active')).toBe(false);
+  });
+
+  it('shows Archived as active for an already-archived list', async () => {
+    const archivedList = { ...LIST, archived: true };
+    await boot({ dbName: freshName(), initialState: { lists: [archivedList] } });
+    const el = mount();
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#archive-archived-btn').classList.contains('active')).toBe(true));
+    expect(el.shadowRoot.querySelector('#archive-active-btn').classList.contains('active')).toBe(false);
+  });
+
+  it('archives a non-archived list when Archived is clicked', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
-    el.shadowRoot.querySelector('#archive-menu-btn').click();
+    el.shadowRoot.querySelector('#archive-archived-btn').click();
     await vi.waitFor(() => expect(getState().lists[0].archived).toBe(true));
     expect(getState().lists[0].name).toBe('Gift ideas');
   });
 
-  it('unarchives an already-archived list on click', async () => {
+  it('unarchives an archived list when Active is clicked', async () => {
     const archivedList = { ...LIST, archived: true };
     await boot({ dbName: freshName(), initialState: { lists: [archivedList] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
-    el.shadowRoot.querySelector('#archive-menu-btn').click();
+    el.shadowRoot.querySelector('#archive-active-btn').click();
     await vi.waitFor(() => expect(getState().lists[0].archived).toBe(false));
+  });
+
+  it('is a no-op clicking the already-active option', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
+    el.shadowRoot.querySelector('#archive-active-btn').click();
+    await new Promise(r => setTimeout(r, 20));
+    expect(getState().lists[0].archived).toBeUndefined();
   });
 
   it('does not affect other lists when archiving', async () => {
@@ -1410,7 +1436,7 @@ describe('list-detail-page — archive list (menu)', () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST, LIST2] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
-    el.shadowRoot.querySelector('#archive-menu-btn').click();
+    el.shadowRoot.querySelector('#archive-archived-btn').click();
     await vi.waitFor(() => expect(getState().lists[0].archived).toBe(true));
     expect(getState().lists[1].archived).toBeUndefined();
   });
@@ -1420,7 +1446,7 @@ describe('list-detail-page — archive list (menu)', () => {
     await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
-    el.shadowRoot.querySelector('#archive-menu-btn').click();
+    el.shadowRoot.querySelector('#archive-archived-btn').click();
     await vi.waitFor(() => {
       const toastEl = document.querySelector('#toast-container .socle-toast-success');
       expect(toastEl?.textContent).toContain('List archived');
@@ -1433,7 +1459,7 @@ describe('list-detail-page — archive list (menu)', () => {
     await boot({ dbName: freshName(), initialState: { lists: [archivedList] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
-    el.shadowRoot.querySelector('#archive-menu-btn').click();
+    el.shadowRoot.querySelector('#archive-active-btn').click();
     await vi.waitFor(() => {
       const toastEl = document.querySelector('#toast-container .socle-toast-success');
       expect(toastEl?.textContent).toContain('List unarchived');
@@ -1445,24 +1471,9 @@ describe('list-detail-page — archive list (menu)', () => {
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('#list-name').textContent).toBe('Gift ideas'));
     el.shadowRoot.querySelector('#menu-btn').click();
-    el.shadowRoot.querySelector('#archive-menu-btn').click();
+    el.shadowRoot.querySelector('#archive-archived-btn').click();
     const dialog = el.shadowRoot.querySelector('#menu').shadowRoot.querySelector('dialog');
     expect(dialog.open).toBe(false);
-  });
-
-  it('reflects the current archived state via aria-pressed', async () => {
-    const archivedList = { ...LIST, archived: true };
-    await boot({ dbName: freshName(), initialState: { lists: [archivedList] } });
-    const el = mount();
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#archive-menu-btn').getAttribute('aria-pressed')).toBe('true'));
-  });
-
-  it('aria-pressed is false for a non-archived list', async () => {
-    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
-    const el = mount();
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#archive-menu-btn').getAttribute('aria-pressed')).toBe('false'));
   });
 });
 

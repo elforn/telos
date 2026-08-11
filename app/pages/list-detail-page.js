@@ -223,23 +223,6 @@ class ListDetailPage extends AppElement {
           color: var(--color-text-muted);
         }
 
-        .menu-item-check {
-          display: flex;
-          align-items: center;
-          color: var(--color-accent);
-          visibility: hidden;
-        }
-
-        .menu-item-check svg {
-          inline-size: var(--icon-size-sm);
-          block-size: var(--icon-size-sm);
-          pointer-events: none;
-        }
-
-        #archive-menu-btn[aria-pressed="true"] .menu-item-check {
-          visibility: visible;
-        }
-
         /* ── Main content ────────────────────────────────────────────────── */
 
         main {
@@ -803,10 +786,13 @@ class ListDetailPage extends AppElement {
           <span>${t('list-detail.share-list')}</span>
           <span class="menu-item-value" aria-hidden="true">›</span>
         </button>
-        <button class="menu-item" id="archive-menu-btn" aria-pressed="false">
-          <span>${t('list-detail.archived-toggle')}</span>
-          <span class="menu-item-check" aria-hidden="true">${icons.check}</span>
-        </button>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('list-detail.archive-label')}</p>
+          <div class="status-pill-group" role="group" aria-label="${t('list-detail.archive-label')}">
+            <button class="status-pill" id="archive-active-btn">${t('list-detail.archive-active')}</button>
+            <button class="status-pill" id="archive-archived-btn">${t('list-detail.archive-archived')}</button>
+          </div>
+        </div>
         <div class="menu-delete-section">
           <button class="menu-delete-btn" id="list-delete-btn">${t('list-detail.delete-list')}</button>
         </div>
@@ -941,16 +927,17 @@ class ListDetailPage extends AppElement {
     this.listen(this._listDialog, 'list-delete', this._onListDialogDelete);
 
     // ── Archive list (menu) ───────────────────────────────────────────────────
-    this._archiveMenuBtn = this.shadowRoot.querySelector('#archive-menu-btn');
-    this._onArchiveMenuBtn = () => {
+    this._setArchived = archived => {
       this._menuDialog.close();
-      const archived = !(getState().lists ?? []).find(l => l.id === this._listId)?.archived;
       setState('lists', (getState().lists ?? []).map(l =>
         l.id === this._listId ? { ...l, archived } : l
       ));
       toast(t(archived ? 'lists.toast-list-archived' : 'lists.toast-list-unarchived'), 'success');
     };
-    this.listen(this._archiveMenuBtn, 'click', this._onArchiveMenuBtn);
+    this._onArchiveActive = () => { if (this._archived) this._setArchived(false); };
+    this._onArchiveArchived = () => { if (!this._archived) this._setArchived(true); };
+    this.listen(this.shadowRoot.querySelector('#archive-active-btn'), 'click', this._onArchiveActive);
+    this.listen(this.shadowRoot.querySelector('#archive-archived-btn'), 'click', this._onArchiveArchived);
 
     // ── Delete list (menu) ────────────────────────────────────────────────────
     this._onListDeleteBtn = () => { this._menuDialog.close(); this._deleteCurrentList(); };
@@ -1556,7 +1543,8 @@ class ListDetailPage extends AppElement {
       this._nameEl.textContent = list.name;
       this.shadowRoot.querySelector('#name-edit-btn')?.setAttribute('aria-label', `${t('list-detail.edit-name')}: ${list.name}`);
       this._pageHeader.style.borderBlockEndColor = list.color ?? '';
-      this._archiveMenuBtn?.setAttribute('aria-pressed', String(!!list.archived));
+      this._archived = !!list.archived;
+      this._applyArchivePref();
       this._showStatus = list.showStatus ?? true;
       this._applyStatusPref();
       this._renderItems(list.items ?? []);
@@ -1725,6 +1713,13 @@ class ListDetailPage extends AppElement {
     const hideBtn = this.shadowRoot?.querySelector('#status-hide-btn');
     if (showBtn) showBtn.classList.toggle('active', this._showStatus);
     if (hideBtn) hideBtn.classList.toggle('active', !this._showStatus);
+  }
+
+  _applyArchivePref() {
+    const activeBtn   = this.shadowRoot?.querySelector('#archive-active-btn');
+    const archivedBtn = this.shadowRoot?.querySelector('#archive-archived-btn');
+    if (activeBtn)   activeBtn.classList.toggle('active', !this._archived);
+    if (archivedBtn) archivedBtn.classList.toggle('active', this._archived);
   }
 
   // ── Filter helpers ────────────────────────────────────────────────────────
