@@ -60,8 +60,6 @@ defineStrings({
   'home.toast-item-created':       'Added to {name}',
   'home.toast-item-created-many':  'Added to {n} lists',
 
-  'goal-dialog.tags-label':              'Tags',
-  'goal-dialog.tags-placeholder':        'Add tag…',
   'goal-dialog.duedate-toggle':          'Deadline',
   'goal-dialog.duedate-clear':           'Clear deadline',
 

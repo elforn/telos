@@ -61,8 +61,6 @@ defineStrings({
   'home.toast-item-created':     'Afegit a {name}',
   'home.toast-item-created-many': 'Afegit a {n} llistes',
 
-  'goal-dialog.tags-label':       'Etiquetes',
-  'goal-dialog.tags-placeholder': 'Afegeix etiqueta…',
   'goal-dialog.duedate-toggle':   'Termini',
   'goal-dialog.duedate-clear':    'Esborra el termini',
 

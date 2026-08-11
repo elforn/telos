@@ -10,8 +10,9 @@ import '../components/list-dialog/list-dialog.js';
 import '../components/add-row/add-row.js';
 import '../../_lib/modules/modal-dialog/modal-dialog.js';
 import { COLOR_PALETTE } from '../components/lists-page-item/lists-page-item.js';
+import '../components/date-filter-row/date-filter-row.js';
 import { icons } from '../icons.js';
-import { DATE_FILTER_KEYS, matchesDateBucket } from '../utils/urgency.js';
+import { matchesDateBucket } from '../utils/urgency.js';
 import { FilterState } from '../../_lib/modules/filter-state/filter-state.js';
 
 const FILTER_SHAPE = {
@@ -350,21 +351,7 @@ class ListsPage extends AppElement {
 
         .filter-row::-webkit-scrollbar { display: none; }
 
-        /* Date pills carry a small urgency-coloured dot so the row self-documents. */
-        .filter-date-pill::before {
-          content: '';
-          display: inline-block;
-          inline-size: 8px;
-          block-size: 8px;
-          border-radius: var(--radius-full);
-          margin-inline-end: var(--space-1);
-          vertical-align: middle;
-        }
-        .filter-date-pill[data-date="overdue"]::before { background: var(--color-danger); }
-        .filter-date-pill[data-date="week"]::before    { background: var(--color-warning); }
-        .filter-date-pill[data-date="month"]::before   { background: var(--color-success); }
-        .filter-date-pill[data-date="later"]::before   { background: var(--color-text-muted); }
-        .filter-date-pill[data-date="none"]::before    { box-shadow: inset 0 0 0 1.5px var(--color-text-muted); }
+        /* Date-bucket pills live in <date-filter-row> now — it owns its own styling. */
 
         .filter-chip {
           flex-shrink: 0;
@@ -435,13 +422,7 @@ class ListsPage extends AppElement {
               <button class="filter-chip" id="fstate-not-empty" data-state="not-empty" aria-pressed="false">${t('lists-page.filter-not-empty')}</button>
               <button class="filter-chip" id="fstate-archived" data-state="archived" aria-pressed="false">${t('lists-page.filter-archived')}</button>
             </div>
-            <div class="filter-row" id="filter-date-row" role="group" aria-label="${t('filter.date-label')}">
-              <button class="filter-chip filter-date-pill" id="fdate-overdue" data-date="overdue" aria-pressed="false">${t('filter.date-overdue')}</button>
-              <button class="filter-chip filter-date-pill" id="fdate-week" data-date="week" aria-pressed="false">${t('filter.date-week')}</button>
-              <button class="filter-chip filter-date-pill" id="fdate-month" data-date="month" aria-pressed="false">${t('filter.date-month')}</button>
-              <button class="filter-chip filter-date-pill" id="fdate-later" data-date="later" aria-pressed="false">${t('filter.date-later')}</button>
-              <button class="filter-chip filter-date-pill" id="fdate-none" data-date="none" aria-pressed="false">${t('filter.date-none')}</button>
-            </div>
+            <date-filter-row id="date-filter-row"></date-filter-row>
           </div>
         </div>
       </div>
@@ -563,17 +544,15 @@ class ListsPage extends AppElement {
     this.listen(this.shadowRoot.querySelector('#filter-states-row'), 'click', this._onFilterState);
 
     this._onFilterDate = e => {
-      const btn = e.target.closest('.filter-date-pill');
-      if (!btn) return;
-      const key = btn.dataset.date;
-      if (!DATE_FILTER_KEYS.includes(key)) return;
+      const key = e.detail.key;
       if (this._filter.dates.has(key)) this._filter.dates.delete(key);
       else this._filter.dates.add(key);
       this._saveFilter();
       this._syncFilterUI();
       this._applyFilter();
     };
-    this.listen(this.shadowRoot.querySelector('#filter-date-row'), 'click', this._onFilterDate);
+    this._dateFilterRow = this.shadowRoot.querySelector('#date-filter-row');
+    this.listen(this._dateFilterRow, 'date-toggle', this._onFilterDate);
 
     this._onFilterClear = () => {
       this._filter = { query: '', states: new Set(), dates: new Set() };
@@ -722,14 +701,7 @@ class ListsPage extends AppElement {
         btn.setAttribute('aria-pressed', String(on));
       }
     }
-    for (const d of DATE_FILTER_KEYS) {
-      const btn = this.shadowRoot.querySelector(`#fdate-${d}`);
-      if (btn) {
-        const on = this._filter.dates.has(d);
-        btn.classList.toggle('active', on);
-        btn.setAttribute('aria-pressed', String(on));
-      }
-    }
+    if (this._dateFilterRow) this._dateFilterRow.selected = this._filter.dates;
   }
 
   _revealCreatedList(id) {

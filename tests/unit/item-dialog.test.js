@@ -357,7 +357,7 @@ describe('item-dialog — new item creation', () => {
     sr.querySelector('#note-input').value = 'A note';
     sr.querySelector('#url-input').value = 'https://example.com';
     sr.querySelector('#duedate-input').value = '2026-08-01';
-    const tagInput = sr.querySelector('#tag-input');
+    const tagInput = sr.querySelector('#tag-input').shadowRoot.querySelector('.tag-text-input');
     tagInput.value = 'work';
     tagInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     sr.querySelector('input[name="status"][value="done"]').checked = true;
@@ -369,7 +369,7 @@ describe('item-dialog — new item creation', () => {
     expect(sr.querySelector('#note-input').value).toBe('');
     expect(sr.querySelector('#url-input').value).toBe('');
     expect(sr.querySelector('#duedate-input').value).toBe('');
-    expect(sr.querySelectorAll('.tag-chip')).toHaveLength(0);
+    expect(sr.querySelector('#tag-input').tags).toEqual([]);
     expect(sr.querySelector('input[name="status"][value="open"]').checked).toBe(true);
     expect(sr.querySelector('#delete').hidden).toBe(true);
   });
@@ -854,7 +854,7 @@ describe('item-dialog — tags on existing item', () => {
     el.open(ITEM);
     const events = [];
     el.addEventListener('item-tags-changed', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#tag-input');
+    const inp = el.shadowRoot.querySelector('#tag-input').shadowRoot.querySelector('.tag-text-input');
     inp.value = 'newtag';
     inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(events).toHaveLength(1);
@@ -866,7 +866,7 @@ describe('item-dialog — tags on existing item', () => {
     el.open({ ...ITEM, tags: ['health'] });
     const events = [];
     el.addEventListener('item-tags-changed', e => events.push(e));
-    el.shadowRoot.querySelector('.tag-chip[data-tag="health"]').click();
+    el.shadowRoot.querySelector('#tag-input').shadowRoot.querySelector('.tag-chip[data-tag="health"]').click();
     expect(events).toHaveLength(1);
     expect(events[0].detail.tags).not.toContain('health');
   });
@@ -876,7 +876,7 @@ describe('item-dialog — tags on existing item', () => {
     el.open(null);
     const events = [];
     el.addEventListener('item-tags-changed', e => events.push(e));
-    const inp = el.shadowRoot.querySelector('#tag-input');
+    const inp = el.shadowRoot.querySelector('#tag-input').shadowRoot.querySelector('.tag-text-input');
     inp.value = 'newtag';
     inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(events).toHaveLength(0);
@@ -1191,20 +1191,15 @@ describe('item-dialog — immediate status commit', () => {
 // ── Tag chip aria-labels ──────────────────────────────────────────────────────
 
 describe('item-dialog — tag chip aria-labels', () => {
+  // Chip rendering/a11y itself is covered exhaustively by tag-input.test.js —
+  // this just checks item-dialog wires item.tags into <tag-input> correctly.
   it('tag chip has aria-label containing the tag name', () => {
     const el = mount();
     el.open({ ...ITEM, tags: ['health', 'fitness'] });
-    const chips = el.shadowRoot.querySelectorAll('.tag-chip');
+    const chips = el.shadowRoot.querySelector('#tag-input').shadowRoot.querySelectorAll('.tag-chip');
     expect(chips).toHaveLength(2);
     expect(chips[0].getAttribute('aria-label')).toContain('health');
     expect(chips[1].getAttribute('aria-label')).toContain('fitness');
-  });
-
-  it('tag chip aria-label is not a raw hex value', () => {
-    const el = mount();
-    el.open({ ...ITEM, tags: ['work'] });
-    const btn = el.shadowRoot.querySelector('.tag-chip');
-    expect(btn.getAttribute('aria-label')).not.toMatch(/#[0-9a-fA-F]/);
   });
 });
 

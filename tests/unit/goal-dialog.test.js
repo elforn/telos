@@ -178,7 +178,7 @@ describe('goal-dialog — new goal creation', () => {
     sr.querySelector('#input').value = 'First goal';
     sr.querySelector('#desc-input').value = 'Some notes';
     sr.querySelector('#duedate-input').value = '2026-12-31';
-    const tagInput = sr.querySelector('#tag-input');
+    const tagInput = sr.querySelector('#tag-input').shadowRoot.querySelector('.tag-text-input');
     tagInput.value = 'health';
     tagInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 
@@ -188,7 +188,7 @@ describe('goal-dialog — new goal creation', () => {
 
     expect(sr.querySelector('#desc-input').value).toBe('');
     expect(sr.querySelector('#duedate-input').value).toBe('');
-    expect(sr.querySelectorAll('.tag-chip')).toHaveLength(0);
+    expect(sr.querySelector('#tag-input').tags).toEqual([]);
     expect(sr.querySelector('#delete').hidden).toBe(true);
   });
 
@@ -1097,20 +1097,15 @@ describe('goal-dialog — archive button', () => {
 });
 
 describe('goal-dialog — tag chip aria-labels', () => {
+  // Chip rendering/a11y itself is covered exhaustively by tag-input.test.js —
+  // this just checks goal-dialog wires goal.tags into <tag-input> correctly.
   it('tag chip has aria-label containing the tag name', () => {
     const el = mount();
     el.open({ id: '1', title: 'Run a 5k', tags: ['health', 'fitness'] });
-    const chips = el.shadowRoot.querySelectorAll('.tag-chip');
+    const chips = el.shadowRoot.querySelector('#tag-input').shadowRoot.querySelectorAll('.tag-chip');
     expect(chips).toHaveLength(2);
     expect(chips[0].getAttribute('aria-label')).toContain('health');
     expect(chips[1].getAttribute('aria-label')).toContain('fitness');
-  });
-
-  it('tag chip aria-label is not a raw hex value', () => {
-    const el = mount();
-    el.open({ id: '1', title: 'Goal', tags: ['work'] });
-    const btn = el.shadowRoot.querySelector('.tag-chip');
-    expect(btn.getAttribute('aria-label')).not.toMatch(/#[0-9a-fA-F]/);
   });
 });
 

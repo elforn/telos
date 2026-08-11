@@ -37,7 +37,8 @@ async function addTagInDialog(page, tag) {
     const inp = document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
       .querySelector('goal-dialog').shadowRoot
-      .querySelector('#tag-input');
+      .querySelector('#tag-input').shadowRoot
+      .querySelector('.tag-text-input');
     inp.value = tagVal;
     inp.dispatchEvent(new Event('input', { bubbles: true }));
     inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true }));
@@ -47,6 +48,7 @@ async function addTagInDialog(page, tag) {
     const wrap = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('home-page')?.shadowRoot
       ?.querySelector('goal-dialog')?.shadowRoot
+      ?.querySelector('#tag-input')?.shadowRoot
       ?.querySelector('#tag-chips-wrap');
     return [...(wrap?.querySelectorAll('.tag-chip') ?? [])]
       .some(c => c.textContent.includes(tagVal));
@@ -169,6 +171,7 @@ test.describe('Goal tags — editing', () => {
       [...document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
+        .querySelector('#tag-input').shadowRoot
         .querySelector('#tag-chips-wrap')
         .querySelectorAll('.tag-chip')]
         .map(c => c.dataset.tag)
@@ -206,6 +209,7 @@ test.describe('Goal tags — editing', () => {
       const chip = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
+        .querySelector('#tag-input').shadowRoot
         .querySelector('#tag-chips-wrap .tag-chip');
       chip?.click();
     });
@@ -215,6 +219,7 @@ test.describe('Goal tags — editing', () => {
       const wrap = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('home-page')?.shadowRoot
         ?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#tag-input')?.shadowRoot
         ?.querySelector('#tag-chips-wrap');
       return wrap?.querySelectorAll('.tag-chip').length === 0;
     });
@@ -223,6 +228,7 @@ test.describe('Goal tags — editing', () => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
+        .querySelector('#tag-input').shadowRoot
         .querySelector('#tag-chips-wrap')
         .querySelectorAll('.tag-chip').length
     );
@@ -236,6 +242,7 @@ test.describe('Goal tags — editing', () => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
+        .querySelector('#tag-input').shadowRoot
         .querySelector('#tag-chips-wrap .tag-chip')?.click();
     });
 
@@ -243,6 +250,7 @@ test.describe('Goal tags — editing', () => {
       const wrap = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('home-page')?.shadowRoot
         ?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#tag-input')?.shadowRoot
         ?.querySelector('#tag-chips-wrap');
       return wrap?.querySelectorAll('.tag-chip').length === 0;
     });

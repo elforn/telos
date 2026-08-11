@@ -61,8 +61,6 @@ defineStrings({
   'home.toast-item-created':     'Ajouté à {name}',
   'home.toast-item-created-many': 'Ajouté à {n} listes',
 
-  'goal-dialog.tags-label':       'Étiquettes',
-  'goal-dialog.tags-placeholder': 'Ajouter une étiquette…',
   'goal-dialog.duedate-toggle':   'Échéance',
   'goal-dialog.duedate-clear':    'Effacer l\'échéance',
 

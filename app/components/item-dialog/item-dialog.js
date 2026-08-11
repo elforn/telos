@@ -3,8 +3,8 @@ import { attachMarkdownHighlight } from '../../utils/markdown-highlight.js';
 import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
+import '../tag-input/tag-input.js';
 import { icons } from '../../icons.js';
-import { tagColor } from '../../utils/tag-color.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
 
@@ -38,7 +38,10 @@ class ItemDialog extends AppElement {
   set currentYear(val) { this._currentYear = val; }
   get currentYear() { return this._currentYear ?? new Date().getFullYear(); }
 
-  set existingTags(val) { this._existingTags = val ?? []; }
+  set existingTags(val) {
+    this._existingTags = val ?? [];
+    if (this._tagInputEl) this._tagInputEl.existingTags = this._existingTags;
+  }
 
   // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -76,10 +79,7 @@ class ItemDialog extends AppElement {
     // Due date is a first-class field for list items — shown by default (URL stays collapsed).
     this._showDueDateField(true);
 
-    this._tags = [...(item?.tags ?? [])];
-    this._tagInput.value = '';
-    this._renderTagChips();
-    this._updateSuggestions();
+    this._tagInputEl.tags = item?.tags ?? [];
 
     this._menuBtn.hidden = false;
 
@@ -109,11 +109,7 @@ class ItemDialog extends AppElement {
     return `
       <style>
         :host {
-          --_note-min-h:          3.5rem;
-          --_chip-x-font-size:    0.9em;
-          --_chip-x-bg:           rgba(0, 0, 0, 0.12);
-          --_chip-x-bg-hover:     rgba(0, 0, 0, 0.22);
-          --_suggestions-shadow:  0 -4px 10px rgba(0, 0, 0, 0.07);
+          --_note-min-h: 3.5rem;
         }
 
         /* Consistent modal padding across the app: --space-5 on both axes. */
@@ -385,128 +381,10 @@ class ItemDialog extends AppElement {
           outline-offset: 2px;
         }
 
-        /* ── Tags ────────────────────────────────────────────────────────── */
+        /* ── Tags — chip/suggestion styling lives in <tag-input> now ─────── */
 
-        .tag-chips-wrap {
-          display: flex;
-          flex-wrap: nowrap;
-          overflow-x: auto;
-          gap: var(--space-2);
-          align-items: stretch;
-          background: var(--color-surface-raised);
-          border: 0.5px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          padding: var(--space-3);
-          box-sizing: border-box;
-          cursor: text;
+        tag-input {
           margin-block-end: var(--space-4);
-        }
-
-        .tag-chips-wrap:focus-within { border-color: var(--color-accent); }
-
-        .tag-chip {
-          display: inline-flex;
-          flex-shrink: 0;
-          align-items: center;
-          box-sizing: border-box;
-          min-block-size: 0;
-          gap: var(--space-1);
-          padding-inline-start: var(--space-3);
-          padding-inline-end: var(--space-1);
-          color: var(--color-text-primary);
-          border-radius: var(--radius-full);
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-medium);
-          font-family: var(--font-family);
-          white-space: nowrap;
-          border: none;
-          cursor: pointer;
-          touch-action: manipulation;
-        }
-
-        .tag-chip:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        .tag-chip-x {
-          background: var(--_chip-x-bg);
-          border-radius: var(--radius-full);
-          inline-size: var(--icon-size-sm);
-          block-size: var(--icon-size-sm);
-          flex-shrink: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          line-height: 1;
-          font-size: var(--_chip-x-font-size);
-          pointer-events: none;
-        }
-
-        .tag-chip:hover .tag-chip-x { background: var(--_chip-x-bg-hover); }
-
-        #tag-input {
-          flex: 1 0 80px;
-          min-inline-size: 80px;
-          background: none;
-          border: none;
-          padding: 0;
-          font-size: var(--font-size-body);
-          font-family: var(--font-family);
-          color: var(--color-text-primary);
-          outline: none;
-          margin-block-end: 0;
-          inline-size: auto;
-          display: inline;
-        }
-
-        #tag-input::placeholder { color: var(--color-text-muted); }
-
-        /* ── Tag suggestions ─────────────────────────────────────────────── */
-
-        .tag-area {
-          position: relative;
-          margin-block-end: var(--space-4);
-        }
-
-        .tag-area .tag-chips-wrap {
-          margin-block-end: 0;
-        }
-
-        #tag-suggestions {
-          position: absolute;
-          inset-block-end: 100%;
-          inset-inline: 0;
-          display: flex;
-          flex-wrap: wrap;
-          gap: var(--space-2);
-          padding-block-start: var(--space-3);
-          padding-block-end: var(--space-2);
-          background: var(--color-surface);
-          border-block-start: 0.5px solid var(--color-border);
-          box-shadow: var(--_suggestions-shadow);
-          border-start-start-radius: var(--radius-sm);
-          border-start-end-radius: var(--radius-sm);
-          z-index: 1;
-        }
-
-        #tag-suggestions[hidden] { display: none; }
-
-        .tag-suggestion {
-          min-block-size: 28px;
-          padding-block: 0;
-          padding-inline: var(--space-3);
-          border-radius: var(--radius-full);
-          border: 1px solid var(--color-border);
-          background: none;
-          color: var(--color-text-secondary);
-          font-size: var(--font-size-caption);
-          touch-action: manipulation;
-        }
-
-        .tag-suggestion:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
         }
 
         /* ── Action sheet ────────────────────────────────────────────────── */
@@ -752,17 +630,7 @@ class ItemDialog extends AppElement {
                    aria-label="${t('item-dialog.duedate-toggle')}" />
             <button type="button" id="duedate-clear" aria-label="${t('item-dialog.duedate-clear')}">${icons.xMark}</button>
           </div>
-          <div class="tag-area">
-            <div id="tag-suggestions" hidden aria-label="${t('item-dialog.tags-label')}"></div>
-            <div class="tag-chips-wrap" id="tag-chips-wrap" role="group" aria-label="${t('item-dialog.tags-label')}">
-              <input type="text"
-                     id="tag-input"
-                     aria-label="${t('item-dialog.tags-placeholder')}"
-                     placeholder="${t('item-dialog.tags-placeholder')}"
-                     autocomplete="off"
-                     autocapitalize="none" />
-            </div>
-          </div>
+          <tag-input id="tag-input"></tag-input>
         </div>
 
         <!-- ── View 2: Goal promoter ──────────────────────────────────────── -->
@@ -853,9 +721,8 @@ class ItemDialog extends AppElement {
     this._dueDateClear = this.shadowRoot.querySelector('#duedate-clear');
     this._dueDateToggle = this.shadowRoot.querySelector('#action-duedate-toggle');
     this._dueDateRow = this.shadowRoot.querySelector('.duedate-field');
-    this._tagChipsWrap = this.shadowRoot.querySelector('#tag-chips-wrap');
-    this._tagInput = this.shadowRoot.querySelector('#tag-input');
-    this._tagSuggestions = this.shadowRoot.querySelector('#tag-suggestions');
+    this._tagInputEl = this.shadowRoot.querySelector('#tag-input');
+    this._tagInputEl.existingTags = this._existingTags ?? [];
     this._deleteBtn = this.shadowRoot.querySelector('#delete');
     this._menuBtn = this.shadowRoot.querySelector('#menu-btn');
     this._closeBtn = this.shadowRoot.querySelector('#close');
@@ -875,7 +742,6 @@ class ItemDialog extends AppElement {
     this._isNew          = false;
     this._skipCreate      = false;
     this._view           = 'main';
-    this._tags           = [];
     this._lastValidTitle   = '';
     this._lastValidNote    = '';
     this._lastValidUrl     = '';
@@ -1058,36 +924,17 @@ class ItemDialog extends AppElement {
     this._onResize = () => this._syncNoteHeight();
 
     // ── Tag input ─────────────────────────────────────────────────────────────
+    // Chip/suggestion mechanics live in <tag-input>; the dialog only decides
+    // whether a change is worth propagating upward (suppressed while _isNew,
+    // same as every other field — a new item isn't "changed", it's drafted).
 
-    this._onTagKeyDown = e => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        e.stopPropagation();
-        this._addTag(this._tagInput.value);
-      } else if (e.key === 'Backspace' && !this._tagInput.value && this._tags.length) {
-        e.preventDefault();
-        this._removeTag(this._tags[this._tags.length - 1]);
-      }
+    this._onTagsChanged = e => {
+      if (this._isNew) return;
+      this.dispatchEvent(new CustomEvent('item-tags-changed', {
+        bubbles: true, composed: true, detail: { tags: e.detail.tags },
+      }));
     };
-
-    this._onTagInput = () => {
-      const val = this._tagInput.value;
-      if (val.includes(',')) {
-        val.split(',').slice(0, -1).forEach(p => this._addTag(p));
-        this._tagInput.value = val.split(',').at(-1);
-      }
-      this._updateSuggestions();
-    };
-
-    this._onTagBlur = () => {
-      if (this._tagInput.value.trim()) this._addTag(this._tagInput.value);
-    };
-
-    this._onTagWrapClick = e => {
-      const chip = e.target.closest('.tag-chip');
-      if (chip) { this._removeTag(chip.dataset.tag); return; }
-      this._tagInput.focus();
-    };
+    this._tagInputEl.addEventListener('tags-changed', this._onTagsChanged);
 
     this._titleInput.addEventListener('keydown', this._onKeyDown);
     this._titleInput.addEventListener('blur',    this._onTitleBlur);
@@ -1101,14 +948,6 @@ class ItemDialog extends AppElement {
     this._dueDateInput.addEventListener('change', this._onDueDateInput);
     this._dueDateClear.addEventListener('pointerdown', e => e.preventDefault());
     this._dueDateClear.addEventListener('click', this._onDueDateClear);
-    this._tagInput.addEventListener('keydown', this._onTagKeyDown);
-    this._tagInput.addEventListener('input', this._onTagInput);
-    this._tagInput.addEventListener('blur', this._onTagBlur);
-    this._tagChipsWrap.addEventListener('click', this._onTagWrapClick);
-    this._onSuggestionPointerDown = e => e.preventDefault();
-    this._tagSuggestions.addEventListener('pointerdown', this._onSuggestionPointerDown);
-    this._onChipRemovePointerDown = e => { if (e.target.closest('.tag-chip')) e.preventDefault(); };
-    this._tagChipsWrap.addEventListener('pointerdown', this._onChipRemovePointerDown);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this._closeBtn.addEventListener('click', this._onClose);
     this._draftToggle = installDraftToggle(this, {
@@ -1274,12 +1113,7 @@ class ItemDialog extends AppElement {
     this._dueDateInput?.removeEventListener('change', this._onDueDateInput);
     this._dueDateToggle?.removeEventListener('click', this._onDueDateToggle);
     this._dueDateClear?.removeEventListener('click', this._onDueDateClear);
-    this._tagInput?.removeEventListener('keydown', this._onTagKeyDown);
-    this._tagInput?.removeEventListener('input', this._onTagInput);
-    this._tagInput?.removeEventListener('blur', this._onTagBlur);
-    this._tagChipsWrap?.removeEventListener('click', this._onTagWrapClick);
-    this._tagSuggestions?.removeEventListener('pointerdown', this._onSuggestionPointerDown);
-    this._tagChipsWrap?.removeEventListener('pointerdown', this._onChipRemovePointerDown);
+    this._tagInputEl?.removeEventListener('tags-changed', this._onTagsChanged);
     this._deleteBtn?.removeEventListener('click', this._onDelete);
     this._closeBtn?.removeEventListener('click', this._onClose);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
@@ -1376,69 +1210,6 @@ class ItemDialog extends AppElement {
     this._modal.close();
   }
 
-  // ── Tag helpers ───────────────────────────────────────────────────────────
-
-  _addTag(raw) {
-    const tag = raw.replace(/,/g, '').trim().toLowerCase();
-    if (!tag || this._tags.includes(tag)) { this._tagInput.value = ''; return; }
-    this._tags.push(tag);
-    this._tagInput.value = '';
-    this._renderTagChips();
-    this._updateSuggestions();
-    this._dispatchTagsChanged();
-  }
-
-  _removeTag(tag) {
-    this._tags = this._tags.filter(existing => existing !== tag);
-    this._renderTagChips();
-    this._dispatchTagsChanged();
-  }
-
-  _dispatchTagsChanged() {
-    if (this._isNew) return;
-    this.dispatchEvent(new CustomEvent('item-tags-changed', {
-      bubbles: true, composed: true, detail: { tags: [...this._tags] },
-    }));
-  }
-
-  _renderTagChips() {
-    this._tagChipsWrap.querySelectorAll('.tag-chip').forEach(c => c.remove());
-    for (const tag of this._tags) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'tag-chip';
-      btn.dataset.tag = tag;
-      btn.setAttribute('aria-label', t('tag.remove', { tag }));
-      btn.style.background = tagColor(tag);
-      btn.appendChild(document.createTextNode(tag));
-      const x = document.createElement('span');
-      x.className = 'tag-chip-x';
-      x.setAttribute('aria-hidden', 'true');
-      x.textContent = '×';
-      btn.appendChild(x);
-      this._tagChipsWrap.insertBefore(btn, this._tagInput);
-    }
-  }
-
-  _updateSuggestions() {
-    if (!this._tagSuggestions) return;
-    const partial = this._tagInput.value.trim().toLowerCase();
-    if (!partial) { this._tagSuggestions.hidden = true; this._tagSuggestions.replaceChildren(); return; }
-    const matches = (this._existingTags ?? []).filter(tag => tag.includes(partial) && !this._tags.includes(tag));
-    if (!matches.length) { this._tagSuggestions.hidden = true; this._tagSuggestions.replaceChildren(); return; }
-    this._tagSuggestions.replaceChildren();
-    for (const tag of matches) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'tag-suggestion';
-      btn.textContent = tag;
-      btn.style.borderColor = tagColor(tag);
-      btn.addEventListener('click', () => { this._addTag(tag); this._tagInput.focus(); });
-      this._tagSuggestions.appendChild(btn);
-    }
-    this._tagSuggestions.hidden = false;
-  }
-
   // ── Draft recovery toggle ─────────────────────────────────────────────────
 
   // A new item has no id of its own — scope its draft to the list it's being
@@ -1457,30 +1228,18 @@ class ItemDialog extends AppElement {
     this._showUrlField(!!url);
     this._dueDateInput.value = dueDate ?? '';
     this._showDueDateField(!!dueDate);
-    this._tags = [...(tags ?? [])];
-    this._renderTagChips();
-    this._updateSuggestions();
+    this._tagInputEl.tags = tags ?? [];
   }
 
   // ── Shared helpers ────────────────────────────────────────────────────────
 
-  _commitPendingTag() {
-    const raw = this._tagInput?.value.trim().toLowerCase().replace(/,/g, '');
-    if (raw && !this._tags.includes(raw)) {
-      this._tags.push(raw);
-      if (this._tagInput) this._tagInput.value = '';
-      this._renderTagChips();
-    }
-  }
-
   _getFormValues() {
-    this._commitPendingTag();
+    const tags = this._tagInputEl.commitPending();
     const title = this._titleInput.value.trim();
     const status = this.shadowRoot.querySelector('input[name="status"]:checked')?.value ?? 'open';
     const note = this._noteInput.value.trim() || undefined;
     const url = this._urlInput.value.trim() || undefined;
     const dueDate = this._dueDateInput.value || undefined;
-    const tags = [...this._tags];
     return { title, status, note, url, dueDate, tags };
   }
 

@@ -18,8 +18,9 @@ import '../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../components/import-text-dialog/import-text-dialog.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
-import { DATE_FILTER_KEYS, matchesDateBucket } from '../utils/urgency.js';
+import { matchesDateBucket } from '../utils/urgency.js';
 import '../components/export-sheet/export-sheet.js';
+import '../components/date-filter-row/date-filter-row.js';
 import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdown.js';
 import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
 import { buildListHandoff, buildItemHandoff, buildItemsHandoff, shareHandoff } from '../utils/handoff.js';
@@ -667,21 +668,7 @@ class ListDetailPage extends AppElement {
           color: var(--color-text-on-accent);
         }
 
-        /* Date pills carry a small urgency-coloured dot so the row self-documents. */
-        .filter-date-pill::before {
-          content: '';
-          display: inline-block;
-          inline-size: 8px;
-          block-size: 8px;
-          border-radius: var(--radius-full);
-          margin-inline-end: var(--space-1);
-          vertical-align: middle;
-        }
-        .filter-date-pill[data-date="overdue"]::before { background: var(--color-danger); }
-        .filter-date-pill[data-date="week"]::before    { background: var(--color-warning); }
-        .filter-date-pill[data-date="month"]::before   { background: var(--color-success); }
-        .filter-date-pill[data-date="later"]::before   { background: var(--color-text-muted); }
-        .filter-date-pill[data-date="none"]::before    { box-shadow: inset 0 0 0 1.5px var(--color-text-muted); }
+        /* Date-bucket pills live in <date-filter-row> now — it owns its own styling. */
 
         .filter-tag-chip {
           border-color: var(--tag-color, var(--color-border));
@@ -740,13 +727,7 @@ class ListDetailPage extends AppElement {
               <button class="filter-pill" id="fstatus-done" aria-pressed="false">${t('item-dialog.status-done')}</button>
               <button class="filter-pill" id="fstatus-closed" aria-pressed="false">${t('item-dialog.status-closed')}</button>
             </div>
-            <div class="filter-row" id="filter-date-row" role="group" aria-label="${t('filter.date-label')}">
-              <button class="filter-pill filter-date-pill" id="fdate-overdue" data-date="overdue" aria-pressed="false">${t('filter.date-overdue')}</button>
-              <button class="filter-pill filter-date-pill" id="fdate-week" data-date="week" aria-pressed="false">${t('filter.date-week')}</button>
-              <button class="filter-pill filter-date-pill" id="fdate-month" data-date="month" aria-pressed="false">${t('filter.date-month')}</button>
-              <button class="filter-pill filter-date-pill" id="fdate-later" data-date="later" aria-pressed="false">${t('filter.date-later')}</button>
-              <button class="filter-pill filter-date-pill" id="fdate-none" data-date="none" aria-pressed="false">${t('filter.date-none')}</button>
-            </div>
+            <date-filter-row id="date-filter-row"></date-filter-row>
             <div class="filter-row" id="filter-tag-row" hidden></div>
           </div>
         </div>
@@ -1509,17 +1490,15 @@ class ListDetailPage extends AppElement {
     this.listen(this.shadowRoot.querySelector('#filter-status-row'), 'click', this._onFilterStatus);
 
     this._onFilterDate = e => {
-      const btn = e.target.closest('.filter-date-pill');
-      if (!btn) return;
-      const key = btn.dataset.date;
-      if (!DATE_FILTER_KEYS.includes(key)) return;
+      const key = e.detail.key;
       if (this._filter.dates.has(key)) this._filter.dates.delete(key);
       else this._filter.dates.add(key);
       this._saveFilter();
       this._syncFilterUI();
       this._applyFilter();
     };
-    this.listen(this.shadowRoot.querySelector('#filter-date-row'), 'click', this._onFilterDate);
+    this._dateFilterRow = this.shadowRoot.querySelector('#date-filter-row');
+    this.listen(this._dateFilterRow, 'date-toggle', this._onFilterDate);
 
     this._onFilterClear = () => {
       this._filter = { query: '', statuses: new Set(), dates: new Set(), tags: new Set() };
@@ -1751,14 +1730,7 @@ class ListDetailPage extends AppElement {
         btn.setAttribute('aria-pressed', String(on));
       }
     }
-    for (const d of DATE_FILTER_KEYS) {
-      const btn = this.shadowRoot.querySelector(`#fdate-${d}`);
-      if (btn) {
-        const on = this._filter.dates.has(d);
-        btn.classList.toggle('active', on);
-        btn.setAttribute('aria-pressed', String(on));
-      }
-    }
+    if (this._dateFilterRow) this._dateFilterRow.selected = this._filter.dates;
     const dot = this._filterBtnEl?.querySelector('.filter-btn-dot');
     if (dot) dot.hidden = !active;
     this.shadowRoot?.querySelector('#filter-clear-btn')?.classList.toggle('active', active);

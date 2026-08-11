@@ -325,7 +325,8 @@ test.describe('List item — tags', () => {
       const inp = document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
         .querySelector('item-dialog').shadowRoot
-        .querySelector('#tag-input');
+        .querySelector('#tag-input').shadowRoot
+        .querySelector('.tag-text-input');
       inp.value = tagVal;
       inp.dispatchEvent(new Event('input', { bubbles: true }));
       inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true }));
@@ -334,6 +335,7 @@ test.describe('List item — tags', () => {
       const wrap = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('item-dialog')?.shadowRoot
+        ?.querySelector('#tag-input')?.shadowRoot
         ?.querySelector('#tag-chips-wrap');
       return [...(wrap?.querySelectorAll('.tag-chip') ?? [])].some(c => c.textContent.includes(tagVal));
     }, tag);
@@ -364,6 +366,7 @@ test.describe('List item — tags', () => {
       [...document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
         .querySelector('item-dialog').shadowRoot
+        .querySelector('#tag-input').shadowRoot
         .querySelector('#tag-chips-wrap')
         .querySelectorAll('.tag-chip')]
         .map(c => c.dataset.tag)
@@ -396,6 +399,7 @@ test.describe('List item — tags', () => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
         .querySelector('item-dialog').shadowRoot
+        .querySelector('#tag-input').shadowRoot
         .querySelector('#tag-chips-wrap .tag-chip')?.click();
     });
 
@@ -403,6 +407,7 @@ test.describe('List item — tags', () => {
       const wrap = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('item-dialog')?.shadowRoot
+        ?.querySelector('#tag-input')?.shadowRoot
         ?.querySelector('#tag-chips-wrap');
       return wrap?.querySelectorAll('.tag-chip').length === 0;
     });

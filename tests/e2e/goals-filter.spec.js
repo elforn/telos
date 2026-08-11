@@ -85,7 +85,8 @@ async function createGoal(page, addId, listId, title, tag = null) {
       const inp = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('#tag-input');
+        .querySelector('#tag-input').shadowRoot
+        .querySelector('.tag-text-input');
       inp.value = tagVal;
       inp.dispatchEvent(new Event('input', { bubbles: true }));
       inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true }));
@@ -95,6 +96,7 @@ async function createGoal(page, addId, listId, title, tag = null) {
       const wrap = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('home-page')?.shadowRoot
         ?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#tag-input')?.shadowRoot
         ?.querySelector('#tag-chips-wrap');
       return [...(wrap?.querySelectorAll('.tag-chip') ?? [])]
         .some(c => c.textContent.includes(tagVal));
