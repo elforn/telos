@@ -52,8 +52,9 @@ promoting items from elsewhere in the app. Which pill is highlighted always show
 current state at a glance; a toast confirms the change right after you tap.
 
 Archiving deliberately lives in the **⋮ menu**, not the rename dialog (which only edits
-the list's name/colour) — it sits alongside the list's other lifecycle actions (Share,
-Extract Markdown, Delete), just above Delete.
+the list's name/colour) — it sits right after the Status and Tag-colour toggles (grouped
+with them as the menu's per-list state controls) and before the Add from text / Extract
+Markdown / Share to Telos / Delete actions below it.
 
 To find an archived list again, open the filter panel on the Lists overview and tap the
 **Archived** chip. This flips the view to show *only* archived lists (matching any other

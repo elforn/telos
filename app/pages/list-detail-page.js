@@ -774,6 +774,13 @@ class ListDetailPage extends AppElement {
             <button class="status-pill" id="tags-hide-btn">${t('settings.reminder-off')}</button>
           </div>
         </div>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('list-detail.archive-label')}</p>
+          <div class="status-pill-group" role="group" aria-label="${t('list-detail.archive-label')}">
+            <button class="status-pill" id="archive-active-btn">${t('list-detail.archive-active')}</button>
+            <button class="status-pill" id="archive-archived-btn">${t('list-detail.archive-archived')}</button>
+          </div>
+        </div>
         <button class="menu-item" id="import-menu-btn">
           <span>${t('list-detail.add-from-text')}</span>
           <span class="menu-item-value" aria-hidden="true">›</span>
@@ -786,13 +793,6 @@ class ListDetailPage extends AppElement {
           <span>${t('list-detail.share-list')}</span>
           <span class="menu-item-value" aria-hidden="true">›</span>
         </button>
-        <div class="menu-section">
-          <p class="menu-section-label">${t('list-detail.archive-label')}</p>
-          <div class="status-pill-group" role="group" aria-label="${t('list-detail.archive-label')}">
-            <button class="status-pill" id="archive-active-btn">${t('list-detail.archive-active')}</button>
-            <button class="status-pill" id="archive-archived-btn">${t('list-detail.archive-archived')}</button>
-          </div>
-        </div>
         <div class="menu-delete-section">
           <button class="menu-delete-btn" id="list-delete-btn">${t('list-detail.delete-list')}</button>
         </div>
