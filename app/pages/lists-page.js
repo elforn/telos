@@ -322,6 +322,14 @@ class ListsPage extends AppElement {
           pointer-events: none;
         }
 
+        #filter-panel {
+          display: flex;
+          flex-direction: column;
+          gap: calc(var(--space-1) + 1px);
+        }
+
+        #filter-panel[hidden] { display: none; }
+
         .filter-chip-row {
           display: flex;
           gap: var(--space-2);

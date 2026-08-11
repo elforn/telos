@@ -92,12 +92,18 @@ class ListsPageItem extends Gestures(AppElement) {
 
         .archive-dot {
           display: none;
-          flex-shrink: 0;
+          position: absolute;
+          inset-block-start: 50%;
+          transform: translateY(-50%);
+          inset-inline-start: calc(var(--space-1) * 1.3);
           inline-size: var(--space-1);
           block-size: var(--space-1);
           border-radius: var(--radius-full);
           background: var(--color-accent);
-          opacity: 0.5;
+          z-index: 0;
+          opacity: 0.2;
+          pointer-events: none;
+          user-select: none;
         }
 
         :host([data-archived="true"]) .archive-dot {
@@ -184,9 +190,9 @@ class ListsPageItem extends Gestures(AppElement) {
 
       <div class="color-panel" id="color-panel" aria-hidden="true"></div>
       <div class="row" tabindex="0" role="button" aria-label="">
+        <span class="archive-dot" aria-hidden="true"></span>
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="list-name"></span>
-        <span class="archive-dot" aria-hidden="true"></span>
         <span class="urgency" aria-hidden="true" hidden></span>
         <span class="item-count"></span>
         <span class="chevron" aria-hidden="true">${icons.chevronRight}</span>
