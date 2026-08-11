@@ -113,7 +113,7 @@ describe('list-item — structure', () => {
 });
 
 describe('list-item — due-date urgency', () => {
-  const urgency = el => el.shadowRoot.querySelector('.row').dataset.urgency;
+  const urgency = el => el.dataset.urgency;
 
   it('is none when there is no dueDate', () => {
     expect(urgency(mount())).toBe('none');

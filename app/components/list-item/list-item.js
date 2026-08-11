@@ -4,6 +4,7 @@ import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { tagStrip } from '../../utils/tag-color.js';
 import { urgencyOf } from '../../utils/urgency.js';
+import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 
 const DONE_WIDTH = 48;   // square-ish done button
@@ -153,8 +154,7 @@ class ListItem extends Gestures(AppElement) {
         }
 
         .note-icon,
-        .url-icon,
-        .duedate-icon {
+        .url-icon {
           flex-shrink: 0;
           color: var(--color-text-muted);
           display: none;
@@ -162,8 +162,7 @@ class ListItem extends Gestures(AppElement) {
         }
 
         .note-icon svg,
-        .url-icon svg,
-        .duedate-icon svg {
+        .url-icon svg {
           display: block;
           inline-size: var(--icon-size-sm);
           block-size: var(--icon-size-sm);
@@ -172,19 +171,10 @@ class ListItem extends Gestures(AppElement) {
         .row[data-has-note="true"]  .note-icon { display: block; }
         .row[data-has-url="true"]   .url-icon  { display: block; }
 
-        /* Due-date calendar, tinted by how soon the date is (open/paused items
-           with a date only). Only 'overdue' gets a non-colour ring. */
-        .row[data-urgency="far"]     .duedate-icon { display: block; color: var(--color-text-muted); }
-        .row[data-urgency="month"]   .duedate-icon { display: block; color: var(--color-success); }
-        .row[data-urgency="week"]    .duedate-icon { display: block; color: var(--color-warning); }
-        .row[data-urgency="today"]   .duedate-icon { display: block; color: var(--color-danger); }
-        .row[data-urgency="overdue"] .duedate-icon {
-          display: block;
-          color: var(--color-text-inverse);
-          background: var(--color-danger);
-          border-radius: var(--radius-sm);
-          padding: 2px;
-        }
+        /* Due-date calendar — shared with goal-item's deadline badge, see
+           app/utils/urgency-badge.js. Unlike goal-item's, this one is never
+           year-gated (open/paused items with a date only). */
+        ${urgencyBadgeStyles()}
 
         .badge {
           display: var(--list-badge-display, inline-flex);
@@ -273,7 +263,7 @@ class ListItem extends Gestures(AppElement) {
         <span class="title"></span>
         <span class="note-icon" aria-hidden="true">${icons.info}</span>
         <span class="url-icon"  aria-hidden="true">${icons.link}</span>
-        <span class="duedate-icon" aria-hidden="true">${icons.calendar}</span>
+        ${urgencyBadgeMarkup}
         <button type="button" class="badge" id="badge-btn" data-status="open"></button>
         <span class="tag-strip" aria-hidden="true"></span>
       </div>
@@ -487,7 +477,7 @@ class ListItem extends Gestures(AppElement) {
     this._row.dataset.status = status;
     this._row.dataset.hasNote = String(!!this._item?.note);
     this._row.dataset.hasUrl = String(!!this._item?.url);
-    this._row.dataset.urgency = urgency;
+    this.dataset.urgency = urgency;
     this._badge.textContent = t(`item-dialog.status-${status}`);
     this._badge.dataset.status = status;
     this._doneEl.innerHTML = isDone ? icons.undo : icons.check;

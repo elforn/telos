@@ -4,6 +4,7 @@ import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { tagStrip } from '../../utils/tag-color.js';
 import { urgencyOf } from '../../utils/urgency.js';
+import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 
 const REVEAL_WIDTH = 60;
@@ -104,8 +105,7 @@ class GoalItem extends Gestures(AppElement) {
           display: var(--tag-strip-display, block);
         }
 
-        .desc-icon,
-        .deadline-icon {
+        .desc-icon {
           position: relative;
           z-index: 1;
           flex-shrink: 0;
@@ -115,8 +115,7 @@ class GoalItem extends Gestures(AppElement) {
           margin-inline-start: var(--space-1);
         }
 
-        .desc-icon svg,
-        .deadline-icon svg {
+        .desc-icon svg {
           display: block;
           inline-size: var(--icon-size-sm);
           block-size: var(--icon-size-sm);
@@ -124,21 +123,13 @@ class GoalItem extends Gestures(AppElement) {
 
         .bar[data-has-desc="true"] .desc-icon { display: block; }
 
-        /* Deadline calendar, tinted by how soon the date is. Gated by
-           --goal-deadline-display so the year menu can hide it for non-current
-           years (default on for the current year — set by year-header). Only
-           'overdue' gets a non-colour ring. */
-        :host([data-urgency="far"])     .deadline-icon { display: var(--goal-deadline-display, block); color: var(--color-text-muted); }
-        :host([data-urgency="month"])   .deadline-icon { display: var(--goal-deadline-display, block); color: var(--color-success); }
-        :host([data-urgency="week"])    .deadline-icon { display: var(--goal-deadline-display, block); color: var(--color-warning); }
-        :host([data-urgency="today"])   .deadline-icon { display: var(--goal-deadline-display, block); color: var(--color-danger); }
-        :host([data-urgency="overdue"]) .deadline-icon {
-          display: var(--goal-deadline-display, block);
-          color: var(--color-text-inverse);
-          background: var(--color-danger);
-          border-radius: var(--radius-sm);
-          padding: 2px;
-        }
+        /* Deadline calendar — shared with list-item's due-date badge, see
+           app/utils/urgency-badge.js. Gated by --goal-deadline-display so the
+           year menu can hide it for non-current years (default on for the
+           current year — set by year-header); list-item's due-date badge is
+           never gated this way. */
+        .urgency-icon { margin-inline-start: var(--space-1); }
+        ${urgencyBadgeStyles('var(--goal-deadline-display, block)')}
 
         .pct-label {
           position: relative;
@@ -375,7 +366,7 @@ class GoalItem extends Gestures(AppElement) {
         </span>
         <span class="tag-strip" aria-hidden="true"></span>
         <span class="desc-icon" aria-hidden="true">${icons.info}</span>
-        <span class="deadline-icon" aria-hidden="true">${icons.calendar}</span>
+        ${urgencyBadgeMarkup}
         <span class="pct-label" hidden></span>
       </div>
     `;
