@@ -628,6 +628,30 @@ describe('item-dialog — hide-time snapshot', () => {
     expect(localStorage.getItem(snapshotKey('new:'))).toBeNull();
   });
 
+  it('clears the snapshot when a new item is committed via quick-add (Enter), not just Close', () => {
+    // Regression: _onTitleBlur used to assign this._item (giving _snapshotRecordId()
+    // a real item id) *before* calling snapshot.clear() — clearing the wrong
+    // localStorage key and leaving the real new:<listId> draft never actually
+    // cleared, so it kept reappearing on every subsequent quick-add entry.
+    const el = mount();
+    el.sourceListId = 'l1';
+    localStorage.setItem(snapshotKey('new:l1'), JSON.stringify({
+      title: 'Draft title', note: 'Draft note', url: '', tags: [],
+    }));
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#title-input').value).toBe('Draft title');
+
+    const titleInput = el.shadowRoot.querySelector('#title-input');
+    titleInput.focus(); // a real Enter keydown only targets a focused input, so blur() actually fires
+    titleInput.value = 'Committed via quick-add';
+    titleInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(localStorage.getItem(snapshotKey('new:l1'))).toBeNull();
+    // Form was reset in place for the next entry, and must not resurrect the draft.
+    expect(el.shadowRoot.querySelector('#title-input').value).toBe('');
+    expect(el.shadowRoot.querySelector('#note-input').value).toBe('');
+  });
+
   it('preserves a titleless new item on close instead of discarding it', () => {
     const el = mount();
     el.open(null);

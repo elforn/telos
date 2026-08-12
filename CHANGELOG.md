@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.22.4] — 2026-08-12
+
+### Fixed
+- **Quick-add (Enter-to-add-next) for new list items could resurrect an already-used draft on the next entry.** The commit-on-blur handler assigned the new item its real id *before* clearing the pending localStorage draft, so the clear call targeted the wrong key and the real `new:<listId>` draft was never actually removed — it kept silently reappearing (pre-filling the form) on every subsequent quick-add entry in that list, even after being restored and saved once already. Reordered so the draft is cleared before the new id is assigned; goal-dialog and list-dialog's equivalent commit-on-blur handlers never had this ordering issue.
+
 ## [1.22.3] — 2026-08-12
 
 ### Fixed

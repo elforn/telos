@@ -773,13 +773,17 @@ class ItemDialog extends AppElement {
         if (!v) return;
         const { status, note, url, dueDate, tags } = this._getFormValues();
         const id = crypto.randomUUID();
+        // Clear while _item is still null, so _snapshotRecordId() resolves to the
+        // new:<listId> key the draft was actually captured/read under — clearing
+        // after assigning _item below would target the fresh item's id instead,
+        // a key nothing was ever written to, leaving the real draft un-cleared.
+        this._snapshot?.clear(); // committed — drop any hide-time snapshot
         this._item = { id, title: v, status, note, url, dueDate, tags, inGoals: [] };
         this._isNew = false;
         this._lastValidTitle   = v;
         this._lastValidNote    = note;
         this._lastValidUrl     = url;
         this._lastValidDueDate = dueDate ?? '';
-        this._snapshot?.clear(); // committed — drop any hide-time snapshot
         this.dispatchEvent(new CustomEvent('item-created', {
           bubbles: true, composed: true,
           detail: { id, title: v, status, note, url, dueDate, tags },
