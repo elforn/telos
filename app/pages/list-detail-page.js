@@ -19,6 +19,8 @@ import '../components/import-text-dialog/import-text-dialog.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
 import { matchesDateBucket } from '../utils/urgency.js';
+import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
+import { pageHeaderStyles, pageHeaderButtonsMarkup } from '../utils/page-header.js';
 import '../components/export-sheet/export-sheet.js';
 import '../components/date-filter-row/date-filter-row.js';
 import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdown.js';
@@ -65,27 +67,14 @@ class ListDetailPage extends AppElement {
           --page-padding: var(--space-5);
         }
 
-        /* ── Header — matches year-header style ──────────────────────────── */
+        /* ── Header — matches year-header style; .page-header/.top-row/
+           .filter-btn/.menu-btn shell shared via app/utils/page-header.js. ── */
+        ${pageHeaderStyles()}
 
-        .page-header {
-          position: sticky;
-          inset-block-start: var(--update-banner-height, 0px);
-          z-index: 100;
-          background: var(--color-surface);
-          border-block-end: var(--header-strip-height) solid var(--color-border);
-          padding-block-start: var(--safe-area-top);
-          padding-inline: var(--page-padding);
-        }
-
-        .top-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          min-block-size: 64px;
-        }
-
-        .back-btn,
-        .menu-btn {
+        /* .back-btn has no lists-page counterpart, so it stays local —
+           duplicates .menu-btn's base properties (no shared 2-page pattern
+           to extract into) plus its own margin-inline-start. */
+        .back-btn {
           flex-shrink: 0;
           min-block-size: var(--touch-target);
           min-inline-size: var(--touch-target);
@@ -98,25 +87,16 @@ class ListDetailPage extends AppElement {
           align-items: center;
           justify-content: center;
           touch-action: manipulation;
+          margin-inline-start: calc(-0.8 * var(--page-padding));
         }
 
-        .menu-btn {
-          margin-inline-end: var(--edge-btn-bleed);
-        }
-
-        .back-btn svg,
-        .menu-btn svg {
+        .back-btn svg {
           inline-size: 22px;
           block-size: 22px;
           pointer-events: none;
         }
 
-        .back-btn {
-          margin-inline-start: calc(-0.8 * var(--page-padding));
-        }
-
-        .back-btn:focus-visible,
-        .menu-btn:focus-visible {
+        .back-btn:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
@@ -463,235 +443,9 @@ class ListDetailPage extends AppElement {
           outline-offset: 2px;
         }
 
-        /* ── Filter button ───────────────────────────────────────────────── */
-
-        .filter-btn {
-          flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
-          background: none;
-          border: none;
-          cursor: pointer;
-          color: var(--color-text-secondary);
-          border-radius: var(--radius-full);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          touch-action: manipulation;
-          position: relative;
-        }
-
-        .filter-btn svg {
-          inline-size: 22px;
-          block-size: 22px;
-          pointer-events: none;
-        }
-
-        .filter-btn:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        .filter-btn-dot {
-          position: absolute;
-          inset-block-start: 10px;
-          inset-inline-end: 10px;
-          inline-size: 6px;
-          block-size: 6px;
-          border-radius: var(--radius-full);
-          background: var(--color-accent);
-        }
-
-        /* ── Filter bar ──────────────────────────────────────────────────── */
-
-        #filter-bar {
-          padding-block: var(--space-2);
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-1);
-          border-block-start: 0.5px solid var(--color-border);
-        }
-
-        #filter-bar[hidden] { display: none; }
-
-        .filter-top-row {
-          display: flex;
-          align-items: center;
-        }
-
-        .filter-search-wrap {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          gap: var(--space-1);
-          background: var(--color-surface-raised);
-          border: 0.5px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          padding-inline: var(--space-3);
-        }
-
-        .filter-search-wrap:focus-within {
-          border-color: var(--color-accent);
-        }
-
-        .filter-search-icon {
-          flex-shrink: 0;
-          color: var(--color-text-muted);
-          display: flex;
-          align-items: center;
-        }
-
-        .filter-search-icon svg {
-          inline-size: 16px;
-          block-size: 16px;
-          pointer-events: none;
-        }
-
-        #filter-search {
-          flex: 1;
-          min-block-size: 34px;
-          background: none;
-          border: none;
-          outline: none;
-          font-family: var(--font-family);
-          font-size: var(--font-size-body);
-          color: var(--color-text-primary);
-        }
-
-        #filter-search::-webkit-search-cancel-button { display: none; }
-
-        #filter-search::placeholder {
-          color: var(--color-text-muted);
-        }
-
-        .filter-clear-btn,
-        .filter-expand-btn {
-          flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
-          border: none;
-          background: none;
-          cursor: pointer;
-          color: var(--color-text-muted);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: var(--radius-sm);
-          touch-action: manipulation;
-        }
-
-        .filter-clear-btn svg {
-          inline-size: 20px;
-          block-size: 20px;
-          pointer-events: none;
-        }
-
-        .filter-clear-btn {
-          margin-inline-end: var(--edge-btn-bleed);
-        }
-
-        .filter-clear-btn.active {
-          color: var(--color-danger);
-        }
-
-        .filter-expand-btn svg {
-          inline-size: 16px;
-          block-size: 16px;
-          pointer-events: none;
-        }
-
-        .filter-expand-btn {
-          position: relative;
-        }
-
-        .filter-expand-btn[aria-expanded="true"] svg {
-          transform: rotate(180deg);
-        }
-
-        .filter-expand-dot {
-          position: absolute;
-          inset-block-start: 6px;
-          inset-inline-end: 6px;
-          inline-size: 6px;
-          block-size: 6px;
-          border-radius: var(--radius-full);
-          background: var(--color-accent);
-          pointer-events: none;
-        }
-
-        .filter-clear-btn:focus-visible,
-        .filter-expand-btn:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        #filter-panel {
-          display: flex;
-          flex-direction: column;
-          gap: calc(var(--space-1) + 1px);
-        }
-
-        #filter-panel[hidden] { display: none; }
-
-        .filter-row {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          overflow-x: auto;
-          flex-wrap: nowrap;
-          scrollbar-width: none;
-          -webkit-overflow-scrolling: touch;
-        }
-
-        .filter-row::-webkit-scrollbar { display: none; }
-
-        .filter-pill,
-        .filter-tag-chip {
-          flex-shrink: 0;
-          min-block-size: var(--touch-target-small);
-          padding-inline: var(--space-3);
-          border-radius: var(--radius-full);
-          border: 1px solid var(--color-border);
-          background: none;
-          cursor: pointer;
-          font-family: var(--font-family);
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-medium);
-          color: var(--color-text-secondary);
-          white-space: nowrap;
-          touch-action: manipulation;
-        }
-
-        .filter-pill.active {
-          background: var(--color-accent);
-          border-color: var(--color-accent);
-          color: var(--color-text-on-accent);
-        }
-
-        /* Date-bucket pills live in <date-filter-row> now — it owns its own styling. */
-
-        .filter-tag-chip {
-          border-color: var(--tag-color, var(--color-border));
-        }
-
-        .filter-tag-chip.active {
-          background: var(--tag-color, var(--color-accent));
-          border-color: var(--tag-color, var(--color-accent));
-          color: var(--color-text-primary);
-        }
-
-        .filter-pill:focus-visible,
-        .filter-tag-chip:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        #filter-empty {
-          text-align: center;
-          padding-block: var(--space-8);
-          color: var(--color-text-muted);
-          font-size: var(--font-size-body);
-        }
+        /* ── Filter bar — shell shared via app/utils/filter-bar.js; panel-row
+           vocabulary below stays local. */
+        ${filterBarStyles()}
 
         .sr-only {
           position: absolute;
@@ -708,29 +462,24 @@ class ListDetailPage extends AppElement {
         <div class="top-row">
           <button class="back-btn" id="back-btn" aria-label="${t('list-detail.back')}">${icons.chevronLeft}</button>
           <h1><button class="name-edit-btn" id="name-edit-btn" aria-label="${t('list-detail.edit-name')}"><span id="list-name"></span><span class="name-pencil" aria-hidden="true">${icons.pencil}</span></button></h1>
-          <button class="filter-btn" id="filter-btn" aria-label="${t('list-detail.filter-toggle')}" aria-expanded="false">${icons.funnel}<span class="filter-btn-dot" hidden aria-hidden="true"></span></button>
-          <button class="menu-btn" id="menu-btn" aria-label="${t('list-detail.menu')}" aria-expanded="false">${icons.dotsVertical}</button>
+          ${pageHeaderButtonsMarkup({ filterLabel: t('list-detail.filter-toggle'), menuLabel: t('list-detail.menu') })}
         </div>
-        <div id="filter-bar" hidden>
-          <div class="filter-top-row">
-            <div class="filter-search-wrap">
-              <span class="filter-search-icon" aria-hidden="true">${icons.magnifyingGlass}</span>
-              <input type="search" id="filter-search" placeholder="${t('list-detail.filter-search')}" aria-label="${t('list-detail.filter-search')}" autocomplete="off" />
-            </div>
-            <button class="filter-expand-btn" id="filter-expand-btn" aria-label="${t('list-detail.filter-expand')}" aria-expanded="false" aria-controls="filter-panel">${icons.chevronDown}<span class="filter-expand-dot" hidden aria-hidden="true"></span></button>
-            <button class="filter-clear-btn" id="filter-clear-btn" aria-label="${t('list-detail.filter-clear')}">${icons.funnelX}</button>
-          </div>
-          <div id="filter-panel" hidden>
+        ${filterBarMarkup({
+          searchPlaceholder: t('list-detail.filter-search'),
+          searchLabel: t('list-detail.filter-search'),
+          expandLabel: t('list-detail.filter-expand'),
+          clearLabel: t('list-detail.filter-clear'),
+          rowsHtml: `
             <div class="filter-row" id="filter-status-row" role="group" aria-label="${t('list-detail.status-label')}">
-              <button class="filter-pill" id="fstatus-open" aria-pressed="false">${t('item-dialog.status-open')}</button>
-              <button class="filter-pill" id="fstatus-paused" aria-pressed="false">${t('item-dialog.status-paused')}</button>
-              <button class="filter-pill" id="fstatus-done" aria-pressed="false">${t('item-dialog.status-done')}</button>
-              <button class="filter-pill" id="fstatus-closed" aria-pressed="false">${t('item-dialog.status-closed')}</button>
+              <button class="filter-pill" id="fstatus-open" data-status="open" aria-pressed="false">${t('item-dialog.status-open')}</button>
+              <button class="filter-pill" id="fstatus-paused" data-status="paused" aria-pressed="false">${t('item-dialog.status-paused')}</button>
+              <button class="filter-pill" id="fstatus-done" data-status="done" aria-pressed="false">${t('item-dialog.status-done')}</button>
+              <button class="filter-pill" id="fstatus-closed" data-status="closed" aria-pressed="false">${t('item-dialog.status-closed')}</button>
             </div>
             <date-filter-row id="date-filter-row"></date-filter-row>
             <div class="filter-row" id="filter-tag-row" hidden></div>
-          </div>
-        </div>
+          `,
+        })}
       </div>
 
       <main>
@@ -1478,8 +1227,7 @@ class ListDetailPage extends AppElement {
     this._onFilterStatus = e => {
       const btn = e.target.closest('.filter-pill');
       if (!btn) return;
-      const statusMap = { 'fstatus-open': 'open', 'fstatus-paused': 'paused', 'fstatus-done': 'done', 'fstatus-closed': 'closed' };
-      const s = statusMap[btn.id];
+      const s = btn.dataset.status;
       if (!s) return;
       if (this._filter.statuses.has(s)) this._filter.statuses.delete(s);
       else this._filter.statuses.add(s);

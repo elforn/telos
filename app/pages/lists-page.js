@@ -13,6 +13,8 @@ import { COLOR_PALETTE } from '../components/lists-page-item/lists-page-item.js'
 import '../components/date-filter-row/date-filter-row.js';
 import { icons } from '../icons.js';
 import { matchesDateBucket } from '../utils/urgency.js';
+import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
+import { pageHeaderStyles, pageHeaderButtonsMarkup } from '../utils/page-header.js';
 import { FilterState } from '../../_lib/modules/filter-state/filter-state.js';
 
 const FILTER_SHAPE = {
@@ -34,24 +36,9 @@ class ListsPage extends AppElement {
           --page-padding: var(--space-5);
         }
 
-        /* ── Header — matches year-header compact style ──────────────────── */
-
-        .page-header {
-          position: sticky;
-          inset-block-start: var(--update-banner-height, 0px);
-          z-index: 100;
-          background: var(--color-surface);
-          border-block-end: var(--header-strip-height) solid var(--color-border);
-          padding-block-start: var(--safe-area-top);
-          padding-inline: var(--page-padding);
-        }
-
-        .top-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          min-block-size: 64px;
-        }
+        /* ── Header — matches year-header compact style; .page-header/.top-row/
+           .filter-btn/.menu-btn shell shared via app/utils/page-header.js. ── */
+        ${pageHeaderStyles()}
 
         .header-actions {
           display: flex;
@@ -81,62 +68,6 @@ class ListsPage extends AppElement {
           display: flex;
           flex-direction: column;
           gap: var(--space-2);
-        }
-
-        /* ── Filter button ───────────────────────────────────────────────── */
-
-        .filter-btn {
-          flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
-          background: none;
-          border: none;
-          cursor: pointer;
-          color: var(--color-text-secondary);
-          border-radius: var(--radius-full);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          touch-action: manipulation;
-          position: relative;
-        }
-
-        .filter-btn svg {
-          inline-size: 22px;
-          block-size: 22px;
-          pointer-events: none;
-        }
-
-        .filter-btn:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        .menu-btn {
-          flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
-          background: none;
-          border: none;
-          cursor: pointer;
-          color: var(--color-text-secondary);
-          border-radius: var(--radius-full);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          touch-action: manipulation;
-          margin-inline-end: var(--edge-btn-bleed);
-        }
-
-        .menu-btn svg {
-          inline-size: 22px;
-          block-size: 22px;
-          pointer-events: none;
-        }
-
-        .menu-btn:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
         }
 
         /* Menu dialog — Date indicators toggle */
@@ -182,209 +113,18 @@ class ListsPage extends AppElement {
           outline-offset: 2px;
         }
 
-        .filter-btn-dot {
-          position: absolute;
-          inset-block-start: 10px;
-          inset-inline-end: 10px;
-          inline-size: 6px;
-          block-size: 6px;
-          border-radius: var(--radius-full);
-          background: var(--color-accent);
-        }
+        /* ── Filter bar — shell shared via app/utils/filter-bar.js; panel-row
+           vocabulary below stays local. */
+        ${filterBarStyles()}
 
-        /* ── Filter bar ──────────────────────────────────────────────────── */
-
-        #filter-bar {
-          padding-block: var(--space-2);
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-1);
-          border-block-start: 0.5px solid var(--color-border);
-        }
-
-        #filter-bar[hidden] { display: none; }
-
-        .filter-bar-row {
-          display: flex;
-          align-items: center;
-        }
-
-        .filter-search-wrap {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          background: var(--color-surface-raised);
-          border: 0.5px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          padding-inline: var(--space-3);
-        }
-
-        .filter-search-wrap:focus-within {
-          border-color: var(--color-accent);
-        }
-
-        .filter-search-icon {
-          flex-shrink: 0;
-          color: var(--color-text-muted);
-          display: flex;
-          align-items: center;
-        }
-
-        .filter-search-icon svg {
-          inline-size: 16px;
-          block-size: 16px;
-          pointer-events: none;
-        }
-
-        #filter-search {
-          flex: 1;
-          min-block-size: 34px;
-          background: none;
-          border: none;
-          outline: none;
-          font-family: var(--font-family);
-          font-size: var(--font-size-body);
-          color: var(--color-text-primary);
-        }
-
-        #filter-search::-webkit-search-cancel-button { display: none; }
-
-        #filter-search::placeholder {
-          color: var(--color-text-muted);
-        }
-
-        .filter-clear-btn {
-          flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
-          border: none;
-          background: none;
-          cursor: pointer;
-          color: var(--color-text-muted);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: var(--radius-sm);
-          touch-action: manipulation;
-          margin-inline-end: var(--edge-btn-bleed);
-        }
-
-        .filter-clear-btn svg {
-          inline-size: 20px;
-          block-size: 20px;
-          pointer-events: none;
-        }
-
-        .filter-clear-btn.active {
-          color: var(--color-danger);
-        }
-
-        .filter-clear-btn:focus-visible,
-        .filter-expand-btn:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        .filter-expand-btn {
-          flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
-          border: none;
-          background: none;
-          cursor: pointer;
-          color: var(--color-text-muted);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: var(--radius-sm);
-          touch-action: manipulation;
-          position: relative;
-        }
-
-        .filter-expand-btn svg {
-          inline-size: 16px;
-          block-size: 16px;
-          pointer-events: none;
-        }
-
-        .filter-expand-btn[aria-expanded="true"] svg {
-          transform: rotate(180deg);
-        }
-
-        .filter-expand-dot {
-          position: absolute;
-          inset-block-start: 6px;
-          inset-inline-end: 6px;
-          inline-size: 6px;
-          block-size: 6px;
-          border-radius: var(--radius-full);
-          background: var(--color-accent);
-          pointer-events: none;
-        }
-
-        #filter-panel {
-          display: flex;
-          flex-direction: column;
-          gap: calc(var(--space-1) + 1px);
-        }
-
-        #filter-panel[hidden] { display: none; }
-
+        /* Lists' 3 state pills wrap to multiple lines rather than scrolling
+           horizontally like the other pages' 4-pill rows — real behavioural
+           difference (short row, no need for the scroll-row treatment), kept
+           local rather than folded into the shared .filter-row. */
         .filter-chip-row {
           display: flex;
           gap: var(--space-2);
           flex-wrap: wrap;
-        }
-
-        .filter-chip-row[hidden] { display: none; }
-
-        .filter-row {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          overflow-x: auto;
-          flex-wrap: nowrap;
-          scrollbar-width: none;
-          -webkit-overflow-scrolling: touch;
-        }
-
-        .filter-row::-webkit-scrollbar { display: none; }
-
-        /* Date-bucket pills live in <date-filter-row> now — it owns its own styling. */
-
-        .filter-chip {
-          flex-shrink: 0;
-          min-block-size: var(--touch-target-small);
-          padding-inline: var(--space-3);
-          border-radius: var(--radius-full);
-          border: 1px solid var(--color-border);
-          background: none;
-          cursor: pointer;
-          font-family: var(--font-family);
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-medium);
-          color: var(--color-text-secondary);
-          white-space: nowrap;
-          touch-action: manipulation;
-        }
-
-        .filter-chip.active {
-          background: var(--color-accent);
-          border-color: var(--color-accent);
-          color: var(--color-text-on-accent);
-        }
-
-        .filter-chip:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        #filter-empty {
-          text-align: center;
-          padding-block: var(--space-8);
-          color: var(--color-text-muted);
-          font-size: var(--font-size-body);
         }
 
         .sr-only {
@@ -403,28 +143,23 @@ class ListsPage extends AppElement {
         <div class="top-row">
           <h1>${t('lists-page.heading')}</h1>
           <div class="header-actions">
-            <button class="filter-btn" id="filter-btn" aria-label="${t('lists-page.filter-toggle')}" aria-expanded="false">${icons.funnel}<span class="filter-btn-dot" hidden aria-hidden="true"></span></button>
-            <button class="menu-btn" id="menu-btn" aria-label="${t('lists-page.menu')}" aria-expanded="false">${icons.dotsVertical}</button>
+            ${pageHeaderButtonsMarkup({ filterLabel: t('lists-page.filter-toggle'), menuLabel: t('lists-page.menu') })}
           </div>
         </div>
-        <div id="filter-bar" hidden>
-          <div class="filter-bar-row">
-            <div class="filter-search-wrap">
-              <span class="filter-search-icon" aria-hidden="true">${icons.magnifyingGlass}</span>
-              <input type="search" id="filter-search" placeholder="${t('lists-page.filter-search')}" aria-label="${t('lists-page.filter-search')}" autocomplete="off" />
-            </div>
-            <button class="filter-expand-btn" id="filter-expand-btn" aria-label="${t('lists-page.filter-expand')}" aria-expanded="false" aria-controls="filter-panel">${icons.chevronDown}<span class="filter-expand-dot" hidden aria-hidden="true"></span></button>
-            <button class="filter-clear-btn" id="filter-clear-btn" aria-label="${t('lists-page.filter-clear')}">${icons.funnelX}</button>
-          </div>
-          <div id="filter-panel" hidden>
+        ${filterBarMarkup({
+          searchPlaceholder: t('lists-page.filter-search'),
+          searchLabel: t('lists-page.filter-search'),
+          expandLabel: t('lists-page.filter-expand'),
+          clearLabel: t('lists-page.filter-clear'),
+          rowsHtml: `
             <div class="filter-chip-row" id="filter-states-row" role="group" aria-label="${t('lists-page.filter-toggle')}">
-              <button class="filter-chip" id="fstate-empty" data-state="empty" aria-pressed="false">${t('lists-page.filter-empty-only')}</button>
-              <button class="filter-chip" id="fstate-not-empty" data-state="not-empty" aria-pressed="false">${t('lists-page.filter-not-empty')}</button>
-              <button class="filter-chip" id="fstate-archived" data-state="archived" aria-pressed="false">${t('lists-page.filter-archived')}</button>
+              <button class="filter-pill" id="fstate-empty" data-state="empty" aria-pressed="false">${t('lists-page.filter-empty-only')}</button>
+              <button class="filter-pill" id="fstate-not-empty" data-state="not-empty" aria-pressed="false">${t('lists-page.filter-not-empty')}</button>
+              <button class="filter-pill" id="fstate-archived" data-state="archived" aria-pressed="false">${t('lists-page.filter-archived')}</button>
             </div>
             <date-filter-row id="date-filter-row"></date-filter-row>
-          </div>
-        </div>
+          `,
+        })}
       </div>
       <main>
         <div id="list-container" role="list"></div>
@@ -531,7 +266,7 @@ class ListsPage extends AppElement {
     this.listen(this._filterExpandBtn, 'click', this._onFilterExpand);
 
     this._onFilterState = e => {
-      const btn = e.target.closest('.filter-chip');
+      const btn = e.target.closest('.filter-pill');
       if (!btn) return;
       const state = btn.dataset.state;
       if (!state) return;

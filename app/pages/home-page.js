@@ -19,6 +19,7 @@ import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
 import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
 import { matchesDateBucket } from '../utils/urgency.js';
+import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
 import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
 import { shareMarkdown } from '../utils/share-markdown.js';
 
@@ -144,197 +145,9 @@ class HomePage extends AppElement {
         .list-section:not(.empty).add-open add-row   { display: block; }
         .list-section:not(.empty).add-open .fold-btn { display: flex; }
 
-        /* ── Filter bar (slotted into year-header) ───────────────────────── */
-
-        #filter-bar {
-          border-block-start: 0.5px solid var(--color-border);
-          padding-block: var(--space-2);
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-1);
-          background: var(--color-surface);
-        }
-
-        #filter-bar[hidden] { display: none; }
-
-        .filter-top-row {
-          display: flex;
-          align-items: center;
-        }
-
-        .filter-search-wrap {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          gap: var(--space-1);
-          background: var(--color-surface-raised);
-          border: 0.5px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          padding-inline: var(--space-3);
-        }
-
-        .filter-search-wrap:focus-within {
-          border-color: var(--color-accent);
-        }
-
-        .filter-search-icon {
-          flex-shrink: 0;
-          color: var(--color-text-muted);
-          display: flex;
-          align-items: center;
-        }
-
-        .filter-search-icon svg {
-          inline-size: 16px;
-          block-size: 16px;
-          pointer-events: none;
-        }
-
-        #filter-search {
-          flex: 1;
-          min-block-size: 34px;
-          background: none;
-          border: none;
-          outline: none;
-          font-family: var(--font-family);
-          font-size: var(--font-size-body);
-          color: var(--color-text-primary);
-        }
-
-        #filter-search::-webkit-search-cancel-button { display: none; }
-
-        #filter-search::placeholder {
-          color: var(--color-text-muted);
-        }
-
-        .filter-clear-btn,
-        .filter-expand-btn {
-          flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
-          border: none;
-          background: none;
-          cursor: pointer;
-          color: var(--color-text-muted);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: var(--radius-sm);
-          touch-action: manipulation;
-        }
-
-        .filter-clear-btn svg {
-          inline-size: 20px;
-          block-size: 20px;
-          pointer-events: none;
-        }
-
-        .filter-clear-btn {
-          margin-inline-end: var(--edge-btn-bleed);
-        }
-
-        .filter-clear-btn.active {
-          color: var(--color-danger);
-        }
-
-        .filter-expand-btn svg {
-          inline-size: 16px;
-          block-size: 16px;
-          pointer-events: none;
-        }
-
-        .filter-expand-btn {
-          position: relative;
-        }
-
-        .filter-expand-btn[aria-expanded="true"] svg {
-          transform: rotate(180deg);
-        }
-
-        .filter-expand-dot {
-          position: absolute;
-          inset-block-start: 6px;
-          inset-inline-end: 6px;
-          inline-size: 6px;
-          block-size: 6px;
-          border-radius: var(--radius-full);
-          background: var(--color-accent);
-          pointer-events: none;
-        }
-
-        .filter-clear-btn:focus-visible,
-        .filter-expand-btn:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        #filter-panel {
-          display: flex;
-          flex-direction: column;
-          gap: calc(var(--space-1) + 1px);
-        }
-
-        #filter-panel[hidden] { display: none; }
-
-        .filter-row {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          overflow-x: auto;
-          flex-wrap: nowrap;
-          scrollbar-width: none;
-          -webkit-overflow-scrolling: touch;
-        }
-
-        .filter-row::-webkit-scrollbar { display: none; }
-
-        .filter-pill,
-        .filter-tag-chip {
-          flex-shrink: 0;
-          min-block-size: var(--touch-target-small);
-          padding-inline: var(--space-3);
-          border-radius: var(--radius-full);
-          border: 1px solid var(--color-border);
-          background: none;
-          cursor: pointer;
-          font-family: var(--font-family);
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-medium);
-          color: var(--color-text-secondary);
-          white-space: nowrap;
-          touch-action: manipulation;
-        }
-
-        .filter-pill.active {
-          background: var(--color-accent);
-          border-color: var(--color-accent);
-          color: var(--color-text-on-accent);
-        }
-
-        /* Date-bucket pills live in <date-filter-row> now — it owns its own styling. */
-
-        .filter-tag-chip {
-          border-color: var(--tag-color, var(--color-border));
-        }
-
-        .filter-tag-chip.active {
-          background: var(--tag-color, var(--color-accent));
-          border-color: var(--tag-color, var(--color-accent));
-          color: var(--color-text-primary);
-        }
-
-        .filter-pill:focus-visible,
-        .filter-tag-chip:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
-        }
-
-        #filter-empty {
-          text-align: center;
-          padding-block: var(--space-8);
-          color: var(--color-text-muted);
-          font-size: var(--font-size-body);
-        }
+        /* ── Filter bar (slotted into year-header) — shell shared via
+           app/utils/filter-bar.js; panel-row vocabulary below stays local. */
+        ${filterBarStyles()}
 
         .sr-only {
           position: absolute;
@@ -349,26 +162,23 @@ class HomePage extends AppElement {
       </style>
 
       <year-header id="header">
-        <div slot="filter-bar" id="filter-bar" hidden>
-          <div class="filter-top-row">
-            <div class="filter-search-wrap">
-              <span class="filter-search-icon" aria-hidden="true">${icons.magnifyingGlass}</span>
-              <input type="search" id="filter-search" placeholder="${t('home-page.filter-search')}" aria-label="${t('home-page.filter-search')}" autocomplete="off" />
-            </div>
-            <button class="filter-expand-btn" id="filter-expand-btn" aria-label="${t('home-page.filter-expand')}" aria-expanded="false" aria-controls="filter-panel">${icons.chevronDown}<span class="filter-expand-dot" hidden aria-hidden="true"></span></button>
-            <button class="filter-clear-btn" id="filter-clear-btn" aria-label="${t('home-page.filter-clear')}">${icons.funnelX}</button>
-          </div>
-          <div id="filter-panel" hidden>
+        ${filterBarMarkup({
+          slot: 'filter-bar',
+          searchPlaceholder: t('home-page.filter-search'),
+          searchLabel: t('home-page.filter-search'),
+          expandLabel: t('home-page.filter-expand'),
+          clearLabel: t('home-page.filter-clear'),
+          rowsHtml: `
             <div class="filter-row" id="filter-states-row" role="group" aria-label="${t('home-page.filter-toggle')}">
-              <button class="filter-pill" id="fstate-done" aria-pressed="false">${t('home-page.filter-done')}</button>
-              <button class="filter-pill" id="fstate-ongoing" aria-pressed="false">${t('home-page.filter-ongoing')}</button>
-              <button class="filter-pill" id="fstate-not-started" aria-pressed="false">${t('home-page.filter-not-started')}</button>
-              <button class="filter-pill" id="fstate-archived" aria-pressed="false">${t('home-page.filter-archived')}</button>
+              <button class="filter-pill" id="fstate-done" data-state="done" aria-pressed="false">${t('home-page.filter-done')}</button>
+              <button class="filter-pill" id="fstate-ongoing" data-state="ongoing" aria-pressed="false">${t('home-page.filter-ongoing')}</button>
+              <button class="filter-pill" id="fstate-not-started" data-state="not-started" aria-pressed="false">${t('home-page.filter-not-started')}</button>
+              <button class="filter-pill" id="fstate-archived" data-state="archived" aria-pressed="false">${t('home-page.filter-archived')}</button>
             </div>
             <date-filter-row id="date-filter-row"></date-filter-row>
             <div class="filter-row" id="filter-tag-row" hidden></div>
-          </div>
-        </div>
+          `,
+        })}
       </year-header>
 
       <main>
@@ -496,8 +306,7 @@ class HomePage extends AppElement {
     this._onFilterState = e => {
       const btn = e.target.closest('.filter-pill');
       if (!btn) return;
-      const stateMap = { 'fstate-done': 'done', 'fstate-ongoing': 'ongoing', 'fstate-not-started': 'not-started', 'fstate-archived': 'archived' };
-      const state = stateMap[btn.id];
+      const state = btn.dataset.state;
       if (!state) return;
       if (this._filter.states.has(state)) this._filter.states.delete(state);
       else this._filter.states.add(state);
