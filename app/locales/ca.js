@@ -24,6 +24,7 @@ defineStrings({
   'goal-dialog.draft-clear':     'Esborra',
   'goal-dialog.draft-revert':    'Reverteix',
   'goal-dialog.draft-undo':      'Desfés',
+  'goal-dialog.draft-restore':   'Restaura l\'esborrany',
 
   'home-page.done':              'Fet',
 
@@ -198,6 +199,7 @@ defineStrings({
   'list-dialog.draft-clear':      'Esborra',
   'list-dialog.draft-revert':     'Reverteix',
   'list-dialog.draft-undo':       'Desfés',
+  'list-dialog.draft-restore':    'Restaura l\'esborrany',
 
   'item-dialog.title-placeholder':'Títol',
   'item-dialog.status-label':     'Estat',
@@ -220,6 +222,7 @@ defineStrings({
   'item-dialog.draft-clear':      'Esborra',
   'item-dialog.draft-revert':     'Reverteix',
   'item-dialog.draft-undo':       'Desfés',
+  'item-dialog.draft-restore':    'Restaura l\'esborrany',
 
   'item-dialog.move-to-list':           'Mou a una llista',
   'item-dialog.add-to-goal':            'Afegeix a un objectiu',

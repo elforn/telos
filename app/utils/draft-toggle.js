@@ -28,6 +28,11 @@ export function installDraftToggle(el, { button, applyValues }) {
   const update = () => {
     button.hidden = !draft;
     if (draft) button.textContent = showingDraft ? clearLabel : undoLabel;
+    // Pending = a draft exists but isn't the one currently shown — the one case
+    // where the button is the *only* way to even see the draft exists, so it
+    // gets a louder style than the plain-text look used once the user has
+    // already engaged with it (see callers' #draft-toggle-btn.has-pending-draft).
+    button.classList.toggle('has-pending-draft', !!draft && !showingDraft);
   };
 
   // Keep the mobile keyboard open when a text field is focused — same
@@ -42,10 +47,15 @@ export function installDraftToggle(el, { button, applyValues }) {
   });
 
   return {
-    reset({ draft: newDraft, target: newTarget, clearLabel: cl, undoLabel: ul }) {
+    // showDraftInitially: whether the draft should be the form's starting display
+    // (default true — the old "recover my in-progress typing" behaviour, safe
+    // when target is blank/nothing-to-lose, e.g. a not-yet-created entry). Pass
+    // false when target is a real, already-committed record — the draft is then
+    // only ever applied via an explicit tap, never silently overwriting it.
+    reset({ draft: newDraft, target: newTarget, clearLabel: cl, undoLabel: ul, showDraftInitially = true }) {
       draft = newDraft;
       target = newTarget;
-      showingDraft = !!draft;
+      showingDraft = showDraftInitially && !!draft;
       clearLabel = cl;
       undoLabel = ul;
       update();

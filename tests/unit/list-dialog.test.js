@@ -392,11 +392,13 @@ describe('list-dialog — hide-time snapshot', () => {
     expect(localStorage.getItem(snapshotKey('l1'))).toBeNull();
   });
 
-  it('restores an existing-list snapshot only when reopening the same list', () => {
+  it('shows the stored record, not a pending draft, when reopening an existing list', () => {
+    // A draft must never silently overwrite an already-committed value — it's
+    // only reachable via the draft-toggle button (see the toggle tests below).
     localStorage.setItem(snapshotKey('l1'), JSON.stringify({ name: 'Pending edit', color: null }));
     const el = mount();
-    el.open(LIST); // same id → restore
-    expect(el.shadowRoot.querySelector('#input').value).toBe('Pending edit');
+    el.open(LIST);
+    expect(el.shadowRoot.querySelector('#input').value).toBe(LIST.name);
   });
 
   it('does not restore an existing-list snapshot when opening a different list', () => {
@@ -475,21 +477,29 @@ describe('list-dialog — draft recovery toggle', () => {
     expect(btn.textContent).toBe('Clear');
   });
 
-  it('shows a Revert toggle when a draft is restored into an existing list', () => {
+  it('shows a "Restore draft" toggle, pending-styled, when a draft exists for an existing list', () => {
     localStorage.setItem(snapshotKey('l1'), JSON.stringify({ name: 'Edited', color: null }));
     const el = mount();
     el.open(LIST);
     const btn = el.shadowRoot.querySelector('#draft-toggle-btn');
     expect(btn.hidden).toBe(false);
-    expect(btn.textContent).toBe('Revert');
+    expect(btn.textContent).toBe('Restore draft');
+    expect(btn.classList.contains('has-pending-draft')).toBe(true);
+    // Form still shows the real stored record, not the draft, until the button is tapped.
+    expect(el.shadowRoot.querySelector('#input').value).toBe(LIST.name);
   });
 
-  it('clicking Revert on an existing list restores the stored record, not blank', () => {
+  it('clicking "Restore draft" previews the draft, and clicking Revert goes back — same button, both directions', () => {
     localStorage.setItem(snapshotKey('l1'), JSON.stringify({ name: 'Edited', color: null }));
     const el = mount();
     el.open(LIST);
-    el.shadowRoot.querySelector('#draft-toggle-btn').click();
+    const btn = el.shadowRoot.querySelector('#draft-toggle-btn');
+    btn.click(); // Restore draft → preview
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Edited');
+    expect(btn.textContent).toBe('Revert');
+    btn.click(); // Revert → back to stored
     expect(el.shadowRoot.querySelector('#input').value).toBe(LIST.name);
+    expect(btn.textContent).toBe('Restore draft');
   });
 
   it('does not store a _savedAt field any more (TTL removed)', () => {

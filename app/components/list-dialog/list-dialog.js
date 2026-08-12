@@ -37,11 +37,17 @@ class ListDialog extends AppElement {
     const targetValues = list
       ? { name: list.name ?? '', color: list.color ?? null }
       : { name: '', color: null };
+    // Existing records: a draft is only ever offered via the button, never silently
+    // applied over the real value the form already shows (peek() doesn't write it).
+    // New entries: nothing committed to protect, so recovering the draft on open
+    // (restoreFor()) is safe and expected.
+    const draftValues = this._isNew ? (this._snapshot?.restoreFor() ?? null) : (this._snapshot?.peek() ?? null);
     this._draftToggle.reset({
-      draft: this._snapshot?.restoreFor() ?? null,
+      draft: draftValues,
       target: targetValues,
+      showDraftInitially: this._isNew,
       clearLabel: this._isNew ? t('list-dialog.draft-clear') : t('list-dialog.draft-revert'),
-      undoLabel:  t('list-dialog.draft-undo'),
+      undoLabel:  this._isNew ? t('list-dialog.draft-undo')  : t('list-dialog.draft-restore'),
     });
   }
 
@@ -158,6 +164,18 @@ class ListDialog extends AppElement {
         #delete { background: none; color: var(--color-danger); }
         #close  { background: none; color: var(--color-text-secondary); }
         #draft-toggle-btn { background: none; color: var(--color-text-secondary); }
+        /* A draft the user hasn't looked at yet — louder than the plain-text
+           footer buttons around it so it isn't missed (see draft-toggle.js). */
+        #draft-toggle-btn.has-pending-draft {
+          /* Solid fill, not the subtle tint used elsewhere: --color-accent text on
+             --color-accent-subtle measures ~2.2:1, well under the 4.5:1 minimum for
+             body text. --color-text-on-accent on solid --color-accent is ~6.9:1. */
+          background: var(--color-accent);
+          color: var(--color-text-on-accent);
+          font-weight: var(--font-weight-semibold);
+          border-radius: var(--radius-full);
+          padding-inline: var(--space-3);
+        }
       </style>
 
       <modal-dialog id="modal">

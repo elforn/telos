@@ -76,6 +76,13 @@ export function installDialogSnapshot(el, { key, isOpen, recordId, snapshot, res
       restore(data);
       return data;
     },
+    // Same lookup as restoreFor(), but never writes into the form — for callers
+    // that only want to know a draft exists (offered via the draft-toggle button)
+    // without silently overwriting whatever's already showing (e.g. a real,
+    // already-committed value that the draft might be stale and worse than).
+    peek() {
+      return read(storageKey());
+    },
     clear() { clear(storageKey()); },
   };
 }

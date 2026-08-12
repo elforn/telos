@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.22.3] — 2026-08-12
+
+### Fixed
+- **Editing an existing item, goal, or list could silently lose its note, link, or notes field.** Root cause: the draft-recovery feature (meant to survive the app being killed/backgrounded mid-edit) restored a stale, unsaved draft straight into the open/edit form on reopening a record — including a draft where the note/URL had been accidentally cleared before the app was backgrounded. If you then edited any other field (e.g. just the due date) and closed, that stale blank content silently overwrote the real, already-saved value. Reopening an existing item/goal/list now always shows what's actually saved; a pending draft is only ever applied via an explicit tap on a clearly-highlighted "Restore draft" button in the footer, which can be tapped again to go back to the saved value — so you can compare before deciding. New, not-yet-created entries are unaffected — recovering an in-progress draft there is still automatic, since there's no saved value to protect.
+
 ## [1.22.1] — 2026-08-12
 
 ### Changed

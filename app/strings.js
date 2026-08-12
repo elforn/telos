@@ -25,6 +25,7 @@ defineStrings({
   'goal-dialog.draft-clear':    'Clear',
   'goal-dialog.draft-revert':   'Revert',
   'goal-dialog.draft-undo':     'Undo',
+  'goal-dialog.draft-restore':  'Restore draft',
 
   'goal-item.delete':          'Delete',
   'goal-item.add-capstone':    'Add capstone goal',
@@ -186,6 +187,7 @@ defineStrings({
   'list-dialog.draft-clear':      'Clear',
   'list-dialog.draft-revert':     'Revert',
   'list-dialog.draft-undo':       'Undo',
+  'list-dialog.draft-restore':    'Restore draft',
 
   'item-dialog.title-placeholder':'Title',
   'item-dialog.status-label':     'Status',
@@ -208,6 +210,7 @@ defineStrings({
   'item-dialog.draft-clear':      'Clear',
   'item-dialog.draft-revert':     'Revert',
   'item-dialog.draft-undo':       'Undo',
+  'item-dialog.draft-restore':    'Restore draft',
   'dialog.saved-sr':              'Saved',
 
   'item-dialog.move-to-list':           'Move to list',

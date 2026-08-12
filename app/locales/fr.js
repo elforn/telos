@@ -24,6 +24,7 @@ defineStrings({
   'goal-dialog.draft-clear':     'Effacer',
   'goal-dialog.draft-revert':    'Rétablir',
   'goal-dialog.draft-undo':      'Annuler',
+  'goal-dialog.draft-restore':   'Restaurer le brouillon',
 
   'home-page.done':              'Terminé',
 
@@ -198,6 +199,7 @@ defineStrings({
   'list-dialog.draft-clear':      'Effacer',
   'list-dialog.draft-revert':     'Rétablir',
   'list-dialog.draft-undo':       'Annuler',
+  'list-dialog.draft-restore':    'Restaurer le brouillon',
 
   'item-dialog.title-placeholder':'Titre',
   'item-dialog.status-label':     'Statut',
@@ -220,6 +222,7 @@ defineStrings({
   'item-dialog.draft-clear':      'Effacer',
   'item-dialog.draft-revert':     'Rétablir',
   'item-dialog.draft-undo':       'Annuler',
+  'item-dialog.draft-restore':    'Restaurer le brouillon',
 
   'item-dialog.move-to-list':           'Déplacer vers une liste',
   'item-dialog.add-to-goal':            'Ajouter à un objectif',

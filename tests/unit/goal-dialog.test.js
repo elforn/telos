@@ -541,11 +541,13 @@ describe('goal-dialog — hide-time snapshot', () => {
     expect(localStorage.getItem(snapshotKey('g1'))).toBeNull();
   });
 
-  it('restores an existing-goal snapshot only when reopening the same goal', () => {
+  it('shows the stored record, not a pending draft, when reopening an existing goal', () => {
+    // A draft must never silently overwrite an already-committed value — it's
+    // only reachable via the draft-toggle button (see the toggle tests below).
     localStorage.setItem(snapshotKey('g1'), JSON.stringify({ title: 'Pending', notes: '', tags: [] }));
     const el = mount();
     el.open(EXISTING_GOAL);
-    expect(el.shadowRoot.querySelector('#input').value).toBe('Pending');
+    expect(el.shadowRoot.querySelector('#input').value).toBe(EXISTING_GOAL.title);
   });
 
   it('does not restore an existing-goal snapshot when opening a different goal', () => {
@@ -637,21 +639,29 @@ describe('goal-dialog — draft recovery toggle', () => {
     expect(btn.textContent).toBe('Clear');
   });
 
-  it('shows a Revert toggle when a draft is restored into an existing goal', () => {
+  it('shows a "Restore draft" toggle, pending-styled, when a draft exists for an existing goal', () => {
     localStorage.setItem(snapshotKey('g1'), JSON.stringify({ title: 'Edited', notes: 'Edited notes', tags: [] }));
     const el = mount();
     el.open(EXISTING_GOAL);
     const btn = el.shadowRoot.querySelector('#draft-toggle-btn');
     expect(btn.hidden).toBe(false);
-    expect(btn.textContent).toBe('Revert');
+    expect(btn.textContent).toBe('Restore draft');
+    expect(btn.classList.contains('has-pending-draft')).toBe(true);
+    // Form still shows the real stored record, not the draft, until the button is tapped.
+    expect(el.shadowRoot.querySelector('#input').value).toBe(EXISTING_GOAL.title);
   });
 
-  it('clicking Revert on an existing goal restores the stored record, not blank', () => {
+  it('clicking "Restore draft" previews the draft, and clicking Revert goes back — same button, both directions', () => {
     localStorage.setItem(snapshotKey('g1'), JSON.stringify({ title: 'Edited', notes: 'Edited notes', tags: [] }));
     const el = mount();
     el.open(EXISTING_GOAL);
-    el.shadowRoot.querySelector('#draft-toggle-btn').click();
+    const btn = el.shadowRoot.querySelector('#draft-toggle-btn');
+    btn.click(); // Restore draft → preview
+    expect(el.shadowRoot.querySelector('#input').value).toBe('Edited');
+    expect(btn.textContent).toBe('Revert');
+    btn.click(); // Revert → back to stored
     expect(el.shadowRoot.querySelector('#input').value).toBe(EXISTING_GOAL.title);
+    expect(btn.textContent).toBe('Restore draft');
   });
 
   it('does not store a _savedAt field any more (TTL removed)', () => {
