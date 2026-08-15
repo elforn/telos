@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.0.0] — 2026-08-16
+
+### Changed
+- **Richer goal-completion celebration.** The confetti burst shown when a goal hits 100% now scatters more particles per burst (8 → 12 each) — same white/accent/accent-dark colours already in use, just a denser fan across the existing animation.
+
 ## [1.22.4] — 2026-08-12
 
 ### Fixed
