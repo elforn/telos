@@ -244,38 +244,50 @@ class GoalItem extends Gestures(AppElement) {
           0% {
             opacity: 1;
             box-shadow:
-              -155px  0px 0 5px #FFFFFF,
-               -90px  0px 0 5px var(--color-accent),
-               -40px  0px 0 5px #FFFFFF,
-                15px  0px 0 5px var(--color-accent-dark),
-                65px  0px 0 5px #FFFFFF,
-               115px  0px 0 5px var(--color-accent),
-               165px  0px 0 5px #FFFFFF,
-               -15px  0px 0 5px var(--color-accent-dark);
+              -175px 0px 0 5px #FFFFFF,
+              -142px 0px 0 5px var(--color-accent),
+              -110px 0px 0 5px var(--color-accent-dark),
+               -77px 0px 0 5px #FFFFFF,
+               -44px 0px 0 5px var(--color-accent),
+               -11px 0px 0 5px var(--color-accent-dark),
+                21px 0px 0 5px #FFFFFF,
+                54px 0px 0 5px var(--color-accent),
+                87px 0px 0 5px var(--color-accent-dark),
+               120px 0px 0 5px #FFFFFF,
+               152px 0px 0 5px var(--color-accent),
+               185px 0px 0 5px var(--color-accent-dark);
           }
           60% {
             opacity: 0.85;
             box-shadow:
-              -157px  -53px 0 4px #FFFFFF,
-               -93px  -68px 0 4px var(--color-accent),
-               -41px  -62px 0 4px #FFFFFF,
-                13px  -73px 0 4px var(--color-accent-dark),
-                66px  -65px 0 4px #FFFFFF,
-               116px  -59px 0 4px var(--color-accent),
-               167px  -52px 0 4px #FFFFFF,
-               -17px  -70px 0 4px var(--color-accent-dark);
+              -175px -50px 0 4px #FFFFFF,
+              -142px -68px 0 4px var(--color-accent),
+              -110px -57px 0 4px var(--color-accent-dark),
+               -77px -75px 0 4px #FFFFFF,
+               -44px -63px 0 4px var(--color-accent),
+               -11px -51px 0 4px var(--color-accent-dark),
+                21px -70px 0 4px #FFFFFF,
+                54px -58px 0 4px var(--color-accent),
+                87px -76px 0 4px var(--color-accent-dark),
+               120px -64px 0 4px #FFFFFF,
+               152px -53px 0 4px var(--color-accent),
+               185px -71px 0 4px var(--color-accent-dark);
           }
           100% {
             opacity: 0;
             box-shadow:
-              -160px   -82px 0 2px #FFFFFF,
-               -95px  -104px 0 2px var(--color-accent),
-               -42px   -96px 0 2px #FFFFFF,
-                12px  -112px 0 2px var(--color-accent-dark),
-                68px  -100px 0 2px #FFFFFF,
-               118px   -90px 0 2px var(--color-accent),
-               170px   -80px 0 2px #FFFFFF,
-               -18px  -108px 0 2px var(--color-accent-dark);
+              -175px  -78px 0 2px #FFFFFF,
+              -142px -102px 0 2px var(--color-accent),
+              -110px  -87px 0 2px var(--color-accent-dark),
+               -77px -111px 0 2px #FFFFFF,
+               -44px  -95px 0 2px var(--color-accent),
+               -11px  -80px 0 2px var(--color-accent-dark),
+                21px -104px 0 2px #FFFFFF,
+                54px  -88px 0 2px var(--color-accent),
+                87px -113px 0 2px var(--color-accent-dark),
+               120px  -97px 0 2px #FFFFFF,
+               152px  -81px 0 2px var(--color-accent),
+               185px -106px 0 2px var(--color-accent-dark);
           }
         }
 
@@ -283,38 +295,50 @@ class GoalItem extends Gestures(AppElement) {
           0% {
             opacity: 1;
             box-shadow:
-              -140px  0px 0 5px var(--color-accent),
-               -75px  0px 0 5px #FFFFFF,
-               -25px  0px 0 5px var(--color-accent-dark),
-                30px  0px 0 5px #FFFFFF,
-                85px  0px 0 5px var(--color-accent),
-               135px  0px 0 5px #FFFFFF,
-               -55px  0px 0 5px #FFFFFF,
-                55px  0px 0 5px var(--color-accent-dark);
+              -155px 0px 0 5px var(--color-accent),
+              -126px 0px 0 5px #FFFFFF,
+               -97px 0px 0 5px var(--color-accent-dark),
+               -68px 0px 0 5px var(--color-accent),
+               -39px 0px 0 5px #FFFFFF,
+               -10px 0px 0 5px var(--color-accent-dark),
+                20px 0px 0 5px var(--color-accent),
+                49px 0px 0 5px #FFFFFF,
+                78px 0px 0 5px var(--color-accent-dark),
+               107px 0px 0 5px var(--color-accent),
+               136px 0px 0 5px #FFFFFF,
+               165px 0px 0 5px var(--color-accent-dark);
           }
           60% {
             opacity: 0.85;
             box-shadow:
-              -142px  -51px 0 4px var(--color-accent),
-               -77px  -70px 0 4px #FFFFFF,
-               -26px  -65px 0 4px var(--color-accent-dark),
-                29px  -75px 0 4px #FFFFFF,
-                86px  -68px 0 4px var(--color-accent),
-               138px  -57px 0 4px #FFFFFF,
-               -56px  -62px 0 4px #FFFFFF,
-                57px  -56px 0 4px var(--color-accent-dark);
+              -155px -57px 0 4px var(--color-accent),
+              -126px -75px 0 4px #FFFFFF,
+               -97px -63px 0 4px var(--color-accent-dark),
+               -68px -51px 0 4px var(--color-accent),
+               -39px -70px 0 4px #FFFFFF,
+               -10px -58px 0 4px var(--color-accent-dark),
+                20px -76px 0 4px var(--color-accent),
+                49px -64px 0 4px #FFFFFF,
+                78px -53px 0 4px var(--color-accent-dark),
+               107px -71px 0 4px var(--color-accent),
+               136px -59px 0 4px #FFFFFF,
+               165px -77px 0 4px var(--color-accent-dark);
           }
           100% {
             opacity: 0;
             box-shadow:
-              -145px   -78px 0 2px var(--color-accent),
-               -80px  -108px 0 2px #FFFFFF,
-               -28px  -100px 0 2px var(--color-accent-dark),
-                28px  -116px 0 2px #FFFFFF,
-                88px  -104px 0 2px var(--color-accent),
-               140px   -88px 0 2px #FFFFFF,
-               -58px   -96px 0 2px #FFFFFF,
-                58px   -86px 0 2px var(--color-accent-dark);
+              -155px  -87px 0 2px var(--color-accent),
+              -126px -111px 0 2px #FFFFFF,
+               -97px  -95px 0 2px var(--color-accent-dark),
+               -68px  -80px 0 2px var(--color-accent),
+               -39px -104px 0 2px #FFFFFF,
+               -10px  -88px 0 2px var(--color-accent-dark),
+                20px -113px 0 2px var(--color-accent),
+                49px  -97px 0 2px #FFFFFF,
+                78px  -81px 0 2px var(--color-accent-dark),
+               107px -106px 0 2px var(--color-accent),
+               136px  -90px 0 2px #FFFFFF,
+               165px -115px 0 2px var(--color-accent-dark);
           }
         }
 
