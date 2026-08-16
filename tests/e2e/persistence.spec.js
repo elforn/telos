@@ -161,13 +161,26 @@ test.describe('Data persistence', () => {
         ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
       return d?.open;
     });
-    // Type/target are collapsed behind a summary for an existing goal —
-    // tap it to reveal the pill group before interacting with it.
+    // Type/target show a plain readout for an existing goal — "Change type"
+    // in the ⋮ menu reveals the pill group before interacting with it.
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('#type-summary').click();
+        .querySelector('#menu-btn').click();
+    });
+    await page.waitForFunction(() => {
+      const sheet = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#action-sheet')?.shadowRoot?.querySelector('dialog');
+      return sheet?.open;
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#action-change-type-btn').click();
     });
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot

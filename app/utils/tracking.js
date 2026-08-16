@@ -19,15 +19,22 @@ import { todayISO } from './today-iso.js';
 // switching into weekly/monthly for the first time).
 export const DEFAULT_TARGET = { weekly: 3, monthly: 4 };
 
-// Periods considered for the weighted average AND the row's glance strip (dot
-// count = PERIOD_WINDOW[type] - 1 history + 1 current) — one shared window so
-// the math and the UI never quietly drift apart. Weekly and monthly get
+// Periods considered for the weighted average — weekly and monthly get
 // separate lengths because a "period" is such a different wall-clock span
 // for each (6 weeks ≈ 1.5 months vs 4 months) — a shared count would mean a
 // flawless brand-new monthly goal can't reach 100% for many months (weight
 // math bottoms out at current/sum-of-1..N with every period before the goal
 // existed counted as missed).
 export const PERIOD_WINDOW = { weekly: 6, monthly: 4 };
+
+// The row's glance strip shows more history than the score actually counts
+// for monthly goals — 6 months of context vs. the 4 PERIOD_WINDOW scores —
+// deliberately: seeing further back doesn't change what you're being judged
+// on, it just gives more of the story. Weekly's display and scored windows
+// stay equal (both were already 6). recentDots() also trims *display* only
+// (see below) — neither of these affects percentValue/weightedAverage,
+// which always read PERIOD_WINDOW.
+export const DOT_WINDOW = { weekly: PERIOD_WINDOW.weekly, monthly: 6 };
 
 // Fix-a-day's scrollable window, in calendar days — sized to actually reach
 // every period the score above can still be influenced by. Past this many
@@ -136,12 +143,19 @@ function countByPeriod(entries, type) {
   return counts;
 }
 
+// Shared by periodFractions (always PERIOD_WINDOW[type], feeds the score)
+// and recentDots (DOT_WINDOW[type], feeds the row — can show more than the
+// score counts, see DOT_WINDOW above).
+function fractionsForWindow(tracking, count, todayIso) {
+  const { type, target, entries } = tracking;
+  const counts = countByPeriod(entries, type);
+  return recentPeriods(type, count, todayIso).map(key => Math.min((counts.get(key) ?? 0) / target, 1));
+}
+
 // Fraction of target met (0–1, capped) for each period in the window, oldest
 // first — the last entry is always the current (possibly still-open) period.
 export function periodFractions(tracking, todayIso = todayISO()) {
-  const { type, target, entries } = tracking;
-  const counts = countByPeriod(entries, type);
-  return recentPeriods(type, PERIOD_WINDOW[type], todayIso).map(key => Math.min((counts.get(key) ?? 0) / target, 1));
+  return fractionsForWindow(tracking, PERIOD_WINDOW[tracking.type], todayIso);
 }
 
 // Raw (uncapped) entry count for the period containing `todayIso` — the
@@ -153,16 +167,26 @@ export function currentPeriodCount(tracking, todayIso = todayISO()) {
   return counts.get(periodKey(todayIso, type)) ?? 0;
 }
 
-// UI-facing: classify each period in the window, with the last one flagged
-// `current` (still open, not a closed period yet) — feeds goal-item's dot-strip
-// directly so the component never touches date math itself.
+// UI-facing: classify each period in the DOT_WINDOW, with the last one
+// flagged `current` (still open, not a closed period yet) — feeds
+// goal-item's dot-strip directly so the component never touches date math
+// itself. Leading missed periods are trimmed before returning: once a losing
+// streak runs all the way back to the start of the window, showing all of it
+// just anchors the row on the failure — trim down to wherever progress
+// actually starts (or, if there's none at all, to the current period alone)
+// so a fresh restart doesn't look like it's dragging a dead streak behind
+// it. Display only — periodFractions/weightedAverage (the score) are a
+// separate call that always reads the full, untrimmed PERIOD_WINDOW.
 export function recentDots(goal, todayIso = todayISO()) {
-  const fractions = periodFractions(goal.tracking, todayIso);
-  return fractions.map((fraction, i) => ({
+  const { type } = goal.tracking;
+  const fractions = fractionsForWindow(goal.tracking, DOT_WINDOW[type], todayIso);
+  const dots = fractions.map((fraction, i) => ({
     fraction,
     state: fraction >= 1 ? 'met' : fraction > 0 ? 'partial' : 'missed',
     current: i === fractions.length - 1,
   }));
+  const firstActive = dots.findIndex(d => d.state !== 'missed');
+  return firstActive === -1 ? dots.slice(-1) : dots.slice(firstActive);
 }
 
 // Linear recency weighting — the current period counts PERIOD_WINDOW[type]×

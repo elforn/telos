@@ -64,6 +64,8 @@ class ListDetailPage extends AppElement {
 
         :host {
           display: block;
+          max-inline-size: var(--page-max-width);
+          margin-inline: auto;
           --page-padding: var(--space-5);
         }
 
@@ -310,8 +312,11 @@ class ListDetailPage extends AppElement {
 
         #bulk-bar {
           position: fixed;
-          inset-inline: 0;
+          inset-inline-start: 50%;
+          transform: translateX(-50%);
+          inline-size: 100%;
           inset-block-end: 0;
+          max-inline-size: var(--page-max-width);
           z-index: 300; /* above bottom-nav (200) and page-header (100) */
           background: var(--color-surface);
           border-block-start: 1px solid var(--color-border);
@@ -323,9 +328,13 @@ class ListDetailPage extends AppElement {
           padding-block-end: calc(var(--space-2) + var(--safe-area-bottom, 0px));
         }
 
+        /* Composes with the base rule's translateX(-50%) centering — a bare
+           translateY() here would replace (not add to) that transform for
+           the animation's duration, popping the bar to the left edge for
+           the slide-in before snapping back to centered. */
         @keyframes bulk-bar-in {
-          from { transform: translateY(100%); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
+          from { transform: translateX(-50%) translateY(100%); opacity: 0; }
+          to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
         }
 
         @media (prefers-reduced-motion: no-preference) {

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   isFrequency, percentValue, setPercent, logEntry, unlogEntry, isLoggedOn,
   isoWeekKey, monthKey, recentPeriods, periodFractions, recentDots, currentPeriodCount,
-  PERIOD_WINDOW, TARGET_LIMITS,
+  PERIOD_WINDOW, DOT_WINDOW, TARGET_LIMITS,
 } from '../../app/utils/tracking.js';
 
 function pct(value) { return { tracking: { type: 'percentage', value } }; }
@@ -145,13 +145,17 @@ describe('tracking — periodFractions', () => {
 });
 
 describe('tracking — recentDots UI classification', () => {
-  it('classifies met / partial / missed and flags the current period', () => {
-    const goal = weekly(2, ['2026-08-10', '2026-08-11']); // this week (Mon 10 .. ) fully met
+  it('classifies met / partial / missed and flags the current period (oldest period has data, so nothing is trimmed)', () => {
+    // Weekly's DOT_WINDOW equals PERIOD_WINDOW (6) either way; an entry in
+    // the oldest tracked week keeps the leading-trim (see below) from
+    // kicking in, so this can still assert on the full 6-dot window.
+    const goal = weekly(2, ['2026-07-08', '2026-08-10', '2026-08-11']); // oldest week (Jul6-12) + this week, fully met
     const dots = recentDots(goal, '2026-08-10');
     expect(dots).toHaveLength(PERIOD_WINDOW.weekly);
     expect(dots[dots.length - 1]).toMatchObject({ state: 'met', current: true, fraction: 1 });
     expect(dots[0].current).toBe(false);
-    expect(dots[0].state).toBe('missed'); // no entries in older periods
+    expect(dots[0].state).not.toBe('missed'); // the trim anchor itself
+    expect(dots[1].state).toBe('missed'); // a middle period with no entries, not part of the leading run
   });
 
   it('a mid-target period classifies as partial', () => {
@@ -160,10 +164,50 @@ describe('tracking — recentDots UI classification', () => {
     expect(dots[dots.length - 1].state).toBe('partial');
   });
 
-  it('a monthly goal produces PERIOD_WINDOW.monthly dots — the row glance strip length', () => {
-    const goal = monthly(4, ['2026-08-10']);
+  it('a monthly goal produces DOT_WINDOW.monthly dots (6) when the oldest is non-empty — more than PERIOD_WINDOW.monthly (4) actually counts toward the score', () => {
+    const goal = monthly(4, ['2026-03-15', '2026-08-10']); // oldest of the 6 shown + current
     const dots = recentDots(goal, '2026-08-10');
-    expect(dots).toHaveLength(PERIOD_WINDOW.monthly);
+    expect(dots).toHaveLength(DOT_WINDOW.monthly);
+  });
+});
+
+describe('tracking — recentDots trims a leading missed streak (display only — see CLAUDE.md)', () => {
+  const TODAY = '2026-08-10'; // Monday — the 6-month display window is Mar..Aug, oldest first
+  const MONTHS_OLDEST_FIRST = ['2026-03-15', '2026-04-15', '2026-05-15', '2026-06-15', '2026-07-15', '2026-08-15'];
+
+  // pattern: 6 chars, oldest → current (left to right), 'x' = an entry
+  // exists that period, 'o' = none. Case carries no meaning for the entries
+  // themselves (only position 5 is ever "current") — kept purely so the
+  // patterns read identically to how they were specified.
+  function goalFor(pattern) {
+    const entries = [];
+    for (let i = 0; i < 6; i++) {
+      if (pattern[i].toLowerCase() === 'x') entries.push(MONTHS_OLDEST_FIRST[i]);
+    }
+    return monthly(1, entries);
+  }
+
+  it.each([
+    ['xoooxX', 6], // oldest has data — nothing trimmed, all 6 shown
+    ['oooxoX', 3], // trims the leading 3 misses, shows xoX
+    ['xooxxX', 6], // oldest has data — nothing trimmed
+    ['oooooX', 1], // nothing but the current period has data — shows just it
+    ['ooooxX', 2], // trims down to xX
+    ['ooxooO', 4], // trims down to xooO — current itself has no entry yet, still always shown
+  ])('%s → %i dots after trim', (pattern, expectedLength) => {
+    const dots = recentDots(goalFor(pattern), TODAY);
+    expect(dots).toHaveLength(expectedLength);
+    expect(dots[dots.length - 1].current).toBe(true);
+  });
+
+  it('an entry old enough to show in the wider display window but outside the scored window never changes percentValue', () => {
+    const withOldEntry    = monthly(1, ['2026-03-15', '2026-08-15']); // March: inside DOT_WINDOW.monthly (6), outside PERIOD_WINDOW.monthly (4)
+    const withoutOldEntry = monthly(1, ['2026-08-15']);
+    expect(percentValue(withOldEntry, TODAY)).toBe(percentValue(withoutOldEntry, TODAY));
+    // The asymmetry this proves the point of: the *display* does pick up
+    // the older entry (why DOT_WINDOW is wider than PERIOD_WINDOW in the
+    // first place) — same goal, two different functions, two different windows.
+    expect(recentDots(withOldEntry, TODAY)).toHaveLength(6); // March survives as the trim anchor
   });
 });
 

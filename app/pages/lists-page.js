@@ -33,6 +33,8 @@ class ListsPage extends AppElement {
       <style>
         :host {
           display: block;
+          max-inline-size: var(--page-max-width);
+          margin-inline: auto;
           --page-padding: var(--space-5);
         }
 

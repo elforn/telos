@@ -7,7 +7,7 @@ import '../tag-input/tag-input.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
-import { isFrequency, TARGET_LIMITS, FIX_DAY_SPAN, PERIOD_WINDOW, DEFAULT_TARGET, isLoggedOn } from '../../utils/tracking.js';
+import { TARGET_LIMITS, FIX_DAY_SPAN, DEFAULT_TARGET } from '../../utils/tracking.js';
 import { todayISO } from '../../utils/today-iso.js';
 
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
@@ -53,7 +53,7 @@ class GoalDialog extends AppElement {
     this._input.value = goal?.title ?? '';
     if (this._deleteBtn) this._deleteBtn.hidden = !goal;
     if (this._menuBtn) this._menuBtn.hidden = false;
-    if (this._fixDayBtn) this._fixDayBtn.hidden = !goal || !isFrequency(goal);
+    if (this._changeTypeBtn) this._changeTypeBtn.hidden = !goal;
     if (this._archiveBtn) {
       this._archiveBtn.hidden = !goal;
       this._archiveBtn.textContent = goal?.archived ? t('goal-dialog.unarchive') : t('goal-dialog.archive');
@@ -71,11 +71,13 @@ class GoalDialog extends AppElement {
     // percentage↔frequency, which just flips the discriminant — see
     // tracking.js). A fresh draft starts at the percentage default; an
     // existing goal seeds from its real current type/target, and starts
-    // collapsed behind the summary — a seldom-changed setting, doesn't need
-    // to greet you fully expanded on every open.
+    // collapsed behind a plain read-only label — a seldom-changed setting,
+    // changed via "Change type" in the ⋮ menu rather than shown expanded on
+    // every open. Fix-a-day starts collapsed too, independently.
     this._draftType   = goal?.tracking?.type   ?? 'percentage';
     this._draftTarget = goal?.tracking?.target ?? DEFAULT_TARGET.weekly;
     this._typeExpanded = false;
+    this._fixDayExpanded = false;
     this._renderTypeSection();
 
     this._lastValidTitle   = goal?.title ?? '';
@@ -215,17 +217,30 @@ class GoalDialog extends AppElement {
 
         .type-field { margin-block-end: var(--space-4); }
 
-        /* Collapsed-by-default summary for an existing goal — a seldom-
-           changed setting, so it stays low-profile until tapped, same
-           reveal-once-no-recollapse idiom as the due-date field toggle.
-           A plain muted label, not button chrome — inherits touch-target
-           sizing and cursor from the generic button rule above, but
-           overrides its padding/background so it reads as text, not a
-           control (matches the old locked-label's visual weight). */
-        .type-summary {
+        /* Existing goal, type/target: plain informational text, not a
+           control — type is changed via the ⋮ menu's "Change type" action
+           (rare enough not to earn permanent on-screen chrome), which
+           reveals the pill group below in its place. */
+        .type-readout {
+          color: var(--color-text-secondary);
+          font-size: var(--font-size-body);
+        }
+
+        /* Fix-a-day: a real expand/collapse toggle, unlike type/target's
+           menu-triggered reveal — stays visible in both states, chevron
+           flips to signal which way tapping it goes. Plain muted label, not
+           button chrome — inherits touch-target sizing and cursor from the
+           generic button rule above, but overrides padding/background so it
+           reads as text, not a control (matches the old locked-label's
+           visual weight, and the "minor control" category the copy button
+           uses --touch-target-small for — tapped occasionally, not the
+           frequently-tapped stepper, which does need the full 40px; see the
+           target-hint a11y note in CHANGELOG). */
+        .summary-toggle {
           display: flex;
           align-items: center;
           gap: var(--space-2);
+          min-block-size: var(--touch-target-small);
           padding-inline: 0;
           background: none;
           color: var(--color-text-secondary);
@@ -234,10 +249,15 @@ class GoalDialog extends AppElement {
           font-weight: normal;
         }
 
-        .type-summary svg {
+        .summary-toggle svg {
           inline-size: var(--icon-size-sm);
           block-size: var(--icon-size-sm);
           flex-shrink: 0;
+          transition: transform 0.15s;
+        }
+
+        .summary-toggle[aria-expanded="true"] svg {
+          transform: rotate(180deg);
         }
 
         .field-label {
@@ -714,10 +734,7 @@ class GoalDialog extends AppElement {
           </div>
           <tag-input id="tag-input"></tag-input>
           <div class="type-field">
-            <button type="button" class="type-summary" id="type-summary" hidden>
-              <span id="type-summary-label"></span>
-              ${icons.chevronDown}
-            </button>
+            <p class="type-readout" id="type-readout" hidden></p>
             <div class="type-pill-group" id="type-pills" role="radiogroup" aria-label="${t('goal-dialog.type-label')}">
               ${TYPES.map(ty => `
                 <button type="button" class="type-pill" data-type="${ty}" role="radio" aria-checked="false">${t('goal-dialog.type-' + ty)}</button>
@@ -733,6 +750,13 @@ class GoalDialog extends AppElement {
                 </div>
                 <button type="button" class="preset-chip" id="everyday-chip" hidden>${t('goal-dialog.everyday-preset')}</button>
               </div>
+            </div>
+            <button type="button" class="summary-toggle" id="fixday-summary" hidden aria-expanded="false">
+              <span>${t('goal-dialog.fixday-summary')}</span>
+              ${icons.chevronDown}
+            </button>
+            <div class="target-block" id="fixday-inline" hidden>
+              <div class="day-chips" id="fixday-chips"></div>
             </div>
           </div>
         </div>
@@ -750,12 +774,6 @@ class GoalDialog extends AppElement {
               </label>
             `).join('')}
           </div>
-        </div>
-
-        <!-- ── View: fix a day (frequency goals only) ─────────────────────── -->
-        <div id="view-fixday" hidden>
-          <p class="picker-heading" id="fixday-heading"></p>
-          <div class="day-chips" id="fixday-chips"></div>
         </div>
 
         <!-- ── Footer: main ─────────────────────────────────────────────── -->
@@ -788,7 +806,7 @@ class GoalDialog extends AppElement {
           <span class="sheet-toggle-label">${t('goal-dialog.duedate-toggle')}</span>
           <span class="sheet-toggle-check">${icons.check}</span>
         </button>
-        <button type="button" id="action-fixday-btn" class="sheet-item" hidden>${t('goal-dialog.fixday-menu')}</button>
+        <button type="button" id="action-change-type-btn" class="sheet-item" hidden>${t('goal-dialog.change-type-menu')}</button>
         <hr class="sheet-divider">
         <button type="button" id="action-move-btn" class="sheet-item">${t('goal-dialog.move-to-year')}</button>
         <button type="button" id="action-create-btn" class="sheet-item">${t('goal-dialog.create-list-item')}</button>
@@ -846,8 +864,8 @@ class GoalDialog extends AppElement {
 
     this._typePills        = [...this.shadowRoot.querySelectorAll('.type-pill')];
     this._typePillGroup    = this.shadowRoot.querySelector('#type-pills');
-    this._typeSummary      = this.shadowRoot.querySelector('#type-summary');
-    this._typeSummaryLabel = this.shadowRoot.querySelector('#type-summary-label');
+    this._typeReadout    = this.shadowRoot.querySelector('#type-readout');
+    this._changeTypeBtn  = this.shadowRoot.querySelector('#action-change-type-btn');
     this._targetBlock    = this.shadowRoot.querySelector('#target-block');
     this._targetLabel    = this.shadowRoot.querySelector('#target-label');
     this._targetValueEl  = this.shadowRoot.querySelector('#target-value');
@@ -855,9 +873,8 @@ class GoalDialog extends AppElement {
     this._targetUpBtn    = this.shadowRoot.querySelector('#target-up');
     this._everydayChip   = this.shadowRoot.querySelector('#everyday-chip');
 
-    this._viewFixDay     = this.shadowRoot.querySelector('#view-fixday');
-    this._fixDayBtn      = this.shadowRoot.querySelector('#action-fixday-btn');
-    this._fixDayHeading  = this.shadowRoot.querySelector('#fixday-heading');
+    this._fixDaySummary  = this.shadowRoot.querySelector('#fixday-summary');
+    this._fixDayInline   = this.shadowRoot.querySelector('#fixday-inline');
     this._fixDayChips    = this.shadowRoot.querySelector('#fixday-chips');
 
     this._isNew           = false;
@@ -1068,9 +1085,6 @@ class GoalDialog extends AppElement {
     this._onActionMove = () => { this._actionSheet.close(); this._showView('move'); };
     this.shadowRoot.querySelector('#action-move-btn').addEventListener('click', this._onActionMove);
 
-    this._onActionFixDay = () => { this._actionSheet.close(); this._showView('fixday'); };
-    this._fixDayBtn.addEventListener('click', this._onActionFixDay);
-
     this._onActionCreate = () => {
       this._actionSheet.close();
       this._listPickerDialog.lists = this.availableLists;
@@ -1111,10 +1125,18 @@ class GoalDialog extends AppElement {
     this._onCopyCta = () => this._commitMove(true);
     this._moveCopyBtn.addEventListener('click', this._onCopyCta);
 
-    // ── Fix-a-day view (frequency goals only) ───────────────────────────────────
-    // No back button — the sheet is dismissible (backdrop tap / Escape) the
-    // same as any other view here, so a dedicated in-app "return to main"
-    // control would just be a second way to do the same thing.
+    // ── Fix-a-day (frequency goals only) — inline, a real expand/collapse
+    // toggle (unlike type/target's menu-triggered, one-way reveal below).
+
+    this._onFixDaySummaryClick = () => {
+      this._fixDayExpanded = !this._fixDayExpanded;
+      this._renderFixDaySummary();
+      // Land on today, not the oldest day, each time it opens — the strip
+      // can run back up to 4 months, and the days worth fixing are almost
+      // always recent ones.
+      if (this._fixDayExpanded) this._fixDayChips.scrollLeft = this._fixDayChips.scrollWidth;
+    };
+    this._fixDaySummary.addEventListener('click', this._onFixDaySummaryClick);
 
     this._onFixDayChipClick = e => {
       const chip = e.target.closest('.day-chip');
@@ -1140,15 +1162,17 @@ class GoalDialog extends AppElement {
 
     // ── Type selector + target stepper (editable for new AND existing goals) ────
 
-    // Collapsed by default on an existing goal — seldom changed, so it stays
-    // low-profile until tapped. Reveal-once, no re-collapse control, same
-    // idiom as the due-date field toggle just above: once shown, it just
-    // stays shown for the rest of this dialog visit.
-    this._onTypeSummaryClick = () => {
+    // Reached via "Change type" in the ⋮ menu for an existing goal (not a
+    // tap on the readout itself, which is plain text) — reveal-once, no
+    // re-collapse control, same idiom as the due-date field toggle just
+    // above: once shown, it just stays shown for the rest of this dialog
+    // visit. Independent of Fix-a-day now — no coordination needed.
+    this._onActionChangeType = () => {
+      this._actionSheet.close();
       this._typeExpanded = true;
       this._renderTypeSection();
     };
-    this._typeSummary.addEventListener('click', this._onTypeSummaryClick);
+    this._changeTypeBtn.addEventListener('click', this._onActionChangeType);
 
     this._onTypePillClick = e => {
       const pill = e.target.closest('.type-pill');
@@ -1255,9 +1279,9 @@ class GoalDialog extends AppElement {
     this._moveMoveBtn?.removeEventListener('click', this._onMoveCta);
     this._moveCopyBtn?.removeEventListener('click', this._onCopyCta);
     this._listPickerDialog?.removeEventListener('list-pick', this._onListPick);
-    this._fixDayBtn?.removeEventListener('click', this._onActionFixDay);
+    this._fixDaySummary?.removeEventListener('click', this._onFixDaySummaryClick);
     this._fixDayChips?.removeEventListener('click', this._onFixDayChipClick);
-    this._typeSummary?.removeEventListener('click', this._onTypeSummaryClick);
+    this._changeTypeBtn?.removeEventListener('click', this._onActionChangeType);
     this._typePills?.forEach(p => p.removeEventListener('click', this._onTypePillClick));
     this._targetDownBtn?.removeEventListener('click', this._onTargetDown);
     this._targetUpBtn?.removeEventListener('click', this._onTargetUp);
@@ -1291,25 +1315,26 @@ class GoalDialog extends AppElement {
     return { type: this._draftType, value: 0, target: this._draftTarget, entries: [] };
   }
 
-  // Type/target stay editable for the life of the goal, new or existing,
-  // any type — switching never drops data (see tracking.js: value/target/
-  // entries are all always present, `type` just says which is live), so
-  // there's no *locked* state to render. But an existing goal's editor
-  // starts collapsed behind a summary button (seldom changed, shouldn't
-  // compete for attention with title/notes/tags on every open) — a new
-  // goal's editor is always expanded, since picking a type is the point of
-  // creating one.
+  // Existing goal: a plain read-only line ("5×/week") — type is changed via
+  // "Change type" in the ⋮ menu (_onActionChangeType), not by tapping this
+  // text, so there's nothing here to make interactive. Reveal-once once
+  // opened from the menu, no re-collapse control — same idiom as the
+  // due-date field toggle. A brand-new goal never collapses at all —
+  // picking a type is the point of creating one, so the full picker always
+  // shows immediately. Independent of Fix-a-day (see _renderFixDaySummary)
+  // — the two used to share one expansion slot; they no longer do, since
+  // type is menu-gated now and doesn't need to coordinate with anything.
   _renderTypeSection() {
-    const collapsed = !this._isNew && !this._typeExpanded;
-    this._typeSummary.hidden = !collapsed;
-    this._typePillGroup.hidden = collapsed;
+    const showTypeEditor = this._isNew || this._typeExpanded;
+    this._typeReadout.hidden = showTypeEditor;
+    this._typePillGroup.hidden = !showTypeEditor;
+    this._renderFixDaySummary();
 
-    if (collapsed) {
+    if (!showTypeEditor) {
       const summary = (this._draftType === 'weekly' || this._draftType === 'monthly')
         ? t(`goal-dialog.type-summary-${this._draftType}`, { target: this._draftTarget })
         : t('goal-dialog.type-percentage');
-      this._typeSummaryLabel.textContent = summary;
-      this._typeSummary.setAttribute('aria-label', `${t('goal-dialog.type-change-aria')} ${summary}`);
+      this._typeReadout.textContent = summary;
       this._targetBlock.hidden = true;
       return;
     }
@@ -1329,6 +1354,23 @@ class GoalDialog extends AppElement {
     this._everydayChip.setAttribute('aria-pressed', String(this._draftType === 'weekly' && this._draftTarget === 7));
   }
 
+  // Fix-a-day: a real expand/collapse toggle (see _onFixDaySummaryClick),
+  // visible whenever the goal is currently frequency regardless of expand
+  // state — unlike type/target's reveal-once menu trigger, this button
+  // never hides itself, just flips its chevron. Derived from _draftType,
+  // not this._goal — callers set _draftType and call _renderTypeSection
+  // (which calls this) before _commitTrackingChange() has updated
+  // this._goal, so this._goal.tracking.type would still read the stale,
+  // pre-switch value here.
+  _renderFixDaySummary() {
+    const canFixDay = !this._isNew && (this._draftType === 'weekly' || this._draftType === 'monthly');
+    if (!canFixDay && this._fixDayExpanded) this._fixDayExpanded = false;
+    this._fixDaySummary.hidden = !canFixDay;
+    this._fixDaySummary.setAttribute('aria-expanded', String(this._fixDayExpanded));
+    this._fixDayInline.hidden = !this._fixDayExpanded;
+    if (this._fixDayExpanded) this._renderFixDayChips();
+  }
+
   // Persists a type or target edit for an existing goal immediately (unlike
   // the new-goal draft, which only commits on title blur/close). value and
   // entries both carry through untouched regardless of which type is now
@@ -1346,13 +1388,7 @@ class GoalDialog extends AppElement {
       target: this._draftTarget,
       entries: this._goal?.tracking?.entries ?? [],
     };
-    if (this._goal) {
-      this._goal = { ...this._goal, tracking };
-      // Fix-a-day only applies while the goal is *currently* frequency —
-      // this can now flip live, mid-edit, so it's re-evaluated on every
-      // commit rather than fixed once when the dialog opened.
-      this._fixDayBtn.hidden = !isFrequency(this._goal);
-    }
+    if (this._goal) this._goal = { ...this._goal, tracking };
     this.dispatchEvent(new CustomEvent('goal-tracking-changed', {
       bubbles: true, composed: true, detail: { tracking },
     }));
@@ -1369,7 +1405,6 @@ class GoalDialog extends AppElement {
   _renderFixDayChips() {
     if (!this._goal) return;
     const type = this._goal.tracking.type;
-    this._fixDayHeading.textContent = t(`goal-dialog.fixday-heading-${type}`, { n: PERIOD_WINDOW[type] });
     const entries = new Set(this._goal.tracking?.entries ?? []);
     const today = todayISO();
     const [ty, tm, td] = today.split('-').map(Number);
@@ -1409,16 +1444,9 @@ class GoalDialog extends AppElement {
   _showView(name) {
     this._viewMain.hidden    = name !== 'main';
     this._viewMove.hidden    = name !== 'move';
-    this._viewFixDay.hidden  = name !== 'fixday';
     this._footerMain.hidden  = name !== 'main';
     this._footerMove.hidden  = name !== 'move';
     if (name === 'move') this._renderMoveView();
-    if (name === 'fixday') {
-      this._renderFixDayChips();
-      // Land on today, not the oldest day — the strip can now run back up to
-      // 4 months, and the days worth fixing are almost always recent ones.
-      this._fixDayChips.scrollLeft = this._fixDayChips.scrollWidth;
-    }
   }
 
   _renderMoveView() {

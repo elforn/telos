@@ -75,7 +75,10 @@ class BottomNav extends AppElement {
           display: block;
           position: fixed;
           inset-block-end: 0;
-          inset-inline: 0;
+          inset-inline-start: 50%;
+          transform: translateX(-50%);
+          inline-size: 100%;
+          max-inline-size: var(--page-max-width);
           z-index: 200;
           touch-action: manipulation;
           background: var(--color-surface);

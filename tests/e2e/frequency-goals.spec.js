@@ -89,7 +89,27 @@ async function tapBar(page) {
   });
 }
 
+// Fix-a-day is inline, a real toggle — tap the summary to unfold the
+// day-chip strip in place (tapping again would collapse it back).
 async function openFixDay(page) {
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot
+      .querySelector('goal-dialog').shadowRoot
+      .querySelector('#fixday-summary').click();
+  });
+  await page.waitForFunction(() => {
+    const inline = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('home-page')?.shadowRoot
+      ?.querySelector('goal-dialog')?.shadowRoot
+      ?.querySelector('#fixday-inline');
+    return inline && !inline.hidden;
+  });
+}
+
+// Type/target show a plain read-only readout for an existing goal — "Change
+// type" in the ⋮ menu reveals the interactive pill group in its place.
+async function expandType(page) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
@@ -107,25 +127,14 @@ async function openFixDay(page) {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
       .querySelector('goal-dialog').shadowRoot
-      .querySelector('#action-fixday-btn').click();
+      .querySelector('#action-change-type-btn').click();
   });
   await page.waitForFunction(() => {
-    const view = document.querySelector('app-router')?.shadowRoot
+    const pills = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('home-page')?.shadowRoot
       ?.querySelector('goal-dialog')?.shadowRoot
-      ?.querySelector('#view-fixday');
-    return view && !view.hidden;
-  });
-}
-
-// Type/target are collapsed behind a summary button for an existing goal
-// (seldom changed) — tap it to reveal the interactive pill group.
-async function expandType(page) {
-  await page.evaluate(() => {
-    document.querySelector('app-router').shadowRoot
-      .querySelector('home-page').shadowRoot
-      .querySelector('goal-dialog').shadowRoot
-      .querySelector('#type-summary').click();
+      ?.querySelector('#type-pills');
+    return pills && !pills.hidden;
   });
 }
 
@@ -211,7 +220,7 @@ test.describe('Frequency goals', () => {
     });
   });
 
-  test('Fix a day: correct a past date via the edit dialog\'s overflow menu', async ({ page }) => {
+  test('Fix a day: correct a past date via the inline day-chip strip', async ({ page }) => {
     await openDialog(page, '#add-capstone');
     await selectType(page, 'weekly');
     await saveDialog(page, 'Move my body');
@@ -221,27 +230,32 @@ test.describe('Frequency goals', () => {
       return list?.querySelectorAll('goal-item').length === 1;
     });
 
-    // Real rendered size, not just the right class — a className/state check
-    // alone would have missed a real bug here: .freq-dots had no CSS rule at
-    // all, defaulting to display:inline, under which width/height (and their
-    // logical equivalents) are spec-ignored on non-replaced boxes. Every
-    // history dot rendered at zero effective size — invisible, while still
-    // carrying the "correct" class the whole time. happy-dom unit tests can't
-    // catch this (no real layout engine); this is why it has to be a real
-    // bounding-box check against an actual browser.
-    const historyDotSizes = await page.evaluate(() => {
+    // A brand-new goal has zero entries, so recentDots trims the history
+    // strip down to nothing (just the current/today token survives — see
+    // the leading-empty-trim tests in tracking.test.js) — confirm that
+    // token itself renders at a real, non-zero size. The equivalent check
+    // for actual history dots runs further below, once the backfill gives
+    // the strip something non-empty to show (a className/state check alone
+    // previously missed a real bug here: .freq-dots had no CSS rule at all,
+    // defaulting to display:inline, under which width/height are spec-
+    // ignored on non-replaced boxes — history dots rendered at zero
+    // effective size while still carrying the "correct" class the whole
+    // time; happy-dom's unit tests can't catch this, no real layout engine).
+    const todayDotSize = await page.evaluate(() => {
       const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('#capstone-list goal-item');
-      return [...item.shadowRoot.querySelectorAll('.freq-dots .freq-dot')]
-        .map(d => d.getBoundingClientRect())
-        .map(r => ({ width: r.width, height: r.height }));
+      const r = item.shadowRoot.querySelector('.freq-today .freq-dot').getBoundingClientRect();
+      return { width: r.width, height: r.height };
     });
-    expect(historyDotSizes).toHaveLength(5);
-    for (const size of historyDotSizes) {
-      expect(size.width).toBeGreaterThan(0);
-      expect(size.height).toBeGreaterThan(0);
-    }
+    expect(todayDotSize.width).toBeGreaterThan(0);
+    expect(todayDotSize.height).toBeGreaterThan(0);
+    expect(await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item.shadowRoot.querySelectorAll('.freq-dots .freq-dot').length;
+    })).toBe(0); // trimmed away — no history yet
 
     await tapBar(page);
     await openFixDay(page);
@@ -254,36 +268,40 @@ test.describe('Frequency goals', () => {
     );
     expect(chipCount).toBe(42); // 7 × PERIOD_WINDOW.weekly (6)
 
-    // The very first chip (oldest of the 42) is 41 days ago — an old miss to
-    // back-fill, distinct from "today" (which the hold gesture already covers
-    // in the other test above; this one is specifically about arbitrary dates).
-    const firstChipIso = await page.evaluate(() =>
+    // 3 weeks (21 days) back — an old miss to back-fill, distinct from
+    // "today" (which the hold gesture already covers in the other test
+    // above; this one is specifically about arbitrary dates). Deliberately
+    // not the strip's absolute oldest chip: FIX_DAY_SPAN is sized for the
+    // worst case (today being a Sunday), so on other days the oldest few
+    // chips can fall just outside the 6-week window recentDots actually
+    // tracks — 21 days back is safely inside that window regardless of
+    // what day of the week "today" happens to be when this runs.
+    const firstChipIso = await page.evaluate(() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 21);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    });
+    const wasPressedBefore = await page.evaluate(iso =>
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('#fixday-chips .day-chip').dataset.iso
-    );
-    const wasPressedBefore = await page.evaluate(() =>
-      document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('goal-dialog').shadowRoot
-        .querySelector('#fixday-chips .day-chip').getAttribute('aria-pressed')
-    );
+        .querySelector(`#fixday-chips .day-chip[data-iso="${iso}"]`).getAttribute('aria-pressed')
+    , firstChipIso);
     expect(wasPressedBefore).toBe('false');
 
-    await page.evaluate(() => {
+    await page.evaluate(iso => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('#fixday-chips .day-chip').click();
-    });
+        .querySelector(`#fixday-chips .day-chip[data-iso="${iso}"]`).click();
+    }, firstChipIso);
 
-    await page.waitForFunction(() =>
+    await page.waitForFunction(iso =>
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('#fixday-chips .day-chip').getAttribute('aria-pressed') === 'true'
-    );
+        .querySelector(`#fixday-chips .day-chip[data-iso="${iso}"]`).getAttribute('aria-pressed') === 'true'
+    , firstChipIso);
 
     // Back-fill landed in the store, not just the chip's own local aria state.
     const entriesAfterAdd = await page.evaluate(() => {
@@ -296,16 +314,26 @@ test.describe('Frequency goals', () => {
 
     // The row underneath the modal is the same live element (not destroyed),
     // so a correction should be visible in its dot-strip immediately — before
-    // the dialog even closes, not just after. Every history dot started
-    // "missed" (fresh goal, zero entries); the back-filled week should no
-    // longer be.
-    const historyDotClassesWhileOpen = await page.evaluate(() => {
+    // the dialog even closes, not just after. The strip started fully
+    // trimmed (fresh goal, zero entries, nothing but the current token);
+    // the back-fill should now be the trim anchor, so at least one real
+    // history dot exists and is met/partial, not missed.
+    const historyDots = await page.evaluate(() => {
       const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('#capstone-list goal-item');
-      return [...item.shadowRoot.querySelectorAll('.freq-dots .freq-dot')].map(d => d.className);
+      return [...item.shadowRoot.querySelectorAll('.freq-dots .freq-dot')]
+        .map(d => ({ className: d.className, ...d.getBoundingClientRect().toJSON() }));
     });
-    expect(historyDotClassesWhileOpen.some(c => c.includes('met') || c.includes('partial'))).toBe(true);
+    expect(historyDots.length).toBeGreaterThan(0); // trim no longer collapses it to nothing
+    expect(historyDots.some(d => d.className.includes('met') || d.className.includes('partial'))).toBe(true);
+    // Real rendered size for every dot now shown, not just the right class —
+    // this is the actual regression check for the historical .freq-dots
+    // invisible-container bug (see the comment above).
+    for (const d of historyDots) {
+      expect(d.width).toBeGreaterThan(0);
+      expect(d.height).toBeGreaterThan(0);
+    }
 
     // A second, different chip: toggle on then off — covers the removal
     // direction (kept from the earlier version of this test) without
@@ -342,11 +370,11 @@ test.describe('Frequency goals', () => {
       return !item._goal.tracking.entries.includes(iso);
     }, secondChip);
 
-    // No back button (removed — the sheet is dismissible like any other view,
-    // not navigated back from). Dismiss the whole dialog via Escape, same as
-    // a real backdrop tap, and confirm the correction survived the close —
-    // this is the actual scenario: does the row still show it once you're
-    // back looking at the list, not just while the dialog happens to be open.
+    // Dismiss the whole dialog via Escape, same as a real backdrop tap
+    // (rather than collapsing the strip itself first), and confirm the
+    // correction survived the close — this is the actual scenario: does the
+    // row still show it once you're back looking at the list, not just
+    // while the dialog happens to be open.
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => {
       const d = document.querySelector('app-router')?.shadowRoot
@@ -432,22 +460,22 @@ test.describe('Frequency goals', () => {
 
     await tapBar(page);
 
-    // Collapsed by default — a summary, not the pill group, on first open.
+    // Collapsed by default — a plain readout, not the pill group, on first open.
     const collapsedState = await page.evaluate(() => {
       const root = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot;
       return {
-        summaryHidden: root.querySelector('#type-summary').hidden,
+        readoutHidden: root.querySelector('#type-readout').hidden,
         pillsHidden: root.querySelector('#type-pills').hidden,
       };
     });
-    expect(collapsedState.summaryHidden).toBe(false);
+    expect(collapsedState.readoutHidden).toBe(false);
     expect(collapsedState.pillsHidden).toBe(true);
 
-    // Tapping the summary reveals the pill group — fully interactive, no
-    // locked state at all, percentage included, since switching never
-    // destroys data.
+    // "Change type" in the ⋮ menu reveals the pill group — fully
+    // interactive, no locked state at all, percentage included, since
+    // switching never destroys data.
     await expandType(page);
     const pillState = await page.evaluate(() => {
       const root = document.querySelector('app-router').shadowRoot
@@ -629,5 +657,76 @@ test.describe('Frequency goals', () => {
     expect(chipCount).toBe(120); // 30 × PERIOD_WINDOW.monthly (4)
     expect(dividerCount).toBeGreaterThanOrEqual(4);
     expect(scrolledToEnd).toBe(true);
+  });
+
+  test('type/target (via the ⋮ menu) and Fix-a-day (inline toggle) are independent — both can be open together, Fix-a-day collapses back on a second tap', async ({ page }) => {
+    await openDialog(page, '#add-capstone');
+    await selectType(page, 'weekly');
+    await saveDialog(page, 'Move my body');
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+
+    await tapBar(page);
+
+    // Collapsed on first open: a plain readout for type, a collapsed toggle
+    // for Fix-a-day, no pill group or day-chip strip yet.
+    let state = await page.evaluate(() => {
+      const root = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot;
+      return {
+        readoutHidden: root.querySelector('#type-readout').hidden,
+        pillsHidden: root.querySelector('#type-pills').hidden,
+        fixdaySummaryHidden: root.querySelector('#fixday-summary').hidden,
+        fixdayExpanded: root.querySelector('#fixday-summary').getAttribute('aria-expanded'),
+      };
+    });
+    expect(state.readoutHidden).toBe(false);
+    expect(state.pillsHidden).toBe(true);
+    expect(state.fixdaySummaryHidden).toBe(false);
+    expect(state.fixdayExpanded).toBe('false');
+
+    // Opening type via the menu and Fix-a-day via its own toggle — both end
+    // up expanded simultaneously, unlike the old shared-row design.
+    await expandType(page);
+    await openFixDay(page);
+    state = await page.evaluate(() => {
+      const root = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot;
+      return {
+        pillsHidden: root.querySelector('#type-pills').hidden,
+        fixdayInlineHidden: root.querySelector('#fixday-inline').hidden,
+      };
+    });
+    expect(state.pillsHidden).toBe(false);
+    expect(state.fixdayInlineHidden).toBe(false);
+
+    // Tapping the Fix-a-day summary again collapses it back — a real
+    // toggle, not a reveal-once control like type/target's menu trigger.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#fixday-summary').click();
+    });
+    state = await page.evaluate(() => {
+      const root = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot;
+      return {
+        fixdayInlineHidden: root.querySelector('#fixday-inline').hidden,
+        fixdaySummaryHidden: root.querySelector('#fixday-summary').hidden,
+        fixdayExpanded: root.querySelector('#fixday-summary').getAttribute('aria-expanded'),
+        pillsHidden: root.querySelector('#type-pills').hidden, // untouched by the fixday collapse
+      };
+    });
+    expect(state.fixdayInlineHidden).toBe(true);
+    expect(state.fixdaySummaryHidden).toBe(false); // stays visible, doesn't disappear
+    expect(state.fixdayExpanded).toBe('false');
+    expect(state.pillsHidden).toBe(false);
   });
 });

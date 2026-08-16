@@ -20,6 +20,17 @@ function isoDaysFromNow(days) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// Two dates guaranteed to fall in the same ISO week (Mon–Sun) as each other
+// and as "today", regardless of which day of the week the suite happens to
+// run on — unlike isoDaysFromNow(0) + isoDaysFromNow(-1), which cross a week
+// boundary (and silently under-count the current period) whenever today is
+// a Monday.
+function isoDaysFromWeekStart(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + days); // Mon=0..Sun=6
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 afterEach(() => { document.body.innerHTML = ''; _resetDeleteGuard(); });
 
 describe('goal-item — structure', () => {
@@ -276,7 +287,7 @@ describe('goal-item — frequency: role, aria, rendering', () => {
   });
 
   it('aria-label includes the current-period count and target', () => {
-    const el = mount(weeklyGoal([isoDaysFromNow(0), isoDaysFromNow(-1)], 3));
+    const el = mount(weeklyGoal([isoDaysFromWeekStart(0), isoDaysFromWeekStart(1)], 3));
     expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-label')).toContain('2 of 3');
   });
 
@@ -287,9 +298,15 @@ describe('goal-item — frequency: role, aria, rendering', () => {
     expect(notLogged.shadowRoot.querySelector('.bar').getAttribute('aria-label')).not.toContain('logged today');
   });
 
-  it('renders 5 history dots plus one today token', () => {
-    const el = mount(weeklyGoal());
+  it('renders 5 history dots plus one today token when the oldest tracked week has an entry (nothing trimmed)', () => {
+    const el = mount(weeklyGoal([isoDaysFromWeekStart(-35)])); // the oldest of the 6 tracked weeks
     expect(el.shadowRoot.querySelectorAll('.freq-dots .freq-dot')).toHaveLength(5);
+    expect(el.shadowRoot.querySelector('.freq-today .freq-dot')).not.toBeNull();
+  });
+
+  it('renders only the today token when there is no history at all — recentDots trims the leading empty run', () => {
+    const el = mount(weeklyGoal()); // no entries anywhere, including this week
+    expect(el.shadowRoot.querySelectorAll('.freq-dots .freq-dot')).toHaveLength(0);
     expect(el.shadowRoot.querySelector('.freq-today .freq-dot')).not.toBeNull();
   });
 

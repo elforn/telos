@@ -41,7 +41,10 @@ class YearHeader extends Gestures(AppElement) {
           display: block;
           position: fixed;
           inset-block-start: var(--update-banner-height, 0px);
-          inset-inline: 0;
+          inset-inline-start: 50%;
+          transform: translateX(-50%);
+          inline-size: 100%;
+          max-inline-size: var(--page-max-width);
           z-index: 100;
           background: var(--color-surface);
           padding-block-start: var(--safe-area-top);

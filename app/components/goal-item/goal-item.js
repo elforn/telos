@@ -803,9 +803,13 @@ class GoalItem extends Gestures(AppElement) {
     }
   }
 
-  // Dot-strip (read-only, last PERIOD_WINDOW[type]-1 closed periods) + the "today"
-  // token (bigger, doubles as the hold target — see .freq-today above). One
-  // shared shape per goal: circle for weekly, soft square for monthly.
+  // Dot-strip (read-only, whatever recentDots() returns — up to DOT_WINDOW[type]
+  // history dots, trimmed at the front so a losing streak that runs the whole
+  // window doesn't visually anchor the row) + the "today" token (bigger,
+  // doubles as the hold target — see .freq-today above). One shared shape
+  // per goal: circle for weekly, soft square for monthly. No length
+  // assumptions here on purpose — the trim/window sizing lives entirely in
+  // tracking.js, this component just renders however many dots come back.
   _renderFreqCluster() {
     const dots = recentDots(this._goal);
     const history = dots.slice(0, -1);

@@ -66,6 +66,7 @@
         --letter-spacing-caps: 0.08em;
         --edge-btn-bleed:      -10px; /* right-edge icon buttons: bleed into page padding so icon aligns with content edge */
         --toast-max-width:     min(90vw, 420px); /* keeps a long toast message on screen */
+        --page-max-width:      600px; /* caps + centers page content on desktop — mobile is the primary surface (95% of use), so this only matters as a secondary-platform comfort width; row-based UI (goal/list rows) reads poorly stretched edge-to-edge on a wide viewport */
       }
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       body {

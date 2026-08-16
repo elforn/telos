@@ -1296,45 +1296,57 @@ describe('goal-dialog — type selector (new goal)', () => {
   });
 });
 
-describe('goal-dialog — type/target collapsed by default on an existing goal, behind a tappable summary', () => {
+describe('goal-dialog — type/target: plain readout for an existing goal, changed via the ⋮ menu', () => {
   function pill(el, type) {
     return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
   }
+  // "Change type" lives in the action sheet now, not a tap on the readout.
   function expand(el) {
-    el.shadowRoot.querySelector('#type-summary').click();
+    el.shadowRoot.querySelector('#action-change-type-btn').click();
   }
 
-  it('shows a summary (not the pill group) for an existing percentage goal', () => {
+  it('shows a plain readout (not the pill group) for an existing percentage goal', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 40, target: 3, entries: [] } });
-    expect(el.shadowRoot.querySelector('#type-summary').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#type-readout').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(true);
-    expect(el.shadowRoot.querySelector('#type-summary-label').textContent).toBe('Percentage');
+    expect(el.shadowRoot.querySelector('#type-readout').textContent).toBe('Percentage');
   });
 
-  it('summary shows type and target for an existing frequency goal', () => {
+  it('readout shows target for an existing frequency goal', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: [] } });
-    expect(el.shadowRoot.querySelector('#type-summary-label').textContent).toContain('5');
+    expect(el.shadowRoot.querySelector('#type-readout').textContent).toContain('5');
   });
 
-  it('tapping the summary reveals the interactive pill group, no locked state anywhere', () => {
+  it('the readout is plain text, not a control — no click handler, no chevron', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: [] } });
+    const readout = el.shadowRoot.querySelector('#type-readout');
+    expect(readout.tagName).toBe('P');
+    readout.click(); // no-op — nothing listens on it
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(true);
+  });
+
+  it('"Change type" in the ⋮ menu reveals the interactive pill group, closes the sheet, no locked state anywhere', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: [] } });
     expand(el);
-    expect(el.shadowRoot.querySelector('#type-summary').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#type-readout').hidden).toBe(true);
     expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#type-locked')).toBeNull(); // the old locked UI no longer exists at all
     expect(pill(el, 'percentage').hidden).toBe(false); // never withheld
     expect(pill(el, 'weekly').getAttribute('aria-checked')).toBe('true');
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('5');
+    expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
   });
 
-  it('a new goal is never collapsed — the pill group is visible immediately, no summary tap needed', () => {
+  it('"Change type" is hidden for a new goal — the full picker already shows immediately, nothing to reveal', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('#type-summary').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#action-change-type-btn').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#type-readout').hidden).toBe(true);
     expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
   });
 
@@ -1376,7 +1388,7 @@ describe('goal-dialog — type/target collapsed by default on an existing goal, 
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
     expand(el);
     pill(el, 'monthly').click();
-    expect(el.shadowRoot.querySelector('#type-summary').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#type-readout').hidden).toBe(true);
     expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
   });
 
@@ -1421,8 +1433,8 @@ describe('goal-dialog — type/target collapsed by default on an existing goal, 
     input.dispatchEvent(new Event('blur', { bubbles: true }));
     expect(events).toHaveLength(1);
     expect(el._goal).toBeNull(); // confirms the gap this test targets actually exists here
-    expect(el.shadowRoot.querySelector('#type-summary').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#type-summary-label').textContent).toContain('Monthly');
+    expect(el.shadowRoot.querySelector('#type-readout').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#type-readout').textContent).toBe('4×/month');
 
     expand(el);
     const trackingEvents = [];
@@ -1443,72 +1455,71 @@ describe('goal-dialog — type/target collapsed by default on an existing goal, 
     expect(events[0].detail.tracking.target).toBe(7);
   });
 
-  it('switching an existing frequency goal to percentage hides the Fix-a-day menu item live', () => {
+  it('switching an existing frequency goal to percentage hides the Fix-a-day summary live', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
     expand(el);
-    expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false);
     pill(el, 'percentage').click();
-    expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(true);
   });
 
-  it('switching an existing percentage goal to weekly reveals the Fix-a-day menu item live', () => {
+  it('switching an existing percentage goal to weekly reveals the Fix-a-day summary live', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0, target: 3, entries: [] } });
     expand(el);
-    expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(true);
     pill(el, 'weekly').click();
-    expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(false);
-  });
-
-  it('the summary button has an accessible label combining purpose and current value', () => {
-    const el = mount();
-    el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', value: 0, target: 6, entries: [] } });
-    const label = el.shadowRoot.querySelector('#type-summary').getAttribute('aria-label');
-    expect(label).toContain('Change type');
-    expect(label).toContain('6');
+    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false);
   });
 });
 
-describe('goal-dialog — Fix a day (frequency goals only)', () => {
-  it('the Fix-a-day menu item is hidden for a percentage goal', () => {
+describe('goal-dialog — Fix a day (frequency goals only, inline, a real expand/collapse toggle)', () => {
+  function expandFixDay(el) {
+    el.shadowRoot.querySelector('#fixday-summary').click();
+  }
+
+  it('the Fix-a-day summary is hidden for a percentage goal', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 } });
-    expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(true);
   });
 
-  it('the Fix-a-day menu item is hidden for a brand-new (unsaved) goal', () => {
+  it('the Fix-a-day summary is hidden for a brand-new (unsaved) goal', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(true);
   });
 
-  it('the Fix-a-day menu item is visible for an existing frequency goal', () => {
+  it('the Fix-a-day summary is visible (collapsed) for an existing frequency goal', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
-    expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-inline').hidden).toBe(true);
   });
 
-  it('opens the fix-day view and renders 42 day chips for a weekly goal (7 × PERIOD_WINDOW.weekly)', () => {
+  it('tapping the summary unfolds the strip inline — no separate view, main view stays put, the trigger itself stays visible', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
-    el.shadowRoot.querySelector('#action-fixday-btn').click();
-    expect(el.shadowRoot.querySelector('#view-fixday').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(true);
-    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(42);
+    expandFixDay(el);
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-inline').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false); // unlike type/target, never hides itself
+    expect(el.shadowRoot.querySelector('#fixday-summary').getAttribute('aria-expanded')).toBe('true');
+    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(42); // 7 × PERIOD_WINDOW.weekly
   });
 
   it('renders 120 day chips for a monthly goal (30 × PERIOD_WINDOW.monthly)', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
-    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    expandFixDay(el);
     expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(120);
   });
 
   it('inserts a month-label divider at every calendar-month boundary the strip crosses', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
-    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    expandFixDay(el);
     const dividers = el.shadowRoot.querySelectorAll('#fixday-chips .day-divider');
     // ~120 days back spans at least 4 distinct calendar months, so at least
     // 4 dividers regardless of what "today" happens to be when this runs.
@@ -1523,28 +1534,42 @@ describe('goal-dialog — Fix a day (frequency goals only)', () => {
     // happy-dom doesn't compute real scrollWidth (always 0), so this just
     // asserts scrollLeft was actively set to track it, not left untouched.
     Object.defineProperty(chips, 'scrollWidth', { value: 999, configurable: true });
-    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    expandFixDay(el);
     expect(chips.scrollLeft).toBe(999);
   });
 
-  it('shows the type-appropriate heading', () => {
-    const weeklyEl = mount();
-    weeklyEl.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
-    weeklyEl.shadowRoot.querySelector('#action-fixday-btn').click();
-    expect(weeklyEl.shadowRoot.querySelector('#fixday-heading').textContent).toContain('6');
-
-    const monthlyEl = mount();
-    monthlyEl.open({ id: 'g2', title: 'Y', tracking: { type: 'monthly', target: 4, entries: [] } });
-    monthlyEl.shadowRoot.querySelector('#action-fixday-btn').click();
-    expect(monthlyEl.shadowRoot.querySelector('#fixday-heading').textContent).toContain('4');
-  });
-
-  it('has no dedicated back button — the sheet is dismissed like any other view (backdrop/Escape), not navigated back from', () => {
+  it('no heading text — the chip strip and its own trigger label carry the context now', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
-    el.shadowRoot.querySelector('#action-fixday-btn').click();
-    expect(el.shadowRoot.querySelector('#fixday-back')).toBeNull();
-    expect(el.shadowRoot.querySelector('.footer-fixday')).toBeNull();
+    expandFixDay(el);
+    expect(el.shadowRoot.querySelector('#fixday-heading')).toBeNull();
+    expect(el.shadowRoot.querySelector('#fixday-inline').querySelector('.picker-heading')).toBeNull();
+  });
+
+  it('is a real toggle — tapping again while expanded collapses it back, chevron state (aria-expanded) flips both ways', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
+    const summary = el.shadowRoot.querySelector('#fixday-summary');
+    expect(summary.getAttribute('aria-expanded')).toBe('false');
+
+    expandFixDay(el);
+    expect(el.shadowRoot.querySelector('#fixday-inline').hidden).toBe(false);
+    expect(summary.getAttribute('aria-expanded')).toBe('true');
+    expect(summary.hidden).toBe(false); // still there, ready to collapse
+
+    expandFixDay(el); // tap again — collapses
+    expect(el.shadowRoot.querySelector('#fixday-inline').hidden).toBe(true);
+    expect(summary.getAttribute('aria-expanded')).toBe('false');
+    expect(summary.hidden).toBe(false); // stays visible, unlike type/target's reveal-once trigger
+  });
+
+  it('type/target and Fix-a-day are independent now — both can be expanded at the same time', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
+    el.shadowRoot.querySelector('#action-change-type-btn').click();
+    expandFixDay(el);
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-inline').hidden).toBe(false);
   });
 
   it('marks the chip for an already-logged date as pressed', () => {
@@ -1552,7 +1577,7 @@ describe('goal-dialog — Fix a day (frequency goals only)', () => {
     const today = new Date();
     const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [iso] } });
-    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    expandFixDay(el);
     const chips = [...el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')];
     const todayChip = chips.find(c => c.dataset.iso === iso);
     expect(todayChip.getAttribute('aria-pressed')).toBe('true');
@@ -1561,7 +1586,7 @@ describe('goal-dialog — Fix a day (frequency goals only)', () => {
   it('clicking a chip dispatches goal-entry-toggle with the goal and iso', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
-    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    expandFixDay(el);
     const events = [];
     el.addEventListener('goal-entry-toggle', e => events.push(e));
     const chip = el.shadowRoot.querySelector('#fixday-chips .day-chip');
@@ -1576,7 +1601,7 @@ describe('goal-dialog — Fix a day (frequency goals only)', () => {
     const today = new Date();
     const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [iso] } });
-    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    expandFixDay(el);
     const chip = [...el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')].find(c => c.dataset.iso === iso);
     chip.click();
     expect(chip.getAttribute('aria-pressed')).toBe('false');
