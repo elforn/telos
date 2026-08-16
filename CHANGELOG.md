@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.1.3] — 2026-08-16
+
+### Fixed
+- **Frequency goal rows never showed history dots — only the current-period dot was ever visible.** The 5-dot history strip's container had no CSS layout rule at all, so it defaulted to `display: inline`, under which width and height are ignored by spec on every child dot — they were rendering at zero size the whole time, regardless of whether a period was met, partial, or missed. Confirmed on both mobile and desktop. Fixed by giving the strip its own `display: flex`.
+
 ## [2.1.2] — 2026-08-16
 
 ### Changed
