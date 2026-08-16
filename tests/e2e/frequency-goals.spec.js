@@ -210,6 +210,28 @@ test.describe('Frequency goals', () => {
       return list?.querySelectorAll('goal-item').length === 1;
     });
 
+    // Real rendered size, not just the right class — a className/state check
+    // alone would have missed a real bug here: .freq-dots had no CSS rule at
+    // all, defaulting to display:inline, under which width/height (and their
+    // logical equivalents) are spec-ignored on non-replaced boxes. Every
+    // history dot rendered at zero effective size — invisible, while still
+    // carrying the "correct" class the whole time. happy-dom unit tests can't
+    // catch this (no real layout engine); this is why it has to be a real
+    // bounding-box check against an actual browser.
+    const historyDotSizes = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return [...item.shadowRoot.querySelectorAll('.freq-dots .freq-dot')]
+        .map(d => d.getBoundingClientRect())
+        .map(r => ({ width: r.width, height: r.height }));
+    });
+    expect(historyDotSizes).toHaveLength(5);
+    for (const size of historyDotSizes) {
+      expect(size.width).toBeGreaterThan(0);
+      expect(size.height).toBeGreaterThan(0);
+    }
+
     await tapBar(page);
     await openFixDay(page);
 

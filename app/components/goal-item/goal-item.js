@@ -158,6 +158,18 @@ class GoalItem extends Gestures(AppElement) {
         .bar[data-freq="true"] .freq-cluster { display: flex; }
         .bar[data-freq="true"] .pct-label { display: none; }
 
+        /* Bare <span>, so it defaults to display:inline — width/height (and
+           their logical equivalents) are spec-ignored on inline, non-replaced
+           boxes. Without this, every history dot renders at zero effective
+           size: invisible, not just "hard to see". (.freq-today's children
+           escape the same trap only because grid/flex children get
+           auto-blockified regardless of their own declared display.) */
+        .freq-dots {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
         .freq-dot {
           inline-size: 13px;
           block-size: 13px;
