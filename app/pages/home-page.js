@@ -579,6 +579,14 @@ class HomePage extends AppElement {
     };
     this.listen(this.shadowRoot, 'goal-entry-toggle', this._onGoalEntryToggle);
 
+    this._onGoalTrackingChanged = e => {
+      if (!this._editingGoal) return;
+      this._mutateSection(this._editingSection, list =>
+        list.map(g => g.id === this._editingGoal.id ? { ...g, tracking: e.detail.tracking } : g)
+      );
+    };
+    this.listen(this.shadowRoot, 'goal-tracking-changed', this._onGoalTrackingChanged);
+
     this._onGoalArchivedChanged = e => {
       if (!this._editingGoal) return;
       const { archived } = e.detail;

@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.2.0] — 2026-08-16
+
+### Changed
+- **Weekly/monthly frequency goals: type and target are no longer frozen after creation.** Percentage↔frequency is still a permanent one-way door, locked in at creation — there's no meaningful mapping between a percentage value and a habit's entry history either direction. But switching between weekly and monthly, or adjusting the target count, now stays open for the life of the goal: the edit dialog's locked label becomes an interactive pill group again (percentage withheld), and target-stepper/Every-day edits commit immediately. Existing log entries carry over untouched across a weekly↔monthly switch — they're just dates, re-bucketed by whichever cadence is now selected.
+- **The frequency-average window is no longer one shared number.** Split into weekly = 6 periods / monthly = 4: a "period" is such a different wall-clock span per type (6 weeks ≈ 1.5 months vs. 6 months) that sharing one count meant a flawless brand-new monthly goal couldn't reach 100% for half a year.
+- **"Fix a day" now spans as far back as the score can actually move** — 42 days for weekly, 120 for monthly (up from a flat 14 for both) — with a plain month-label divider inserted wherever the strip crosses a calendar month, and opens scrolled to today rather than the oldest day.
+
 ## [2.1.3] — 2026-08-16
 
 ### Fixed

@@ -803,7 +803,7 @@ class GoalItem extends Gestures(AppElement) {
     }
   }
 
-  // Dot-strip (read-only, last PERIOD_WINDOW-1 closed periods) + the "today"
+  // Dot-strip (read-only, last PERIOD_WINDOW[type]-1 closed periods) + the "today"
   // token (bigger, doubles as the hold target — see .freq-today above). One
   // shared shape per goal: circle for weekly, soft square for monthly.
   _renderFreqCluster() {

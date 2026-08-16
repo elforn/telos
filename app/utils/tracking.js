@@ -10,9 +10,22 @@
 import { todayISO } from './today-iso.js';
 
 // Periods considered for the weighted average AND the row's glance strip (dot
-// count = PERIOD_WINDOW - 1 history + 1 current) — one shared window so the
-// math and the UI never quietly drift apart.
-export const PERIOD_WINDOW = 6;
+// count = PERIOD_WINDOW[type] - 1 history + 1 current) — one shared window so
+// the math and the UI never quietly drift apart. Weekly and monthly get
+// separate lengths because a "period" is such a different wall-clock span
+// for each (6 weeks ≈ 1.5 months vs 4 months) — a shared count would mean a
+// flawless brand-new monthly goal can't reach 100% for many months (weight
+// math bottoms out at current/sum-of-1..N with every period before the goal
+// existed counted as missed).
+export const PERIOD_WINDOW = { weekly: 6, monthly: 4 };
+
+// Fix-a-day's scrollable window, in calendar days — sized to actually reach
+// every period the score above can still be influenced by. Past this many
+// days back, backfilling an entry wouldn't move the displayed percentage, so
+// there's no reason to scroll further. Months are approximated at 30 days;
+// fix-a-day is a flat day-count strip, not period-boundary-exact — the score
+// itself (via monthKey/isoWeekKey below) is the exact calendar math.
+export const FIX_DAY_SPAN = { weekly: 7 * PERIOD_WINDOW.weekly, monthly: 30 * PERIOD_WINDOW.monthly };
 
 export const TARGET_LIMITS = { weekly: [1, 7], monthly: [1, 31] };
 
@@ -86,7 +99,7 @@ function periodKey(iso, type) {
 // The last `count` period keys ending with the period containing `todayIso`,
 // oldest first — the shared window the dot-strip and the weighted average
 // both walk.
-export function recentPeriods(type, count = PERIOD_WINDOW, todayIso = todayISO()) {
+export function recentPeriods(type, count = PERIOD_WINDOW[type], todayIso = todayISO()) {
   const today = localDate(todayIso);
   const keys = [];
   for (let i = count - 1; i >= 0; i--) {
@@ -115,7 +128,7 @@ function countByPeriod(entries, type) {
 export function periodFractions(tracking, todayIso = todayISO()) {
   const { type, target, entries } = tracking;
   const counts = countByPeriod(entries, type);
-  return recentPeriods(type, PERIOD_WINDOW, todayIso).map(key => Math.min((counts.get(key) ?? 0) / target, 1));
+  return recentPeriods(type, PERIOD_WINDOW[type], todayIso).map(key => Math.min((counts.get(key) ?? 0) / target, 1));
 }
 
 // Raw (uncapped) entry count for the period containing `todayIso` — the
@@ -139,8 +152,8 @@ export function recentDots(goal, todayIso = todayISO()) {
   }));
 }
 
-// Linear recency weighting — the current period counts PERIOD_WINDOW× as much
-// as the oldest one in the window. Documented here rather than left implicit:
+// Linear recency weighting — the current period counts PERIOD_WINDOW[type]×
+// as much as the oldest one in the window. Documented here rather than left implicit:
 // encodes "how you're doing lately matters more than a closed period from a
 // while back" without a hard cliff between "counted" and "not counted".
 function weightedAverage(tracking, todayIso = todayISO()) {

@@ -326,6 +326,27 @@ describe('home-page — goal mutations', () => {
     });
   });
 
+  it('updates tracking (weekly→monthly switch + target) when goal-tracking-changed fires from the dialog', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'weekly', target: 3, entries: ['2026-01-05'] } }], milestones: [], wow: [] },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-tap', {
+      bubbles: true, composed: true,
+      detail: { goal: { id: 'c1', title: 'Goal', tracking: { type: 'weekly', target: 3, entries: ['2026-01-05'] } } },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-tracking-changed', {
+      bubbles: true, composed: true,
+      detail: { tracking: { type: 'monthly', target: 6, entries: ['2026-01-05'] } },
+    }));
+    await vi.waitFor(() => {
+      expect(getState().goals['2026'].capstone[0].tracking).toEqual({ type: 'monthly', target: 6, entries: ['2026-01-05'] });
+    });
+  });
+
   it('goal-created carries the chosen tracking through to the stored goal', async () => {
     await boot({ dbName: freshName(), initialState: { goals: { '2026': { capstone: [], milestones: [], wow: [] } }, images: {} } });
     const el = mount(2026);

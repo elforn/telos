@@ -103,6 +103,108 @@ test.describe('Data persistence', () => {
     expect(after?.percentage).toBe(before?.percentage);
   });
 
+  test('editing an existing frequency goal (weekly→monthly switch + target) persists across page reload', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForHomePage(page);
+
+    // Create as weekly via the type pill, same as frequency-goals.spec.js.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#add-capstone').click();
+    });
+    await page.waitForFunction(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open;
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('.type-pill[data-type="weekly"]').click();
+    });
+    await page.evaluate(() => {
+      const sr = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot;
+      const inp = sr.querySelector('input');
+      inp.value = 'Stretch';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      sr.querySelector('#close').click();
+    });
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('#capstone-list');
+      return list?.querySelectorAll('goal-item').length > 0;
+    });
+
+    // Reopen and switch weekly → monthly, bump the target.
+    const barBox = await page.evaluate(() => {
+      const bar = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item').shadowRoot
+        .querySelector('.bar');
+      return bar.getBoundingClientRect().toJSON();
+    });
+    await page.mouse.move(barBox.x + barBox.width * 0.5, barBox.y + barBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForFunction(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open;
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('.type-pill[data-type="monthly"]').click();
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#target-up').click();
+    });
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item?._goal?.tracking?.type === 'monthly' && item?._goal?.tracking?.target === 5;
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#close').click();
+    });
+
+    await waitForIDBFlush(page);
+    await page.reload();
+    await waitForHomePage(page);
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot?.querySelector('#capstone-list');
+      return list?.querySelectorAll('goal-item').length > 0;
+    });
+
+    const tracking = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item._goal.tracking;
+    });
+    expect(tracking.type).toBe('monthly');
+    expect(tracking.target).toBe(5);
+  });
+
   test('app shell renders after reload', async ({ page }) => {
     await page.goto('/');
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);

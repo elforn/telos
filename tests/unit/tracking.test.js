@@ -92,11 +92,18 @@ describe('tracking — isoWeekKey / monthKey', () => {
 });
 
 describe('tracking — recentPeriods window', () => {
-  it('returns PERIOD_WINDOW keys ending with the current period, oldest first', () => {
-    const keys = recentPeriods('weekly', PERIOD_WINDOW, '2026-08-10');
-    expect(keys).toHaveLength(PERIOD_WINDOW);
+  it('returns PERIOD_WINDOW.weekly keys ending with the current period, oldest first', () => {
+    const keys = recentPeriods('weekly', PERIOD_WINDOW.weekly, '2026-08-10');
+    expect(keys).toHaveLength(PERIOD_WINDOW.weekly);
     expect(keys[keys.length - 1]).toBe(isoWeekKey('2026-08-10'));
-    expect(new Set(keys).size).toBe(PERIOD_WINDOW); // all distinct
+    expect(new Set(keys).size).toBe(PERIOD_WINDOW.weekly); // all distinct
+  });
+
+  it('defaults to PERIOD_WINDOW.monthly keys for a monthly goal', () => {
+    const keys = recentPeriods('monthly', PERIOD_WINDOW.monthly, '2026-08-10');
+    expect(keys).toHaveLength(PERIOD_WINDOW.monthly);
+    expect(keys[keys.length - 1]).toBe(monthKey('2026-08-10'));
+    expect(new Set(keys).size).toBe(PERIOD_WINDOW.monthly); // all distinct
   });
 
   it('monthly window spans whole months across a year boundary', () => {
@@ -122,7 +129,13 @@ describe('tracking — periodFractions', () => {
     const goal = weekly(3, []);
     const fractions = periodFractions(goal.tracking, '2026-08-10');
     expect(fractions.every(f => f === 0)).toBe(true);
-    expect(fractions).toHaveLength(PERIOD_WINDOW);
+    expect(fractions).toHaveLength(PERIOD_WINDOW.weekly);
+  });
+
+  it('a monthly goal produces PERIOD_WINDOW.monthly fractions', () => {
+    const goal = monthly(4, []);
+    const fractions = periodFractions(goal.tracking, '2026-08-10');
+    expect(fractions).toHaveLength(PERIOD_WINDOW.monthly);
   });
 });
 
@@ -130,7 +143,7 @@ describe('tracking — recentDots UI classification', () => {
   it('classifies met / partial / missed and flags the current period', () => {
     const goal = weekly(2, ['2026-08-10', '2026-08-11']); // this week (Mon 10 .. ) fully met
     const dots = recentDots(goal, '2026-08-10');
-    expect(dots).toHaveLength(PERIOD_WINDOW);
+    expect(dots).toHaveLength(PERIOD_WINDOW.weekly);
     expect(dots[dots.length - 1]).toMatchObject({ state: 'met', current: true, fraction: 1 });
     expect(dots[0].current).toBe(false);
     expect(dots[0].state).toBe('missed'); // no entries in older periods
@@ -141,6 +154,12 @@ describe('tracking — recentDots UI classification', () => {
     const dots = recentDots(goal, '2026-08-10');
     expect(dots[dots.length - 1].state).toBe('partial');
   });
+
+  it('a monthly goal produces PERIOD_WINDOW.monthly dots — the row glance strip length', () => {
+    const goal = monthly(4, ['2026-08-10']);
+    const dots = recentDots(goal, '2026-08-10');
+    expect(dots).toHaveLength(PERIOD_WINDOW.monthly);
+  });
 });
 
 describe('tracking — weighted average (percentValue for frequency types, pinned to a fixed "today")', () => {
@@ -149,18 +168,38 @@ describe('tracking — weighted average (percentValue for frequency types, pinne
   it('current-period-only weekly goal scores above the flat (unweighted) average', () => {
     const goal = weekly(2, ['2026-08-10', '2026-08-11']); // current week: 2/2 = met, nothing else
     const value = percentValue(goal, TODAY);
-    const flatAverage = Math.round((1 / PERIOD_WINDOW) * 100);
+    const flatAverage = Math.round((1 / PERIOD_WINDOW.weekly) * 100);
     expect(value).toBeGreaterThan(flatAverage);
     expect(value).toBeLessThan(100);
   });
 
-  it('all periods in the window met returns exactly 100', () => {
+  it('all periods in the window met returns exactly 100 (weekly)', () => {
     const entries = [];
-    for (let i = 0; i < PERIOD_WINDOW; i++) {
+    for (let i = 0; i < PERIOD_WINDOW.weekly; i++) {
       const d = new Date(2026, 7, 10 - i * 7); // one entry per week, walking back from TODAY
       entries.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
     }
     expect(percentValue(weekly(1, entries), TODAY)).toBe(100);
+  });
+
+  it('all periods in the window met returns exactly 100 (monthly)', () => {
+    const entries = [];
+    for (let i = 0; i < PERIOD_WINDOW.monthly; i++) {
+      const d = new Date(2026, 7 - i, 10); // one entry per month, walking back from TODAY
+      entries.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    }
+    expect(percentValue(monthly(1, entries), TODAY)).toBe(100);
+  });
+
+  it('a flawless brand-new monthly goal (only the current month met) is well short of 100', () => {
+    // The regression this session's PERIOD_WINDOW split exists to soften: a
+    // goal with history only in the current period still can't show 100%
+    // (the other periods in the window are genuinely unmet), but a shorter
+    // monthly window means it climbs there much faster than a 6-month one.
+    const value = percentValue(monthly(1, [TODAY]), TODAY);
+    expect(value).toBeCloseTo(Math.round((PERIOD_WINDOW.monthly / ((PERIOD_WINDOW.monthly * (PERIOD_WINDOW.monthly + 1)) / 2)) * 100), 0);
+    expect(value).toBeGreaterThan(0);
+    expect(value).toBeLessThan(100);
   });
 
   it('no entries at all returns 0', () => {

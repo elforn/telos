@@ -241,9 +241,9 @@ test.describe('Frequency goals', () => {
         .querySelector('goal-dialog').shadowRoot
         .querySelectorAll('#fixday-chips .day-chip').length
     );
-    expect(chipCount).toBe(14);
+    expect(chipCount).toBe(42); // 7 × PERIOD_WINDOW.weekly (6)
 
-    // The very first chip (oldest of the 14) is 13 days ago — an old miss to
+    // The very first chip (oldest of the 42) is 41 days ago — an old miss to
     // back-fill, distinct from "today" (which the hold gesture already covers
     // in the other test above; this one is specifically about arbitrary dates).
     const firstChipIso = await page.evaluate(() =>
@@ -407,5 +407,113 @@ test.describe('Frequency goals', () => {
     const tracking = await goalItemTracking(page);
     expect(tracking.type).toBe('weekly');
     expect(tracking.target).toBe(7);
+  });
+
+  test('editing an existing goal: target stays editable, and weekly↔monthly can be switched (percentage stays off-limits)', async ({ page }) => {
+    await openDialog(page, '#add-capstone');
+    await selectType(page, 'weekly');
+    await saveDialog(page, 'Move my body');
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+
+    await tapBar(page);
+
+    // The pill group (not the locked label) is showing, with percentage
+    // withheld — this is the real point of the feature: type/target aren't
+    // frozen the moment the goal exists, only the percentage↔frequency
+    // boundary is.
+    const pillState = await page.evaluate(() => {
+      const root = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot;
+      return {
+        pillsHidden: root.querySelector('#type-pills').hidden,
+        lockedHidden: root.querySelector('#type-locked').hidden,
+        percentagePillHidden: root.querySelector('.type-pill[data-type="percentage"]').hidden,
+      };
+    });
+    expect(pillState.pillsHidden).toBe(false);
+    expect(pillState.lockedHidden).toBe(true);
+    expect(pillState.percentagePillHidden).toBe(true);
+
+    // Bump the target — commits immediately, no save/close needed.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#target-up').click();
+    });
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item?._goal?.tracking?.target === 4;
+    });
+
+    // Log today, then switch to monthly — the entry should carry over.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#close').click();
+    });
+    await holdOnBar(page);
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return (item?._goal?.tracking?.entries?.length ?? 0) === 1;
+    });
+    const loggedIso = (await goalItemTracking(page)).entries[0];
+
+    await tapBar(page);
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('.type-pill[data-type="monthly"]').click();
+    });
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item?._goal?.tracking?.type === 'monthly';
+    });
+    const afterSwitch = await goalItemTracking(page);
+    expect(afterSwitch.type).toBe('monthly');
+    expect(afterSwitch.target).toBe(4); // monthly's own default, not carried over from weekly
+    expect(afterSwitch.entries).toContain(loggedIso); // same dates, just re-bucketed
+  });
+
+  test('Fix a day on a monthly goal spans 120 days with month-label dividers, opened scrolled to today', async ({ page }) => {
+    await openDialog(page, '#add-capstone');
+    await selectType(page, 'monthly');
+    await saveDialog(page, 'Call parents');
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+
+    await tapBar(page);
+    await openFixDay(page);
+
+    const { chipCount, dividerCount, scrolledToEnd } = await page.evaluate(() => {
+      const strip = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#fixday-chips');
+      return {
+        chipCount: strip.querySelectorAll('.day-chip').length,
+        dividerCount: strip.querySelectorAll('.day-divider').length,
+        scrolledToEnd: strip.scrollLeft > 0, // any distance in confirms it isn't stuck at the oldest day
+      };
+    });
+    expect(chipCount).toBe(120); // 30 × PERIOD_WINDOW.monthly (4)
+    expect(dividerCount).toBeGreaterThanOrEqual(4);
+    expect(scrolledToEnd).toBe(true);
   });
 });

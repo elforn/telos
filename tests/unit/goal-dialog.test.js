@@ -1296,18 +1296,100 @@ describe('goal-dialog — type selector (new goal only)', () => {
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
   });
 
-  it('type is locked (no pill group) once viewing an existing goal', () => {
+  it('percentage type is locked (no pill group) once viewing an existing goal — the only conversion that never opens up', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 } });
     expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(true);
     expect(el.shadowRoot.querySelector('#type-locked').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#type-locked-label').textContent).toBeTruthy();
   });
+});
 
-  it('locked label shows type and target for an existing frequency goal', () => {
+describe('goal-dialog — weekly/monthly type and target stay editable on an existing frequency goal (percentage↔frequency stays a one-way door)', () => {
+  function pill(el, type) {
+    return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
+  }
+
+  it('shows the pill group (not the locked label) for an existing frequency goal, with the percentage pill withheld', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 5, entries: [] } });
-    expect(el.shadowRoot.querySelector('#type-locked-label').textContent).toContain('5');
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#type-locked').hidden).toBe(true);
+    expect(pill(el, 'percentage').hidden).toBe(true);
+    expect(pill(el, 'weekly').getAttribute('aria-checked')).toBe('true');
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('5');
+  });
+
+  it('clicking the percentage pill is a no-op while editing an existing frequency goal', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 5, entries: [] } });
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e));
+    pill(el, 'percentage').click();
+    expect(events).toHaveLength(0);
+    expect(pill(el, 'weekly').getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('switching monthly→weekly on an existing goal dispatches goal-tracking-changed, resets to the default target, and preserves entries', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 10, entries: ['2026-07-01', '2026-08-01'] } });
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e));
+    pill(el, 'weekly').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', target: 3, entries: ['2026-07-01', '2026-08-01'] });
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('3');
+  });
+
+  it('the target stepper commits immediately on an existing goal', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: ['2026-08-01'] } });
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e));
+    el.shadowRoot.querySelector('#target-up').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', target: 4, entries: ['2026-08-01'] });
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('4');
+  });
+
+  it('stays editable (not locked) right after an in-session blur-commit of a new frequency goal, before .goal is ever assigned', () => {
+    // Regression: this._goal is still null immediately after a same-visit
+    // blur-commit (nothing hands the real stored record back to the dialog
+    // synchronously) — _trackingEditable() has to fall back to the draft
+    // that was just submitted, or this reads as a locked percentage goal.
+    const el = mount();
+    el.open(null);
+    pill(el, 'monthly').click();
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = 'Call parents';
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+    expect(events).toHaveLength(1);
+    expect(el._goal).toBeNull(); // confirms the gap this test targets actually exists here
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#type-locked').hidden).toBe(true);
+    expect(pill(el, 'percentage').hidden).toBe(true); // one-way door already shut
+    expect(pill(el, 'monthly').getAttribute('aria-checked')).toBe('true');
+
+    // And it's genuinely interactive, not just visually unlocked.
+    const trackingEvents = [];
+    el.addEventListener('goal-tracking-changed', e => trackingEvents.push(e));
+    pill(el, 'weekly').click();
+    expect(trackingEvents).toHaveLength(1);
+    expect(trackingEvents[0].detail.tracking.type).toBe('weekly');
+  });
+
+  it('the Every-day preset commits immediately on an existing weekly goal', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e));
+    el.shadowRoot.querySelector('#everyday-chip').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.tracking.target).toBe(7);
   });
 });
 
@@ -1330,13 +1412,54 @@ describe('goal-dialog — Fix a day (frequency goals only)', () => {
     expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(false);
   });
 
-  it('opens the fix-day view and renders 14 day chips', () => {
+  it('opens the fix-day view and renders 42 day chips for a weekly goal (7 × PERIOD_WINDOW.weekly)', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
     el.shadowRoot.querySelector('#action-fixday-btn').click();
     expect(el.shadowRoot.querySelector('#view-fixday').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(true);
-    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(14);
+    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(42);
+  });
+
+  it('renders 120 day chips for a monthly goal (30 × PERIOD_WINDOW.monthly)', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
+    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(120);
+  });
+
+  it('inserts a month-label divider at every calendar-month boundary the strip crosses', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
+    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    const dividers = el.shadowRoot.querySelectorAll('#fixday-chips .day-divider');
+    // ~120 days back spans at least 4 distinct calendar months, so at least
+    // 4 dividers regardless of what "today" happens to be when this runs.
+    expect(dividers.length).toBeGreaterThanOrEqual(4);
+    dividers.forEach(d => expect(d.getAttribute('aria-hidden')).toBe('true'));
+  });
+
+  it('lands scrolled to the end of the strip (today), not the oldest day', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
+    const chips = el.shadowRoot.querySelector('#fixday-chips');
+    // happy-dom doesn't compute real scrollWidth (always 0), so this just
+    // asserts scrollLeft was actively set to track it, not left untouched.
+    Object.defineProperty(chips, 'scrollWidth', { value: 999, configurable: true });
+    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    expect(chips.scrollLeft).toBe(999);
+  });
+
+  it('shows the type-appropriate heading', () => {
+    const weeklyEl = mount();
+    weeklyEl.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
+    weeklyEl.shadowRoot.querySelector('#action-fixday-btn').click();
+    expect(weeklyEl.shadowRoot.querySelector('#fixday-heading').textContent).toContain('6');
+
+    const monthlyEl = mount();
+    monthlyEl.open({ id: 'g2', title: 'Y', tracking: { type: 'monthly', target: 4, entries: [] } });
+    monthlyEl.shadowRoot.querySelector('#action-fixday-btn').click();
+    expect(monthlyEl.shadowRoot.querySelector('#fixday-heading').textContent).toContain('4');
   });
 
   it('has no dedicated back button — the sheet is dismissed like any other view (backdrop/Escape), not navigated back from', () => {

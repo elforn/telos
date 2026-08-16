@@ -7,14 +7,14 @@ import '../tag-input/tag-input.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
-import { isFrequency, TARGET_LIMITS, isLoggedOn } from '../../utils/tracking.js';
+import { isFrequency, TARGET_LIMITS, FIX_DAY_SPAN, PERIOD_WINDOW, isLoggedOn } from '../../utils/tracking.js';
 import { todayISO } from '../../utils/today-iso.js';
 
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
 const TYPES = ['percentage', 'weekly', 'monthly'];
-const FIX_DAYS = 14;
 const DEFAULT_TARGET = { weekly: 3, monthly: 4 };
+const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 class GoalDialog extends AppElement {
   // ── Public properties ─────────────────────────────────────────────────────
@@ -68,10 +68,18 @@ class GoalDialog extends AppElement {
 
     this._tagInputEl.tags = goal?.tags ?? [];
 
-    // Type is chosen once, at creation — a fresh draft always starts at the
-    // default (percentage), an existing goal's type is fixed and shown locked.
-    this._draftType   = 'percentage';
-    this._draftTarget = DEFAULT_TARGET.weekly;
+    // Percentage vs frequency is chosen once, at creation, and never crosses
+    // that line again — a fresh draft always starts at the default
+    // (percentage). But within frequency, weekly/monthly and the target are
+    // editable for the life of the goal, so an existing frequency goal seeds
+    // the draft from its real values rather than the percentage default.
+    if (goal && isFrequency(goal)) {
+      this._draftType   = goal.tracking.type;
+      this._draftTarget = goal.tracking.target;
+    } else {
+      this._draftType   = 'percentage';
+      this._draftTarget = DEFAULT_TARGET.weekly;
+    }
     this._renderTypeSection();
 
     this._lastValidTitle   = goal?.title ?? '';
@@ -371,6 +379,24 @@ class GoalDialog extends AppElement {
         .day-chip:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
+        }
+
+        /* Month landmark — the strip spans up to 4 months (monthly goals),
+           long enough that an undifferentiated run of day chips loses its
+           place; a plain label, not a control. */
+        .day-divider {
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding-inline: 2px;
+          block-size: 48px;
+          font-size: var(--font-size-micro);
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-text-muted);
+          text-transform: uppercase;
+          letter-spacing: var(--letter-spacing-caps);
+          white-space: nowrap;
         }
 
         /* ── Description textarea + highlight overlay ───────────────────── */
@@ -727,7 +753,7 @@ class GoalDialog extends AppElement {
 
         <!-- ── View: fix a day (frequency goals only) ─────────────────────── -->
         <div id="view-fixday" hidden>
-          <p class="picker-heading">${t('goal-dialog.fixday-heading')}</p>
+          <p class="picker-heading" id="fixday-heading"></p>
           <div class="day-chips" id="fixday-chips"></div>
         </div>
 
@@ -819,6 +845,7 @@ class GoalDialog extends AppElement {
 
     this._typePillGroup  = this.shadowRoot.querySelector('#type-pills');
     this._typePills      = [...this.shadowRoot.querySelectorAll('.type-pill')];
+    this._percentagePill = this.shadowRoot.querySelector('.type-pill[data-type="percentage"]');
     this._typeLocked      = this.shadowRoot.querySelector('#type-locked');
     this._typeLockedLabel = this.shadowRoot.querySelector('#type-locked-label');
     this._targetBlock    = this.shadowRoot.querySelector('#target-block');
@@ -831,6 +858,7 @@ class GoalDialog extends AppElement {
 
     this._viewFixDay     = this.shadowRoot.querySelector('#view-fixday');
     this._fixDayBtn      = this.shadowRoot.querySelector('#action-fixday-btn');
+    this._fixDayHeading  = this.shadowRoot.querySelector('#fixday-heading');
     this._fixDayChips    = this.shadowRoot.querySelector('#fixday-chips');
 
     this._isNew           = false;
@@ -1115,7 +1143,8 @@ class GoalDialog extends AppElement {
 
     this._onTypePillClick = e => {
       const pill = e.target.closest('.type-pill');
-      if (!pill || !this._isNew || pill.dataset.type === this._draftType) return;
+      if (!pill || pill.hidden) return;
+      if (!this._trackingEditable() || pill.dataset.type === this._draftType) return;
       this._draftType = pill.dataset.type;
       // Switching type always resets to that type's own default target —
       // weekly's and monthly's scales differ enough (1–7 vs 1–31) that
@@ -1123,6 +1152,7 @@ class GoalDialog extends AppElement {
       // meaningful, so there's no "preserve the number" case to protect.
       if (this._draftType !== 'percentage') this._draftTarget = DEFAULT_TARGET[this._draftType];
       this._renderTypeSection();
+      if (!this._isNew) this._commitTrackingChange();
     };
     this._typePills.forEach(p => p.addEventListener('click', this._onTypePillClick));
 
@@ -1130,6 +1160,7 @@ class GoalDialog extends AppElement {
       const [min] = TARGET_LIMITS[this._draftType];
       this._draftTarget = Math.max(min, this._draftTarget - 1);
       this._renderTypeSection();
+      if (!this._isNew) this._commitTrackingChange();
     };
     this._targetDownBtn.addEventListener('click', this._onTargetDown);
 
@@ -1137,12 +1168,14 @@ class GoalDialog extends AppElement {
       const [, max] = TARGET_LIMITS[this._draftType];
       this._draftTarget = Math.min(max, this._draftTarget + 1);
       this._renderTypeSection();
+      if (!this._isNew) this._commitTrackingChange();
     };
     this._targetUpBtn.addEventListener('click', this._onTargetUp);
 
     this._onEverydayChip = () => {
       this._draftTarget = 7;
       this._renderTypeSection();
+      if (!this._isNew) this._commitTrackingChange();
     };
     this._everydayChip.addEventListener('click', this._onEverydayChip);
 
@@ -1246,28 +1279,39 @@ class GoalDialog extends AppElement {
       : { type: this._draftType, target: this._draftTarget, entries: [] };
   }
 
-  // Type is chosen once, at creation — an interactive pill group for a fresh
-  // draft, a plain locked label (with the target baked into the text) for an
-  // existing goal. There is no third "disabled pill group" state on purpose:
-  // a greyed-out control still invites tapping, a label doesn't.
-  _renderTypeSection() {
-    this._typePillGroup.hidden = !this._isNew;
-    this._typeLocked.hidden = this._isNew;
+  // True while type/target are still open to editing — a fresh draft, or an
+  // existing goal whose type is weekly/monthly (percentage is a one-way
+  // door: chosen once and locked forever after commit). Prefers the real
+  // stored goal, but falls back to the draft just submitted — right after an
+  // in-session blur-commit (still the same dialog visit, goal-created just
+  // fired) nothing hands the real stored record back here yet, and the
+  // draft describes the same goal exactly.
+  _trackingEditable() {
+    if (this._isNew) return true;
+    const type = this._goal?.tracking?.type ?? this._draftType;
+    return type === 'weekly' || type === 'monthly';
+  }
 
-    if (!this._isNew) {
+  // Percentage vs frequency is chosen once, at creation, and locked forever
+  // after — a plain label, not a greyed-out control (a disabled pill group
+  // still invites tapping, a label doesn't). But *within* frequency there's
+  // no such one-way door: weekly/monthly and the target stay editable for
+  // the life of the goal, since entries are just dates that any target or
+  // cadence can re-bucket losslessly — so an existing frequency goal gets
+  // the same interactive pill group as a fresh draft, just with the
+  // percentage pill withheld.
+  _renderTypeSection() {
+    const editable = this._trackingEditable();
+    this._typePillGroup.hidden = !editable;
+    this._typeLocked.hidden = editable;
+
+    if (!editable) {
       this._targetBlock.hidden = true;
-      // this._goal is the source of truth once it's known — but right after an
-      // in-session blur-commit (still the same dialog visit, goal-created just
-      // fired) nothing hands the real stored record back here, so fall back to
-      // the draft that was just submitted; it describes the same goal exactly.
-      const type   = this._goal?.tracking?.type   ?? this._draftType;
-      const target = this._goal?.tracking?.target ?? this._draftTarget;
-      this._typeLockedLabel.textContent = (type === 'weekly' || type === 'monthly')
-        ? t(`goal-dialog.type-locked-${type}`, { target })
-        : t('goal-dialog.type-locked-percentage');
+      this._typeLockedLabel.textContent = t('goal-dialog.type-locked-percentage');
       return;
     }
 
+    this._percentagePill.hidden = !this._isNew;
     this._typePills.forEach(p => p.setAttribute('aria-checked', String(p.dataset.type === this._draftType)));
 
     const showTarget = this._draftType !== 'percentage';
@@ -1284,19 +1328,52 @@ class GoalDialog extends AppElement {
     this._targetHint.textContent = t(`goal-dialog.target-hint-${this._draftType}`, { n: this._draftTarget });
   }
 
-  // The last FIX_DAYS days, oldest first, each a toggle reflecting whether an
-  // entry exists for that date — tapping a filled chip removes it, an empty
-  // one back-fills it, same control either direction (see CLAUDE.md Sharing-
-  // style "one control, two jobs" precedent).
+  // Persists a weekly/monthly type or target edit for the current goal
+  // immediately (unlike the new-goal draft, which only commits on title
+  // blur/close) — entries carry over untouched, since they're just dates
+  // that the new type/target re-buckets on the next read, nothing to
+  // migrate. Doesn't require this._goal to be known: right after an
+  // in-session blur-commit it's still null (see _trackingEditable), but
+  // home-page resolves the target goal from its own _editingGoal, not from
+  // this event's detail — and a goal that new genuinely has no entries yet,
+  // so the `?? []` fallback is exactly correct, not just a safe default.
+  _commitTrackingChange() {
+    const tracking = { type: this._draftType, target: this._draftTarget, entries: this._goal?.tracking?.entries ?? [] };
+    if (this._goal) this._goal = { ...this._goal, tracking };
+    this.dispatchEvent(new CustomEvent('goal-tracking-changed', {
+      bubbles: true, composed: true, detail: { tracking },
+    }));
+    this._announceSaved();
+  }
+
+  // The last FIX_DAY_SPAN[type] days, oldest first, each a toggle reflecting
+  // whether an entry exists for that date — tapping a filled chip removes it,
+  // an empty one back-fills it, same control either direction (see CLAUDE.md
+  // Sharing-style "one control, two jobs" precedent). Sized per type since
+  // that's exactly how far back a backfill can still move the score (see
+  // FIX_DAY_SPAN). A month-label divider is inserted wherever the strip
+  // crosses into a new calendar month — plain landmarks, not chips.
   _renderFixDayChips() {
     if (!this._goal) return;
+    const type = this._goal.tracking.type;
+    this._fixDayHeading.textContent = t(`goal-dialog.fixday-heading-${type}`, { n: PERIOD_WINDOW[type] });
     const entries = new Set(this._goal.tracking?.entries ?? []);
     const today = todayISO();
     const [ty, tm, td] = today.split('-').map(Number);
     const dows = [t('goal-dialog.dow-sun'), t('goal-dialog.dow-mon'), t('goal-dialog.dow-tue'), t('goal-dialog.dow-wed'), t('goal-dialog.dow-thu'), t('goal-dialog.dow-fri'), t('goal-dialog.dow-sat')];
-    const chips = [];
-    for (let i = FIX_DAYS - 1; i >= 0; i--) {
+    const span = FIX_DAY_SPAN[type];
+    const nodes = [];
+    let lastMonth = null;
+    for (let i = span - 1; i >= 0; i--) {
       const d = new Date(ty, tm - 1, td - i);
+      if (d.getMonth() !== lastMonth) {
+        lastMonth = d.getMonth();
+        const divider = document.createElement('span');
+        divider.className = 'day-divider';
+        divider.setAttribute('aria-hidden', 'true');
+        divider.textContent = t(`goal-dialog.month-${MONTH_KEYS[lastMonth]}`);
+        nodes.push(divider);
+      }
       const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const logged = entries.has(iso);
       const chip = document.createElement('button');
@@ -1306,9 +1383,9 @@ class GoalDialog extends AppElement {
       chip.setAttribute('aria-pressed', String(logged));
       chip.setAttribute('aria-label', `${dows[d.getDay()]} ${d.getDate()}${logged ? `, ${t('goal-dialog.fixday-logged')}` : ''}`);
       chip.innerHTML = `<span class="dow" aria-hidden="true">${dows[d.getDay()]}</span><span class="num" aria-hidden="true">${d.getDate()}</span>`;
-      chips.push(chip);
+      nodes.push(chip);
     }
-    this._fixDayChips.replaceChildren(...chips);
+    this._fixDayChips.replaceChildren(...nodes);
   }
 
   _showDueDateField(show) {
@@ -1323,7 +1400,12 @@ class GoalDialog extends AppElement {
     this._footerMain.hidden  = name !== 'main';
     this._footerMove.hidden  = name !== 'move';
     if (name === 'move') this._renderMoveView();
-    if (name === 'fixday') this._renderFixDayChips();
+    if (name === 'fixday') {
+      this._renderFixDayChips();
+      // Land on today, not the oldest day — the strip can now run back up to
+      // 4 months, and the days worth fixing are almost always recent ones.
+      this._fixDayChips.scrollLeft = this._fixDayChips.scrollWidth;
+    }
   }
 
   _renderMoveView() {
