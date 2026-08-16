@@ -1339,13 +1339,12 @@ describe('goal-dialog — Fix a day (frequency goals only)', () => {
     expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(14);
   });
 
-  it('back returns to the main view', () => {
+  it('has no dedicated back button — the sheet is dismissed like any other view (backdrop/Escape), not navigated back from', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
     el.shadowRoot.querySelector('#action-fixday-btn').click();
-    el.shadowRoot.querySelector('#fixday-back').click();
-    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#view-fixday').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-back')).toBeNull();
+    expect(el.shadowRoot.querySelector('.footer-fixday')).toBeNull();
   });
 
   it('marks the chip for an already-logged date as pressed', () => {

@@ -751,11 +751,6 @@ class GoalDialog extends AppElement {
           </div>
         </div>
 
-        <!-- ── Footer: fix a day ────────────────────────────────────────── -->
-        <div slot="footer" class="actions footer-fixday" hidden>
-          <button type="button" id="fixday-back">${t('goal-dialog.picker-back')}</button>
-        </div>
-
         <div id="save-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
       </modal-dialog>
 
@@ -835,9 +830,7 @@ class GoalDialog extends AppElement {
     this._targetHint     = this.shadowRoot.querySelector('#target-hint');
 
     this._viewFixDay     = this.shadowRoot.querySelector('#view-fixday');
-    this._footerFixDay   = this.shadowRoot.querySelector('.footer-fixday');
     this._fixDayBtn      = this.shadowRoot.querySelector('#action-fixday-btn');
-    this._fixDayBack     = this.shadowRoot.querySelector('#fixday-back');
     this._fixDayChips    = this.shadowRoot.querySelector('#fixday-chips');
 
     this._isNew           = false;
@@ -1092,9 +1085,9 @@ class GoalDialog extends AppElement {
     this._moveCopyBtn.addEventListener('click', this._onCopyCta);
 
     // ── Fix-a-day view (frequency goals only) ───────────────────────────────────
-
-    this._onFixDayBack = () => this._showView('main');
-    this._fixDayBack.addEventListener('click', this._onFixDayBack);
+    // No back button — the sheet is dismissible (backdrop tap / Escape) the
+    // same as any other view here, so a dedicated in-app "return to main"
+    // control would just be a second way to do the same thing.
 
     this._onFixDayChipClick = e => {
       const chip = e.target.closest('.day-chip');
@@ -1220,7 +1213,6 @@ class GoalDialog extends AppElement {
     this._moveCopyBtn?.removeEventListener('click', this._onCopyCta);
     this._listPickerDialog?.removeEventListener('list-pick', this._onListPick);
     this._fixDayBtn?.removeEventListener('click', this._onActionFixDay);
-    this._fixDayBack?.removeEventListener('click', this._onFixDayBack);
     this._fixDayChips?.removeEventListener('click', this._onFixDayChipClick);
     this._typePills?.forEach(p => p.removeEventListener('click', this._onTypePillClick));
     this._targetDownBtn?.removeEventListener('click', this._onTargetDown);
@@ -1330,7 +1322,6 @@ class GoalDialog extends AppElement {
     this._viewFixDay.hidden  = name !== 'fixday';
     this._footerMain.hidden  = name !== 'main';
     this._footerMove.hidden  = name !== 'move';
-    this._footerFixDay.hidden = name !== 'fixday';
     if (name === 'move') this._renderMoveView();
     if (name === 'fixday') this._renderFixDayChips();
   }

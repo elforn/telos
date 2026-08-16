@@ -261,34 +261,84 @@ test.describe('Frequency goals', () => {
     });
     expect(entriesAfterAdd).toContain(firstChipIso);
 
-    // Tapping the same (now-filled) chip again removes it — same control, both directions.
+    // The row underneath the modal is the same live element (not destroyed),
+    // so a correction should be visible in its dot-strip immediately — before
+    // the dialog even closes, not just after. Every history dot started
+    // "missed" (fresh goal, zero entries); the back-filled week should no
+    // longer be.
+    const historyDotClassesWhileOpen = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return [...item.shadowRoot.querySelectorAll('.freq-dots .freq-dot')].map(d => d.className);
+    });
+    expect(historyDotClassesWhileOpen.some(c => c.includes('met') || c.includes('partial'))).toBe(true);
+
+    // A second, different chip: toggle on then off — covers the removal
+    // direction (kept from the earlier version of this test) without
+    // disturbing the first chip's entry, which stays logged through to the
+    // dismiss-and-recheck below.
+    const secondChip = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelectorAll('#fixday-chips .day-chip')[1].dataset.iso
+    );
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('#fixday-chips .day-chip').click();
+        .querySelectorAll('#fixday-chips .day-chip')[1].click();
+    });
+    await page.waitForFunction(iso => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item._goal.tracking.entries.includes(iso);
+    }, secondChip);
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelectorAll('#fixday-chips .day-chip')[1].click();
     });
     await page.waitForFunction(iso => {
       const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('#capstone-list goal-item');
       return !item._goal.tracking.entries.includes(iso);
-    }, firstChipIso);
+    }, secondChip);
 
-    // Back returns to the main edit view.
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('goal-dialog').shadowRoot
-        .querySelector('#fixday-back').click();
+    // No back button (removed — the sheet is dismissible like any other view,
+    // not navigated back from). Dismiss the whole dialog via Escape, same as
+    // a real backdrop tap, and confirm the correction survived the close —
+    // this is the actual scenario: does the row still show it once you're
+    // back looking at the list, not just while the dialog happens to be open.
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return !d?.open;
     });
-    const mainVisible = await page.evaluate(() => {
-      const dlg = document.querySelector('app-router').shadowRoot
+
+    const entriesAfterClose = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
-        .querySelector('goal-dialog').shadowRoot;
-      return !dlg.querySelector('#view-main').hidden && dlg.querySelector('#view-fixday').hidden;
+        .querySelector('#capstone-list goal-item');
+      return item._goal.tracking.entries;
     });
-    expect(mainVisible).toBe(true);
+    expect(entriesAfterClose).toContain(firstChipIso);
+    expect(entriesAfterClose).not.toContain(secondChip);
+
+    const historyDotClassesAfterClose = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return [...item.shadowRoot.querySelectorAll('.freq-dots .freq-dot')].map(d => d.className);
+    });
+    expect(historyDotClassesAfterClose.some(c => c.includes('met') || c.includes('partial'))).toBe(true);
   });
 
   test('create a monthly goal — squircle today-token, distinct from weekly\'s circle', async ({ page }) => {
