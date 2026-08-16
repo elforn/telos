@@ -1296,33 +1296,52 @@ describe('goal-dialog — type selector (new goal)', () => {
   });
 });
 
-describe('goal-dialog — type and target stay editable on an existing goal, any direction, nothing ever destroyed', () => {
+describe('goal-dialog — type/target collapsed by default on an existing goal, behind a tappable summary', () => {
   function pill(el, type) {
     return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
   }
+  function expand(el) {
+    el.shadowRoot.querySelector('#type-summary').click();
+  }
 
-  it('shows the interactive pill group (no locked state) for an existing percentage goal', () => {
+  it('shows a summary (not the pill group) for an existing percentage goal', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 40, target: 3, entries: [] } });
-    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#type-locked')).toBeNull(); // the locked UI no longer exists at all
-    expect(pill(el, 'percentage').getAttribute('aria-checked')).toBe('true');
-    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#type-summary').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#type-summary-label').textContent).toBe('Percentage');
   });
 
-  it('shows the pill group for an existing frequency goal too, all three pills interactive', () => {
+  it('summary shows type and target for an existing frequency goal', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: [] } });
+    expect(el.shadowRoot.querySelector('#type-summary-label').textContent).toContain('5');
+  });
+
+  it('tapping the summary reveals the interactive pill group, no locked state anywhere', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: [] } });
+    expand(el);
+    expect(el.shadowRoot.querySelector('#type-summary').hidden).toBe(true);
     expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
-    expect(pill(el, 'percentage').hidden).toBe(false); // no longer withheld
+    expect(el.shadowRoot.querySelector('#type-locked')).toBeNull(); // the old locked UI no longer exists at all
+    expect(pill(el, 'percentage').hidden).toBe(false); // never withheld
     expect(pill(el, 'weekly').getAttribute('aria-checked')).toBe('true');
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('5');
   });
 
+  it('a new goal is never collapsed — the pill group is visible immediately, no summary tap needed', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#type-summary').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
+  });
+
   it('switching an existing percentage goal to weekly preserves its value dormant, target defaults, entries start empty', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 62, target: 3, entries: [] } });
+    expand(el);
     const events = [];
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'weekly').click();
@@ -1333,6 +1352,7 @@ describe('goal-dialog — type and target stay editable on an existing goal, any
   it('switching a frequency goal to percentage preserves entries dormant and surfaces the last value', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 62, target: 5, entries: ['2026-08-01'] } });
+    expand(el);
     const events = [];
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'percentage').click();
@@ -1343,6 +1363,7 @@ describe('goal-dialog — type and target stay editable on an existing goal, any
   it('switching back and forth (weekly → percentage → weekly) recovers the original entries — nothing is destroyed', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: ['2026-08-01', '2026-08-08'] } });
+    expand(el);
     pill(el, 'percentage').click(); // entries go dormant, not deleted
     const events = [];
     el.addEventListener('goal-tracking-changed', e => events.push(e));
@@ -1350,9 +1371,19 @@ describe('goal-dialog — type and target stay editable on an existing goal, any
     expect(events[0].detail.tracking.entries).toEqual(['2026-08-01', '2026-08-08']);
   });
 
+  it('stays expanded across further edits within the same visit — no re-collapse control', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
+    expand(el);
+    pill(el, 'monthly').click();
+    expect(el.shadowRoot.querySelector('#type-summary').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
+  });
+
   it('switching monthly→weekly on an existing goal dispatches goal-tracking-changed, resets the target, and preserves entries', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', value: 0, target: 10, entries: ['2026-07-01', '2026-08-01'] } });
+    expand(el);
     const events = [];
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'weekly').click();
@@ -1364,6 +1395,7 @@ describe('goal-dialog — type and target stay editable on an existing goal, any
   it('the target stepper commits immediately on an existing goal', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: ['2026-08-01'] } });
+    expand(el);
     const events = [];
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     el.shadowRoot.querySelector('#target-up').click();
@@ -1377,7 +1409,8 @@ describe('goal-dialog — type and target stay editable on an existing goal, any
     // blur-commit (nothing hands the real stored record back to the dialog
     // synchronously) — _commitTrackingChange has to work off the draft that
     // was just submitted, not this._goal, or a pill tap in this exact
-    // window would silently no-op.
+    // window would silently no-op. Committing also collapses the editor
+    // (it's now "an existing goal"), so re-expand before interacting again.
     const el = mount();
     el.open(null);
     pill(el, 'monthly').click();
@@ -1388,10 +1421,10 @@ describe('goal-dialog — type and target stay editable on an existing goal, any
     input.dispatchEvent(new Event('blur', { bubbles: true }));
     expect(events).toHaveLength(1);
     expect(el._goal).toBeNull(); // confirms the gap this test targets actually exists here
-    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
-    expect(pill(el, 'percentage').hidden).toBe(false);
-    expect(pill(el, 'monthly').getAttribute('aria-checked')).toBe('true');
+    expect(el.shadowRoot.querySelector('#type-summary').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#type-summary-label').textContent).toContain('Monthly');
 
+    expand(el);
     const trackingEvents = [];
     el.addEventListener('goal-tracking-changed', e => trackingEvents.push(e));
     pill(el, 'percentage').click();
@@ -1402,6 +1435,7 @@ describe('goal-dialog — type and target stay editable on an existing goal, any
   it('the Every-day preset commits immediately on an existing weekly goal', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
+    expand(el);
     const events = [];
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     el.shadowRoot.querySelector('#everyday-chip').click();
@@ -1412,6 +1446,7 @@ describe('goal-dialog — type and target stay editable on an existing goal, any
   it('switching an existing frequency goal to percentage hides the Fix-a-day menu item live', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
+    expand(el);
     expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(false);
     pill(el, 'percentage').click();
     expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(true);
@@ -1420,9 +1455,18 @@ describe('goal-dialog — type and target stay editable on an existing goal, any
   it('switching an existing percentage goal to weekly reveals the Fix-a-day menu item live', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0, target: 3, entries: [] } });
+    expand(el);
     expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(true);
     pill(el, 'weekly').click();
     expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(false);
+  });
+
+  it('the summary button has an accessible label combining purpose and current value', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', value: 0, target: 6, entries: [] } });
+    const label = el.shadowRoot.querySelector('#type-summary').getAttribute('aria-label');
+    expect(label).toContain('Change type');
+    expect(label).toContain('6');
   });
 });
 

@@ -161,6 +161,14 @@ test.describe('Data persistence', () => {
         ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
       return d?.open;
     });
+    // Type/target are collapsed behind a summary for an existing goal —
+    // tap it to reveal the pill group before interacting with it.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#type-summary').click();
+    });
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot

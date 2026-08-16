@@ -70,9 +70,12 @@ class GoalDialog extends AppElement {
     // Type/target stay editable for the life of the goal (including
     // percentage↔frequency, which just flips the discriminant — see
     // tracking.js). A fresh draft starts at the percentage default; an
-    // existing goal seeds from its real current type/target.
+    // existing goal seeds from its real current type/target, and starts
+    // collapsed behind the summary — a seldom-changed setting, doesn't need
+    // to greet you fully expanded on every open.
     this._draftType   = goal?.tracking?.type   ?? 'percentage';
     this._draftTarget = goal?.tracking?.target ?? DEFAULT_TARGET.weekly;
+    this._typeExpanded = false;
     this._renderTypeSection();
 
     this._lastValidTitle   = goal?.title ?? '';
@@ -208,9 +211,35 @@ class GoalDialog extends AppElement {
           outline-offset: 2px;
         }
 
-        /* ── Type selector + target stepper (new goals only) ────────────── */
+        /* ── Type selector + target stepper ──────────────────────────────── */
 
         .type-field { margin-block-end: var(--space-4); }
+
+        /* Collapsed-by-default summary for an existing goal — a seldom-
+           changed setting, so it stays low-profile until tapped, same
+           reveal-once-no-recollapse idiom as the due-date field toggle. */
+        .type-summary {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          inline-size: 100%;
+          min-block-size: var(--touch-target);
+          padding-inline: var(--space-3);
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          color: var(--color-text-primary);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          cursor: pointer;
+        }
+
+        .type-summary svg {
+          inline-size: var(--icon-size-sm);
+          block-size: var(--icon-size-sm);
+          color: var(--color-text-secondary);
+          flex-shrink: 0;
+        }
 
         .field-label {
           font-size: var(--font-size-caption);
@@ -695,6 +724,10 @@ class GoalDialog extends AppElement {
           </div>
           <tag-input id="tag-input"></tag-input>
           <div class="type-field">
+            <button type="button" class="type-summary" id="type-summary" hidden>
+              <span id="type-summary-label"></span>
+              ${icons.chevronDown}
+            </button>
             <div class="type-pill-group" id="type-pills" role="radiogroup" aria-label="${t('goal-dialog.type-label')}">
               ${TYPES.map(ty => `
                 <button type="button" class="type-pill" data-type="${ty}" role="radio" aria-checked="false">${t('goal-dialog.type-' + ty)}</button>
@@ -822,7 +855,10 @@ class GoalDialog extends AppElement {
     this._actionSheet       = this.shadowRoot.querySelector('#action-sheet');
     this._listPickerDialog  = this.shadowRoot.querySelector('#list-picker');
 
-    this._typePills      = [...this.shadowRoot.querySelectorAll('.type-pill')];
+    this._typePills        = [...this.shadowRoot.querySelectorAll('.type-pill')];
+    this._typePillGroup    = this.shadowRoot.querySelector('#type-pills');
+    this._typeSummary      = this.shadowRoot.querySelector('#type-summary');
+    this._typeSummaryLabel = this.shadowRoot.querySelector('#type-summary-label');
     this._targetBlock    = this.shadowRoot.querySelector('#target-block');
     this._targetLabel    = this.shadowRoot.querySelector('#target-label');
     this._targetValueEl  = this.shadowRoot.querySelector('#target-value');
@@ -1116,6 +1152,16 @@ class GoalDialog extends AppElement {
 
     // ── Type selector + target stepper (editable for new AND existing goals) ────
 
+    // Collapsed by default on an existing goal — seldom changed, so it stays
+    // low-profile until tapped. Reveal-once, no re-collapse control, same
+    // idiom as the due-date field toggle just above: once shown, it just
+    // stays shown for the rest of this dialog visit.
+    this._onTypeSummaryClick = () => {
+      this._typeExpanded = true;
+      this._renderTypeSection();
+    };
+    this._typeSummary.addEventListener('click', this._onTypeSummaryClick);
+
     this._onTypePillClick = e => {
       const pill = e.target.closest('.type-pill');
       if (!pill || pill.dataset.type === this._draftType) return;
@@ -1223,6 +1269,7 @@ class GoalDialog extends AppElement {
     this._listPickerDialog?.removeEventListener('list-pick', this._onListPick);
     this._fixDayBtn?.removeEventListener('click', this._onActionFixDay);
     this._fixDayChips?.removeEventListener('click', this._onFixDayChipClick);
+    this._typeSummary?.removeEventListener('click', this._onTypeSummaryClick);
     this._typePills?.forEach(p => p.removeEventListener('click', this._onTypePillClick));
     this._targetDownBtn?.removeEventListener('click', this._onTargetDown);
     this._targetUpBtn?.removeEventListener('click', this._onTargetUp);
@@ -1259,8 +1306,26 @@ class GoalDialog extends AppElement {
   // Type/target stay editable for the life of the goal, new or existing,
   // any type — switching never drops data (see tracking.js: value/target/
   // entries are all always present, `type` just says which is live), so
-  // there's no locked state left to render.
+  // there's no *locked* state to render. But an existing goal's editor
+  // starts collapsed behind a summary button (seldom changed, shouldn't
+  // compete for attention with title/notes/tags on every open) — a new
+  // goal's editor is always expanded, since picking a type is the point of
+  // creating one.
   _renderTypeSection() {
+    const collapsed = !this._isNew && !this._typeExpanded;
+    this._typeSummary.hidden = !collapsed;
+    this._typePillGroup.hidden = collapsed;
+
+    if (collapsed) {
+      const summary = (this._draftType === 'weekly' || this._draftType === 'monthly')
+        ? t(`goal-dialog.type-summary-${this._draftType}`, { target: this._draftTarget })
+        : t('goal-dialog.type-percentage');
+      this._typeSummaryLabel.textContent = summary;
+      this._typeSummary.setAttribute('aria-label', `${t('goal-dialog.type-change-aria')} ${summary}`);
+      this._targetBlock.hidden = true;
+      return;
+    }
+
     this._typePills.forEach(p => p.setAttribute('aria-checked', String(p.dataset.type === this._draftType)));
 
     const showTarget = this._draftType !== 'percentage';

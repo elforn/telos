@@ -118,6 +118,17 @@ async function openFixDay(page) {
   });
 }
 
+// Type/target are collapsed behind a summary button for an existing goal
+// (seldom changed) — tap it to reveal the interactive pill group.
+async function expandType(page) {
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot
+      .querySelector('goal-dialog').shadowRoot
+      .querySelector('#type-summary').click();
+  });
+}
+
 test.describe('Frequency goals', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(`/${currentYear}`);
@@ -421,8 +432,23 @@ test.describe('Frequency goals', () => {
 
     await tapBar(page);
 
-    // The pill group is fully interactive for an existing goal — no locked
-    // state at all, percentage included, since switching never destroys data.
+    // Collapsed by default — a summary, not the pill group, on first open.
+    const collapsedState = await page.evaluate(() => {
+      const root = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot;
+      return {
+        summaryHidden: root.querySelector('#type-summary').hidden,
+        pillsHidden: root.querySelector('#type-pills').hidden,
+      };
+    });
+    expect(collapsedState.summaryHidden).toBe(false);
+    expect(collapsedState.pillsHidden).toBe(true);
+
+    // Tapping the summary reveals the pill group — fully interactive, no
+    // locked state at all, percentage included, since switching never
+    // destroys data.
+    await expandType(page);
     const pillState = await page.evaluate(() => {
       const root = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
@@ -466,6 +492,7 @@ test.describe('Frequency goals', () => {
     const loggedIso = (await goalItemTracking(page)).entries[0];
 
     await tapBar(page);
+    await expandType(page);
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
@@ -510,6 +537,7 @@ test.describe('Frequency goals', () => {
 
     // Switch to weekly, log an entry.
     await tapBar(page);
+    await expandType(page);
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
@@ -539,6 +567,7 @@ test.describe('Frequency goals', () => {
 
     // Switch back to percentage — the original value must reappear, not reset.
     await tapBar(page);
+    await expandType(page);
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
