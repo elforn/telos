@@ -217,27 +217,26 @@ class GoalDialog extends AppElement {
 
         /* Collapsed-by-default summary for an existing goal — a seldom-
            changed setting, so it stays low-profile until tapped, same
-           reveal-once-no-recollapse idiom as the due-date field toggle. */
+           reveal-once-no-recollapse idiom as the due-date field toggle.
+           A plain muted label, not button chrome — inherits touch-target
+           sizing and cursor from the generic button rule above, but
+           overrides its padding/background so it reads as text, not a
+           control (matches the old locked-label's visual weight). */
         .type-summary {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          inline-size: 100%;
-          min-block-size: var(--touch-target);
-          padding-inline: var(--space-3);
-          background: var(--color-surface-raised);
-          border: 0.5px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          color: var(--color-text-primary);
+          gap: var(--space-2);
+          padding-inline: 0;
+          background: none;
+          color: var(--color-text-secondary);
           font-size: var(--font-size-body);
           font-family: var(--font-family);
-          cursor: pointer;
+          font-weight: normal;
         }
 
         .type-summary svg {
           inline-size: var(--icon-size-sm);
           block-size: var(--icon-size-sm);
-          color: var(--color-text-secondary);
           flex-shrink: 0;
         }
 
@@ -338,15 +337,6 @@ class GoalDialog extends AppElement {
           background: var(--color-accent-subtle);
           border-color: var(--color-accent);
           color: var(--color-accent);
-        }
-
-        .target-hint {
-          margin-inline-start: auto;
-          flex: 1 1 auto;
-          min-inline-size: 0;
-          text-align: end;
-          font-size: var(--font-size-caption);
-          color: var(--color-text-muted);
         }
 
         /* ── Fix-a-day chips (mirrors move-view's picker-heading spacing) ─ */
@@ -742,7 +732,6 @@ class GoalDialog extends AppElement {
                   <button type="button" class="stepper-btn" id="target-up" aria-label="${t('goal-dialog.target-increase')}">+</button>
                 </div>
                 <button type="button" class="preset-chip" id="everyday-chip" hidden>${t('goal-dialog.everyday-preset')}</button>
-                <p class="target-hint" id="target-hint"></p>
               </div>
             </div>
           </div>
@@ -865,7 +854,6 @@ class GoalDialog extends AppElement {
     this._targetDownBtn  = this.shadowRoot.querySelector('#target-down');
     this._targetUpBtn    = this.shadowRoot.querySelector('#target-up');
     this._everydayChip   = this.shadowRoot.querySelector('#everyday-chip');
-    this._targetHint     = this.shadowRoot.querySelector('#target-hint');
 
     this._viewFixDay     = this.shadowRoot.querySelector('#view-fixday');
     this._fixDayBtn      = this.shadowRoot.querySelector('#action-fixday-btn');
@@ -1339,7 +1327,6 @@ class GoalDialog extends AppElement {
     this._targetUpBtn.disabled = this._draftTarget >= max;
     this._everydayChip.hidden = this._draftType !== 'weekly';
     this._everydayChip.setAttribute('aria-pressed', String(this._draftType === 'weekly' && this._draftTarget === 7));
-    this._targetHint.textContent = t(`goal-dialog.target-hint-${this._draftType}`, { n: this._draftTarget });
   }
 
   // Persists a type or target edit for an existing goal immediately (unlike

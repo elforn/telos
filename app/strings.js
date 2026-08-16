@@ -96,8 +96,6 @@ defineStrings({
   'goal-dialog.everyday-preset':        'Every day',
   'goal-dialog.target-label-weekly':    'Times per week',
   'goal-dialog.target-label-monthly':   'Times per month',
-  'goal-dialog.target-hint-weekly':     'Log {n}× this week to hit 100%.',
-  'goal-dialog.target-hint-monthly':    'Log {n}× this month to hit 100%.',
   'goal-dialog.fixday-menu':            'Fix a day…',
   'goal-dialog.fixday-heading-weekly':  'Last {n} weeks',
   'goal-dialog.fixday-heading-monthly': 'Last {n} months',

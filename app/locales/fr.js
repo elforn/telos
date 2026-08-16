@@ -97,8 +97,6 @@ defineStrings({
   'goal-dialog.everyday-preset':          'Tous les jours',
   'goal-dialog.target-label-weekly':      'Fois par semaine',
   'goal-dialog.target-label-monthly':     'Fois par mois',
-  'goal-dialog.target-hint-weekly':       '{n}× cette semaine pour atteindre 100 %.',
-  'goal-dialog.target-hint-monthly':      '{n}× ce mois-ci pour atteindre 100 %.',
   'goal-dialog.fixday-menu':              'Corriger un jour…',
   'goal-dialog.fixday-heading-weekly':    'Les {n} dernières semaines',
   'goal-dialog.fixday-heading-monthly':   'Les {n} derniers mois',

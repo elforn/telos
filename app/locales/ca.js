@@ -97,8 +97,6 @@ defineStrings({
   'goal-dialog.everyday-preset':          'Cada dia',
   'goal-dialog.target-label-weekly':      'Vegades per setmana',
   'goal-dialog.target-label-monthly':     'Vegades per mes',
-  'goal-dialog.target-hint-weekly':       '{n}× aquesta setmana per arribar al 100 %.',
-  'goal-dialog.target-hint-monthly':      '{n}× aquest mes per arribar al 100 %.',
   'goal-dialog.fixday-menu':              'Corregeix un dia…',
   'goal-dialog.fixday-heading-weekly':    'Les últimes {n} setmanes',
   'goal-dialog.fixday-heading-monthly':   'Els últims {n} mesos',
