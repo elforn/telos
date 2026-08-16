@@ -49,14 +49,14 @@ describe('buildItemsHandoff', () => {
 
 describe('buildGoalHandoff', () => {
   it('carries a bare goal unchanged', () => {
-    const goal = { id: 'g1', title: 'Run a marathon', tags: [], percentage: 40 };
+    const goal = { id: 'g1', title: 'Run a marathon', tags: [], tracking: { type: 'percentage', value: 40 } };
     expect(buildGoalHandoff(goal)).toEqual({ __telosHandoff: true, kind: 'goal', goal });
   });
 });
 
 describe('buildYearHandoff', () => {
   it('nests the year goals under a goals key by year', () => {
-    const yearGoals = { capstone: [{ id: 'c1', title: 'Capstone', tags: [], percentage: 50 }], milestones: [], wow: [], focus: [] };
+    const yearGoals = { capstone: [{ id: 'c1', title: 'Capstone', tags: [], tracking: { type: 'percentage', value: 50 } }], milestones: [], wow: [], focus: [] };
     const payload = buildYearHandoff(2027, yearGoals);
     expect(payload).toEqual({
       __telosHandoff: true,

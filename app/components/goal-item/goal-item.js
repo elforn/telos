@@ -6,11 +6,21 @@ import { tagStrip } from '../../utils/tag-color.js';
 import { urgencyOf } from '../../utils/urgency.js';
 import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
+import { percentValue, isFrequency, recentDots, isLoggedOn, currentPeriodCount } from '../../utils/tracking.js';
 
 const REVEAL_WIDTH = 60;
 const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
 const SWIPE_DEAD_ZONE = 15;   // px of drag before bar starts moving
+
+// Frequency "today" token geometry — a 40px box (== --touch-target) holding a
+// 30px dot with room for a 2px gap to the ring around it. Weekly renders the
+// ring/dot as a true circle (rx = half the box); monthly as a soft square —
+// shape is the only thing on the row that says which unit you're looking at.
+const TODAY_BOX = 40;
+const TODAY_RING_SIZE = 34;   // the <rect>'s width/height, inset within TODAY_BOX
+const TODAY_RING_INSET = (TODAY_BOX - TODAY_RING_SIZE) / 2;
+const TODAY_RING_RX = { weekly: TODAY_RING_SIZE / 2, monthly: 8 };
 
 class GoalItem extends Gestures(AppElement) {
   set goal(value) {
@@ -130,6 +140,95 @@ class GoalItem extends Gestures(AppElement) {
            never gated this way. */
         .urgency-icon { margin-inline-start: var(--space-1); }
         ${urgencyBadgeStyles('var(--goal-deadline-display, block)')}
+
+        /* ── Frequency goals: dot-strip + today token ────────────────────
+           Replaces the pct-label's slot — hold-drag scrub has no meaning
+           here, so that space becomes a read-only glance strip instead. */
+
+        .freq-cluster {
+          position: relative;
+          z-index: 1;
+          display: none;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+          margin-inline-start: var(--space-2);
+        }
+
+        .bar[data-freq="true"] .freq-cluster { display: flex; }
+        .bar[data-freq="true"] .pct-label { display: none; }
+
+        .freq-dot {
+          inline-size: 13px;
+          block-size: 13px;
+          border-radius: var(--radius-full);
+          background: var(--color-border);
+          flex-shrink: 0;
+        }
+        .freq-dot.met { background: var(--color-accent); }
+        .freq-dot.partial {
+          background: conic-gradient(var(--color-accent) var(--frac, 50%), var(--color-border) 0);
+        }
+        .bar[data-freq-type="monthly"] .freq-dot { border-radius: 5px; }
+
+        .freq-today {
+          position: relative;
+          inline-size: ${TODAY_BOX}px;
+          block-size: ${TODAY_BOX}px;
+          flex-shrink: 0;
+          display: grid;
+          place-items: center;
+        }
+
+        .freq-today .freq-dot {
+          inline-size: 30px;
+          block-size: 30px;
+        }
+        .bar[data-freq-type="monthly"] .freq-today .freq-dot {
+          inline-size: 24px;
+          block-size: 24px;
+          border-radius: 6px;
+        }
+
+        /* Plain complete stroke, no sweep animation — the 500ms hold is
+           confirmed all at once (a single setTimeout in the gestures mixin,
+           no intermediate progress callback), so there's nothing to animate
+           mid-hold; the ring just appears once logged. */
+        .freq-ring {
+          position: absolute;
+          inset: 0;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+        .freq-today.logged .freq-ring { opacity: 1; }
+        .freq-ring .progress { fill: none; stroke: var(--color-success); stroke-width: 2; }
+
+        /* Small tick — every successful log. Same recipe as list-item's own
+           done-celebrate (outline pulse + background wash), just retargeted
+           at this component's .bar instead of a shared .row class. Reserved
+           for the ROUTINE action; the big particle-burst .celebrating above
+           stays for the rare "whole window met" moment (percentValue hits
+           100 only when every period in the window is fully met — same
+           crossing check as the percentage case, no separate detection). */
+        @keyframes log-ring {
+          0%   { outline-color: transparent; }
+          30%  { outline-color: color-mix(in srgb, var(--color-accent) 60%, transparent); }
+          100% { outline-color: transparent; }
+        }
+        @keyframes log-wash {
+          0%   { background: var(--color-surface); }
+          25%  { background: color-mix(in srgb, var(--color-accent) 30%, var(--color-surface)); }
+          100% { background: var(--color-surface); }
+        }
+        :host(.log-tick) .bar {
+          outline: 3px solid transparent;
+          outline-offset: 1px;
+          animation: log-ring 500ms ease-out, log-wash 500ms ease-out;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          :host(.log-tick) .bar { animation: none; outline: none; }
+        }
 
         .pct-label {
           position: relative;
@@ -392,6 +491,15 @@ class GoalItem extends Gestures(AppElement) {
         <span class="desc-icon" aria-hidden="true">${icons.info}</span>
         ${urgencyBadgeMarkup}
         <span class="pct-label" hidden></span>
+        <span class="freq-cluster" aria-hidden="true">
+          <span class="freq-dots"></span>
+          <span class="freq-today">
+            <span class="freq-dot"></span>
+            <svg class="freq-ring" viewBox="0 0 ${TODAY_BOX} ${TODAY_BOX}" width="${TODAY_BOX}" height="${TODAY_BOX}">
+              <rect class="progress" x="${TODAY_RING_INSET}" y="${TODAY_RING_INSET}" width="${TODAY_RING_SIZE}" height="${TODAY_RING_SIZE}" rx="${TODAY_RING_SIZE / 2}"></rect>
+            </svg>
+          </span>
+        </span>
       </div>
     `;
   }
@@ -403,7 +511,12 @@ class GoalItem extends Gestures(AppElement) {
     this._title = this.shadowRoot.querySelector('.title');
     this._stripEl = this.shadowRoot.querySelector('.tag-strip');
     this._pctLabel = this.shadowRoot.querySelector('.pct-label');
+    this._freqDots = this.shadowRoot.querySelector('.freq-dots');
+    this._freqToday = this.shadowRoot.querySelector('.freq-today');
+    this._freqTodayDot = this._freqToday.querySelector('.freq-dot');
+    this._freqRing = this.shadowRoot.querySelector('.freq-ring .progress');
     this._revealedDir = null;
+    this._wasLoggedToday = undefined; // undefined (not false) so the first _update() never ticks — mirrors _celebrate()'s prevPct guard below
 
     this._update();
 
@@ -479,20 +592,31 @@ class GoalItem extends Gestures(AppElement) {
     this._tap();
   }
 
+  // Frequency goals have no continuous value to scrub — the 500ms dwell that
+  // starts a percentage-goal's hold-drag instead commits a log toggle
+  // immediately (the gestures mixin fires onHoldDragStart exactly once, at
+  // dwell-confirmation, with a free haptic buzz already built in — nothing
+  // to animate mid-hold, so unlike the percentage case there's no drag phase
+  // to enter). onHoldDrag/onHoldDragEnd are no-ops for this type: the action
+  // already happened at the start.
+
   onHoldDragStart() {
     this._closeReveal();
+    if (isFrequency(this._goal)) { this._toggleLog(); return; }
     this.classList.add('hold-active');
     this._bar.style.transition = 'none';
     this._setDragMode(true);
   }
 
   onHoldDragKey(dir) {
+    if (isFrequency(this._goal)) { this._toggleLog(); return; } // either arrow — it's a toggle, not a scrub
     this._setPct(dir === 'right' ? Math.min(100, this._pct + 5) : Math.max(0, this._pct - 5));
     if (this._pct === 100) this._celebrate();
     this._emitProgress();
   }
 
   onHoldDrag(e) {
+    if (isFrequency(this._goal)) return;
     const rect = this._bar.getBoundingClientRect();
     if (!rect.width) return;
     const pct = Math.round(Math.max(0, Math.min(100, (e.endX - rect.left) / rect.width * 100)));
@@ -500,6 +624,7 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   onHoldDragEnd() {
+    if (isFrequency(this._goal)) return;
     this.classList.remove('hold-active');
     this._bar.style.transition = '';
     this._setDragMode(false);
@@ -557,13 +682,35 @@ class GoalItem extends Gestures(AppElement) {
   _setPct(pct) {
     this._pct = Math.max(0, Math.min(100, pct));
     this._fill.style.width = `${this._pct}%`;
-    this._bar.setAttribute('aria-valuenow', String(this._pct));
+    if (!isFrequency(this._goal)) this._bar.setAttribute('aria-valuenow', String(this._pct));
     if (this._pctLabel) this._pctLabel.textContent = `${this._pct}%`;
   }
 
   _setDragMode(active) {
     this._title.hidden = active;
     this._pctLabel.hidden = !active;
+  }
+
+  // Toggling is the row's one frequency action, reachable by hold or by
+  // Left/Right arrow — dispatched upward, same shape as _emitProgress(),
+  // because the store mutation lives in the page, not the component.
+  _toggleLog() {
+    this.dispatchEvent(new CustomEvent('goal-log-toggle', {
+      bubbles: true, composed: true, detail: { goal: this._goal },
+    }));
+  }
+
+  // Small tick — every successful log. See the .log-tick keyframes above for
+  // why this is a separate, quieter thing from ._celebrate()'s particle burst.
+  // setTimeout rather than animationend, matching _celebrate() below — under
+  // prefers-reduced-motion the animation is `none`, so animationend would
+  // never fire and the class would stick until the next toggle force-removed it.
+  _logTick() {
+    clearTimeout(this._logTickTimer);
+    this.classList.remove('log-tick');
+    void this.offsetWidth; // force reflow so a rapid re-log restarts the animation
+    this.classList.add('log-tick');
+    this._logTickTimer = setTimeout(() => this.classList.remove('log-tick'), 500);
   }
 
   _emitProgress() {
@@ -592,15 +739,24 @@ class GoalItem extends Gestures(AppElement) {
 
   _update() {
     if (!this._bar) return;
-    const pct = this._goal?.percentage ?? 0;
+    const isFreq = isFrequency(this._goal);
+    const pct = percentValue(this._goal);
     const prevPct = this._pct;
     this._pct = Math.max(0, pct);
     const title = this._goal?.title ?? '';
     const active = this._pct < 100 && !this._goal?.archived;
     const urgency = urgencyOf(this._goal?.dueDate, active);
     this._title.textContent = title;
-    this._bar.setAttribute('aria-label',
-      urgency === 'none' ? title : t('goal-item.duedate-aria', { title, when: t(`urgency.${urgency}`) }));
+
+    let label = urgency === 'none' ? title : t('goal-item.duedate-aria', { title, when: t(`urgency.${urgency}`) });
+    if (isFreq) {
+      const { type, target } = this._goal.tracking;
+      const count = currentPeriodCount(this._goal.tracking);
+      label = t(`goal-item.freq-aria-${type}`, { title: label, count, target });
+      if (isLoggedOn(this._goal)) label += t('goal-item.freq-logged-suffix');
+    }
+    this._bar.setAttribute('aria-label', label);
+
     this._bar.dataset.hasDesc = String(!!this._goal?.notes);
     this.dataset.archived = String(!!this._goal?.archived);
     this.dataset.urgency = urgency;
@@ -611,6 +767,56 @@ class GoalItem extends Gestures(AppElement) {
       this._stripEl.style.background = bg;
       this._stripEl.hidden = !bg;
     }
+
+    // role="slider" only makes sense for a continuous, draggable value — a
+    // frequency goal's row is closer to a toggle (hold logs/unlogs today),
+    // so it drops the slider role and its min/max/now triad entirely rather
+    // than carry attributes that would misdescribe it.
+    this._bar.setAttribute('role', isFreq ? 'button' : 'slider');
+    if (isFreq) {
+      this._bar.removeAttribute('aria-valuemin');
+      this._bar.removeAttribute('aria-valuemax');
+      this._bar.removeAttribute('aria-valuenow');
+      this._bar.setAttribute('aria-pressed', String(isLoggedOn(this._goal)));
+    } else {
+      this._bar.setAttribute('aria-valuemin', '0');
+      this._bar.setAttribute('aria-valuemax', '100');
+      this._bar.removeAttribute('aria-pressed');
+    }
+
+    this._bar.dataset.freq = String(isFreq);
+    if (isFreq) {
+      this._bar.dataset.freqType = this._goal.tracking.type;
+      this._renderFreqCluster();
+    }
+  }
+
+  // Dot-strip (read-only, last PERIOD_WINDOW-1 closed periods) + the "today"
+  // token (bigger, doubles as the hold target — see .freq-today above). One
+  // shared shape per goal: circle for weekly, soft square for monthly.
+  _renderFreqCluster() {
+    const dots = recentDots(this._goal);
+    const history = dots.slice(0, -1);
+    const today = dots[dots.length - 1];
+
+    this._freqDots.replaceChildren(...history.map(d => {
+      const el = document.createElement('span');
+      el.className = 'freq-dot' + (d.state === 'met' ? ' met' : d.state === 'partial' ? ' partial' : '');
+      if (d.state === 'partial') el.style.setProperty('--frac', `${Math.round(d.fraction * 100)}%`);
+      return el;
+    }));
+
+    this._freqTodayDot.className = 'freq-dot' + (today.state === 'met' ? ' met' : today.state === 'partial' ? ' partial' : '');
+    if (today.state === 'partial') this._freqTodayDot.style.setProperty('--frac', `${Math.round(today.fraction * 100)}%`);
+    else this._freqTodayDot.style.removeProperty('--frac');
+
+    const rx = TODAY_RING_RX[this._goal.tracking.type];
+    this._freqRing.setAttribute('rx', rx);
+
+    const logged = isLoggedOn(this._goal);
+    this._freqToday.classList.toggle('logged', logged);
+    if (this._wasLoggedToday !== undefined && logged && !this._wasLoggedToday) this._logTick();
+    this._wasLoggedToday = logged;
   }
 }
 

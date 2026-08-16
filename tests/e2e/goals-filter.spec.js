@@ -144,7 +144,7 @@ async function waitForProgress(page, listId, pct) {
     const item = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('home-page')?.shadowRoot
       ?.querySelector(`${id} goal-item`);
-    return (item?._goal?.percentage ?? -1) === p;
+    return (item?._goal?.tracking?.value ?? -1) === p;
   }, [listId, pct]);
 }
 

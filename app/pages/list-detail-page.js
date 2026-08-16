@@ -895,7 +895,7 @@ class ListDetailPage extends AppElement {
       const { title, status, note, url, dueDate, tags, year, section } = e.detail;
       const item    = this._editingItem;
       const goalId  = crypto.randomUUID();
-      const goal    = { id: goalId, title, tags: [...(tags ?? [])], dueDate, percentage: 0 };
+      const goal    = { id: goalId, title, tags: [...(tags ?? [])], dueDate, tracking: { type: 'percentage', value: 0 } };
       const state   = getState();
       const yearStr = String(year);
       const existing = state.goals?.[yearStr] ?? { capstone: [], milestones: [], wow: [], focus: [] };

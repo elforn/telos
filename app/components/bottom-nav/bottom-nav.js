@@ -7,6 +7,7 @@ import { exportData, downloadExport, readImportFile, previewImport, applyMerge, 
 import { toast } from '../../../_lib/modules/toast/toast.js';
 import { getState } from '../../../_lib/core/store/store.js';
 import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
+import { percentValue } from '../../utils/tracking.js';
 import { repairInstallation } from '../../../_lib/core/sw-manager/sw-repair.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
 import { backupBeforeRepair, LAST_EXPORT_KEY } from '../../utils/backup-before-repair.js';
@@ -999,7 +1000,7 @@ class BottomNav extends AppElement {
     const year = goals[new Date().getFullYear()] ?? {};
     const goalBuckets = ['capstone', 'milestones', 'wow', 'focus']
       .flatMap(s => year[s] ?? [])
-      .map(g => urgencyOf(g.dueDate, (g.percentage ?? 0) < 100 && !g.archived));
+      .map(g => urgencyOf(g.dueDate, percentValue(g) < 100 && !g.archived));
 
     const rollupVisible = getState().listsRollupVisible ?? true;
     const itemBuckets = !rollupVisible ? [] : (getState().lists ?? [])
@@ -1052,7 +1053,7 @@ class BottomNav extends AppElement {
   }
 
   _subscribeVersion() {
-    fetch('version.json').then(r => r.json()).then(data => {
+    fetch(`${BASE_PATH}version.json`).then(r => r.json()).then(data => {
       const el = this.shadowRoot?.querySelector('#version-text');
       if (el && data?.buildHash) {
         el.textContent = `${t('year-header.version')} ${__APP_VERSION__} (${data.buildHash})`;

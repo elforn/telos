@@ -1,3 +1,5 @@
+import { percentValue } from './tracking.js';
+
 const SECTION_LABELS = {
   capstone:   'Capstone',
   milestones: '3 Month Milestones',
@@ -18,9 +20,9 @@ function _tags(tags) {
 // ── Goals ─────────────────────────────────────────────────────────────────────
 
 function _goalListLine(goal, metadata) {
-  const done = goal.percentage === 100;
+  const done = percentValue(goal) === 100;
   if (metadata) {
-    const pct  = done ? '✅' : `[${goal.percentage}%]`;
+    const pct  = done ? '✅' : `[${percentValue(goal)}%]`;
     const tags = _tags(goal.tags);
     const due  = goal.dueDate ? `Due: ${_formatDate(goal.dueDate)}` : null;
     const parts = [tags, due].filter(Boolean);
@@ -31,13 +33,13 @@ function _goalListLine(goal, metadata) {
 }
 
 function _goalContentBlock(goal, metadata) {
-  const done   = goal.percentage === 100;
+  const done   = percentValue(goal) === 100;
   const prefix = done ? '✅ ' : '';
   const lines  = [`### ${prefix}${goal.title}`, '---'];
   let hasBody  = false;
 
   if (metadata) {
-    const pct  = `[${goal.percentage}%]`;
+    const pct  = `[${percentValue(goal)}%]`;
     const tags = _tags(goal.tags);
     const due  = goal.dueDate ? `Due: ${_formatDate(goal.dueDate)}` : null;
     const parts = [tags, due].filter(Boolean);
@@ -79,7 +81,7 @@ export function exportGoalsMarkdown(yearGoals, year, { metadata = false, notes =
 // own title becomes the top-level heading, since there's no container title like
 // a list name to use instead).
 export function exportGoalMarkdown(goal, { metadata = false, notes = false } = {}) {
-  const done    = goal.percentage === 100;
+  const done    = percentValue(goal) === 100;
   const prefix  = done ? '✅ ' : '';
   const heading = `# ${prefix}${goal.title}`;
 
@@ -91,7 +93,7 @@ export function exportGoalMarkdown(goal, { metadata = false, notes = false } = {
   let hasBody = false;
 
   if (metadata) {
-    const pct  = `[${goal.percentage}%]`;
+    const pct  = `[${percentValue(goal)}%]`;
     const tags = _tags(goal.tags);
     const due  = goal.dueDate ? `Due: ${_formatDate(goal.dueDate)}` : null;
     const parts = [tags, due].filter(Boolean);

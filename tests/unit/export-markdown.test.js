@@ -11,18 +11,18 @@ import {
 const YEAR = '2026';
 
 const GOALS = {
-  capstone:  [{ id: '1', title: 'Ship it', percentage: 60, tags: ['work'], dueDate: '2026-07-03' }],
+  capstone:  [{ id: '1', title: 'Ship it', tracking: { type: 'percentage', value: 60 }, tags: ['work'], dueDate: '2026-07-03' }],
   milestones: [
-    { id: '2', title: 'MVP done',  percentage: 100, tags: [] },
-    { id: '3', title: 'Beta live', percentage: 0,   tags: ['work', 'q2'], notes: 'Need testers' },
+    { id: '2', title: 'MVP done',  tracking: { type: 'percentage', value: 100 }, tags: [] },
+    { id: '3', title: 'Beta live', tracking: { type: 'percentage', value: 0 },   tags: ['work', 'q2'], notes: 'Need testers' },
   ],
   wow:   [],
   focus: [],
 };
 
 const GOALS_WITH_NOTES = {
-  capstone: [{ id: '1', title: 'Ship it', percentage: 100, tags: ['work'], notes: 'Make it happen', dueDate: '2026-07-03' }],
-  milestones: [{ id: '2', title: 'MVP done', percentage: 50, tags: [], notes: undefined }],
+  capstone: [{ id: '1', title: 'Ship it', tracking: { type: 'percentage', value: 100 }, tags: ['work'], notes: 'Make it happen', dueDate: '2026-07-03' }],
+  milestones: [{ id: '2', title: 'MVP done', tracking: { type: 'percentage', value: 50 }, tags: [], notes: undefined }],
   wow: [], focus: [],
 };
 
@@ -183,9 +183,9 @@ describe('goals, notes, metadata', () => {
 // ── Single goal ───────────────────────────────────────────────────────────────
 
 describe('exportGoalMarkdown', () => {
-  const GOAL = { id: '1', title: 'Ship it', percentage: 60, tags: ['work'], dueDate: '2026-07-03' };
-  const GOAL_DONE = { id: '2', title: 'Done goal', percentage: 100, tags: [] };
-  const GOAL_WITH_NOTES = { id: '3', title: 'Ship it', percentage: 100, tags: ['work'], notes: 'Make it happen', dueDate: '2026-07-03' };
+  const GOAL = { id: '1', title: 'Ship it', tracking: { type: 'percentage', value: 60 }, tags: ['work'], dueDate: '2026-07-03' };
+  const GOAL_DONE = { id: '2', title: 'Done goal', tracking: { type: 'percentage', value: 100 }, tags: [] };
+  const GOAL_WITH_NOTES = { id: '3', title: 'Ship it', tracking: { type: 'percentage', value: 100 }, tags: ['work'], notes: 'Make it happen', dueDate: '2026-07-03' };
 
   it('uses the goal title as the top-level heading', () => {
     const out = exportGoalMarkdown(GOAL, {});

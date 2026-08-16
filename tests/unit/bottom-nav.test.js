@@ -482,13 +482,44 @@ describe('bottom-nav — urgency roll-up', () => {
   const listsDot = el => el.shadowRoot.querySelector('#lists-dot');
 
   it('shows a red count on the Years pill for current-year goals due today/overdue', () => {
-    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }]));
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
     setState('lists', []);
     const el = mount();
     el.refreshUrgency();
     expect(yearsDot(el).hidden).toBe(false);
     expect(yearsDot(el).dataset.urgency).toBe('overdue');
     expect(yearsDot(el).dataset.count).toBe('1');
+  });
+
+  it('a fully-complete goal with a past due date does not count as overdue on the Years pill', () => {
+    // Regression: percentValue(goal) must gate urgency here, not a stale
+    // `goal.percentage` read — a 100%-done goal is inactive regardless of
+    // its due date (mirrors goal-item's own `active` computation).
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 100 }, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', []);
+    const el = mount();
+    el.refreshUrgency();
+    expect(yearsDot(el).hidden).toBe(true);
+  });
+
+  it('a partially-met frequency goal with a past due date still counts as overdue', () => {
+    // A single entry only meets the current period, not the full 6-period
+    // window — percentValue stays below 100, so this proves percentValue()
+    // (not a stale flat field) is actually driving frequency goals here too.
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'weekly', target: 1, entries: [isoDaysFromNow(0)] }, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', []);
+    const el = mount();
+    el.refreshUrgency();
+    expect(yearsDot(el).hidden).toBe(false);
+  });
+
+  it('a fully-met frequency goal (whole window) does not count as overdue', () => {
+    const entries = [0, 1, 2, 3, 4, 5].map(w => isoDaysFromNow(-w * 7));
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'weekly', target: 1, entries }, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', []);
+    const el = mount();
+    el.refreshUrgency();
+    expect(yearsDot(el).hidden).toBe(true);
   });
 
   it('shows the Lists pill colour without a count for a green/yellow item', () => {
@@ -502,7 +533,7 @@ describe('bottom-nav — urgency roll-up', () => {
   });
 
   it('ignores non-current-year goals on the Years pill', () => {
-    setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
+    setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
     setState('lists', []);
     const el = mount();
     el.refreshUrgency();
@@ -510,7 +541,7 @@ describe('bottom-nav — urgency roll-up', () => {
   });
 
   it('hides both pills when nothing is due soon', () => {
-    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(90) }]));
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(90) }]));
     setState('lists', []);
     const el = mount();
     el.refreshUrgency();
@@ -519,7 +550,7 @@ describe('bottom-nav — urgency roll-up', () => {
   });
 
   it('mutes the Lists pill (not Years) when listsRollupVisible is false', () => {
-    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }]));
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
     setState('lists', [{ id: 'l', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', tags: [], inGoals: [], dueDate: isoDaysFromNow(-1) }] }]);
     setState('listsRollupVisible', false);
     const el = mount();
@@ -552,7 +583,7 @@ describe('bottom-nav — app icon badge', () => {
   it('calls setAppBadge with the combined urgent count', () => {
     navigator.setAppBadge = vi.fn().mockResolvedValue(undefined);
     navigator.clearAppBadge = vi.fn().mockResolvedValue(undefined);
-    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }]));
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
     setState('lists', [{ id: 'l', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', tags: [], inGoals: [], dueDate: isoDaysFromNow(0) }] }]);
     const el = mount();
     el.refreshUrgency();
@@ -573,7 +604,7 @@ describe('bottom-nav — app icon badge', () => {
     const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
     navigator.setAppBadge = vi.fn().mockRejectedValue(new Error('denied'));
     navigator.clearAppBadge = vi.fn().mockResolvedValue(undefined);
-    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }]));
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
     setState('lists', []);
     expect(() => { const el = mount(); el.refreshUrgency(); }).not.toThrow();
     await vi.waitFor(() => expect(consoleErr).toHaveBeenCalledWith('App badge update failed:', expect.any(Error)));
@@ -583,7 +614,7 @@ describe('bottom-nav — app icon badge', () => {
     const original = navigator.setAppBadge;
     // eslint-disable-next-line no-param-reassign
     delete navigator.setAppBadge;
-    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], percentage: 10, dueDate: isoDaysFromNow(-1) }]));
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
     expect(() => { const el = mount(); el.refreshUrgency(); }).not.toThrow();
     navigator.setAppBadge = original;
   });
@@ -632,7 +663,7 @@ describe('bottom-nav — slice-handoff import routing', () => {
   });
 
   it('a year-kind handoff hides Replace but keeps Merge, and merges via the generic goals path', async () => {
-    const yearGoals = { capstone: [{ id: 'c1', title: 'Shared goal', tags: [], percentage: 40 }], milestones: [], wow: [], focus: [] };
+    const yearGoals = { capstone: [{ id: 'c1', title: 'Shared goal', tags: [], tracking: { type: 'percentage', value: 40 } }], milestones: [], wow: [], focus: [] };
     vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
       type: 'simple',
       payload: { __telosHandoff: true, kind: 'year', goals: { '2027': yearGoals } },
@@ -764,7 +795,7 @@ describe('bottom-nav — slice-handoff import routing', () => {
   it('a goal-kind handoff shows the year/section landing view, hiding Merge/Replace', async () => {
     vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
       type: 'simple',
-      payload: { __telosHandoff: true, kind: 'goal', goal: { id: 'g1', title: 'Run a marathon', tags: [], percentage: 0 } },
+      payload: { __telosHandoff: true, kind: 'goal', goal: { id: 'g1', title: 'Run a marathon', tags: [], tracking: { type: 'percentage', value: 0 } } },
       blobs: [],
     });
     const el = mount();
@@ -780,7 +811,7 @@ describe('bottom-nav — slice-handoff import routing', () => {
   it('confirming the goal landing merges the goal into the chosen year and section', async () => {
     vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
       type: 'simple',
-      payload: { __telosHandoff: true, kind: 'goal', goal: { id: 'g1', title: 'Run a marathon', tags: [], percentage: 0 } },
+      payload: { __telosHandoff: true, kind: 'goal', goal: { id: 'g1', title: 'Run a marathon', tags: [], tracking: { type: 'percentage', value: 0 } } },
       blobs: [],
     });
     const el = mount();
@@ -804,7 +835,7 @@ describe('bottom-nav — slice-handoff import routing', () => {
     _resetToast();
     vi.spyOn(syncModule, 'previewImport').mockResolvedValue({
       type: 'simple',
-      payload: { __telosHandoff: true, kind: 'goal', goal: { id: 'g1', title: 'Run a marathon', tags: [], percentage: 0 } },
+      payload: { __telosHandoff: true, kind: 'goal', goal: { id: 'g1', title: 'Run a marathon', tags: [], tracking: { type: 'percentage', value: 0 } } },
       blobs: [],
     });
     vi.spyOn(syncModule, 'applyMerge').mockRejectedValueOnce(new Error('boom'));

@@ -442,7 +442,7 @@ function hidePage() {
   window.dispatchEvent(new Event('pagehide'));
 }
 
-const EXISTING_GOAL = { id: 'g1', title: 'Real goal', percentage: 0 };
+const EXISTING_GOAL = { id: 'g1', title: 'Real goal', tracking: { type: 'percentage', value: 0 } };
 
 describe('goal-dialog — hide-time snapshot', () => {
   // ── new goal ──
@@ -553,7 +553,7 @@ describe('goal-dialog — hide-time snapshot', () => {
   it('does not restore an existing-goal snapshot when opening a different goal', () => {
     localStorage.setItem(snapshotKey('g1'), JSON.stringify({ title: 'Pending', notes: '', tags: [] }));
     const el = mount();
-    el.open({ id: 'g2', title: 'Another goal', percentage: 0 });
+    el.open({ id: 'g2', title: 'Another goal', tracking: { type: 'percentage', value: 0 } });
     expect(el.shadowRoot.querySelector('#input').value).toBe('Another goal');
   });
 
@@ -1120,7 +1120,7 @@ describe('goal-dialog — tag chip aria-labels', () => {
 });
 
 describe('goal-dialog — share markdown', () => {
-  const goal = { id: '1', title: 'Run a 5k', notes: 'My desc', tags: [], percentage: 40 };
+  const goal = { id: '1', title: 'Run a 5k', notes: 'My desc', tags: [], tracking: { type: 'percentage', value: 40 } };
 
   it('dispatches goal-export-request with the current goal on Share Markdown', () => {
     const el = mount();
@@ -1144,7 +1144,7 @@ describe('goal-dialog — share markdown', () => {
 });
 
 describe('goal-dialog — share goal', () => {
-  const goal = { id: '1', title: 'Run a 5k', notes: 'My desc', tags: [], percentage: 40 };
+  const goal = { id: '1', title: 'Run a 5k', notes: 'My desc', tags: [], tracking: { type: 'percentage', value: 40 } };
 
   it('dispatches goal-share-request with the current goal on Share', () => {
     const el = mount();
@@ -1164,6 +1164,197 @@ describe('goal-dialog — share goal', () => {
     el.shadowRoot.querySelector('#action-share-btn').click();
     expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
     expect(el.shadowRoot.querySelector('#modal').close).toHaveBeenCalled();
+  });
+});
+
+describe('goal-dialog — type selector (new goal only)', () => {
+  function pill(el, type) {
+    return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
+  }
+  function create(el, detail = {}) {
+    el.open(null);
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = detail.title ?? 'New goal';
+    el.shadowRoot.querySelector('#modal').close();
+    return events;
+  }
+
+  it('defaults to percentage — no target block, pill-group visible for a new goal', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#type-locked').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+    expect(pill(el, 'percentage').getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('selecting weekly reveals the target block with the default target', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('3');
+    expect(el.shadowRoot.querySelector('#everyday-chip').hidden).toBe(false);
+  });
+
+  it('selecting monthly reveals the target block, no Every-day preset', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'monthly').click();
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('4');
+    expect(el.shadowRoot.querySelector('#everyday-chip').hidden).toBe(true);
+  });
+
+  it('stepper increments/decrements and clamps to TARGET_LIMITS.weekly (1–7)', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    const down = el.shadowRoot.querySelector('#target-down');
+    const up   = el.shadowRoot.querySelector('#target-up');
+    for (let i = 0; i < 5; i++) down.click(); // 3 -> 1, then clamps
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('1');
+    expect(down.disabled).toBe(true);
+    for (let i = 0; i < 10; i++) up.click(); // clamps at 7
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('7');
+    expect(up.disabled).toBe(true);
+  });
+
+  it('Every-day preset sets weekly target to 7 and shows as active', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    el.shadowRoot.querySelector('#everyday-chip').click();
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('7');
+    expect(el.shadowRoot.querySelector('#everyday-chip').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('switching back to percentage hides the target block again', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    pill(el, 'percentage').click();
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+    expect(pill(el, 'percentage').getAttribute('aria-checked')).toBe('true');
+    expect(pill(el, 'weekly').getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('goal-created carries a percentage tracking object by default', () => {
+    const el = mount();
+    const events = create(el);
+    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 0 });
+  });
+
+  it('goal-created carries the selected weekly type/target with empty entries', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    el.shadowRoot.querySelector('#target-up').click(); // 3 -> 4
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Move my body';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', target: 4, entries: [] });
+  });
+
+  it('resets to percentage default after a quick-add commit (Enter) starts the next entry', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'monthly').click();
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = 'First goal';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
+    expect(pill(el, 'percentage').getAttribute('aria-checked')).toBe('true');
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+  });
+
+  it('type is locked (no pill group) once viewing an existing goal', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 } });
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#type-locked').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+  });
+
+  it('locked label shows type and target for an existing frequency goal', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 5, entries: [] } });
+    expect(el.shadowRoot.querySelector('#type-locked-label').textContent).toContain('5');
+  });
+});
+
+describe('goal-dialog — Fix a day (frequency goals only)', () => {
+  it('the Fix-a-day menu item is hidden for a percentage goal', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 } });
+    expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(true);
+  });
+
+  it('the Fix-a-day menu item is hidden for a brand-new (unsaved) goal', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(true);
+  });
+
+  it('the Fix-a-day menu item is visible for an existing frequency goal', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
+    expect(el.shadowRoot.querySelector('#action-fixday-btn').hidden).toBe(false);
+  });
+
+  it('opens the fix-day view and renders 14 day chips', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
+    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    expect(el.shadowRoot.querySelector('#view-fixday').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(true);
+    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(14);
+  });
+
+  it('back returns to the main view', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
+    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    el.shadowRoot.querySelector('#fixday-back').click();
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#view-fixday').hidden).toBe(true);
+  });
+
+  it('marks the chip for an already-logged date as pressed', () => {
+    const el = mount();
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [iso] } });
+    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    const chips = [...el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')];
+    const todayChip = chips.find(c => c.dataset.iso === iso);
+    expect(todayChip.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('clicking a chip dispatches goal-entry-toggle with the goal and iso', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
+    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    const events = [];
+    el.addEventListener('goal-entry-toggle', e => events.push(e));
+    const chip = el.shadowRoot.querySelector('#fixday-chips .day-chip');
+    chip.click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.goal.id).toBe('g1');
+    expect(events[0].detail.iso).toBe(chip.dataset.iso);
+  });
+
+  it('clicking an already-logged chip flips aria-pressed back to false', () => {
+    const el = mount();
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [iso] } });
+    el.shadowRoot.querySelector('#action-fixday-btn').click();
+    const chip = [...el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')].find(c => c.dataset.iso === iso);
+    chip.click();
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
   });
 });
 

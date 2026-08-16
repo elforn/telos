@@ -74,7 +74,7 @@ test.describe('Update flow — data persistence', () => {
         existing.onsuccess = () => {
           const data = existing.result?.data ?? {};
           const yearGoals = data.goals?.[year] ?? { capstone: [], milestones: [], wow: [], focus: [] };
-          yearGoals.capstone = [{ id: 'update-test-1', title: 'Survives update', percentage: 0, tags: [] }];
+          yearGoals.capstone = [{ id: 'update-test-1', title: 'Survives update', tracking: { type: 'percentage', value: 0 }, tags: [] }];
           data.goals = { ...data.goals, [year]: yearGoals };
           tx.objectStore('state').put({ id: 'root', data });
           tx.oncomplete = resolve;

@@ -11,6 +11,7 @@ import '../_lib/core/sw-manager/sw-manager.js';
 import '../_lib/core/components/update-banner/update-banner.js';
 import { backupBeforeRepair } from './utils/backup-before-repair.js';
 import { combineSharedText } from './utils/combine-shared-text.js';
+import { migrateGoals } from './utils/migrate-goals.js';
 import './pages/year-redirect.js';
 import './pages/home-page.js';
 import './pages/not-found-page.js';
@@ -20,7 +21,7 @@ import './components/bottom-nav/bottom-nav.js';
 
 initTheme();
 
-await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, lists: [], goalsTagsVisible: {}, goalsDeadlinesVisible: {}, listsTagsVisible: {}, listsRollupVisible: true } });
+await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, lists: [], goalsTagsVisible: {}, goalsDeadlinesVisible: {}, listsTagsVisible: {}, listsRollupVisible: true }, migrate: migrateGoals });
 
 // bottom-nav mounts (and subscribes) before boot loads state, and boot doesn't
 // re-notify existing subscribers — refresh its urgency roll-up once state is in.

@@ -270,14 +270,14 @@ test.describe('Goal progress via hold-drag', () => {
       const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('#capstone-list goal-item');
-      return (item?._goal?.percentage ?? 0) > 0;
+      return (item?._goal?.tracking?.value ?? 0) > 0;
     });
 
     const pct = await page.evaluate(() => {
       const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('#capstone-list goal-item');
-      return item._goal?.percentage;
+      return item._goal?.tracking?.value;
     });
     expect(pct).toBeGreaterThan(0);
     expect(pct).toBeLessThanOrEqual(100);

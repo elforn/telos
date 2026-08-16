@@ -19,6 +19,7 @@ import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
 import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
 import { matchesDateBucket } from '../utils/urgency.js';
+import { percentValue, setPercent, logEntry, unlogEntry, isLoggedOn } from '../utils/tracking.js';
 import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
 import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
 import { shareMarkdown } from '../utils/share-markdown.js';
@@ -441,6 +442,9 @@ class HomePage extends AppElement {
     };
     this.listen(this._capstoneList, 'goal-progress', this._onCapstoneProgress);
 
+    this._onCapstoneLogToggle = e => this._toggleEntry('capstone', e.detail.goal.id);
+    this.listen(this._capstoneList, 'goal-log-toggle', this._onCapstoneLogToggle);
+
     this._onCapstoneDelete = e => this._deleteGoalWithUndo('capstone', e.detail.goal.id);
     this.listen(this._capstoneList, 'goal-delete', this._onCapstoneDelete);
 
@@ -465,6 +469,9 @@ class HomePage extends AppElement {
     };
     this.listen(this._milestoneList, 'goal-progress', this._onMilestoneProgress);
 
+    this._onMilestoneLogToggle = e => this._toggleEntry('milestones', e.detail.goal.id);
+    this.listen(this._milestoneList, 'goal-log-toggle', this._onMilestoneLogToggle);
+
     this._onMilestoneDelete = e => this._deleteGoalWithUndo('milestones', e.detail.goal.id);
     this.listen(this._milestoneList, 'goal-delete', this._onMilestoneDelete);
 
@@ -485,6 +492,9 @@ class HomePage extends AppElement {
     };
     this.listen(this._wowList, 'goal-progress', this._onWowProgress);
 
+    this._onWowLogToggle = e => this._toggleEntry('wow', e.detail.goal.id);
+    this.listen(this._wowList, 'goal-log-toggle', this._onWowLogToggle);
+
     this._onWowDelete = e => this._deleteGoalWithUndo('wow', e.detail.goal.id);
     this.listen(this._wowList, 'goal-delete', this._onWowDelete);
 
@@ -504,6 +514,9 @@ class HomePage extends AppElement {
       this._setProgress('focus', e.detail.goal.id, e.detail.percentage);
     };
     this.listen(this._focusList, 'goal-progress', this._onFocusProgress);
+
+    this._onFocusLogToggle = e => this._toggleEntry('focus', e.detail.goal.id);
+    this.listen(this._focusList, 'goal-log-toggle', this._onFocusLogToggle);
 
     this._onFocusDelete = e => this._deleteGoalWithUndo('focus', e.detail.goal.id);
     this.listen(this._focusList, 'goal-delete', this._onFocusDelete);
@@ -560,6 +573,12 @@ class HomePage extends AppElement {
     };
     this.listen(this.shadowRoot, 'goal-duedate-changed', this._onGoalDueDateChanged);
 
+    this._onGoalEntryToggle = e => {
+      if (!this._editingGoal) return;
+      this._toggleEntryOn(this._editingSection, this._editingGoal.id, e.detail.iso);
+    };
+    this.listen(this.shadowRoot, 'goal-entry-toggle', this._onGoalEntryToggle);
+
     this._onGoalArchivedChanged = e => {
       if (!this._editingGoal) return;
       const { archived } = e.detail;
@@ -593,9 +612,9 @@ class HomePage extends AppElement {
     this.listen(this.shadowRoot, 'goal-closed', this._onGoalClosed);
 
     this._onGoalCreated = e => {
-      const { title, notes, dueDate, tags } = e.detail;
+      const { title, notes, dueDate, tags, tracking } = e.detail;
       const snapshot = getState().goals;
-      const goal = this._addGoal(this._editingSection, title, notes, dueDate, tags);
+      const goal = this._addGoal(this._editingSection, title, notes, dueDate, tags, tracking);
       // goal-created now fires on title blur (commit-on-blur) while the dialog is
       // still open, so track the new goal as the one being edited — later
       // notes/tag/due-date changes in the same session update it in place.
@@ -782,14 +801,28 @@ class HomePage extends AppElement {
     setState('goals', { ...getState().goals, [year]: { ...yg, [section]: fn(yg[section] ?? []) } });
   }
 
-  _addGoal(section, title, notes, dueDate, tags) {
-    const goal = { id: crypto.randomUUID(), title, notes, dueDate, tags: tags ?? [], percentage: 0 };
+  _addGoal(section, title, notes, dueDate, tags, tracking = { type: 'percentage', value: 0 }) {
+    const goal = { id: crypto.randomUUID(), title, notes, dueDate, tags: tags ?? [], tracking };
     this._mutateSection(section, list => [...list, goal]);
     return goal;
   }
 
   _setProgress(section, id, percentage) {
-    this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, percentage } : g));
+    this._mutateSection(section, list => list.map(g => g.id === id ? setPercent(g, percentage) : g));
+  }
+
+  // Toggles *today's* entry — the row's own hold gesture only ever touches today.
+  _toggleEntry(section, id) {
+    this._mutateSection(section, list => list.map(g =>
+      g.id === id ? (isLoggedOn(g) ? unlogEntry(g) : logEntry(g)) : g
+    ));
+  }
+
+  // Toggles an arbitrary date's entry — the edit dialog's "Fix a day" strip.
+  _toggleEntryOn(section, id, iso) {
+    this._mutateSection(section, list => list.map(g =>
+      g.id === id ? (isLoggedOn(g, iso) ? unlogEntry(g, iso) : logEntry(g, iso)) : g
+    ));
   }
 
   _setArchived(section, id, archived) {
@@ -910,7 +943,7 @@ class HomePage extends AppElement {
       // Non-archived goals with state filter: check progress-based states (OR logic)
       const progressStates = [...states].filter(s => s !== 'archived');
       if (progressStates.length > 0) {
-        const pct = goal.percentage ?? 0;
+        const pct = percentValue(goal);
         const gstate = pct === 100 ? 'done' : pct === 0 ? 'not-started' : 'ongoing';
         if (!progressStates.includes(gstate)) return false;
       } else {
@@ -927,7 +960,7 @@ class HomePage extends AppElement {
       if (![...tags].some(tag => gtags.includes(tag))) return false;
     }
     if (dates.size) {
-      const active = !goal.archived && (goal.percentage ?? 0) < 100;
+      const active = !goal.archived && percentValue(goal) < 100;
       if (![...dates].some(key => matchesDateBucket(key, goal.dueDate, active))) return false;
     }
     return true;

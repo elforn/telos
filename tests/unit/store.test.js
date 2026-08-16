@@ -15,7 +15,7 @@ describe('Simple store — boot', () => {
   it('restores persisted state on a second boot', async () => {
     const name = freshName();
     await boot({ dbName: name, initialState: { goals: {} } });
-    setState('goals', { '2026': { capstone: [{ id: '1', title: 'Persisted', percentage: 0 }], milestones: [], wow: [] } });
+    setState('goals', { '2026': { capstone: [{ id: '1', title: 'Persisted', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] } });
     reset();
     await boot({ dbName: name, initialState: { goals: {} } });
     expect(getState().goals?.['2026']?.capstone?.[0]?.title).toBe('Persisted');
@@ -74,7 +74,7 @@ describe('Simple store — setState / getState', () => {
     await boot({ dbName: freshName(), initialState: { goals: {} } });
     let received;
     subscribe('goals', val => { received = val; });
-    const goals = { '2026': { capstone: [{ id: '1', title: 'Test', percentage: 0 }], milestones: [], wow: [] } };
+    const goals = { '2026': { capstone: [{ id: '1', title: 'Test', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] } };
     setState('goals', goals);
     expect(received).toEqual(goals);
   });

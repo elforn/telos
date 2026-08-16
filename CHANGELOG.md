@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.1.0] — 2026-08-16
+
+### Added
+- **Frequency goals — weekly and monthly habit tracking, alongside the existing percentage goals.** When creating a new goal, a Type selector (Percentage / Weekly / Monthly) picks how it's tracked; Weekly/Monthly reveal a target stepper (1–7 times/week, 1–31 times/month), with "Every day" as a one-tap weekly preset (target = 7). Type is fixed once the goal is created — the selector is replaced by a plain locked label in the edit dialog, since switching a goal's whole tracking shape mid-stream is a bigger decision than this iteration takes on.
+- **New row interaction for frequency goals: tap still opens the edit dialog everywhere (unchanged); hold (~0.5s) logs or un-logs *today* — a toggle, not the percentage row's continuous drag.** The row shows a read-only glance strip (last 5 closed periods + today) instead of the percentage row's hidden `%` label: weekly periods render as circles, monthly as soft squares — the only thing on the row that says which unit you're looking at. Logging plays a small tick (reused from the existing done-item treatment — an outline pulse + background wash); the row's full particle-burst celebration is unchanged and now also fires correctly for frequency goals when every period in the glance window is met (percentage value reaching exactly 100% already implies that, no separate detection needed). Arrow-key equivalents (goal row focused, Left/Right) log/un-log the same as holding, for keyboard users.
+- **Fixing a missed or mis-logged day** lives in the edit dialog's "⋮" menu → "Fix a day…", tucked away rather than sitting open by default since it's an occasional correction, not a daily action. Opens as an overlay in front of the dialog (mirroring the existing move-to-year sub-view pattern) showing the last 14 days as toggle chips — tap a filled one to remove that day's entry, an empty one to back-fill it.
+- Progress for weekly/monthly goals is a **linearly recency-weighted average over the last 6 periods** (current period weighted 6×, oldest tracked period 1×) — documented in `app/utils/tracking.js` and CLAUDE.md's data model section. Weeks are ISO weeks (Monday–Sunday).
+
+### Changed
+- **Internal: goal progress storage migrated from a flat `percentage: number` to a `tracking` union** (`{ type: 'percentage', value }` / `{ type: 'weekly'|'monthly', target, entries }`), converted automatically and losslessly for every existing goal on first launch after this update (`app/utils/migrate-goals.js`, via the store's `boot({ migrate })` hook). No visible change for existing percentage goals — same values, same behaviour, just read through `percentValue(goal)` everywhere instead of a raw field.
+
+### Fixed
+- **The version number shown in Settings could silently lose its build hash.** `bottom-nav.js` fetched `version.json` with a bare relative path instead of the app's `BASE_PATH`-prefixed one every other request in that file already used — worked by coincidence from the home route, 404'd silently (an existing `.catch` swallowed the error) from a two-segment-deep route like a list page.
+- **The Years-tab urgency badge could keep flagging a fully-completed goal as overdue.** Caught while migrating goal storage to `tracking` (above): one read site outside the converted call sites was still checking the old flat `percentage` field, which no longer exists on any goal — a 100%-done goal past its due date stayed stuck showing as overdue in the badge, indefinitely.
+
 ## [2.0.0] — 2026-08-16
 
 ### Changed

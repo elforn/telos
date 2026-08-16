@@ -86,7 +86,7 @@ describe('home-page — store integration', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', {
-      '2026': { capstone: [{ id: 'c1', title: 'Grand Capstone', percentage: 0 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c1', title: 'Grand Capstone', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
     });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
@@ -97,7 +97,7 @@ describe('home-page — store integration', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', {
-      '2026': { capstone: [{ id: 'c1', title: 'Goal', percentage: 0 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
     });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-section').classList.contains('empty')).toBe(false)
@@ -108,7 +108,7 @@ describe('home-page — store integration', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', {
-      '2026': { capstone: [], milestones: [{ id: 'm1', title: 'Q1 target', percentage: 0 }], wow: [] },
+      '2026': { capstone: [], milestones: [{ id: 'm1', title: 'Q1 target', tracking: { type: 'percentage', value: 0 } }], wow: [] },
     });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#milestone-list').querySelectorAll('goal-item').length).toBe(1)
@@ -119,7 +119,7 @@ describe('home-page — store integration', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', {
-      '2026': { capstone: [], milestones: [], wow: [{ id: 'w1', title: 'First marathon', percentage: 0 }] },
+      '2026': { capstone: [], milestones: [], wow: [{ id: 'w1', title: 'First marathon', tracking: { type: 'percentage', value: 0 } }] },
     });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#wow-list').querySelectorAll('goal-item').length).toBe(1)
@@ -130,7 +130,7 @@ describe('home-page — store integration', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', {
-      '2025': { capstone: [], milestones: [{ id: 'm1', title: 'Past milestone', percentage: 0 }], wow: [] },
+      '2025': { capstone: [], milestones: [{ id: 'm1', title: 'Past milestone', tracking: { type: 'percentage', value: 0 } }], wow: [] },
     });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#milestone-section').classList.contains('empty')).toBe(true)
@@ -152,7 +152,7 @@ describe('home-page — store integration', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', {
-      '2026': { capstone: [], milestones: [{ id: 'm1', title: 'Q1', percentage: 0 }], wow: [] },
+      '2026': { capstone: [], milestones: [{ id: 'm1', title: 'Q1', tracking: { type: 'percentage', value: 0 } }], wow: [] },
     });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#milestone-list').querySelectorAll('goal-item').length).toBe(1)
@@ -167,7 +167,7 @@ describe('home-page — store integration', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', {
-      '2026': { capstone: [], milestones: [], wow: [], focus: [{ id: 'f1', title: 'Daily habit', percentage: 0 }] },
+      '2026': { capstone: [], milestones: [], wow: [], focus: [{ id: 'f1', title: 'Daily habit', tracking: { type: 'percentage', value: 0 } }] },
     });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#focus-list').querySelectorAll('goal-item').length).toBe(1)
@@ -188,19 +188,19 @@ describe('home-page — goal mutations', () => {
     );
     const item = el.shadowRoot.querySelector('#capstone-list goal-item');
     expect(item._goal.title).toBe('New Capstone');
-    expect(item._goal.percentage).toBe(0);
+    expect(item._goal.tracking.value).toBe(0);
   });
 
   it('edits title when goal-title-changed fires after goal-tap on existing goal', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
-      '2026': { capstone: [{ id: 'c1', title: 'Old Title', percentage: 0 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c1', title: 'Old Title', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
     }, images: {} } });
     const el = mount(2026);
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
     );
     el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-tap', {
-      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Old Title', percentage: 0 } },
+      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Old Title', tracking: { type: 'percentage', value: 0 } } },
     }));
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-title-changed', {
       bubbles: true, composed: true, detail: { title: 'New Title' },
@@ -212,7 +212,7 @@ describe('home-page — goal mutations', () => {
 
   it('updates progress when goal-progress fires', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
-      '2026': { capstone: [{ id: 'c1', title: 'Goal', percentage: 0 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
     }, images: {} } });
     const el = mount(2026);
     await vi.waitFor(() =>
@@ -223,13 +223,89 @@ describe('home-page — goal mutations', () => {
       detail: { goal: { id: 'c1' }, percentage: 50 },
     }));
     await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#capstone-list goal-item')._goal.percentage).toBe(50)
+      expect(el.shadowRoot.querySelector('#capstone-list goal-item')._goal.tracking.value).toBe(50)
     );
+  });
+
+  it('toggles today\'s entry when goal-log-toggle fires from a frequency goal-item', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'weekly', target: 3, entries: [] } }], milestones: [], wow: [] },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-log-toggle', {
+      bubbles: true, composed: true,
+      detail: { goal: { id: 'c1' } },
+    }));
+    await vi.waitFor(() => {
+      const entries = getState().goals['2026'].capstone[0].tracking.entries;
+      expect(entries).toHaveLength(1);
+    });
+  });
+
+  it('goal-log-toggle un-logs when today is already logged', async () => {
+    const todayIso = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })();
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'weekly', target: 3, entries: [todayIso] } }], milestones: [], wow: [] },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-log-toggle', {
+      bubbles: true, composed: true,
+      detail: { goal: { id: 'c1' } },
+    }));
+    await vi.waitFor(() => {
+      expect(getState().goals['2026'].capstone[0].tracking.entries).toEqual([]);
+    });
+  });
+
+  it('toggles an arbitrary entry when goal-entry-toggle fires from the dialog', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'weekly', target: 3, entries: [] } }], milestones: [], wow: [] },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    // goal-tap sets _editingGoal, which goal-entry-toggle relies on (mirrors
+    // how goal-tags-changed etc. resolve which goal/section to mutate).
+    el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-tap', {
+      bubbles: true, composed: true,
+      detail: { goal: { id: 'c1', title: 'Goal', tracking: { type: 'weekly', target: 3, entries: [] } } },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-entry-toggle', {
+      bubbles: true, composed: true,
+      detail: { goal: { id: 'c1' }, iso: '2026-01-05' },
+    }));
+    await vi.waitFor(() => {
+      expect(getState().goals['2026'].capstone[0].tracking.entries).toEqual(['2026-01-05']);
+    });
+  });
+
+  it('goal-created carries the chosen tracking through to the stored goal', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: { '2026': { capstone: [], milestones: [], wow: [] } }, images: {} } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#add-capstone').click();
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-created', {
+      bubbles: true, composed: true,
+      detail: { title: 'Move my body', notes: undefined, dueDate: undefined, tags: [], tracking: { type: 'weekly', target: 5, entries: [] } },
+    }));
+    await vi.waitFor(() => {
+      const goal = getState().goals['2026'].capstone.find(g => g.title === 'Move my body');
+      expect(goal.tracking).toEqual({ type: 'weekly', target: 5, entries: [] });
+    });
   });
 
   it('removes goal when goal-delete fires from goal-item swipe', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
-      '2026': { capstone: [{ id: 'c1', title: 'Goal', percentage: 0 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
     }, images: {} } });
     const el = mount(2026);
     await vi.waitFor(() =>
@@ -269,14 +345,14 @@ describe('home-page — goal mutations', () => {
 
   it('updates notes when goal-notes-changed fires after goal-tap on existing goal', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
-      '2026': { capstone: [{ id: 'c1', title: 'Goal', percentage: 0 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
     }, images: {} } });
     const el = mount(2026);
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
     );
     el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-tap', {
-      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Goal', percentage: 0 } },
+      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 } } },
     }));
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-notes-changed', {
       bubbles: true, composed: true, detail: { notes: 'Updated notes' },
@@ -288,14 +364,14 @@ describe('home-page — goal mutations', () => {
 
   it('updates dueDate when goal-duedate-changed fires after goal-tap on existing goal', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
-      '2026': { capstone: [{ id: 'c1', title: 'Goal', percentage: 0 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
     }, images: {} } });
     const el = mount(2026);
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
     );
     el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-tap', {
-      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Goal', percentage: 0 } },
+      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 } } },
     }));
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-duedate-changed', {
       bubbles: true, composed: true, detail: { dueDate: '2026-11-15' },
@@ -328,14 +404,14 @@ describe('home-page — goal mutations', () => {
 
   it('removes goal when goal-delete fires from dialog', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
-      '2026': { capstone: [{ id: 'c1', title: 'Goal', percentage: 0 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
     }, images: {} } });
     const el = mount(2026);
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
     );
     el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-tap', {
-      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Goal', percentage: 0 } },
+      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 } } },
     }));
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-delete', {
       bubbles: true, composed: true,
@@ -351,14 +427,14 @@ describe('home-page — _renderList key diffing', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', {
-      '2026': { capstone: [{ id: 'c1', title: 'Before', percentage: 0 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c1', title: 'Before', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
     });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
     );
     const original = el.shadowRoot.querySelector('#capstone-list goal-item');
     setState('goals', {
-      '2026': { capstone: [{ id: 'c1', title: 'After', percentage: 50 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c1', title: 'After', tracking: { type: 'percentage', value: 50 } }], milestones: [], wow: [] },
     });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list goal-item')._goal.title).toBe('After')
@@ -371,15 +447,15 @@ describe('home-page — _renderList key diffing', () => {
     const el = mount(2026);
     setState('goals', {
       '2026': { capstone: [
-        { id: 'c1', title: 'A', percentage: 0 },
-        { id: 'c2', title: 'B', percentage: 0 },
+        { id: 'c1', title: 'A', tracking: { type: 'percentage', value: 0 } },
+        { id: 'c2', title: 'B', tracking: { type: 'percentage', value: 0 } },
       ], milestones: [], wow: [] },
     });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
     );
     setState('goals', {
-      '2026': { capstone: [{ id: 'c2', title: 'B', percentage: 0 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c2', title: 'B', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
     });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
@@ -393,9 +469,9 @@ describe('home-page — goal reorder', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'A', percentage: 0 },
-      { id: 'c2', title: 'B', percentage: 0 },
-      { id: 'c3', title: 'C', percentage: 0 },
+      { id: 'c1', title: 'A', tracking: { type: 'percentage', value: 0 } },
+      { id: 'c2', title: 'B', tracking: { type: 'percentage', value: 0 } },
+      { id: 'c3', title: 'C', tracking: { type: 'percentage', value: 0 } },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
@@ -410,8 +486,8 @@ describe('home-page — goal reorder', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'A', percentage: 0 },
-      { id: 'c2', title: 'B', percentage: 0 },
+      { id: 'c1', title: 'A', tracking: { type: 'percentage', value: 0 } },
+      { id: 'c2', title: 'B', tracking: { type: 'percentage', value: 0 } },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
@@ -424,9 +500,9 @@ describe('home-page — goal reorder', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'A', percentage: 0 },
+      { id: 'c1', title: 'A', tracking: { type: 'percentage', value: 0 } },
     ], milestones: [
-      { id: 'm1', title: 'M', percentage: 0 },
+      { id: 'm1', title: 'M', tracking: { type: 'percentage', value: 0 } },
     ], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
@@ -498,8 +574,8 @@ describe('home-page — _applyGoalFilter', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'Run a marathon', percentage: 0, tags: [] },
-      { id: 'c2', title: 'Learn piano',    percentage: 0, tags: [] },
+      { id: 'c1', title: 'Run a marathon', tracking: { type: 'percentage', value: 0 }, tags: [] },
+      { id: 'c2', title: 'Learn piano',    tracking: { type: 'percentage', value: 0 }, tags: [] },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
@@ -519,8 +595,8 @@ describe('home-page — _applyGoalFilter', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'Alpha', percentage: 0, tags: [] },
-      { id: 'c2', title: 'Beta',  percentage: 0, tags: [] },
+      { id: 'c1', title: 'Alpha', tracking: { type: 'percentage', value: 0 }, tags: [] },
+      { id: 'c2', title: 'Beta',  tracking: { type: 'percentage', value: 0 }, tags: [] },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
@@ -537,9 +613,9 @@ describe('home-page — _applyGoalFilter', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'Done goal',    percentage: 100, tags: [] },
-      { id: 'c2', title: 'Ongoing goal', percentage: 50,  tags: [] },
-      { id: 'c3', title: 'Fresh goal',   percentage: 0,   tags: [] },
+      { id: 'c1', title: 'Done goal',    tracking: { type: 'percentage', value: 100 }, tags: [] },
+      { id: 'c2', title: 'Ongoing goal', tracking: { type: 'percentage', value: 50 },  tags: [] },
+      { id: 'c3', title: 'Fresh goal',   tracking: { type: 'percentage', value: 0 },   tags: [] },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
@@ -558,9 +634,9 @@ describe('home-page — _applyGoalFilter', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'Done',    percentage: 100, tags: [] },
-      { id: 'c2', title: 'Ongoing', percentage: 50,  tags: [] },
-      { id: 'c3', title: 'Fresh',   percentage: 0,   tags: [] },
+      { id: 'c1', title: 'Done',    tracking: { type: 'percentage', value: 100 }, tags: [] },
+      { id: 'c2', title: 'Ongoing', tracking: { type: 'percentage', value: 50 },  tags: [] },
+      { id: 'c3', title: 'Fresh',   tracking: { type: 'percentage', value: 0 },   tags: [] },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
@@ -579,8 +655,8 @@ describe('home-page — _applyGoalFilter', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'Health goal',  percentage: 0, tags: ['health'] },
-      { id: 'c2', title: 'Finance goal', percentage: 0, tags: ['finance'] },
+      { id: 'c1', title: 'Health goal',  tracking: { type: 'percentage', value: 0 }, tags: ['health'] },
+      { id: 'c2', title: 'Finance goal', tracking: { type: 'percentage', value: 0 }, tags: ['finance'] },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
@@ -598,8 +674,8 @@ describe('home-page — _applyGoalFilter', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'Active goal',   percentage: 0, tags: [] },
-      { id: 'c2', title: 'Archived goal', percentage: 0, tags: [], archived: true },
+      { id: 'c1', title: 'Active goal',   tracking: { type: 'percentage', value: 0 }, tags: [] },
+      { id: 'c2', title: 'Archived goal', tracking: { type: 'percentage', value: 0 }, tags: [], archived: true },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
@@ -617,8 +693,8 @@ describe('home-page — _applyGoalFilter', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'Active goal',   percentage: 0, tags: [] },
-      { id: 'c2', title: 'Archived goal', percentage: 0, tags: [], archived: true },
+      { id: 'c1', title: 'Active goal',   tracking: { type: 'percentage', value: 0 }, tags: [] },
+      { id: 'c2', title: 'Archived goal', tracking: { type: 'percentage', value: 0 }, tags: [], archived: true },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(2)
@@ -636,9 +712,9 @@ describe('home-page — _applyGoalFilter', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'Done goal',     percentage: 100, tags: [] },
-      { id: 'c2', title: 'Ongoing goal',  percentage: 50,  tags: [] },
-      { id: 'c3', title: 'Archived goal', percentage: 0,   tags: [], archived: true },
+      { id: 'c1', title: 'Done goal',     tracking: { type: 'percentage', value: 100 }, tags: [] },
+      { id: 'c2', title: 'Ongoing goal',  tracking: { type: 'percentage', value: 50 },  tags: [] },
+      { id: 'c3', title: 'Archived goal', tracking: { type: 'percentage', value: 0 },   tags: [], archived: true },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
@@ -657,9 +733,9 @@ describe('home-page — _applyGoalFilter', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'Run daily',    percentage: 0, tags: ['health'] },
-      { id: 'c2', title: 'Run finances', percentage: 0, tags: ['finance'] },
-      { id: 'c3', title: 'Piano',        percentage: 0, tags: ['health'] },
+      { id: 'c1', title: 'Run daily',    tracking: { type: 'percentage', value: 0 }, tags: ['health'] },
+      { id: 'c2', title: 'Run finances', tracking: { type: 'percentage', value: 0 }, tags: ['finance'] },
+      { id: 'c3', title: 'Piano',        tracking: { type: 'percentage', value: 0 }, tags: ['health'] },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
@@ -679,9 +755,9 @@ describe('home-page — _applyGoalFilter', () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
     setState('goals', { '2026': { capstone: [
-      { id: 'c1', title: 'Overdue goal', percentage: 20, tags: [], dueDate: iso(-2) },
-      { id: 'c2', title: 'Soon goal',    percentage: 20, tags: [], dueDate: iso(20) },
-      { id: 'c3', title: 'No-date goal', percentage: 20, tags: [] },
+      { id: 'c1', title: 'Overdue goal', tracking: { type: 'percentage', value: 20 }, tags: [], dueDate: iso(-2) },
+      { id: 'c2', title: 'Soon goal',    tracking: { type: 'percentage', value: 20 }, tags: [], dueDate: iso(20) },
+      { id: 'c3', title: 'No-date goal', tracking: { type: 'percentage', value: 20 }, tags: [] },
     ], milestones: [], wow: [], focus: [] } });
     await vi.waitFor(() =>
       expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(3)
@@ -748,10 +824,10 @@ describe('home-page — create with active filter', () => {
 describe('home-page — share goal', () => {
   it('shares the goal via goal-share-request from the dialog', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
-      '2026': { capstone: [{ id: 'c1', title: 'Goal', tags: [], percentage: 40 }], milestones: [], wow: [] },
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tags: [], tracking: { type: 'percentage', value: 40 } }], milestones: [], wow: [] },
     } } });
     const el = mount(2026);
-    const goal = { id: 'c1', title: 'Goal', tags: [], percentage: 40 };
+    const goal = { id: 'c1', title: 'Goal', tags: [], tracking: { type: 'percentage', value: 40 } };
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-share-request', {
       bubbles: true, composed: true, detail: { goal },
     }));
@@ -766,7 +842,7 @@ describe('home-page — share goal', () => {
     await boot({ dbName: freshName(), initialState: { goals: {} } });
     const el = mount(2026);
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-share-request', {
-      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Goal', tags: [], percentage: 0 } },
+      bubbles: true, composed: true, detail: { goal: { id: 'c1', title: 'Goal', tags: [], tracking: { type: 'percentage', value: 0 } } },
     }));
     await vi.waitFor(() => {
       const toastEl = document.querySelector('#toast-container .socle-toast-error');
@@ -785,7 +861,7 @@ describe('home-page — share goal markdown', () => {
   it('builds markdown for the goal and copies it (no navigator.share in this environment)', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {} } });
     const el = mount(2026);
-    const goal = { id: 'c1', title: 'Run a 5k', tags: [], percentage: 40 };
+    const goal = { id: 'c1', title: 'Run a 5k', tags: [], tracking: { type: 'percentage', value: 40 } };
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-export-request', {
       bubbles: true, composed: true, detail: { goal },
     }));
@@ -800,7 +876,7 @@ describe('home-page — share goal markdown', () => {
     _resetToast();
     await boot({ dbName: freshName(), initialState: { goals: {} } });
     const el = mount(2026);
-    const goal = { id: 'c1', title: 'Run a 5k', tags: [], percentage: 40 };
+    const goal = { id: 'c1', title: 'Run a 5k', tags: [], tracking: { type: 'percentage', value: 40 } };
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-export-request', {
       bubbles: true, composed: true, detail: { goal },
     }));
@@ -828,7 +904,7 @@ describe('home-page — share goal markdown', () => {
     writeText.mockRejectedValueOnce(new Error('denied'));
     await boot({ dbName: freshName(), initialState: { goals: {} } });
     const el = mount(2026);
-    const goal = { id: 'c1', title: 'Run a 5k', tags: [], percentage: 40 };
+    const goal = { id: 'c1', title: 'Run a 5k', tags: [], tracking: { type: 'percentage', value: 40 } };
     el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-export-request', {
       bubbles: true, composed: true, detail: { goal },
     }));
@@ -844,7 +920,7 @@ describe('home-page — share goal markdown', () => {
 
 describe('home-page — share year', () => {
   it('shares the whole current year via year-share-request from year-header', async () => {
-    const yearGoals = { capstone: [{ id: 'c1', title: 'Goal', tags: [], percentage: 40 }], milestones: [], wow: [], focus: [] };
+    const yearGoals = { capstone: [{ id: 'c1', title: 'Goal', tags: [], tracking: { type: 'percentage', value: 40 } }], milestones: [], wow: [], focus: [] };
     await boot({ dbName: freshName(), initialState: { goals: { '2026': yearGoals } } });
     const el = mount(2026);
     el.shadowRoot.querySelector('year-header').dispatchEvent(new CustomEvent('year-share-request', {
@@ -878,7 +954,7 @@ describe('home-page — export year markdown', () => {
   });
 
   it('builds markdown for the whole year and copies it (no navigator.share in this environment)', async () => {
-    const yearGoals = { capstone: [{ id: 'c1', title: 'Run a 5k', tags: [], percentage: 40 }], milestones: [], wow: [], focus: [] };
+    const yearGoals = { capstone: [{ id: 'c1', title: 'Run a 5k', tags: [], tracking: { type: 'percentage', value: 40 } }], milestones: [], wow: [], focus: [] };
     await boot({ dbName: freshName(), initialState: { goals: { '2026': yearGoals } } });
     const el = mount(2026);
     el.shadowRoot.querySelector('year-header').dispatchEvent(new CustomEvent('year-export-confirm', {

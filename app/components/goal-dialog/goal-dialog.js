@@ -7,9 +7,14 @@ import '../tag-input/tag-input.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
+import { isFrequency, TARGET_LIMITS, isLoggedOn } from '../../utils/tracking.js';
+import { todayISO } from '../../utils/today-iso.js';
 
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
+const TYPES = ['percentage', 'weekly', 'monthly'];
+const FIX_DAYS = 14;
+const DEFAULT_TARGET = { weekly: 3, monthly: 4 };
 
 class GoalDialog extends AppElement {
   // ── Public properties ─────────────────────────────────────────────────────
@@ -49,6 +54,7 @@ class GoalDialog extends AppElement {
     this._input.value = goal?.title ?? '';
     if (this._deleteBtn) this._deleteBtn.hidden = !goal;
     if (this._menuBtn) this._menuBtn.hidden = false;
+    if (this._fixDayBtn) this._fixDayBtn.hidden = !goal || !isFrequency(goal);
     if (this._archiveBtn) {
       this._archiveBtn.hidden = !goal;
       this._archiveBtn.textContent = goal?.archived ? t('goal-dialog.unarchive') : t('goal-dialog.archive');
@@ -61,6 +67,12 @@ class GoalDialog extends AppElement {
     this._showDueDateField(!!goal?.dueDate);
 
     this._tagInputEl.tags = goal?.tags ?? [];
+
+    // Type is chosen once, at creation — a fresh draft always starts at the
+    // default (percentage), an existing goal's type is fixed and shown locked.
+    this._draftType   = 'percentage';
+    this._draftTarget = DEFAULT_TARGET.weekly;
+    this._renderTypeSection();
 
     this._lastValidTitle   = goal?.title ?? '';
     this._lastValidNotes   = goal?.notes ?? '';
@@ -191,6 +203,166 @@ class GoalDialog extends AppElement {
         #duedate-clear:hover { background: var(--color-surface); }
 
         #duedate-clear:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        /* ── Type selector + target stepper (new goals only) ────────────── */
+
+        .type-field { margin-block-end: var(--space-4); }
+
+        .field-label {
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-text-muted);
+          text-transform: uppercase;
+          letter-spacing: var(--letter-spacing-caps);
+          margin: 0 0 var(--space-2);
+        }
+
+        .type-pill-group {
+          display: flex;
+          gap: var(--space-1);
+          background: var(--color-surface-raised);
+          border-radius: var(--radius-full);
+          padding: var(--space-1);
+        }
+
+        .type-pill {
+          flex: 1;
+          min-block-size: var(--touch-target);
+          border: none;
+          background: transparent;
+          border-radius: var(--radius-full);
+          padding-inline: var(--space-2);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          font-family: var(--font-family);
+          color: var(--color-text-secondary);
+          cursor: pointer;
+        }
+
+        .type-pill[aria-checked="true"] {
+          background: var(--color-accent);
+          color: var(--color-text-inverse);
+        }
+
+        /* Locked (existing goal) — plain text, not a control: type is fixed
+           after creation, so there is nothing here to interact with. */
+        .type-locked {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          color: var(--color-text-secondary);
+          font-size: var(--font-size-body);
+          margin: 0;
+        }
+
+        .type-locked svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); flex-shrink: 0; }
+
+        .target-block {
+          margin-block-start: var(--space-3);
+          padding-block-start: var(--space-3);
+          border-block-start: 0.5px solid var(--color-border);
+        }
+
+        .target-row {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+        }
+
+        .target-stepper {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-full);
+          padding: var(--space-1);
+        }
+
+        .stepper-btn {
+          min-block-size: var(--touch-target-small, 32px);
+          min-inline-size: var(--touch-target-small, 32px);
+          border-radius: var(--radius-full);
+          border: none;
+          background: var(--color-surface-raised);
+          color: var(--color-text-primary);
+          font-size: var(--font-size-subheading);
+          line-height: 1;
+          padding: 0;
+        }
+
+        .stepper-btn:disabled { opacity: 0.4; cursor: default; }
+
+        .target-value {
+          min-inline-size: 1.5ch;
+          text-align: center;
+          font-weight: var(--font-weight-bold);
+          font-variant-numeric: tabular-nums;
+        }
+
+        .preset-chip {
+          border: 0.5px solid var(--color-border);
+          background: transparent;
+          border-radius: var(--radius-full);
+          padding-inline: var(--space-3);
+          min-block-size: var(--touch-target-small, 32px);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          font-family: var(--font-family);
+          color: var(--color-text-secondary);
+        }
+
+        .preset-chip[aria-pressed="true"] {
+          background: var(--color-accent-subtle);
+          border-color: var(--color-accent);
+          color: var(--color-accent);
+        }
+
+        .target-hint {
+          margin: var(--space-2) 0 0;
+          font-size: var(--font-size-caption);
+          color: var(--color-text-muted);
+        }
+
+        /* ── Fix-a-day chips (mirrors move-view's picker-heading spacing) ─ */
+
+        .day-chips {
+          display: flex;
+          gap: var(--space-2);
+          overflow-x: auto;
+          padding-block-end: var(--space-1);
+        }
+
+        .day-chip {
+          flex-shrink: 0;
+          inline-size: 40px;
+          block-size: 48px;
+          border-radius: var(--radius-md);
+          border: 0.5px solid var(--color-border);
+          background: var(--color-surface-raised);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 2px;
+          font-family: var(--font-family);
+          color: var(--color-text-secondary);
+          font-size: var(--font-size-micro);
+        }
+
+        .day-chip .dow { text-transform: uppercase; letter-spacing: var(--letter-spacing-caps); color: var(--color-text-muted); }
+        .day-chip .num { font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
+
+        .day-chip[aria-pressed="true"] {
+          background: var(--color-accent);
+          border-color: var(--color-accent);
+        }
+        .day-chip[aria-pressed="true"] .dow,
+        .day-chip[aria-pressed="true"] .num { color: var(--color-text-inverse); }
+
+        .day-chip:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
@@ -496,6 +668,27 @@ class GoalDialog extends AppElement {
                  autocomplete="off"
                  enterkeyhint="go"
                  maxlength="80" />
+          <div class="type-field">
+            <p class="field-label">${t('goal-dialog.type-label')}</p>
+            <div class="type-pill-group" id="type-pills" role="radiogroup" aria-label="${t('goal-dialog.type-label')}">
+              ${TYPES.map(ty => `
+                <button type="button" class="type-pill" data-type="${ty}" role="radio" aria-checked="false">${t('goal-dialog.type-' + ty)}</button>
+              `).join('')}
+            </div>
+            <p class="type-locked" id="type-locked" hidden>${icons.lock}<span id="type-locked-label"></span></p>
+            <div class="target-block" id="target-block" hidden>
+              <p class="field-label" id="target-label"></p>
+              <div class="target-row">
+                <div class="target-stepper">
+                  <button type="button" class="stepper-btn" id="target-down" aria-label="${t('goal-dialog.target-decrease')}">−</button>
+                  <span class="target-value" id="target-value"></span>
+                  <button type="button" class="stepper-btn" id="target-up" aria-label="${t('goal-dialog.target-increase')}">+</button>
+                </div>
+                <button type="button" class="preset-chip" id="everyday-chip" hidden>${t('goal-dialog.everyday-preset')}</button>
+              </div>
+              <p class="target-hint" id="target-hint"></p>
+            </div>
+          </div>
           <div class="textarea-wrap">
             <div class="md-highlight" aria-hidden="true"></div>
             <textarea id="desc-input"
@@ -527,6 +720,12 @@ class GoalDialog extends AppElement {
           </div>
         </div>
 
+        <!-- ── View: fix a day (frequency goals only) ─────────────────────── -->
+        <div id="view-fixday" hidden>
+          <p class="picker-heading">${t('goal-dialog.fixday-heading')}</p>
+          <div class="day-chips" id="fixday-chips"></div>
+        </div>
+
         <!-- ── Footer: main ─────────────────────────────────────────────── -->
         <div slot="footer" class="actions footer-main">
           <button type="button" id="menu-btn" hidden aria-label="${t('goal-dialog.more-actions')}">${icons.dotsVertical}</button>
@@ -547,6 +746,11 @@ class GoalDialog extends AppElement {
           </div>
         </div>
 
+        <!-- ── Footer: fix a day ────────────────────────────────────────── -->
+        <div slot="footer" class="actions footer-fixday" hidden>
+          <button type="button" id="fixday-back">${t('goal-dialog.picker-back')}</button>
+        </div>
+
         <div id="save-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
       </modal-dialog>
 
@@ -557,6 +761,7 @@ class GoalDialog extends AppElement {
           <span class="sheet-toggle-label">${t('goal-dialog.duedate-toggle')}</span>
           <span class="sheet-toggle-check">${icons.check}</span>
         </button>
+        <button type="button" id="action-fixday-btn" class="sheet-item" hidden>${t('goal-dialog.fixday-menu')}</button>
         <hr class="sheet-divider">
         <button type="button" id="action-move-btn" class="sheet-item">${t('goal-dialog.move-to-year')}</button>
         <button type="button" id="action-create-btn" class="sheet-item">${t('goal-dialog.create-list-item')}</button>
@@ -612,6 +817,24 @@ class GoalDialog extends AppElement {
     this._actionSheet       = this.shadowRoot.querySelector('#action-sheet');
     this._listPickerDialog  = this.shadowRoot.querySelector('#list-picker');
 
+    this._typePillGroup  = this.shadowRoot.querySelector('#type-pills');
+    this._typePills      = [...this.shadowRoot.querySelectorAll('.type-pill')];
+    this._typeLocked      = this.shadowRoot.querySelector('#type-locked');
+    this._typeLockedLabel = this.shadowRoot.querySelector('#type-locked-label');
+    this._targetBlock    = this.shadowRoot.querySelector('#target-block');
+    this._targetLabel    = this.shadowRoot.querySelector('#target-label');
+    this._targetValueEl  = this.shadowRoot.querySelector('#target-value');
+    this._targetDownBtn  = this.shadowRoot.querySelector('#target-down');
+    this._targetUpBtn    = this.shadowRoot.querySelector('#target-up');
+    this._everydayChip   = this.shadowRoot.querySelector('#everyday-chip');
+    this._targetHint     = this.shadowRoot.querySelector('#target-hint');
+
+    this._viewFixDay     = this.shadowRoot.querySelector('#view-fixday');
+    this._footerFixDay   = this.shadowRoot.querySelector('.footer-fixday');
+    this._fixDayBtn      = this.shadowRoot.querySelector('#action-fixday-btn');
+    this._fixDayBack     = this.shadowRoot.querySelector('#fixday-back');
+    this._fixDayChips    = this.shadowRoot.querySelector('#fixday-chips');
+
     this._isNew           = false;
     this._lastValidTitle   = '';
     this._lastValidNotes   = '';
@@ -631,12 +854,14 @@ class GoalDialog extends AppElement {
         const notes   = this._descInput.value.trim() || undefined;
         const dueDate = this._dueDateInput.value || undefined;
         const tags    = this._tagInputEl.commitPending();
+        const tracking = this._draftTracking();
         this._isNew = false;
         this._lastValidTitle = v;
         this._snapshot?.clear();
         this.dispatchEvent(new CustomEvent('goal-created', {
-          bubbles: true, composed: true, detail: { title: v, notes, dueDate, tags },
+          bubbles: true, composed: true, detail: { title: v, notes, dueDate, tags, tracking },
         }));
+        this._renderTypeSection();
         return;
       }
       if (!v) { this._input.value = this._lastValidTitle; return; }
@@ -721,13 +946,14 @@ class GoalDialog extends AppElement {
           const notes = this._descInput.value.trim() || undefined;
           const dueDate = this._dueDateInput.value || undefined;
           const tags  = this._tagInputEl.commitPending();
+          const tracking = this._draftTracking();
           // Mark committed so a blur fired *after* this close (the browser fires
           // the dialog's close before the focused input's blur) doesn't re-create
           // via _onTitleBlur's commit-on-blur path.
           this._isNew = false;
           this._lastValidTitle = title;
           this.dispatchEvent(new CustomEvent('goal-created', {
-            bubbles: true, composed: true, detail: { title, notes, dueDate, tags },
+            bubbles: true, composed: true, detail: { title, notes, dueDate, tags, tracking },
           }));
         } else {
           this._snapshot?.capture(); // can't commit without a title — preserve notes/tags
@@ -817,6 +1043,9 @@ class GoalDialog extends AppElement {
     this._onActionMove = () => { this._actionSheet.close(); this._showView('move'); };
     this.shadowRoot.querySelector('#action-move-btn').addEventListener('click', this._onActionMove);
 
+    this._onActionFixDay = () => { this._actionSheet.close(); this._showView('fixday'); };
+    this._fixDayBtn.addEventListener('click', this._onActionFixDay);
+
     this._onActionCreate = () => {
       this._actionSheet.close();
       this._listPickerDialog.lists = this.availableLists;
@@ -856,6 +1085,68 @@ class GoalDialog extends AppElement {
 
     this._onCopyCta = () => this._commitMove(true);
     this._moveCopyBtn.addEventListener('click', this._onCopyCta);
+
+    // ── Fix-a-day view (frequency goals only) ───────────────────────────────────
+
+    this._onFixDayBack = () => this._showView('main');
+    this._fixDayBack.addEventListener('click', this._onFixDayBack);
+
+    this._onFixDayChipClick = e => {
+      const chip = e.target.closest('.day-chip');
+      if (!chip || !this._goal) return;
+      const iso = chip.dataset.iso;
+      const wasLogged = chip.getAttribute('aria-pressed') === 'true';
+      this.dispatchEvent(new CustomEvent('goal-entry-toggle', {
+        bubbles: true, composed: true, detail: { goal: this._goal, iso },
+      }));
+      // Reflect immediately — the store round-trip updates `goal` on the next
+      // property set, but the toggle should feel instant under a tap.
+      const entries = this._goal.tracking.entries;
+      this._goal = {
+        ...this._goal,
+        tracking: {
+          ...this._goal.tracking,
+          entries: wasLogged ? entries.filter(d => d !== iso) : [...entries, iso].sort(),
+        },
+      };
+      chip.setAttribute('aria-pressed', String(!wasLogged));
+    };
+    this._fixDayChips.addEventListener('click', this._onFixDayChipClick);
+
+    // ── Type selector + target stepper (new goals only) ─────────────────────────
+
+    this._onTypePillClick = e => {
+      const pill = e.target.closest('.type-pill');
+      if (!pill || !this._isNew || pill.dataset.type === this._draftType) return;
+      this._draftType = pill.dataset.type;
+      // Switching type always resets to that type's own default target —
+      // weekly's and monthly's scales differ enough (1–7 vs 1–31) that
+      // carrying over a stale number from the other type wouldn't be
+      // meaningful, so there's no "preserve the number" case to protect.
+      if (this._draftType !== 'percentage') this._draftTarget = DEFAULT_TARGET[this._draftType];
+      this._renderTypeSection();
+    };
+    this._typePills.forEach(p => p.addEventListener('click', this._onTypePillClick));
+
+    this._onTargetDown = () => {
+      const [min] = TARGET_LIMITS[this._draftType];
+      this._draftTarget = Math.max(min, this._draftTarget - 1);
+      this._renderTypeSection();
+    };
+    this._targetDownBtn.addEventListener('click', this._onTargetDown);
+
+    this._onTargetUp = () => {
+      const [, max] = TARGET_LIMITS[this._draftType];
+      this._draftTarget = Math.min(max, this._draftTarget + 1);
+      this._renderTypeSection();
+    };
+    this._targetUpBtn.addEventListener('click', this._onTargetUp);
+
+    this._onEverydayChip = () => {
+      this._draftTarget = 7;
+      this._renderTypeSection();
+    };
+    this._everydayChip.addEventListener('click', this._onEverydayChip);
 
     // ── List picker (Create list item) ────────────────────────────────────────
 
@@ -923,6 +1214,13 @@ class GoalDialog extends AppElement {
     this._moveMoveBtn?.removeEventListener('click', this._onMoveCta);
     this._moveCopyBtn?.removeEventListener('click', this._onCopyCta);
     this._listPickerDialog?.removeEventListener('list-pick', this._onListPick);
+    this._fixDayBtn?.removeEventListener('click', this._onActionFixDay);
+    this._fixDayBack?.removeEventListener('click', this._onFixDayBack);
+    this._fixDayChips?.removeEventListener('click', this._onFixDayChipClick);
+    this._typePills?.forEach(p => p.removeEventListener('click', this._onTypePillClick));
+    this._targetDownBtn?.removeEventListener('click', this._onTargetDown);
+    this._targetUpBtn?.removeEventListener('click', this._onTargetUp);
+    this._everydayChip?.removeEventListener('click', this._onEverydayChip);
   }
 
   // ── Draft recovery toggle ─────────────────────────────────────────────────
@@ -945,6 +1243,77 @@ class GoalDialog extends AppElement {
 
   // ── Private ───────────────────────────────────────────────────────────────
 
+  _draftTracking() {
+    return this._draftType === 'percentage'
+      ? { type: 'percentage', value: 0 }
+      : { type: this._draftType, target: this._draftTarget, entries: [] };
+  }
+
+  // Type is chosen once, at creation — an interactive pill group for a fresh
+  // draft, a plain locked label (with the target baked into the text) for an
+  // existing goal. There is no third "disabled pill group" state on purpose:
+  // a greyed-out control still invites tapping, a label doesn't.
+  _renderTypeSection() {
+    this._typePillGroup.hidden = !this._isNew;
+    this._typeLocked.hidden = this._isNew;
+
+    if (!this._isNew) {
+      this._targetBlock.hidden = true;
+      // this._goal is the source of truth once it's known — but right after an
+      // in-session blur-commit (still the same dialog visit, goal-created just
+      // fired) nothing hands the real stored record back here, so fall back to
+      // the draft that was just submitted; it describes the same goal exactly.
+      const type   = this._goal?.tracking?.type   ?? this._draftType;
+      const target = this._goal?.tracking?.target ?? this._draftTarget;
+      this._typeLockedLabel.textContent = (type === 'weekly' || type === 'monthly')
+        ? t(`goal-dialog.type-locked-${type}`, { target })
+        : t('goal-dialog.type-locked-percentage');
+      return;
+    }
+
+    this._typePills.forEach(p => p.setAttribute('aria-checked', String(p.dataset.type === this._draftType)));
+
+    const showTarget = this._draftType !== 'percentage';
+    this._targetBlock.hidden = !showTarget;
+    if (!showTarget) return;
+
+    const [min, max] = TARGET_LIMITS[this._draftType];
+    this._targetValueEl.textContent = String(this._draftTarget);
+    this._targetLabel.textContent = t(`goal-dialog.target-label-${this._draftType}`);
+    this._targetDownBtn.disabled = this._draftTarget <= min;
+    this._targetUpBtn.disabled = this._draftTarget >= max;
+    this._everydayChip.hidden = this._draftType !== 'weekly';
+    this._everydayChip.setAttribute('aria-pressed', String(this._draftType === 'weekly' && this._draftTarget === 7));
+    this._targetHint.textContent = t(`goal-dialog.target-hint-${this._draftType}`, { n: this._draftTarget });
+  }
+
+  // The last FIX_DAYS days, oldest first, each a toggle reflecting whether an
+  // entry exists for that date — tapping a filled chip removes it, an empty
+  // one back-fills it, same control either direction (see CLAUDE.md Sharing-
+  // style "one control, two jobs" precedent).
+  _renderFixDayChips() {
+    if (!this._goal) return;
+    const entries = new Set(this._goal.tracking?.entries ?? []);
+    const today = todayISO();
+    const [ty, tm, td] = today.split('-').map(Number);
+    const dows = [t('goal-dialog.dow-sun'), t('goal-dialog.dow-mon'), t('goal-dialog.dow-tue'), t('goal-dialog.dow-wed'), t('goal-dialog.dow-thu'), t('goal-dialog.dow-fri'), t('goal-dialog.dow-sat')];
+    const chips = [];
+    for (let i = FIX_DAYS - 1; i >= 0; i--) {
+      const d = new Date(ty, tm - 1, td - i);
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const logged = entries.has(iso);
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'day-chip';
+      chip.dataset.iso = iso;
+      chip.setAttribute('aria-pressed', String(logged));
+      chip.setAttribute('aria-label', `${dows[d.getDay()]} ${d.getDate()}${logged ? `, ${t('goal-dialog.fixday-logged')}` : ''}`);
+      chip.innerHTML = `<span class="dow" aria-hidden="true">${dows[d.getDay()]}</span><span class="num" aria-hidden="true">${d.getDate()}</span>`;
+      chips.push(chip);
+    }
+    this._fixDayChips.replaceChildren(...chips);
+  }
+
   _showDueDateField(show) {
     this._dueDateRow.hidden = !show;
     this._dueDateToggle.setAttribute('aria-pressed', String(show));
@@ -953,9 +1322,12 @@ class GoalDialog extends AppElement {
   _showView(name) {
     this._viewMain.hidden    = name !== 'main';
     this._viewMove.hidden    = name !== 'move';
+    this._viewFixDay.hidden  = name !== 'fixday';
     this._footerMain.hidden  = name !== 'main';
     this._footerMove.hidden  = name !== 'move';
+    this._footerFixDay.hidden = name !== 'fixday';
     if (name === 'move') this._renderMoveView();
+    if (name === 'fixday') this._renderFixDayChips();
   }
 
   _renderMoveView() {

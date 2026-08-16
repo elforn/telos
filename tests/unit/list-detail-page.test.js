@@ -644,7 +644,7 @@ describe('list-detail-page — item-promote', () => {
     });
   });
 
-  it('new goal has the canonical shape with percentage 0', async () => {
+  it('new goal has the canonical percentage-tracking shape', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }], goals: {} } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
@@ -659,8 +659,8 @@ describe('list-detail-page — item-promote', () => {
 
     await vi.waitFor(() => {
       const goal = getState().goals?.['2026']?.capstone?.[0];
-      expect(goal?.percentage).toBe(0);
-      expect(goal && 'tracking' in goal).toBe(false);
+      expect(goal?.tracking).toEqual({ type: 'percentage', value: 0 });
+      expect(goal && 'percentage' in goal).toBe(false);
     });
   });
 

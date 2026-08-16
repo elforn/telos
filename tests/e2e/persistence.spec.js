@@ -38,7 +38,7 @@ function getCapstoneItem(page) {
     const item = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('home-page')?.shadowRoot
       ?.querySelector('#capstone-list goal-item');
-    return item ? { title: item._goal?.title, percentage: item._goal?.percentage } : null;
+    return item ? { title: item._goal?.title, percentage: item._goal?.tracking?.value } : null;
   });
 }
 
@@ -84,7 +84,7 @@ test.describe('Data persistence', () => {
       const item = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('home-page')?.shadowRoot
         ?.querySelector('#capstone-list goal-item');
-      return (item?._goal?.percentage ?? 0) > 0;
+      return (item?._goal?.tracking?.value ?? 0) > 0;
     });
 
     const before = await getCapstoneItem(page);
