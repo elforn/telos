@@ -7,13 +7,12 @@ import '../tag-input/tag-input.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
-import { isFrequency, TARGET_LIMITS, FIX_DAY_SPAN, PERIOD_WINDOW, isLoggedOn } from '../../utils/tracking.js';
+import { isFrequency, TARGET_LIMITS, FIX_DAY_SPAN, PERIOD_WINDOW, DEFAULT_TARGET, isLoggedOn } from '../../utils/tracking.js';
 import { todayISO } from '../../utils/today-iso.js';
 
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
 const TYPES = ['percentage', 'weekly', 'monthly'];
-const DEFAULT_TARGET = { weekly: 3, monthly: 4 };
 const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 class GoalDialog extends AppElement {
@@ -68,18 +67,12 @@ class GoalDialog extends AppElement {
 
     this._tagInputEl.tags = goal?.tags ?? [];
 
-    // Percentage vs frequency is chosen once, at creation, and never crosses
-    // that line again — a fresh draft always starts at the default
-    // (percentage). But within frequency, weekly/monthly and the target are
-    // editable for the life of the goal, so an existing frequency goal seeds
-    // the draft from its real values rather than the percentage default.
-    if (goal && isFrequency(goal)) {
-      this._draftType   = goal.tracking.type;
-      this._draftTarget = goal.tracking.target;
-    } else {
-      this._draftType   = 'percentage';
-      this._draftTarget = DEFAULT_TARGET.weekly;
-    }
+    // Type/target stay editable for the life of the goal (including
+    // percentage↔frequency, which just flips the discriminant — see
+    // tracking.js). A fresh draft starts at the percentage default; an
+    // existing goal seeds from its real current type/target.
+    this._draftType   = goal?.tracking?.type   ?? 'percentage';
+    this._draftTarget = goal?.tracking?.target ?? DEFAULT_TARGET.weekly;
     this._renderTypeSection();
 
     this._lastValidTitle   = goal?.title ?? '';
@@ -254,19 +247,6 @@ class GoalDialog extends AppElement {
           background: var(--color-accent);
           color: var(--color-text-inverse);
         }
-
-        /* Locked (existing goal) — plain text, not a control: type is fixed
-           after creation, so there is nothing here to interact with. */
-        .type-locked {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          color: var(--color-text-secondary);
-          font-size: var(--font-size-body);
-          margin: 0;
-        }
-
-        .type-locked svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); flex-shrink: 0; }
 
         .target-block {
           margin-block-start: var(--space-3);
@@ -720,7 +700,6 @@ class GoalDialog extends AppElement {
                 <button type="button" class="type-pill" data-type="${ty}" role="radio" aria-checked="false">${t('goal-dialog.type-' + ty)}</button>
               `).join('')}
             </div>
-            <p class="type-locked" id="type-locked" hidden>${icons.lock}<span id="type-locked-label"></span></p>
             <div class="target-block" id="target-block" hidden>
               <p class="field-label sr-only" id="target-label"></p>
               <div class="target-row">
@@ -843,11 +822,7 @@ class GoalDialog extends AppElement {
     this._actionSheet       = this.shadowRoot.querySelector('#action-sheet');
     this._listPickerDialog  = this.shadowRoot.querySelector('#list-picker');
 
-    this._typePillGroup  = this.shadowRoot.querySelector('#type-pills');
     this._typePills      = [...this.shadowRoot.querySelectorAll('.type-pill')];
-    this._percentagePill = this.shadowRoot.querySelector('.type-pill[data-type="percentage"]');
-    this._typeLocked      = this.shadowRoot.querySelector('#type-locked');
-    this._typeLockedLabel = this.shadowRoot.querySelector('#type-locked-label');
     this._targetBlock    = this.shadowRoot.querySelector('#target-block');
     this._targetLabel    = this.shadowRoot.querySelector('#target-label');
     this._targetValueEl  = this.shadowRoot.querySelector('#target-value');
@@ -1139,17 +1114,18 @@ class GoalDialog extends AppElement {
     };
     this._fixDayChips.addEventListener('click', this._onFixDayChipClick);
 
-    // ── Type selector + target stepper (new goals only) ─────────────────────────
+    // ── Type selector + target stepper (editable for new AND existing goals) ────
 
     this._onTypePillClick = e => {
       const pill = e.target.closest('.type-pill');
-      if (!pill || pill.hidden) return;
-      if (!this._trackingEditable() || pill.dataset.type === this._draftType) return;
+      if (!pill || pill.dataset.type === this._draftType) return;
       this._draftType = pill.dataset.type;
-      // Switching type always resets to that type's own default target —
-      // weekly's and monthly's scales differ enough (1–7 vs 1–31) that
-      // carrying over a stale number from the other type wouldn't be
-      // meaningful, so there's no "preserve the number" case to protect.
+      // Switching to weekly/monthly always resets the *target* to that
+      // type's own default — weekly's and monthly's scales differ enough
+      // (1–7 vs 1–31) that carrying over a stale number from the other type
+      // wouldn't be meaningful. This only resets `target`; `value` and
+      // `entries` (the fields that actually hold history) are untouched —
+      // see _commitTrackingChange.
       if (this._draftType !== 'percentage') this._draftTarget = DEFAULT_TARGET[this._draftType];
       this._renderTypeSection();
       if (!this._isNew) this._commitTrackingChange();
@@ -1273,45 +1249,18 @@ class GoalDialog extends AppElement {
 
   // ── Private ───────────────────────────────────────────────────────────────
 
+  // Full widened shape from the start (see tracking.js) — value/target/
+  // entries all present regardless of which type is picked, so a brand-new
+  // goal already conforms to the same shape a switched-type goal would.
   _draftTracking() {
-    return this._draftType === 'percentage'
-      ? { type: 'percentage', value: 0 }
-      : { type: this._draftType, target: this._draftTarget, entries: [] };
+    return { type: this._draftType, value: 0, target: this._draftTarget, entries: [] };
   }
 
-  // True while type/target are still open to editing — a fresh draft, or an
-  // existing goal whose type is weekly/monthly (percentage is a one-way
-  // door: chosen once and locked forever after commit). Prefers the real
-  // stored goal, but falls back to the draft just submitted — right after an
-  // in-session blur-commit (still the same dialog visit, goal-created just
-  // fired) nothing hands the real stored record back here yet, and the
-  // draft describes the same goal exactly.
-  _trackingEditable() {
-    if (this._isNew) return true;
-    const type = this._goal?.tracking?.type ?? this._draftType;
-    return type === 'weekly' || type === 'monthly';
-  }
-
-  // Percentage vs frequency is chosen once, at creation, and locked forever
-  // after — a plain label, not a greyed-out control (a disabled pill group
-  // still invites tapping, a label doesn't). But *within* frequency there's
-  // no such one-way door: weekly/monthly and the target stay editable for
-  // the life of the goal, since entries are just dates that any target or
-  // cadence can re-bucket losslessly — so an existing frequency goal gets
-  // the same interactive pill group as a fresh draft, just with the
-  // percentage pill withheld.
+  // Type/target stay editable for the life of the goal, new or existing,
+  // any type — switching never drops data (see tracking.js: value/target/
+  // entries are all always present, `type` just says which is live), so
+  // there's no locked state left to render.
   _renderTypeSection() {
-    const editable = this._trackingEditable();
-    this._typePillGroup.hidden = !editable;
-    this._typeLocked.hidden = editable;
-
-    if (!editable) {
-      this._targetBlock.hidden = true;
-      this._typeLockedLabel.textContent = t('goal-dialog.type-locked-percentage');
-      return;
-    }
-
-    this._percentagePill.hidden = !this._isNew;
     this._typePills.forEach(p => p.setAttribute('aria-checked', String(p.dataset.type === this._draftType)));
 
     const showTarget = this._draftType !== 'percentage';
@@ -1328,18 +1277,30 @@ class GoalDialog extends AppElement {
     this._targetHint.textContent = t(`goal-dialog.target-hint-${this._draftType}`, { n: this._draftTarget });
   }
 
-  // Persists a weekly/monthly type or target edit for the current goal
-  // immediately (unlike the new-goal draft, which only commits on title
-  // blur/close) — entries carry over untouched, since they're just dates
-  // that the new type/target re-buckets on the next read, nothing to
-  // migrate. Doesn't require this._goal to be known: right after an
-  // in-session blur-commit it's still null (see _trackingEditable), but
-  // home-page resolves the target goal from its own _editingGoal, not from
-  // this event's detail — and a goal that new genuinely has no entries yet,
-  // so the `?? []` fallback is exactly correct, not just a safe default.
+  // Persists a type or target edit for an existing goal immediately (unlike
+  // the new-goal draft, which only commits on title blur/close). value and
+  // entries both carry through untouched regardless of which type is now
+  // active — that's the whole point: switching never destroys the inactive
+  // side, so switching back recovers exactly what was there before. Doesn't
+  // require this._goal to be known: right after an in-session blur-commit
+  // it's still null (home-page resolves the target goal from its own
+  // _editingGoal, not from this event's detail), and a goal that new
+  // genuinely has no prior value/entries yet, so the `?? 0`/`?? []`
+  // fallbacks are exactly correct, not just safe defaults.
   _commitTrackingChange() {
-    const tracking = { type: this._draftType, target: this._draftTarget, entries: this._goal?.tracking?.entries ?? [] };
-    if (this._goal) this._goal = { ...this._goal, tracking };
+    const tracking = {
+      type: this._draftType,
+      value: this._goal?.tracking?.value ?? 0,
+      target: this._draftTarget,
+      entries: this._goal?.tracking?.entries ?? [],
+    };
+    if (this._goal) {
+      this._goal = { ...this._goal, tracking };
+      // Fix-a-day only applies while the goal is *currently* frequency —
+      // this can now flip live, mid-edit, so it's re-evaluated on every
+      // commit rather than fixed once when the dialog opened.
+      this._fixDayBtn.hidden = !isFrequency(this._goal);
+    }
     this.dispatchEvent(new CustomEvent('goal-tracking-changed', {
       bubbles: true, composed: true, detail: { tracking },
     }));

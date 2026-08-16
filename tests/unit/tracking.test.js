@@ -38,6 +38,11 @@ describe('tracking — percentValue / setPercent (percentage type)', () => {
     expect(setPercent(goal, 55).id).toBe('g1');
     expect(setPercent(goal, 55).title).toBe('X');
   });
+
+  it('setPercent preserves a dormant target/entries from a goal that has previously been weekly/monthly', () => {
+    const goal = { id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: ['2026-08-01'] } };
+    expect(setPercent(goal, 75).tracking).toEqual({ type: 'percentage', value: 75, target: 5, entries: ['2026-08-01'] });
+  });
 });
 
 describe('tracking — logEntry / unlogEntry / isLoggedOn', () => {

@@ -1,13 +1,23 @@
-// The `tracking` union — canonical goal progress shape (replaces flat
-// `percentage`, migrated once at boot; see app/utils/migrate-goals.js):
-//   { type: 'percentage', value: number }                            — 0–100
-//   { type: 'weekly'|'monthly', target: number, entries: string[] }  — entries
-//     are unique ISO calendar dates (YYYY-MM-DD), one per day max, past dates
-//     allowed. "Every day" is a UI preset for weekly target=7, not its own type.
+// The `tracking` shape (replaces flat `percentage`, migrated once at boot;
+// see app/utils/migrate-goals.js). Not a strict discriminated union — every
+// goal always carries all four fields:
+//   { type: 'percentage' | 'weekly' | 'monthly', value: number, target: number, entries: string[] }
+// `type` is a pure discriminant: it tells consumers which fields are "live"
+// (percentValue reads `value` for percentage, `target`/`entries` for
+// weekly/monthly), but doesn't gate which fields *exist*. Switching type
+// never drops the inactive side — a goal that's been both a percentage and a
+// habit at different points keeps both `value` and `entries` around, so
+// switching back recovers exactly what was there before. `entries` are
+// unique ISO calendar dates (YYYY-MM-DD), one per day max, past dates
+// allowed. "Every day" is a UI preset for weekly target=7, not its own type.
 //
 // percentValue() works identically for all three types — nothing outside this
 // module should read `.tracking` directly.
 import { todayISO } from './today-iso.js';
+
+// Target defaults for a type that's never had one set (a fresh goal, or one
+// switching into weekly/monthly for the first time).
+export const DEFAULT_TARGET = { weekly: 3, monthly: 4 };
 
 // Periods considered for the weighted average AND the row's glance strip (dot
 // count = PERIOD_WINDOW[type] - 1 history + 1 current) — one shared window so
@@ -42,7 +52,10 @@ export function percentValue(goal, todayIso = todayISO()) {
 }
 
 export function setPercent(goal, pct) {
-  return { ...goal, tracking: { type: 'percentage', value: Math.max(0, Math.min(100, pct)) } };
+  // Spreads the existing tracking first so a dormant target/entries (from a
+  // goal that's previously been weekly/monthly) survives untouched — only
+  // type and value are actually being set here.
+  return { ...goal, tracking: { ...goal.tracking, type: 'percentage', value: Math.max(0, Math.min(100, pct)) } };
 }
 
 export function logEntry(goal, iso = todayISO()) {

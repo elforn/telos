@@ -409,7 +409,7 @@ test.describe('Frequency goals', () => {
     expect(tracking.target).toBe(7);
   });
 
-  test('editing an existing goal: target stays editable, and weekly↔monthly can be switched (percentage stays off-limits)', async ({ page }) => {
+  test('editing an existing goal: target stays editable, and weekly↔monthly can be switched live', async ({ page }) => {
     await openDialog(page, '#add-capstone');
     await selectType(page, 'weekly');
     await saveDialog(page, 'Move my body');
@@ -421,23 +421,19 @@ test.describe('Frequency goals', () => {
 
     await tapBar(page);
 
-    // The pill group (not the locked label) is showing, with percentage
-    // withheld — this is the real point of the feature: type/target aren't
-    // frozen the moment the goal exists, only the percentage↔frequency
-    // boundary is.
+    // The pill group is fully interactive for an existing goal — no locked
+    // state at all, percentage included, since switching never destroys data.
     const pillState = await page.evaluate(() => {
       const root = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot;
       return {
         pillsHidden: root.querySelector('#type-pills').hidden,
-        lockedHidden: root.querySelector('#type-locked').hidden,
         percentagePillHidden: root.querySelector('.type-pill[data-type="percentage"]').hidden,
       };
     });
     expect(pillState.pillsHidden).toBe(false);
-    expect(pillState.lockedHidden).toBe(true);
-    expect(pillState.percentagePillHidden).toBe(true);
+    expect(pillState.percentagePillHidden).toBe(false);
 
     // Bump the target — commits immediately, no save/close needed.
     await page.evaluate(() => {
@@ -486,6 +482,95 @@ test.describe('Frequency goals', () => {
     expect(afterSwitch.type).toBe('monthly');
     expect(afterSwitch.target).toBe(4); // monthly's own default, not carried over from weekly
     expect(afterSwitch.entries).toContain(loggedIso); // same dates, just re-bucketed
+  });
+
+  test('switching percentage↔frequency preserves both sides — nothing is destroyed by the switch', async ({ page }) => {
+    // Create as a default percentage goal, give it some progress.
+    await openDialog(page, '#add-capstone');
+    await saveDialog(page, 'Read more');
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+    await page.evaluate(() => {
+      const bar = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item').shadowRoot
+        .querySelector('.bar');
+      for (let i = 0; i < 6; i++) bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return (item?._goal?.tracking?.value ?? 0) > 0;
+    });
+    const originalValue = (await goalItemTracking(page)).value;
+
+    // Switch to weekly, log an entry.
+    await tapBar(page);
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('.type-pill[data-type="weekly"]').click();
+    });
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item?._goal?.tracking?.type === 'weekly';
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#close').click();
+    });
+    await holdOnBar(page);
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return (item?._goal?.tracking?.entries?.length ?? 0) === 1;
+    });
+    const loggedIso = (await goalItemTracking(page)).entries[0];
+
+    // Switch back to percentage — the original value must reappear, not reset.
+    await tapBar(page);
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('.type-pill[data-type="percentage"]').click();
+    });
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item?._goal?.tracking?.type === 'percentage';
+    });
+    const backToPercentage = await goalItemTracking(page);
+    expect(backToPercentage.value).toBe(originalValue);
+    expect(backToPercentage.entries).toContain(loggedIso); // dormant, not deleted
+
+    // And switching to weekly again recovers the logged entry.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('.type-pill[data-type="weekly"]').click();
+    });
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item?._goal?.tracking?.type === 'weekly';
+    });
+    const backToWeekly = await goalItemTracking(page);
+    expect(backToWeekly.entries).toContain(loggedIso);
+    expect(backToWeekly.value).toBe(originalValue); // still dormant, still there
   });
 
   test('Fix a day on a monthly goal spans 120 days with month-label dividers, opened scrolled to today', async ({ page }) => {

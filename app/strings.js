@@ -88,7 +88,6 @@ defineStrings({
   'goal-dialog.type-percentage':        'Percentage',
   'goal-dialog.type-weekly':            'Weekly',
   'goal-dialog.type-monthly':           'Monthly',
-  'goal-dialog.type-locked-percentage': 'Percentage',
   'goal-dialog.target-decrease':        'Decrease target',
   'goal-dialog.target-increase':        'Increase target',
   'goal-dialog.everyday-preset':        'Every day',
