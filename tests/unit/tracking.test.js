@@ -198,3 +198,9 @@ describe('tracking — currentPeriodCount', () => {
     expect(currentPeriodCount(weekly(3, []).tracking, TODAY)).toBe(0);
   });
 });
+
+describe('tracking — TARGET_LIMITS', () => {
+  it('exposes the exact clamp ranges goal-dialog\'s stepper relies on', () => {
+    expect(TARGET_LIMITS).toEqual({ weekly: [1, 7], monthly: [1, 31] });
+  });
+});

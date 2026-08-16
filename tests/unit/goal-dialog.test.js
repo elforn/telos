@@ -1258,6 +1258,32 @@ describe('goal-dialog — type selector (new goal only)', () => {
     expect(events[0].detail.tracking).toEqual({ type: 'weekly', target: 4, entries: [] });
   });
 
+  it('stepper increments/decrements and clamps to TARGET_LIMITS.monthly (1–31)', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'monthly').click();
+    const down = el.shadowRoot.querySelector('#target-down');
+    const up   = el.shadowRoot.querySelector('#target-up');
+    for (let i = 0; i < 5; i++) down.click(); // 4 -> 1, then clamps
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('1');
+    expect(down.disabled).toBe(true);
+    for (let i = 0; i < 40; i++) up.click(); // clamps at 31, not 7 — the weekly ceiling must not leak into monthly
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('31');
+    expect(up.disabled).toBe(true);
+  });
+
+  it('goal-created carries the selected monthly type/target with empty entries', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'monthly').click();
+    el.shadowRoot.querySelector('#target-up').click(); // 4 -> 5
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Call parents';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.tracking).toEqual({ type: 'monthly', target: 5, entries: [] });
+  });
+
   it('resets to percentage default after a quick-add commit (Enter) starts the next entry', () => {
     const el = mount();
     el.open(null);

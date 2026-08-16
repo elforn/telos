@@ -264,6 +264,17 @@ describe('goal-item — frequency: role, aria, rendering', () => {
     expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('un-logging today flips aria-pressed back and removes the green ring, not just the tick state', () => {
+    const el = mount(weeklyGoal([isoDaysFromNow(0)]));
+    expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-pressed')).toBe('true');
+    expect(el.shadowRoot.querySelector('.freq-today').classList.contains('logged')).toBe(true);
+
+    el.goal = weeklyGoal([]);
+
+    expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-pressed')).toBe('false');
+    expect(el.shadowRoot.querySelector('.freq-today').classList.contains('logged')).toBe(false);
+  });
+
   it('aria-label includes the current-period count and target', () => {
     const el = mount(weeklyGoal([isoDaysFromNow(0), isoDaysFromNow(-1)], 3));
     expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-label')).toContain('2 of 3');

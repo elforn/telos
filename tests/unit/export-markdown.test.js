@@ -226,6 +226,31 @@ describe('exportGoalMarkdown', () => {
     const out = exportGoalMarkdown({ ...GOAL, notes: undefined }, { notes: true });
     expect(out).toBe('# Ship it\n---');
   });
+
+  // percentValue(goal) must drive export the same way for frequency goals as
+  // for percentage goals — these weren't covered by the mechanical fixture
+  // conversion to `tracking`, which only ever touched percentage-type goals.
+  function isoDaysFromNow(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  it('shows a computed percentage (not [object Object]) for a weekly goal', () => {
+    // target 1, a single entry logged today, nothing in the other 5 windowed
+    // weeks — weighted average = (1×6)/21 ≈ 28.57%, rounds to 29%.
+    const goal = { id: '4', title: 'Move daily', tracking: { type: 'weekly', target: 1, entries: [isoDaysFromNow(0)] }, tags: [] };
+    const out = exportGoalMarkdown(goal, { metadata: true });
+    expect(out).toContain('- [29%] Move daily');
+  });
+
+  it('marks a fully-met weekly goal (whole window) as done, same as a 100% percentage goal', () => {
+    const entries = [0, 1, 2, 3, 4, 5].map(w => isoDaysFromNow(-w * 7));
+    const goal = { id: '5', title: 'Consistent', tracking: { type: 'weekly', target: 1, entries }, tags: [] };
+    const out = exportGoalMarkdown(goal, {});
+    expect(out).toContain('# ✅ Consistent');
+    expect(out).toContain('- ✅ Consistent');
+  });
 });
 
 // ── Lists, no notes, no metadata ─────────────────────────────────────────────

@@ -69,6 +69,55 @@ async function holdOnBar(page) {
   await page.mouse.up();
 }
 
+async function tapBar(page) {
+  const box = await page.evaluate(() => {
+    const bar = document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot
+      .querySelector('#capstone-list goal-item').shadowRoot
+      .querySelector('.bar');
+    return bar.getBoundingClientRect().toJSON();
+  });
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForFunction(() => {
+    const d = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('home-page')?.shadowRoot
+      ?.querySelector('goal-dialog')?.shadowRoot
+      ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+    return d?.open;
+  });
+}
+
+async function openFixDay(page) {
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot
+      .querySelector('goal-dialog').shadowRoot
+      .querySelector('#menu-btn').click();
+  });
+  await page.waitForFunction(() => {
+    const sheet = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('home-page')?.shadowRoot
+      ?.querySelector('goal-dialog')?.shadowRoot
+      ?.querySelector('#action-sheet')?.shadowRoot?.querySelector('dialog');
+    return sheet?.open;
+  });
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot
+      .querySelector('goal-dialog').shadowRoot
+      .querySelector('#action-fixday-btn').click();
+  });
+  await page.waitForFunction(() => {
+    const view = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('home-page')?.shadowRoot
+      ?.querySelector('goal-dialog')?.shadowRoot
+      ?.querySelector('#view-fixday');
+    return view && !view.hidden;
+  });
+}
+
 test.describe('Frequency goals', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(`/${currentYear}`);
@@ -149,6 +198,97 @@ test.describe('Frequency goals', () => {
         .querySelector('#capstone-list goal-item');
       return (item?._goal?.tracking?.entries?.length ?? 0) === 0;
     });
+  });
+
+  test('Fix a day: correct a past date via the edit dialog\'s overflow menu', async ({ page }) => {
+    await openDialog(page, '#add-capstone');
+    await selectType(page, 'weekly');
+    await saveDialog(page, 'Move my body');
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+
+    await tapBar(page);
+    await openFixDay(page);
+
+    const chipCount = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelectorAll('#fixday-chips .day-chip').length
+    );
+    expect(chipCount).toBe(14);
+
+    // The very first chip (oldest of the 14) is 13 days ago — an old miss to
+    // back-fill, distinct from "today" (which the hold gesture already covers
+    // in the other test above; this one is specifically about arbitrary dates).
+    const firstChipIso = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#fixday-chips .day-chip').dataset.iso
+    );
+    const wasPressedBefore = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#fixday-chips .day-chip').getAttribute('aria-pressed')
+    );
+    expect(wasPressedBefore).toBe('false');
+
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#fixday-chips .day-chip').click();
+    });
+
+    await page.waitForFunction(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#fixday-chips .day-chip').getAttribute('aria-pressed') === 'true'
+    );
+
+    // Back-fill landed in the store, not just the chip's own local aria state.
+    const entriesAfterAdd = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item._goal.tracking.entries;
+    });
+    expect(entriesAfterAdd).toContain(firstChipIso);
+
+    // Tapping the same (now-filled) chip again removes it — same control, both directions.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#fixday-chips .day-chip').click();
+    });
+    await page.waitForFunction(iso => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return !item._goal.tracking.entries.includes(iso);
+    }, firstChipIso);
+
+    // Back returns to the main edit view.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#fixday-back').click();
+    });
+    const mainVisible = await page.evaluate(() => {
+      const dlg = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot;
+      return !dlg.querySelector('#view-main').hidden && dlg.querySelector('#view-fixday').hidden;
+    });
+    expect(mainVisible).toBe(true);
   });
 
   test('create a monthly goal — squircle today-token, distinct from weekly\'s circle', async ({ page }) => {

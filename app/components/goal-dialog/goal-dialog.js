@@ -269,12 +269,14 @@ class GoalDialog extends AppElement {
         .target-row {
           display: flex;
           align-items: center;
-          gap: var(--space-3);
+          flex-wrap: wrap;
+          gap: var(--space-2) var(--space-3);
         }
 
         .target-stepper {
           display: flex;
           align-items: center;
+          flex-shrink: 0;
           gap: var(--space-3);
           border: 0.5px solid var(--color-border);
           border-radius: var(--radius-full);
@@ -282,8 +284,8 @@ class GoalDialog extends AppElement {
         }
 
         .stepper-btn {
-          min-block-size: var(--touch-target-small, 32px);
-          min-inline-size: var(--touch-target-small, 32px);
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
           border-radius: var(--radius-full);
           border: none;
           background: var(--color-surface-raised);
@@ -303,11 +305,12 @@ class GoalDialog extends AppElement {
         }
 
         .preset-chip {
+          flex-shrink: 0;
           border: 0.5px solid var(--color-border);
           background: transparent;
           border-radius: var(--radius-full);
           padding-inline: var(--space-3);
-          min-block-size: var(--touch-target-small, 32px);
+          min-block-size: var(--touch-target);
           font-size: var(--font-size-caption);
           font-weight: var(--font-weight-semibold);
           font-family: var(--font-family);
@@ -321,7 +324,10 @@ class GoalDialog extends AppElement {
         }
 
         .target-hint {
-          margin: var(--space-2) 0 0;
+          margin-inline-start: auto;
+          flex: 1 1 auto;
+          min-inline-size: 0;
+          text-align: end;
           font-size: var(--font-size-caption);
           color: var(--color-text-muted);
         }
@@ -668,27 +674,6 @@ class GoalDialog extends AppElement {
                  autocomplete="off"
                  enterkeyhint="go"
                  maxlength="80" />
-          <div class="type-field">
-            <p class="field-label">${t('goal-dialog.type-label')}</p>
-            <div class="type-pill-group" id="type-pills" role="radiogroup" aria-label="${t('goal-dialog.type-label')}">
-              ${TYPES.map(ty => `
-                <button type="button" class="type-pill" data-type="${ty}" role="radio" aria-checked="false">${t('goal-dialog.type-' + ty)}</button>
-              `).join('')}
-            </div>
-            <p class="type-locked" id="type-locked" hidden>${icons.lock}<span id="type-locked-label"></span></p>
-            <div class="target-block" id="target-block" hidden>
-              <p class="field-label" id="target-label"></p>
-              <div class="target-row">
-                <div class="target-stepper">
-                  <button type="button" class="stepper-btn" id="target-down" aria-label="${t('goal-dialog.target-decrease')}">−</button>
-                  <span class="target-value" id="target-value"></span>
-                  <button type="button" class="stepper-btn" id="target-up" aria-label="${t('goal-dialog.target-increase')}">+</button>
-                </div>
-                <button type="button" class="preset-chip" id="everyday-chip" hidden>${t('goal-dialog.everyday-preset')}</button>
-              </div>
-              <p class="target-hint" id="target-hint"></p>
-            </div>
-          </div>
           <div class="textarea-wrap">
             <div class="md-highlight" aria-hidden="true"></div>
             <textarea id="desc-input"
@@ -703,6 +688,26 @@ class GoalDialog extends AppElement {
             <button type="button" id="duedate-clear" aria-label="${t('goal-dialog.duedate-clear')}">${icons.xMark}</button>
           </div>
           <tag-input id="tag-input"></tag-input>
+          <div class="type-field">
+            <div class="type-pill-group" id="type-pills" role="radiogroup" aria-label="${t('goal-dialog.type-label')}">
+              ${TYPES.map(ty => `
+                <button type="button" class="type-pill" data-type="${ty}" role="radio" aria-checked="false">${t('goal-dialog.type-' + ty)}</button>
+              `).join('')}
+            </div>
+            <p class="type-locked" id="type-locked" hidden>${icons.lock}<span id="type-locked-label"></span></p>
+            <div class="target-block" id="target-block" hidden>
+              <p class="field-label sr-only" id="target-label"></p>
+              <div class="target-row">
+                <div class="target-stepper">
+                  <button type="button" class="stepper-btn" id="target-down" aria-label="${t('goal-dialog.target-decrease')}">−</button>
+                  <span class="target-value" id="target-value"></span>
+                  <button type="button" class="stepper-btn" id="target-up" aria-label="${t('goal-dialog.target-increase')}">+</button>
+                </div>
+                <button type="button" class="preset-chip" id="everyday-chip" hidden>${t('goal-dialog.everyday-preset')}</button>
+                <p class="target-hint" id="target-hint"></p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- ── View: move to year+section ───────────────────────────────── -->

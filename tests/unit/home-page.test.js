@@ -245,6 +245,43 @@ describe('home-page — goal mutations', () => {
     });
   });
 
+  it('goal-log-toggle also works on milestones/wow/focus — not just capstone', async () => {
+    // The capstone test above exercises one of four nearly-identical, copy-
+    // pasted listeners (_onCapstoneLogToggle/_onMilestoneLogToggle/etc.) — this
+    // catches a typo in any of the other three going undetected.
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': {
+        capstone: [],
+        milestones: [{ id: 'm1', title: 'M', tracking: { type: 'weekly', target: 3, entries: [] } }],
+        wow: [{ id: 'w1', title: 'W', tracking: { type: 'weekly', target: 3, entries: [] } }],
+        focus: [{ id: 'f1', title: 'F', tracking: { type: 'weekly', target: 3, entries: [] } }],
+      },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() => {
+      expect(el.shadowRoot.querySelector('#milestone-list').querySelectorAll('goal-item').length).toBe(1);
+      expect(el.shadowRoot.querySelector('#wow-list').querySelectorAll('goal-item').length).toBe(1);
+      expect(el.shadowRoot.querySelector('#focus-list').querySelectorAll('goal-item').length).toBe(1);
+    });
+
+    el.shadowRoot.querySelector('#milestone-list').dispatchEvent(new CustomEvent('goal-log-toggle', {
+      bubbles: true, composed: true, detail: { goal: { id: 'm1' } },
+    }));
+    el.shadowRoot.querySelector('#wow-list').dispatchEvent(new CustomEvent('goal-log-toggle', {
+      bubbles: true, composed: true, detail: { goal: { id: 'w1' } },
+    }));
+    el.shadowRoot.querySelector('#focus-list').dispatchEvent(new CustomEvent('goal-log-toggle', {
+      bubbles: true, composed: true, detail: { goal: { id: 'f1' } },
+    }));
+
+    await vi.waitFor(() => {
+      const yg = getState().goals['2026'];
+      expect(yg.milestones[0].tracking.entries).toHaveLength(1);
+      expect(yg.wow[0].tracking.entries).toHaveLength(1);
+      expect(yg.focus[0].tracking.entries).toHaveLength(1);
+    });
+  });
+
   it('goal-log-toggle un-logs when today is already logged', async () => {
     const todayIso = (() => {
       const d = new Date();
