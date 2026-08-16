@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.1.1] — 2026-08-16
+
+### Changed
+- **Goal-creation dialog: the Type/target section now sits after Tags**, not right after the title — a small ordering tweak from using the 2.1.0 feature.
+- Trimmed two redundant labels in that section: the "Type" heading (the pill group already carries an equivalent accessible name) and the "Times per week/month" heading (the selected pill and the hint sentence below both already say it — kept for screen readers only, not visually).
+- The target hint sentence now sits on the same row as the stepper, right-aligned, instead of its own line below.
+
+### Fixed
+- **The target stepper's ± buttons and the "Every day" preset chip were sized below this app's minimum touch target** (28px, a size class reserved for minor controls like the copy button — not primary, frequently-tapped ones). Now 40px, caught during an `/a11y` pass.
+
 ## [2.1.0] — 2026-08-16
 
 ### Added
