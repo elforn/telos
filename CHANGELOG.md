@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.1.2] — 2026-08-16
+
+### Changed
+- **Removed the "Back" button from the goal-dialog's Fix-a-day sheet.** It's dismissible the same way as every other view in the dialog (backdrop tap, Escape), so the button was a second control doing the same thing.
+
 ## [2.1.1] — 2026-08-16
 
 ### Changed
