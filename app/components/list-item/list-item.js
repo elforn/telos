@@ -133,9 +133,9 @@ class ListItem extends Gestures(AppElement) {
         .tag-strip {
           position: absolute;
           inset-block-end: 0;
-          inset-inline-start: var(--space-10);
+          inset-inline-start: var(--space-8);
           inset-inline-end: var(--space-3);
-          block-size: 3px;
+          block-size: 2px;
           pointer-events: none;
           display: var(--tag-strip-display, block);
         }
