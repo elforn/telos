@@ -532,6 +532,18 @@ class GoalItem extends Gestures(AppElement) {
 
     this._update();
 
+    // Captured at pointerdown time, in the capture phase (so it runs before the
+    // Gestures mixin's own bubble-phase pointerdown listener on this same host).
+    // Event.composedPath() is only valid while the event is still dispatching —
+    // by the time onTap() runs (on pointerup, after the mixin resolves the whole
+    // gesture), the pointerdown event's dispatch is long finished and
+    // composedPath() would silently return []. Reading it live here and stashing
+    // a plain boolean is what makes the check usable later.
+    this._onPointerDownCapture = e => {
+      this._tapOnToday = e.composedPath().includes(this._freqToday);
+    };
+    this.addEventListener('pointerdown', this._onPointerDownCapture, true);
+
     this._stopPointerDown = e => e.stopPropagation();
 
     this._deleteEl = this.shadowRoot.querySelector('#delete-btn');
@@ -586,6 +598,7 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   unsubscribe() {
+    this.removeEventListener('pointerdown', this._onPointerDownCapture, true);
     this._deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
     this._deleteEl?.removeEventListener('pointerup', this._onDeletePointerUp);
     this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
@@ -600,12 +613,12 @@ class GoalItem extends Gestures(AppElement) {
   // (not a hold) toggles the log — it's the row's primary action target, so
   // it shouldn't cost a 500ms dwell. Everywhere else on the bar, tap still
   // opens the goal dialog and hold still toggles (see onHoldDragStart below).
-  onTap(e) {
+  onTap() {
     if (this._revealedDir) {
       this._closeReveal();
       return;
     }
-    if (isFrequency(this._goal) && e?.originalEvent?.composedPath().includes(this._freqToday)) {
+    if (isFrequency(this._goal) && this._tapOnToday) {
       this._toggleLog();
       return;
     }
