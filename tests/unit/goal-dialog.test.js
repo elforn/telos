@@ -1296,45 +1296,40 @@ describe('goal-dialog — type selector (new goal)', () => {
   });
 });
 
-describe('goal-dialog — type/target: plain readout for an existing goal, changed via the ⋮ menu', () => {
+describe('goal-dialog — type/target: no main-view presence for an existing goal, changed via the ⋮ menu', () => {
   function pill(el, type) {
     return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
   }
-  // "Change type" lives in the action sheet now, not a tap on the readout.
+  // "Change type" lives in the action sheet — nothing on the main view to tap.
   function expand(el) {
     el.shadowRoot.querySelector('#action-change-type-btn').click();
   }
 
-  it('shows a plain readout (not the pill group) for an existing percentage goal', () => {
+  it('shows no pill group on the main view for an existing percentage goal', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 40, target: 3, entries: [] } });
-    expect(el.shadowRoot.querySelector('#type-readout').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(true);
-    expect(el.shadowRoot.querySelector('#type-readout').textContent).toBe('Percentage');
   });
 
-  it('readout shows target for an existing frequency goal', () => {
+  it('the current value rides along as trailing text on the "Change type" menu item, not anywhere on the main view', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: [] } });
-    expect(el.shadowRoot.querySelector('#type-readout').textContent).toContain('5');
+    expect(el.shadowRoot.querySelector('#change-type-value').textContent).toContain('5');
   });
 
-  it('the readout is plain text, not a control — no click handler, no chevron', () => {
+  it('percentage shows a plain type name as the menu item value', () => {
     const el = mount();
-    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: [] } });
-    const readout = el.shadowRoot.querySelector('#type-readout');
-    expect(readout.tagName).toBe('P');
-    readout.click(); // no-op — nothing listens on it
-    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(true);
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 40, target: 3, entries: [] } });
+    expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('Percentage');
   });
 
   it('"Change type" in the ⋮ menu reveals the interactive pill group, closes the sheet, no locked state anywhere', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: [] } });
     expand(el);
-    expect(el.shadowRoot.querySelector('#type-readout').hidden).toBe(true);
     expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#type-locked')).toBeNull(); // the old locked UI no longer exists at all
+    expect(el.shadowRoot.querySelector('#type-readout')).toBeNull(); // nor does the plain-readout UI that replaced it
     expect(pill(el, 'percentage').hidden).toBe(false); // never withheld
     expect(pill(el, 'weekly').getAttribute('aria-checked')).toBe('true');
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
@@ -1346,7 +1341,6 @@ describe('goal-dialog — type/target: plain readout for an existing goal, chang
     const el = mount();
     el.open(null);
     expect(el.shadowRoot.querySelector('#action-change-type-btn').hidden).toBe(true);
-    expect(el.shadowRoot.querySelector('#type-readout').hidden).toBe(true);
     expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
   });
 
@@ -1388,8 +1382,8 @@ describe('goal-dialog — type/target: plain readout for an existing goal, chang
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
     expand(el);
     pill(el, 'monthly').click();
-    expect(el.shadowRoot.querySelector('#type-readout').hidden).toBe(true);
     expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('4×/month'); // stays in sync
   });
 
   it('switching monthly→weekly on an existing goal dispatches goal-tracking-changed, resets the target, and preserves entries', () => {
@@ -1433,8 +1427,8 @@ describe('goal-dialog — type/target: plain readout for an existing goal, chang
     input.dispatchEvent(new Event('blur', { bubbles: true }));
     expect(events).toHaveLength(1);
     expect(el._goal).toBeNull(); // confirms the gap this test targets actually exists here
-    expect(el.shadowRoot.querySelector('#type-readout').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#type-readout').textContent).toBe('4×/month');
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('4×/month');
 
     expand(el);
     const trackingEvents = [];

@@ -460,17 +460,16 @@ test.describe('Frequency goals', () => {
 
     await tapBar(page);
 
-    // Collapsed by default — a plain readout, not the pill group, on first open.
+    // Collapsed by default — no pill group on the main view, current value
+    // only visible as trailing text on the ⋮ menu's "Change type" item.
     const collapsedState = await page.evaluate(() => {
       const root = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot;
       return {
-        readoutHidden: root.querySelector('#type-readout').hidden,
         pillsHidden: root.querySelector('#type-pills').hidden,
       };
     });
-    expect(collapsedState.readoutHidden).toBe(false);
     expect(collapsedState.pillsHidden).toBe(true);
 
     // "Change type" in the ⋮ menu reveals the pill group — fully
@@ -671,20 +670,18 @@ test.describe('Frequency goals', () => {
 
     await tapBar(page);
 
-    // Collapsed on first open: a plain readout for type, a collapsed toggle
-    // for Fix-a-day, no pill group or day-chip strip yet.
+    // Collapsed on first open: no pill group for type (value only visible
+    // via the ⋮ menu), a collapsed toggle for Fix-a-day, no day-chip strip yet.
     let state = await page.evaluate(() => {
       const root = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot;
       return {
-        readoutHidden: root.querySelector('#type-readout').hidden,
         pillsHidden: root.querySelector('#type-pills').hidden,
         fixdaySummaryHidden: root.querySelector('#fixday-summary').hidden,
         fixdayExpanded: root.querySelector('#fixday-summary').getAttribute('aria-expanded'),
       };
     });
-    expect(state.readoutHidden).toBe(false);
     expect(state.pillsHidden).toBe(true);
     expect(state.fixdaySummaryHidden).toBe(false);
     expect(state.fixdayExpanded).toBe('false');

@@ -217,13 +217,20 @@ class GoalDialog extends AppElement {
 
         .type-field { margin-block-end: var(--space-4); }
 
-        /* Existing goal, type/target: plain informational text, not a
-           control — type is changed via the ⋮ menu's "Change type" action
-           (rare enough not to earn permanent on-screen chrome), which
-           reveals the pill group below in its place. */
-        .type-readout {
-          color: var(--color-text-secondary);
-          font-size: var(--font-size-body);
+        /* Existing goal, type/target: no presence on the main view at all —
+           a whole row for three words of read-only context was still too
+           prominent for a set-once, rarely-revisited setting. The current
+           value instead rides along as trailing text on the ⋮ menu's
+           "Change type" item itself (a settings-row pattern: label start,
+           value end) — visible only where you'd actually look for it. */
+        .sheet-item-value {
+          gap: var(--space-2);
+        }
+
+        .sheet-item-value-text {
+          flex: 1;
+          text-align: end;
+          color: var(--color-text-muted);
         }
 
         /* Fix-a-day: a real expand/collapse toggle, unlike type/target's
@@ -734,7 +741,6 @@ class GoalDialog extends AppElement {
           </div>
           <tag-input id="tag-input"></tag-input>
           <div class="type-field">
-            <p class="type-readout" id="type-readout" hidden></p>
             <div class="type-pill-group" id="type-pills" role="radiogroup" aria-label="${t('goal-dialog.type-label')}">
               ${TYPES.map(ty => `
                 <button type="button" class="type-pill" data-type="${ty}" role="radio" aria-checked="false">${t('goal-dialog.type-' + ty)}</button>
@@ -806,7 +812,10 @@ class GoalDialog extends AppElement {
           <span class="sheet-toggle-label">${t('goal-dialog.duedate-toggle')}</span>
           <span class="sheet-toggle-check">${icons.check}</span>
         </button>
-        <button type="button" id="action-change-type-btn" class="sheet-item" hidden>${t('goal-dialog.change-type-menu')}</button>
+        <button type="button" id="action-change-type-btn" class="sheet-item sheet-item-value" hidden>
+          <span>${t('goal-dialog.change-type-menu')}</span>
+          <span class="sheet-item-value-text" id="change-type-value"></span>
+        </button>
         <hr class="sheet-divider">
         <button type="button" id="action-move-btn" class="sheet-item">${t('goal-dialog.move-to-year')}</button>
         <button type="button" id="action-create-btn" class="sheet-item">${t('goal-dialog.create-list-item')}</button>
@@ -864,8 +873,8 @@ class GoalDialog extends AppElement {
 
     this._typePills        = [...this.shadowRoot.querySelectorAll('.type-pill')];
     this._typePillGroup    = this.shadowRoot.querySelector('#type-pills');
-    this._typeReadout    = this.shadowRoot.querySelector('#type-readout');
-    this._changeTypeBtn  = this.shadowRoot.querySelector('#action-change-type-btn');
+    this._changeTypeBtn   = this.shadowRoot.querySelector('#action-change-type-btn');
+    this._changeTypeValue = this.shadowRoot.querySelector('#change-type-value');
     this._targetBlock    = this.shadowRoot.querySelector('#target-block');
     this._targetLabel    = this.shadowRoot.querySelector('#target-label');
     this._targetValueEl  = this.shadowRoot.querySelector('#target-value');
@@ -1315,26 +1324,27 @@ class GoalDialog extends AppElement {
     return { type: this._draftType, value: 0, target: this._draftTarget, entries: [] };
   }
 
-  // Existing goal: a plain read-only line ("5×/week") — type is changed via
-  // "Change type" in the ⋮ menu (_onActionChangeType), not by tapping this
-  // text, so there's nothing here to make interactive. Reveal-once once
-  // opened from the menu, no re-collapse control — same idiom as the
-  // due-date field toggle. A brand-new goal never collapses at all —
-  // picking a type is the point of creating one, so the full picker always
-  // shows immediately. Independent of Fix-a-day (see _renderFixDaySummary)
-  // — the two used to share one expansion slot; they no longer do, since
-  // type is menu-gated now and doesn't need to coordinate with anything.
+  // Existing goal: no presence on the main view at all until "Change type"
+  // is tapped in the ⋮ menu (_onActionChangeType) — even a plain read-only
+  // line was still a whole row for three words. The current value instead
+  // rides along as trailing text on that menu item itself, kept in sync on
+  // every render regardless of expand state. Reveal-once once opened from
+  // the menu, no re-collapse control — same idiom as the due-date field
+  // toggle. A brand-new goal never collapses at all — picking a type is the
+  // point of creating one, so the full picker always shows immediately.
+  // Independent of Fix-a-day (see _renderFixDaySummary) — the two used to
+  // share one expansion slot; they no longer do, since type is menu-gated
+  // now and doesn't need to coordinate with anything.
   _renderTypeSection() {
     const showTypeEditor = this._isNew || this._typeExpanded;
-    this._typeReadout.hidden = showTypeEditor;
     this._typePillGroup.hidden = !showTypeEditor;
     this._renderFixDaySummary();
 
+    this._changeTypeValue.textContent = (this._draftType === 'weekly' || this._draftType === 'monthly')
+      ? t(`goal-dialog.type-summary-${this._draftType}`, { target: this._draftTarget })
+      : t('goal-dialog.type-percentage');
+
     if (!showTypeEditor) {
-      const summary = (this._draftType === 'weekly' || this._draftType === 'monthly')
-        ? t(`goal-dialog.type-summary-${this._draftType}`, { target: this._draftTarget })
-        : t('goal-dialog.type-percentage');
-      this._typeReadout.textContent = summary;
       this._targetBlock.hidden = true;
       return;
     }
