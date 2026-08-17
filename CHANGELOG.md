@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [2.2.0] — 2026-08-16
+## [2.3.0] — 2026-08-17
 
 ### Changed
 - **Goal type and target are no longer frozen after creation — including percentage↔frequency.** Switching never destroys data: `tracking` keeps `value`, `target`, and `entries` all present regardless of which type is currently active (`type` is a pure discriminant, not a strict union), so switching away from a type and back recovers exactly what was there before — a percentage goal's progress survives a trip through frequency tracking and back, and a habit's logged entries survive a trip through percentage and back. Only `target` resets to the new type's own default on a switch into weekly/monthly (weekly's and monthly's scales differ enough — 1–7 vs. 1–31 — that carrying over a stale number wouldn't be meaningful); `value` and `entries` are untouched by any switch. Edits on an existing goal commit immediately. A fresh goal still shows the full type picker + target stepper right away, since choosing a type is the point of creating one — but an existing goal shows nothing for it on the main view at all; the current value (e.g. "5×/week") trails the "Change type" ⋮ menu item instead, right-aligned and muted, since this is normally a set-once, rarely-revisited choice that doesn't deserve a permanent row. Tapping that menu item reveals the same picker inline, in the menu-value's place.
@@ -16,6 +16,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **"Fix a day" moved out of the overflow menu, inline into the dialog** — used more often than the type/target picker, and now a real expand/collapse toggle (tap to open, tap again to close), with the "Last N weeks/months" heading removed as redundant.
 - **Removed the misleading target hint** ("Log N× this week to hit 100%") — wrong given the weighted-average formula (hitting target in the current period alone doesn't reach 100% unless prior periods were also met) and wasn't earning its place even when accurate.
 - **On desktop, page content and the bottom nav now cap at a comfortable column width instead of stretching full-bleed** — row-based UI (goal/list rows) reads poorly spread across a wide monitor. Mobile (95% of use) is unaffected.
+
+### Fixed
+- **List item tag-strip sat too far right and read a touch heavy.** Tightened its start inset (`--space-10` → `--space-8`) and thickness (3px → 2px).
 
 ## [2.1.3] — 2026-08-16
 
