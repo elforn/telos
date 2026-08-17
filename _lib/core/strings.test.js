@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { defineStrings, setLocale, getLocale, t, reset } from './strings.js';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+import { defineStrings, setLocale, getLocale, t, reset, _snapshot, _restore } from './strings.js';
 
 const _ls = (() => {
   let store = {};
@@ -10,6 +10,20 @@ const _ls = (() => {
     clear: () => { store = {}; },
   };
 })();
+
+// Under vitest `isolate: false`, _locales is shared with every other test file in the
+// worker. A consuming app's `app/strings.js` may have already registered real strings
+// as a module-load side effect before this file runs — snapshot/restore around the whole
+// suite so this file's reset()/defineStrings() calls never leak past it.
+let _preExistingSnapshot;
+
+beforeAll(() => {
+  _preExistingSnapshot = _snapshot();
+});
+
+afterAll(() => {
+  _restore(_preExistingSnapshot);
+});
 
 beforeEach(() => {
   vi.stubGlobal('localStorage', _ls);
@@ -92,5 +106,26 @@ describe('reset', () => {
     reset();
     expect(t('foo.bar')).toBe('foo.bar');
     expect(getLocale()).toBe('en');
+  });
+});
+
+describe('_snapshot / _restore (isolate: false regression)', () => {
+  it('preserves a pre-existing consumer registration through a reset()/defineStrings()/reset() cycle', async () => {
+    // Simulates a consuming app's app/strings.js: registers real strings as a module-load
+    // side effect, which (per ES module caching) only ever runs once per worker — exactly
+    // the scenario that leaked under vitest `isolate: false` before this fix.
+    await import('./strings.fixture.js');
+    expect(t('fixture.greeting')).toBe('Hello from fixture');
+
+    const snapshot = _snapshot();
+
+    // The mutate cycle strings.test.js's own beforeEach/afterEach run for every test.
+    reset();
+    defineStrings({ 'foo.bar': 'Hello' });
+    reset();
+
+    _restore(snapshot);
+
+    expect(t('fixture.greeting')).toBe('Hello from fixture');
   });
 });
