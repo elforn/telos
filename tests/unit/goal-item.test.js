@@ -373,6 +373,51 @@ describe('goal-item — frequency: tap still edits, hold logs', () => {
     bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
     expect(events).toHaveLength(2);
   });
+
+  it('a plain tap on the today token dispatches goal-log-toggle, not goal-tap', () => {
+    const el = mount(weeklyGoal());
+    const tapEvents = [];
+    const toggleEvents = [];
+    el.addEventListener('goal-tap', e => tapEvents.push(e));
+    el.addEventListener('goal-log-toggle', e => toggleEvents.push(e));
+
+    const today = el.shadowRoot.querySelector('.freq-today');
+    const rect = today.getBoundingClientRect();
+    const opts = { bubbles: true, composed: true, clientX: rect.x, clientY: rect.y, pointerId: 1, button: 0 };
+    today.dispatchEvent(new PointerEvent('pointerdown', opts));
+    today.dispatchEvent(new PointerEvent('pointerup', opts));
+
+    expect(toggleEvents).toHaveLength(1);
+    expect(tapEvents).toHaveLength(0);
+  });
+
+  it('a plain tap elsewhere on the bar still dispatches goal-tap, not goal-log-toggle', () => {
+    const el = mount(weeklyGoal());
+    const tapEvents = [];
+    const toggleEvents = [];
+    el.addEventListener('goal-tap', e => tapEvents.push(e));
+    el.addEventListener('goal-log-toggle', e => toggleEvents.push(e));
+
+    const title = el.shadowRoot.querySelector('.title');
+    const opts = { bubbles: true, composed: true, clientX: 5, clientY: 5, pointerId: 1, button: 0 };
+    title.dispatchEvent(new PointerEvent('pointerdown', opts));
+    title.dispatchEvent(new PointerEvent('pointerup', opts));
+
+    expect(tapEvents).toHaveLength(1);
+    expect(toggleEvents).toHaveLength(0);
+  });
+
+  it('holding on the today token still dispatches goal-log-toggle (hold path unaffected)', async () => {
+    const el = mount(weeklyGoal());
+    const toggleEvents = [];
+    el.addEventListener('goal-log-toggle', e => toggleEvents.push(e));
+
+    const today = el.shadowRoot.querySelector('.freq-today');
+    const opts = { bubbles: true, composed: true, clientX: 10, clientY: 10, pointerId: 1, button: 0 };
+    today.dispatchEvent(new PointerEvent('pointerdown', opts));
+    await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: 600 });
+    today.dispatchEvent(new PointerEvent('pointerup', opts));
+  });
 });
 
 describe('goal-item — frequency: log tick + celebration', () => {

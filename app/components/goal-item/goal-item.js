@@ -596,9 +596,17 @@ class GoalItem extends Gestures(AppElement) {
 
   // ── Gestures ──────────────────────────────────────────────────────────────
 
-  onTap() {
+  // The "today" token is the one part of a frequency row where a plain tap
+  // (not a hold) toggles the log — it's the row's primary action target, so
+  // it shouldn't cost a 500ms dwell. Everywhere else on the bar, tap still
+  // opens the goal dialog and hold still toggles (see onHoldDragStart below).
+  onTap(e) {
     if (this._revealedDir) {
       this._closeReveal();
+      return;
+    }
+    if (isFrequency(this._goal) && e?.originalEvent?.composedPath().includes(this._freqToday)) {
+      this._toggleLog();
       return;
     }
     this._tap();
@@ -610,7 +618,9 @@ class GoalItem extends Gestures(AppElement) {
   // dwell-confirmation, with a free haptic buzz already built in — nothing
   // to animate mid-hold, so unlike the percentage case there's no drag phase
   // to enter). onHoldDrag/onHoldDragEnd are no-ops for this type: the action
-  // already happened at the start.
+  // already happened at the start. This still fires for a hold anywhere on
+  // the bar, including the "today" token — the token's plain-tap shortcut
+  // above doesn't remove the hold path, it adds a faster one.
 
   onHoldDragStart() {
     this._closeReveal();
