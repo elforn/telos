@@ -7,12 +7,12 @@ import '../tag-input/tag-input.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
-import { TARGET_LIMITS, FIX_DAY_SPAN, DEFAULT_TARGET } from '../../utils/tracking.js';
+import { TARGET_LIMITS, FIX_DAY_SPAN, DEFAULT_TARGET, isEntryType, isDecreasing } from '../../utils/tracking.js';
 import { todayISO } from '../../utils/today-iso.js';
 
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
-const TYPES = ['percentage', 'weekly', 'monthly'];
+const TYPES = ['percentage', 'weekly', 'monthly', 'decreasing'];
 const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 class GoalDialog extends AppElement {
@@ -75,7 +75,11 @@ class GoalDialog extends AppElement {
     // changed via "Change type" in the ⋮ menu rather than shown expanded on
     // every open. Fix-a-day starts collapsed too, independently.
     this._draftType   = goal?.tracking?.type   ?? 'percentage';
-    this._draftTarget = goal?.tracking?.target ?? DEFAULT_TARGET.weekly;
+    // `?? DEFAULT_TARGET[this._draftType]` picks up the right seed per type
+    // (0 for decreasing, which is falsy but meaningful — never `||` here);
+    // the trailing `?? DEFAULT_TARGET.weekly` only matters for 'percentage',
+    // which has no entry of its own and never reads _draftTarget anyway.
+    this._draftTarget = goal?.tracking?.target ?? DEFAULT_TARGET[this._draftType] ?? DEFAULT_TARGET.weekly;
     this._typeExpanded = false;
     this._fixDayExpanded = false;
     this._renderTypeSection();
@@ -286,6 +290,7 @@ class GoalDialog extends AppElement {
 
         .type-pill {
           flex: 1;
+          min-inline-size: 0;
           min-block-size: var(--touch-target);
           border: none;
           background: transparent;
@@ -296,6 +301,9 @@ class GoalDialog extends AppElement {
           font-family: var(--font-family);
           color: var(--color-text-secondary);
           cursor: pointer;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .type-pill[aria-checked="true"] {
@@ -1340,9 +1348,12 @@ class GoalDialog extends AppElement {
     this._typePillGroup.hidden = !showTypeEditor;
     this._renderFixDaySummary();
 
-    this._changeTypeValue.textContent = (this._draftType === 'weekly' || this._draftType === 'monthly')
-      ? t(`goal-dialog.type-summary-${this._draftType}`, { target: this._draftTarget })
-      : t('goal-dialog.type-percentage');
+    // 'percentage' is the one type with no target concept at all — every
+    // other type (including any future one) uses its own type-summary-*
+    // string rather than silently falling back to "Percentage" here.
+    this._changeTypeValue.textContent = this._draftType === 'percentage'
+      ? t('goal-dialog.type-percentage')
+      : t(`goal-dialog.type-summary-${this._draftType}`, { target: this._draftTarget });
 
     if (!showTypeEditor) {
       this._targetBlock.hidden = true;
@@ -1351,13 +1362,18 @@ class GoalDialog extends AppElement {
 
     this._typePills.forEach(p => p.setAttribute('aria-checked', String(p.dataset.type === this._draftType)));
 
-    const showTarget = this._draftType !== 'percentage';
+    const showTarget = isEntryType(this._draftType);
     this._targetBlock.hidden = !showTarget;
     if (!showTarget) return;
 
     const [min, max] = TARGET_LIMITS[this._draftType];
     this._targetValueEl.textContent = String(this._draftTarget);
     this._targetLabel.textContent = t(`goal-dialog.target-label-${this._draftType}`);
+    // Weekly/monthly leave the label screen-reader-only — the bare stepper
+    // number reads fine next to the "Every day" chip for context. Decreasing
+    // has no such chip, so a bare "0" next to nothing would be opaque —
+    // this is the one type whose label actually needs to be seen.
+    this._targetLabel.classList.toggle('sr-only', this._draftType !== 'decreasing');
     this._targetDownBtn.disabled = this._draftTarget <= min;
     this._targetUpBtn.disabled = this._draftTarget >= max;
     this._everydayChip.hidden = this._draftType !== 'weekly';
@@ -1373,7 +1389,7 @@ class GoalDialog extends AppElement {
   // this._goal, so this._goal.tracking.type would still read the stale,
   // pre-switch value here.
   _renderFixDaySummary() {
-    const canFixDay = !this._isNew && (this._draftType === 'weekly' || this._draftType === 'monthly');
+    const canFixDay = !this._isNew && isEntryType(this._draftType);
     if (!canFixDay && this._fixDayExpanded) this._fixDayExpanded = false;
     this._fixDaySummary.hidden = !canFixDay;
     this._fixDaySummary.setAttribute('aria-expanded', String(this._fixDayExpanded));
@@ -1439,7 +1455,8 @@ class GoalDialog extends AppElement {
       chip.className = 'day-chip';
       chip.dataset.iso = iso;
       chip.setAttribute('aria-pressed', String(logged));
-      chip.setAttribute('aria-label', `${dows[d.getDay()]} ${d.getDate()}${logged ? `, ${t('goal-dialog.fixday-logged')}` : ''}`);
+      const loggedWord = t(isDecreasing(this._goal) ? 'goal-dialog.fixday-slipped' : 'goal-dialog.fixday-logged');
+      chip.setAttribute('aria-label', `${dows[d.getDay()]} ${d.getDate()}${logged ? `, ${loggedWord}` : ''}`);
       chip.innerHTML = `<span class="dow" aria-hidden="true">${dows[d.getDay()]}</span><span class="num" aria-hidden="true">${d.getDate()}</span>`;
       nodes.push(chip);
     }

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
-import '../../app/components/goal-item/goal-item.js';
+import { septagonGradient } from '../../app/components/goal-item/goal-item.js';
 import { _resetDeleteGuard } from '../../app/utils/delete-ghost-guard.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
@@ -191,6 +191,24 @@ describe('goal-item — hold drag', () => {
     expect(events).toHaveLength(1);
     expect(events[0].detail.percentage).toBe(50);
   });
+
+  it('a decreasing goal ignores drag entirely — hold toggles instead of scrubbing', async () => {
+    const el = mount({ id: 'g1', title: 'No ice cream', tracking: { type: 'decreasing', target: 0, entries: [] } });
+    el.shadowRoot.querySelector('.bar').getBoundingClientRect = () => ({ left: 0, width: 200, top: 0, height: 40 });
+
+    const progressEvents = [];
+    const toggleEvents = [];
+    el.addEventListener('goal-progress', e => progressEvents.push(e));
+    el.addEventListener('goal-log-toggle', e => toggleEvents.push(e));
+
+    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
+    await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: 600 });
+    el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 100, clientY: 20, pointerId: 1 }));
+    el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 100, clientY: 20, pointerId: 1, button: 0 }));
+
+    expect(progressEvents).toHaveLength(0);
+    expect(el.classList.contains('hold-active')).toBe(false);
+  });
 });
 
 describe('goal-item — swipe', () => {
@@ -319,7 +337,7 @@ describe('goal-item — frequency: role, aria, rendering', () => {
   it('monthly renders the today token as a squircle (small rx)', () => {
     const el = mount(monthlyGoal());
     const rx = el.shadowRoot.querySelector('.freq-ring .progress').getAttribute('rx');
-    expect(Number(rx)).toBe(8);
+    expect(Number(rx)).toBe(7);
   });
 
   it('bar[data-freq] and data-freq-type reflect the tracking type', () => {
@@ -417,6 +435,212 @@ describe('goal-item — frequency: tap still edits, hold logs', () => {
     today.dispatchEvent(new PointerEvent('pointerdown', opts));
     await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: 600 });
     today.dispatchEvent(new PointerEvent('pointerup', opts));
+  });
+});
+
+function decreasingGoal(entries = [], target = 0, extra = {}) {
+  return { id: 'g1', title: 'No ice cream', tracking: { type: 'decreasing', target, entries }, ...extra };
+}
+
+describe('goal-item — decreasing: rendering', () => {
+  it('sets data-type="decreasing" and data-freq="false"', () => {
+    const el = mount(decreasingGoal());
+    const bar = el.shadowRoot.querySelector('.bar');
+    expect(bar.dataset.type).toBe('decreasing');
+    expect(bar.dataset.freq).toBe('false');
+  });
+
+  it('other types still set data-type correctly (percentage, weekly, monthly)', () => {
+    expect(mount({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 } })
+      .shadowRoot.querySelector('.bar').dataset.type).toBe('percentage');
+    expect(mount(weeklyGoal()).shadowRoot.querySelector('.bar').dataset.type).toBe('weekly');
+    expect(mount(monthlyGoal()).shadowRoot.querySelector('.bar').dataset.type).toBe('monthly');
+  });
+
+  it('renders 6 septagons, the last one carrying the "current" class', () => {
+    const el = mount(decreasingGoal());
+    const weeks = el.shadowRoot.querySelectorAll('.septagon-strip .septagon-week');
+    expect(weeks).toHaveLength(6);
+    expect([...weeks].filter(w => w.classList.contains('current'))).toHaveLength(1);
+    expect(weeks[weeks.length - 1].classList.contains('current')).toBe(true);
+  });
+
+  it('septagonGradient fades accent to 60% for within-allowance and 20% for over-allowance — an opacity "draining" escalation, never a second hue', () => {
+    // All three states use color-mix() (or, for clean, a bare var()) in a
+    // way happy-dom's limited CSS parser can't round-trip through
+    // element.style.background (it rejects the whole value when any
+    // segment it can't parse — confirmed fine in real Chromium/Firefox), so
+    // this is verified at the pure string-output level instead of via DOM.
+    const days = [
+      { state: 'clean' }, { state: 'within' }, { state: 'over' },
+      { state: 'clean' }, { state: 'clean' }, { state: 'clean' }, { state: 'clean' },
+    ];
+    const gradient = septagonGradient(days);
+    expect(gradient).toContain('var(--color-accent)');
+    expect(gradient).toContain('color-mix(in srgb, var(--color-accent) 60%, transparent)');
+    expect(gradient).toContain('color-mix(in srgb, var(--color-accent) 20%, transparent)');
+    expect(gradient).not.toContain('--color-success');
+    expect(gradient).not.toContain('--color-warning');
+    expect(gradient).not.toContain('--color-danger');
+    expect(gradient.startsWith('conic-gradient(from 0deg,')).toBe(true);
+  });
+
+  it('septagonGradient renders a not-yet-happened day as plain transparent, overriding its (always-clean) state', () => {
+    expect(septagonGradient([{ state: 'clean', future: true }]))
+      .toBe('conic-gradient(from 0deg, transparent 0.000deg 51.429deg)');
+  });
+
+  it('a clean goal\'s current week is all --color-accent wedges (theme-aligned, matching weekly\'s met-dot)', () => {
+    const el = mount(decreasingGoal());
+    const current = el.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
+    expect(current.style.background).toContain('--color-accent');
+    expect(current.style.background).not.toContain('--color-success');
+    expect(current.style.background).not.toContain('--color-warning');
+  });
+
+  it('history weeks are a plain filled heptagon with no separate border/ring element — only the current week ever gets a ring', () => {
+    const el = mount(decreasingGoal());
+    const weeks = [...el.shadowRoot.querySelectorAll('.septagon-strip .septagon-week')];
+    const history = weeks.slice(0, -1);
+    history.forEach(week => {
+      expect(week.children).toHaveLength(1); // just .septagon-fill, nothing else
+      expect(week.querySelector('.septagon-ring')).toBeNull();
+    });
+  });
+
+  it('the current septagon has a separate SVG ring element (not a rim/background trick), invisible until today has a recorded slip', () => {
+    const clean = mount(decreasingGoal([]));
+    const cleanCurrent = clean.shadowRoot.querySelector('.septagon-week.current');
+    expect(cleanCurrent.querySelector('.septagon-ring')).not.toBeNull();
+    expect(cleanCurrent.classList.contains('logged')).toBe(false);
+
+    const logged = mount(decreasingGoal([isoDaysFromNow(0)]));
+    expect(logged.shadowRoot.querySelector('.septagon-week.current').classList.contains('logged')).toBe(true);
+  });
+
+  it('keeps the percentage label hidden, same as frequency types — the septagon strip carries the score instead', () => {
+    const el = mount(decreasingGoal());
+    expect(el.shadowRoot.querySelector('.pct-label').hidden).toBe(true);
+  });
+});
+
+describe('goal-item — decreasing: role, aria', () => {
+  it('uses role=button with aria-pressed, same as frequency types', () => {
+    const el = mount(decreasingGoal());
+    const bar = el.shadowRoot.querySelector('.bar');
+    expect(bar.getAttribute('role')).toBe('button');
+    expect(bar.hasAttribute('aria-valuemin')).toBe(false);
+    expect(bar.hasAttribute('aria-valuenow')).toBe(false);
+    expect(bar.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('aria-pressed reflects whether today is logged', () => {
+    const el = mount(decreasingGoal([isoDaysFromNow(0)]));
+    expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('aria-label includes the percent-clean, slip count, and allowance', () => {
+    const el = mount(decreasingGoal([isoDaysFromWeekStart(0)], 1));
+    const label = el.shadowRoot.querySelector('.bar').getAttribute('aria-label');
+    expect(label).toContain('% clean');
+    expect(label).toContain('1 slips this week');
+    expect(label).toContain('1 allowed');
+  });
+
+  it('aria-label gets a slipped-today suffix only when logged', () => {
+    const logged = mount(decreasingGoal([isoDaysFromNow(0)]));
+    expect(logged.shadowRoot.querySelector('.bar').getAttribute('aria-label')).toContain('slipped today');
+    const clean = mount(decreasingGoal([]));
+    expect(clean.shadowRoot.querySelector('.bar').getAttribute('aria-label')).not.toContain('slipped today');
+  });
+});
+
+describe('goal-item — decreasing: tap/hold', () => {
+  it('a plain tap on the current septagon dispatches goal-log-toggle, not goal-tap', () => {
+    const el = mount(decreasingGoal());
+    const tapEvents = [];
+    const toggleEvents = [];
+    el.addEventListener('goal-tap', e => tapEvents.push(e));
+    el.addEventListener('goal-log-toggle', e => toggleEvents.push(e));
+
+    const current = el.shadowRoot.querySelector('.septagon-week.current');
+    const opts = { bubbles: true, composed: true, clientX: 5, clientY: 5, pointerId: 1, button: 0 };
+    current.dispatchEvent(new PointerEvent('pointerdown', opts));
+    current.dispatchEvent(new PointerEvent('pointerup', opts));
+
+    expect(toggleEvents).toHaveLength(1);
+    expect(tapEvents).toHaveLength(0);
+  });
+
+  it('a plain tap on a history septagon (read-only) still dispatches goal-tap, not goal-log-toggle', () => {
+    const el = mount(decreasingGoal());
+    const tapEvents = [];
+    const toggleEvents = [];
+    el.addEventListener('goal-tap', e => tapEvents.push(e));
+    el.addEventListener('goal-log-toggle', e => toggleEvents.push(e));
+
+    const weeks = el.shadowRoot.querySelectorAll('.septagon-strip .septagon-week');
+    const history = weeks[0]; // oldest, not .current
+    const opts = { bubbles: true, composed: true, clientX: 5, clientY: 5, pointerId: 1, button: 0 };
+    history.dispatchEvent(new PointerEvent('pointerdown', opts));
+    history.dispatchEvent(new PointerEvent('pointerup', opts));
+
+    expect(tapEvents).toHaveLength(1);
+    expect(toggleEvents).toHaveLength(0);
+  });
+
+  it('a plain tap elsewhere on the bar still dispatches goal-tap', () => {
+    const el = mount(decreasingGoal());
+    const tapEvents = [];
+    el.addEventListener('goal-tap', e => tapEvents.push(e));
+    const title = el.shadowRoot.querySelector('.title');
+    const opts = { bubbles: true, composed: true, clientX: 5, clientY: 5, pointerId: 1, button: 0 };
+    title.dispatchEvent(new PointerEvent('pointerdown', opts));
+    title.dispatchEvent(new PointerEvent('pointerup', opts));
+    expect(tapEvents).toHaveLength(1);
+  });
+
+  it('holding anywhere on the bar dispatches goal-log-toggle, no scrub/hold-active, and the fill width does not change', async () => {
+    const el = mount(decreasingGoal());
+    const toggleEvents = [];
+    const progressEvents = [];
+    el.addEventListener('goal-log-toggle', e => toggleEvents.push(e));
+    el.addEventListener('goal-progress', e => progressEvents.push(e));
+
+    const widthBefore = el.shadowRoot.querySelector('.fill').style.width;
+    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
+    await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: 600 });
+    el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
+
+    expect(el.classList.contains('hold-active')).toBe(false);
+    expect(progressEvents).toHaveLength(0);
+    expect(el.shadowRoot.querySelector('.fill').style.width).toBe(widthBefore);
+  });
+
+  it('ArrowRight and ArrowLeft both dispatch goal-log-toggle (a toggle, not a scrub)', () => {
+    const el = mount(decreasingGoal());
+    const events = [];
+    el.addEventListener('goal-log-toggle', e => events.push(e));
+    const bar = el.shadowRoot.querySelector('.bar');
+    bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    expect(events).toHaveLength(2);
+  });
+});
+
+describe('goal-item — decreasing: log tick', () => {
+  it('adds .log-tick when a slip is logged for today', () => {
+    const el = mount(decreasingGoal([]));
+    expect(el.classList.contains('log-tick')).toBe(false);
+    el.goal = decreasingGoal([isoDaysFromNow(0)]);
+    expect(el.classList.contains('log-tick')).toBe(true);
+  });
+
+  it('does not re-trigger .log-tick when un-logging', () => {
+    const el = mount(decreasingGoal([isoDaysFromNow(0)]));
+    el.classList.remove('log-tick'); // isolate from any mount-time state
+    el.goal = decreasingGoal([]);
+    expect(el.classList.contains('log-tick')).toBe(false);
   });
 });
 

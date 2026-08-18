@@ -1294,6 +1294,50 @@ describe('goal-dialog — type selector (new goal)', () => {
     expect(pill(el, 'percentage').getAttribute('aria-checked')).toBe('true');
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
   });
+
+  it('selecting Avoid reveals the target block defaulting to 0, no Every-day preset', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'decreasing').click();
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('0');
+    expect(el.shadowRoot.querySelector('#everyday-chip').hidden).toBe(true);
+  });
+
+  it('Avoid\'s stepper floors at 0 (not 1, unlike weekly/monthly) and clamps to TARGET_LIMITS.decreasing (0–6)', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'decreasing').click();
+    const down = el.shadowRoot.querySelector('#target-down');
+    const up   = el.shadowRoot.querySelector('#target-up');
+    down.click(); // already 0 — stays 0
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('0');
+    expect(down.disabled).toBe(true);
+    for (let i = 0; i < 10; i++) up.click(); // clamps at 6, not 7
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('6');
+    expect(up.disabled).toBe(true);
+  });
+
+  it('Avoid\'s target label is visible (not screen-reader-only, unlike weekly/monthly)', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    expect(el.shadowRoot.querySelector('#target-label').classList.contains('sr-only')).toBe(true);
+    pill(el, 'decreasing').click();
+    expect(el.shadowRoot.querySelector('#target-label').classList.contains('sr-only')).toBe(false);
+  });
+
+  it('goal-created carries the selected Avoid type/allowance, with a dormant value alongside empty entries', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'decreasing').click();
+    el.shadowRoot.querySelector('#target-up').click(); // 0 -> 1
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'No ice cream';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 1, entries: [] });
+  });
 });
 
 describe('goal-dialog — type/target: no main-view presence for an existing goal, changed via the ⋮ menu', () => {
@@ -1320,7 +1364,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
   it('percentage shows a plain type name as the menu item value', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 40, target: 3, entries: [] } });
-    expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('Percentage');
+    expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('Percent');
   });
 
   it('"Change type" in the ⋮ menu reveals the interactive pill group, closes the sheet, no locked state anywhere', () => {
@@ -1466,6 +1510,43 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     pill(el, 'weekly').click();
     expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false);
   });
+
+  it('the change-type summary string is correct for an existing Avoid goal, not the old "Percentage" mis-render', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', value: 0, target: 2, entries: [] } });
+    expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('Avoid, 2 slip/wk allowed');
+  });
+
+  it('switching an existing goal to Avoid preserves entries dormant and defaults the allowance to 0', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: ['2026-08-01'] } });
+    expand(el);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e));
+    pill(el, 'decreasing').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 0, entries: ['2026-08-01'] });
+  });
+
+  it('switching back and forth (weekly → Avoid → weekly) recovers the original entries — nothing is destroyed', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: ['2026-08-01', '2026-08-08'] } });
+    expand(el);
+    pill(el, 'decreasing').click(); // entries reinterpreted as slips, not deleted
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e));
+    pill(el, 'weekly').click(); // switch back
+    expect(events[0].detail.tracking.entries).toEqual(['2026-08-01', '2026-08-08']);
+  });
+
+  it('switching an existing goal to Avoid reveals the Fix-a-day summary live', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0, target: 3, entries: [] } });
+    expand(el);
+    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(true);
+    pill(el, 'decreasing').click();
+    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false);
+  });
 });
 
 describe('goal-dialog — Fix a day (frequency goals only, inline, a real expand/collapse toggle)', () => {
@@ -1503,11 +1584,11 @@ describe('goal-dialog — Fix a day (frequency goals only, inline, a real expand
     expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(42); // 7 × PERIOD_WINDOW.weekly
   });
 
-  it('renders 120 day chips for a monthly goal (30 × PERIOD_WINDOW.monthly)', () => {
+  it('renders 180 day chips for a monthly goal (30 × DOT_WINDOW.monthly — reaches the full 6-month dot-strip, not just the 4 months still scored)', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
     expandFixDay(el);
-    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(120);
+    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(180);
   });
 
   it('inserts a month-label divider at every calendar-month boundary the strip crosses', () => {
@@ -1599,6 +1680,37 @@ describe('goal-dialog — Fix a day (frequency goals only, inline, a real expand
     const chip = [...el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')].find(c => c.dataset.iso === iso);
     chip.click();
     expect(chip.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('is visible for an existing Avoid goal and renders 42 day chips (7 × PERIOD_WINDOW.decreasing), same span as weekly', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', target: 0, entries: [] } });
+    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false);
+    expandFixDay(el);
+    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(42);
+  });
+
+  it('an Avoid goal\'s logged-day chip aria-label says "slipped", not "logged"', () => {
+    const el = mount();
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', target: 0, entries: [iso] } });
+    expandFixDay(el);
+    const chips = [...el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')];
+    const todayChip = chips.find(c => c.dataset.iso === iso);
+    expect(todayChip.getAttribute('aria-label')).toContain('slipped');
+    expect(todayChip.getAttribute('aria-label')).not.toContain('logged');
+  });
+
+  it('a weekly goal\'s logged-day chip aria-label still says "logged" (unaffected)', () => {
+    const el = mount();
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [iso] } });
+    expandFixDay(el);
+    const chips = [...el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')];
+    const todayChip = chips.find(c => c.dataset.iso === iso);
+    expect(todayChip.getAttribute('aria-label')).toContain('logged');
   });
 });
 

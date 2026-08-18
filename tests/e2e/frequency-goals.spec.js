@@ -423,7 +423,7 @@ test.describe('Frequency goals', () => {
         .querySelector('#capstone-list goal-item');
       return item.shadowRoot.querySelector('.freq-ring .progress').getAttribute('rx');
     });
-    expect(Number(rx)).toBe(8); // the squircle radius, not a full circle
+    expect(Number(rx)).toBe(7); // the squircle radius, not a full circle
   });
 
   test('Every-day preset creates a weekly goal with target 7', async ({ page }) => {
@@ -629,7 +629,7 @@ test.describe('Frequency goals', () => {
     expect(backToWeekly.value).toBe(originalValue); // still dormant, still there
   });
 
-  test('Fix a day on a monthly goal spans 120 days with month-label dividers, opened scrolled to today', async ({ page }) => {
+  test('Fix a day on a monthly goal spans 180 days with month-label dividers, opened scrolled to today', async ({ page }) => {
     await openDialog(page, '#add-capstone');
     await selectType(page, 'monthly');
     await saveDialog(page, 'Call parents');
@@ -653,7 +653,7 @@ test.describe('Frequency goals', () => {
         scrolledToEnd: strip.scrollLeft > 0, // any distance in confirms it isn't stuck at the oldest day
       };
     });
-    expect(chipCount).toBe(120); // 30 × PERIOD_WINDOW.monthly (4)
+    expect(chipCount).toBe(180); // 30 × DOT_WINDOW.monthly (6) — the full display window, not just the 4 months still scored
     expect(dividerCount).toBeGreaterThanOrEqual(4);
     expect(scrolledToEnd).toBe(true);
   });

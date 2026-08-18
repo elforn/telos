@@ -1,21 +1,51 @@
 import { describe, it, expect } from 'vitest';
 import {
-  isFrequency, percentValue, setPercent, logEntry, unlogEntry, isLoggedOn,
+  isFrequency, isEntryType, isEntryBased, isDecreasing,
+  percentValue, setPercent, logEntry, unlogEntry, isLoggedOn,
   isoWeekKey, monthKey, recentPeriods, periodFractions, recentDots, currentPeriodCount,
-  PERIOD_WINDOW, DOT_WINDOW, TARGET_LIMITS,
+  weekDayStates, recentWeekStates,
+  PERIOD_WINDOW, DOT_WINDOW, TARGET_LIMITS, DEFAULT_TARGET, FIX_DAY_SPAN,
 } from '../../app/utils/tracking.js';
 
 function pct(value) { return { tracking: { type: 'percentage', value } }; }
 function weekly(target, entries) { return { tracking: { type: 'weekly', target, entries } }; }
 function monthly(target, entries) { return { tracking: { type: 'monthly', target, entries } }; }
+function decreasing(target, entries) { return { tracking: { type: 'decreasing', target, entries } }; }
 
 describe('tracking — isFrequency', () => {
   it('is true only for weekly/monthly', () => {
     expect(isFrequency(pct(50))).toBe(false);
     expect(isFrequency(weekly(3, []))).toBe(true);
     expect(isFrequency(monthly(4, []))).toBe(true);
+    expect(isFrequency(decreasing(0, []))).toBe(false); // not a frequency type — see isEntryBased below
     expect(isFrequency({})).toBe(false);
     expect(isFrequency(null)).toBe(false);
+  });
+});
+
+describe('tracking — isEntryType / isEntryBased / isDecreasing', () => {
+  it('isEntryType is true for weekly, monthly, and decreasing only', () => {
+    expect(isEntryType('weekly')).toBe(true);
+    expect(isEntryType('monthly')).toBe(true);
+    expect(isEntryType('decreasing')).toBe(true);
+    expect(isEntryType('percentage')).toBe(false);
+    expect(isEntryType(undefined)).toBe(false);
+  });
+
+  it('isEntryBased reads the goal\'s tracking type through isEntryType', () => {
+    expect(isEntryBased(pct(50))).toBe(false);
+    expect(isEntryBased(weekly(3, []))).toBe(true);
+    expect(isEntryBased(monthly(4, []))).toBe(true);
+    expect(isEntryBased(decreasing(0, []))).toBe(true);
+    expect(isEntryBased({})).toBe(false);
+    expect(isEntryBased(null)).toBe(false);
+  });
+
+  it('isDecreasing is true only for the decreasing type', () => {
+    expect(isDecreasing(decreasing(0, []))).toBe(true);
+    expect(isDecreasing(weekly(3, []))).toBe(false);
+    expect(isDecreasing(pct(50))).toBe(false);
+    expect(isDecreasing(null)).toBe(false);
   });
 });
 
@@ -115,6 +145,12 @@ describe('tracking — recentPeriods window', () => {
     const keys = recentPeriods('monthly', 3, '2026-01-15');
     expect(keys).toEqual(['2025-11', '2025-12', '2026-01']);
   });
+
+  it('decreasing shares weekly\'s ISO-week buckets, not monthly\'s (regression guard: an unlisted type used to silently fall into the monthly branch)', () => {
+    const decreasingKeys = recentPeriods('decreasing', PERIOD_WINDOW.decreasing, '2026-08-10');
+    const weeklyKeys = recentPeriods('weekly', PERIOD_WINDOW.weekly, '2026-08-10');
+    expect(decreasingKeys).toEqual(weeklyKeys);
+  });
 });
 
 describe('tracking — periodFractions', () => {
@@ -141,6 +177,34 @@ describe('tracking — periodFractions', () => {
     const goal = monthly(4, []);
     const fractions = periodFractions(goal.tracking, '2026-08-10');
     expect(fractions).toHaveLength(PERIOD_WINDOW.monthly);
+  });
+
+  it('decreasing: no slips in a week scores that period a full 1', () => {
+    const goal = decreasing(0, []);
+    const fractions = periodFractions(goal.tracking, '2026-08-10');
+    expect(fractions.every(f => f === 1)).toBe(true);
+  });
+
+  it('decreasing: slips within the allowance still score 1 — the allowance is free, not discounted', () => {
+    const goal = decreasing(2, ['2026-08-10', '2026-08-11']); // 2 slips this week, allowance 2
+    const fractions = periodFractions(goal.tracking, '2026-08-11');
+    expect(fractions[fractions.length - 1]).toBe(1);
+  });
+
+  it('decreasing: a slip past the allowance is weighed against (7 - allowance), not a flat 7', () => {
+    // periodFractions always uses the closed-week formula (PERIOD_FRACTION.decreasing)
+    // regardless of which period is "current" — the elapsed-day correction for a
+    // still-open week is applied separately, only inside decreasingWeightedAverage
+    // (see the percentValue describe block below), not here.
+    const goal = decreasing(1, ['2026-08-10', '2026-08-11', '2026-08-12']); // 3 slips, allowance 1 → 2 costly
+    const fractions = periodFractions(goal.tracking, '2026-08-12');
+    expect(fractions[fractions.length - 1]).toBeCloseTo(1 - 2 / (7 - 1), 10);
+  });
+
+  it('decreasing: a week fully outside the allowance never scores below 0 (clamped, not negative)', () => {
+    const goal = decreasing(0, ['2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15', '2026-08-16']); // all 7 days
+    const fractions = periodFractions(goal.tracking, '2026-08-16');
+    expect(fractions[fractions.length - 1]).toBe(0);
   });
 });
 
@@ -269,6 +333,204 @@ describe('tracking — weighted average (percentValue for frequency types, pinne
   });
 });
 
+describe('tracking — percentValue (decreasing), pinned to a fixed "today"', () => {
+  const TODAY = '2026-08-10'; // Monday — same convention as the frequency weighted-average suite above
+
+  function sevenDaysFrom(mondayIso) {
+    const [y, m, d] = mondayIso.split('-').map(Number);
+    return Array.from({ length: 7 }, (_, i) => {
+      const dt = new Date(y, m - 1, d + i);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    });
+  }
+  function mondayMinusWeeks(mondayIso, weeksAgo) {
+    const [y, m, d] = mondayIso.split('-').map(Number);
+    const dt = new Date(y, m - 1, d - weeksAgo * 7);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  }
+  function mondayOf(dateIso) {
+    const [y, m, d] = dateIso.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7)); // Mon=0..Sun=6
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  }
+
+  it('no slips at all returns 100', () => {
+    expect(percentValue(decreasing(0, []), TODAY)).toBe(100);
+  });
+
+  it('a fully-slipped week 5 weeks ago costs far less than the same fully-slipped week right now (the doubling recency curve)', () => {
+    // Evaluated on the Sunday of the current week (fully elapsed) specifically
+    // so the elapsed-day correction (see the describe block further below) is
+    // a no-op here — this isolates the recency curve on its own, the same
+    // clean comparison as the original version of this test.
+    const SUNDAY = '2026-08-16'; // the Sunday ending TODAY's own ISO week
+    const currentMonday = mondayOf(SUNDAY);
+    const oldBadWeek = decreasing(0, sevenDaysFrom(mondayMinusWeeks(currentMonday, 5))); // oldest of the 6 tracked weeks
+    const recentBadWeek = decreasing(0, sevenDaysFrom(currentMonday)); // current week, all 7 days already elapsed
+    const oldScore = percentValue(oldBadWeek, SUNDAY);
+    const recentScore = percentValue(recentBadWeek, SUNDAY);
+    // weights are 1,2,4,8,16,32 (sum 63): a bad oldest week costs 1/63 ≈ 98,
+    // a bad current week costs 32/63 ≈ 49 — not just "some" difference.
+    expect(oldScore).toBe(98);
+    expect(recentScore).toBe(49);
+    expect(oldScore).toBeGreaterThan(recentScore);
+  });
+
+  it('slips within the allowance never cost anything, only the excess does', () => {
+    const goal = decreasing(2, ['2026-08-10', '2026-08-11']); // 2 slips this week, allowance 2 → free
+    expect(percentValue(goal, TODAY)).toBe(100);
+  });
+
+  it('the allowance applies per week, not once across the whole 6-week window', () => {
+    const entries = [];
+    for (let weeksAgo = 0; weeksAgo <= 5; weeksAgo++) {
+      const week = sevenDaysFrom(mondayMinusWeeks(TODAY, weeksAgo));
+      entries.push(week[0], week[1]); // 2 slips every week — 12 total across the window
+    }
+    expect(percentValue(decreasing(2, entries), TODAY)).toBe(100); // allowance 2/week absorbs all of them
+  });
+
+  it('a slip fully outside the 6-week window contributes nothing — recovers to 100 once it ages out', () => {
+    expect(percentValue(decreasing(0, ['2026-01-05']), TODAY)).toBe(100);
+  });
+
+  it('weekly/monthly percentValue is unaffected by the decreasing-only recency curve (scope regression guard)', () => {
+    // Same shape of test as the existing frequency recency-weighting test above,
+    // re-run here to confirm decreasingWeightedAverage is never reached for
+    // weekly/monthly — their shared linear weightedAverage is untouched.
+    const oldMet = weekly(1, ['2026-07-08']);
+    const recentMet = weekly(1, [TODAY]);
+    expect(percentValue(recentMet, TODAY)).toBeGreaterThan(percentValue(oldMet, TODAY));
+    expect(percentValue(oldMet, TODAY)).toBeGreaterThan(0);
+  });
+});
+
+describe('tracking — percentValue (decreasing): current-week elapsed-day correction', () => {
+  // Mon..Sun of the week containing TODAY above. Every scenario here shares
+  // the same 5-fully-failed-prior-weeks base (worked through numerically
+  // with the product owner before implementing) so the current week's
+  // day-by-day behavior can be checked in isolation from the recency curve
+  // covered by the describe block above.
+  const DAYS = ['2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15', '2026-08-16'];
+
+  function priorFiveWeeksFailed() {
+    const entries = [];
+    for (let weeksAgo = 1; weeksAgo <= 5; weeksAgo++) {
+      const d = new Date(2026, 7, 10 - weeksAgo * 7);
+      for (let i = 0; i < 7; i++) {
+        const day = new Date(d.getFullYear(), d.getMonth(), d.getDate() + i);
+        entries.push(`${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`);
+      }
+    }
+    return entries;
+  }
+
+  it('failing every day this week too never raises the score — flat at the floor, not a mid-week bump', () => {
+    // Without this correction, the growing weight of the current week can
+    // briefly out-run a worsening fraction and make the score climb for the
+    // first few days despite continued failure — this is the regression
+    // guard for that. See decreasingWeightedAverage's comment for the math.
+    const base = priorFiveWeeksFailed();
+    for (let day = 0; day < 7; day++) {
+      const entries = [...base, ...DAYS.slice(0, day + 1)];
+      expect(percentValue(decreasing(0, entries), DAYS[day])).toBe(0);
+    }
+  });
+
+  it('a clean current week climbs smoothly across the week, never jumping straight to the fully-elapsed value', () => {
+    const entries = priorFiveWeeksFailed();
+    const scores = DAYS.map(day => percentValue(decreasing(0, entries), day));
+    expect(scores).toEqual([13, 23, 31, 37, 42, 47, 51]); // Monday -> Sunday
+    for (let i = 1; i < scores.length; i++) expect(scores[i]).toBeGreaterThan(scores[i - 1]);
+  });
+
+  it('a single Monday slip drops the score immediately, then recovers every clean day after, converging to the standard formula by Sunday', () => {
+    const entries = [...priorFiveWeeksFailed(), DAYS[0]]; // only Monday ever slips
+    const scores = DAYS.map(day => percentValue(decreasing(0, entries), day));
+    expect(scores[0]).toBe(0); // Monday's own slip
+    for (let i = 1; i < scores.length; i++) expect(scores[i]).toBeGreaterThan(scores[i - 1]); // recovers every day after
+    // By Sunday the week is fully elapsed (elapsedDays=7), so the correction
+    // is a no-op and this matches exactly what PERIOD_FRACTION.decreasing
+    // alone would give a closed "1 slip this week" period: weights
+    // 1,2,4,8,16,32 (sum 63), current week fraction 6/7 -> (6/7*32)/63 ≈ 43.5%.
+    expect(scores[scores.length - 1]).toBe(44);
+  });
+
+  it('a new slip mid-week causes a visible drop, never a rise, even in the middle of an otherwise-clean recovery', () => {
+    const base = priorFiveWeeksFailed();
+    const wedScore = percentValue(decreasing(0, base), DAYS[2]); // clean through Wednesday
+    const thuScore = percentValue(decreasing(0, [...base, DAYS[3]]), DAYS[3]); // slips Thursday
+    expect(thuScore).toBeLessThan(wedScore);
+  });
+});
+
+describe('tracking — weekDayStates / recentWeekStates', () => {
+  const TODAY = '2026-08-10'; // Monday
+
+  it('always returns the 7 days of the week, Monday first, in chronological order', () => {
+    const days = weekDayStates(decreasing(0, []), TODAY, 0);
+    expect(days).toHaveLength(7);
+    expect(days.map(d => d.iso)).toEqual([
+      '2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15', '2026-08-16',
+    ]);
+  });
+
+  it('no entries -> every day is clean', () => {
+    const days = weekDayStates(decreasing(1, []), TODAY, 0);
+    expect(days.every(d => d.state === 'clean')).toBe(true);
+  });
+
+  it('ranks slips chronologically against the allowance: first N within, the rest over', () => {
+    const goal = decreasing(2, ['2026-08-10', '2026-08-12', '2026-08-14']); // Mon, Wed, Fri
+    const days = weekDayStates(goal, TODAY, 0);
+    expect(days.find(d => d.iso === '2026-08-10').state).toBe('within'); // 1st slip
+    expect(days.find(d => d.iso === '2026-08-12').state).toBe('within'); // 2nd slip
+    expect(days.find(d => d.iso === '2026-08-14').state).toBe('over');   // 3rd slip, past allowance
+    expect(days.find(d => d.iso === '2026-08-11').state).toBe('clean');
+  });
+
+  it('backfilling an earlier slip re-ranks a later one from within to over (allowance is spent chronologically)', () => {
+    const before = decreasing(2, ['2026-08-12', '2026-08-14']); // Wed, Fri — both within (allowance 2)
+    const beforeDays = weekDayStates(before, TODAY, 0);
+    expect(beforeDays.find(d => d.iso === '2026-08-14').state).toBe('within');
+
+    const backfilled = decreasing(2, ['2026-08-11', '2026-08-12', '2026-08-14']); // add Tue, earlier than both
+    const afterDays = weekDayStates(backfilled, TODAY, 0);
+    expect(afterDays.find(d => d.iso === '2026-08-11').state).toBe('within'); // now 1st
+    expect(afterDays.find(d => d.iso === '2026-08-12').state).toBe('within'); // now 2nd
+    expect(afterDays.find(d => d.iso === '2026-08-14').state).toBe('over');   // bumped to 3rd
+  });
+
+  it('flags today and future days within the current week', () => {
+    const days = weekDayStates(decreasing(0, []), TODAY, 0);
+    expect(days.find(d => d.iso === TODAY).today).toBe(true);
+    expect(days.find(d => d.iso === '2026-08-16').future).toBe(true); // Sunday, after TODAY (Monday)
+    expect(days.find(d => d.iso === TODAY).future).toBe(false);
+  });
+
+  it('is correct when todayIso itself is a Sunday (still buckets into the same Mon–Sun week)', () => {
+    const sunday = weekDayStates(decreasing(0, []), '2026-08-16', 0);
+    const monday = weekDayStates(decreasing(0, []), '2026-08-10', 0);
+    expect(sunday.map(d => d.iso)).toEqual(monday.map(d => d.iso));
+  });
+
+  it('a week before the goal existed (no entries) comes back all-clean, not a placeholder state', () => {
+    const days = weekDayStates(decreasing(0, []), TODAY, 5); // oldest of the 6 tracked weeks
+    expect(days.every(d => d.state === 'clean')).toBe(true);
+  });
+
+  it('recentWeekStates returns PERIOD_WINDOW.decreasing weeks, oldest first, last one matching weeksAgo=0', () => {
+    const goal = decreasing(0, ['2026-08-12']); // a slip in the current week only
+    const weeks = recentWeekStates(goal, TODAY);
+    expect(weeks).toHaveLength(PERIOD_WINDOW.decreasing);
+    expect(weeks[weeks.length - 1]).toEqual(weekDayStates(goal, TODAY, 0));
+    expect(weeks[0]).toEqual(weekDayStates(goal, TODAY, PERIOD_WINDOW.decreasing - 1));
+    // only the current week has the slip — every history week is clean
+    expect(weeks.slice(0, -1).every(week => week.every(d => d.state === 'clean'))).toBe(true);
+  });
+});
+
 describe('tracking — currentPeriodCount', () => {
   const TODAY = '2026-08-10';
 
@@ -289,6 +551,27 @@ describe('tracking — currentPeriodCount', () => {
 
 describe('tracking — TARGET_LIMITS', () => {
   it('exposes the exact clamp ranges goal-dialog\'s stepper relies on', () => {
-    expect(TARGET_LIMITS).toEqual({ weekly: [1, 7], monthly: [1, 31] });
+    expect(TARGET_LIMITS).toEqual({ weekly: [1, 7], monthly: [1, 31], decreasing: [0, 6] });
+  });
+});
+
+describe('tracking — decreasing constants', () => {
+  it('DEFAULT_TARGET.decreasing is 0 (strict — no free slips unless configured)', () => {
+    expect(DEFAULT_TARGET.decreasing).toBe(0);
+  });
+
+  it('PERIOD_WINDOW.decreasing is 6, matching weekly\'s window', () => {
+    expect(PERIOD_WINDOW.decreasing).toBe(6);
+  });
+
+  it('FIX_DAY_SPAN.decreasing is 42 (7 × 6 weeks), matching weekly\'s span', () => {
+    expect(FIX_DAY_SPAN.decreasing).toBe(42);
+    expect(FIX_DAY_SPAN.decreasing).toBe(FIX_DAY_SPAN.weekly);
+  });
+
+  it('FIX_DAY_SPAN.monthly reaches the full DOT_WINDOW.monthly display window (180 days), not just the scored PERIOD_WINDOW.monthly (120)', () => {
+    expect(FIX_DAY_SPAN.monthly).toBe(30 * DOT_WINDOW.monthly);
+    expect(FIX_DAY_SPAN.monthly).toBe(180);
+    expect(FIX_DAY_SPAN.monthly).toBeGreaterThan(30 * PERIOD_WINDOW.monthly); // reaches further than what's still scored
   });
 });

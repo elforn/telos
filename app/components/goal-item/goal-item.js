@@ -6,21 +6,81 @@ import { tagStrip } from '../../utils/tag-color.js';
 import { urgencyOf } from '../../utils/urgency.js';
 import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
-import { percentValue, isFrequency, recentDots, isLoggedOn, currentPeriodCount } from '../../utils/tracking.js';
+import {
+  percentValue, isFrequency, isEntryBased, isDecreasing, recentDots, recentWeekStates,
+  isLoggedOn, currentPeriodCount,
+} from '../../utils/tracking.js';
 
 const REVEAL_WIDTH = 60;
 const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
 const SWIPE_DEAD_ZONE = 15;   // px of drag before bar starts moving
 
-// Frequency "today" token geometry — a 40px box (== --touch-target) holding a
-// 30px dot with room for a 2px gap to the ring around it. Weekly renders the
-// ring/dot as a true circle (rx = half the box); monthly as a soft square —
-// shape is the only thing on the row that says which unit you're looking at.
+// Frequency "today" token geometry — a 40px tap-target box (== --touch-target,
+// unchanged, so alignment across goal types stays exact) holding a 27px dot
+// (90% of the original 30px, exact-pixel not a CSS scale transform) with a
+// gap to the ring around it. Weekly renders the ring/dot as a true circle
+// (rx = half the box); monthly as a soft square — shape is the only thing
+// on the row that says which unit you're looking at.
 const TODAY_BOX = 40;
-const TODAY_RING_SIZE = 34;   // the <rect>'s width/height, inset within TODAY_BOX
+const TODAY_RING_SIZE = 31;   // the <rect>'s width/height, inset within TODAY_BOX — same dot+4 gap as before, just at the smaller scale
 const TODAY_RING_INSET = (TODAY_BOX - TODAY_RING_SIZE) / 2;
-const TODAY_RING_RX = { weekly: TODAY_RING_SIZE / 2, monthly: 8 };
+const TODAY_RING_RX = { weekly: TODAY_RING_SIZE / 2, monthly: 7 }; // monthly's corner radius scaled down with it (was 8 at the old 34px ring)
+
+// Decreasing goals' "septagon" strip — 7-wedge heptagons, one per scored
+// week, oldest → current. Regular 7-gon, vertex 0 at 12 o'clock, clockwise —
+// matches conic-gradient's own 0deg-at-top, clockwise convention exactly, so
+// wedge boundaries land precisely on vertices with no seam.
+const SEPTAGON_SIDES = 7;
+const SEPTAGON_STEP = 360 / SEPTAGON_SIDES;
+const SEPTAGON_CLIP = `polygon(${
+  Array.from({ length: SEPTAGON_SIDES }, (_, i) => {
+    const a = (-90 + i * SEPTAGON_STEP) * Math.PI / 180;
+    return `${(50 + 50 * Math.cos(a)).toFixed(2)}% ${(50 + 50 * Math.sin(a)).toFixed(2)}%`;
+  }).join(', ')
+})`;
+// The three logged states are the same accent color at different
+// opacities — a "draining" metaphor instead of a hue-based escalation:
+// full accent when clean, still mostly full at 60% for a forgiven slip,
+// down to 20% once you're over. Never competes with a second hue at all,
+// so it's collision-proof against any accent choice by construction, not
+// by picking colors that happen not to clash with it. `future` (a day in
+// the current week that hasn't happened yet) is a 4th, separate state —
+// fully transparent, not a color at all — so it can never be mistaken for
+// "over" (hence 10% -> 20%: at 10% the two were too close to tell apart)
+// and never silently counts as "clean" the way an un-logged day otherwise
+// would.
+const SEPTAGON_WEDGE_COLOR = {
+  clean: 'var(--color-accent)',
+  within: 'color-mix(in srgb, var(--color-accent) 60%, transparent)',
+  over: 'color-mix(in srgb, var(--color-accent) 20%, transparent)',
+  future: 'transparent',
+};
+// Exact pixel match to freq-dot's history size (13) — literal, not
+// perceptually-compensated.
+const SEPTAGON_HISTORY_SIZE = 13;
+// A couple px bigger than freq-today's dot (now 27px) — same relationship
+// as before, just following the dot's own 90%-of-original shrink down to
+// exact pixels.
+const SEPTAGON_CURRENT_SIZE = 29;
+const SEPTAGON_RING_SIZE = 33; // same +4 gap to the fill as before, at the smaller scale
+const SEPTAGON_RING_POINTS = Array.from({ length: SEPTAGON_SIDES }, (_, i) => {
+  const a = (-90 + i * SEPTAGON_STEP) * Math.PI / 180;
+  const c = TODAY_BOX / 2, r = SEPTAGON_RING_SIZE / 2;
+  return `${(c + r * Math.cos(a)).toFixed(2)},${(c + r * Math.sin(a)).toFixed(2)}`;
+}).join(' ');
+
+// Exported (unusually, for an internal helper) purely so tests can check its
+// string output directly — happy-dom's CSS parser rejects the whole
+// `style.background` value outright when it contains color-mix() nested in
+// conic-gradient() (real Firefox/Chrome handle it fine, confirmed live),
+// so DOM-level assertions can't observe the 'within' wedge color at all.
+export function septagonGradient(days) {
+  const stops = days.map((d, i) =>
+    `${SEPTAGON_WEDGE_COLOR[d.future ? 'future' : d.state]} ${(i * SEPTAGON_STEP).toFixed(3)}deg ${((i + 1) * SEPTAGON_STEP).toFixed(3)}deg`
+  ).join(', ');
+  return `conic-gradient(from 0deg, ${stops})`;
+}
 
 class GoalItem extends Gestures(AppElement) {
   set goal(value) {
@@ -193,12 +253,12 @@ class GoalItem extends Gestures(AppElement) {
         }
 
         .freq-today .freq-dot {
-          inline-size: 30px;
-          block-size: 30px;
+          inline-size: 27px;
+          block-size: 27px;
         }
         .bar[data-freq-type="monthly"] .freq-today .freq-dot {
-          inline-size: 24px;
-          block-size: 24px;
+          /* Same size as weekly's dot — border-radius is the only thing
+             that should differ between the two shapes. */
           border-radius: 6px;
         }
 
@@ -251,6 +311,83 @@ class GoalItem extends Gestures(AppElement) {
           flex-shrink: 0;
           margin-inline-start: var(--space-2);
         }
+
+        /* ── Decreasing ("Avoid") goals: septagon history strip ───────────
+           Six 7-wedge heptagons, oldest → current, replacing the frequency
+           dot-cluster entirely for this type — pct-label stays hidden, same
+           as frequency types, since the strip itself carries the score. The
+           bar/fill deliberately get NO color override here — it keeps the
+           same accent styling every other type's .fill uses; the septagon
+           wedges layer a value-based escalation on top (see
+           SEPTAGON_WEDGE_COLOR): full accent -> faded accent -> nearly
+           drained, plus fully transparent for a day that hasn't happened
+           yet — collision-proof against any accent choice since it never
+           competes with a second hue. */
+
+        .septagon-strip {
+          position: relative;
+          z-index: 1;
+          display: none;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+          margin-inline-start: var(--space-2);
+        }
+
+        .bar[data-type="decreasing"] .septagon-strip { display: flex; }
+        .bar[data-type="decreasing"] .freq-cluster { display: none; }
+
+        /* History weeks: a plain filled heptagon, no border/rim at all —
+           matches freq-dot exactly (a flat colored circle/squircle with
+           no ring of its own; only the "today" token ever gets a ring). */
+        .septagon-week {
+          position: relative;
+          flex-shrink: 0;
+          inline-size: ${SEPTAGON_HISTORY_SIZE}px;
+          block-size: ${SEPTAGON_HISTORY_SIZE}px;
+        }
+
+        .septagon-fill {
+          position: absolute;
+          inset: 0;
+          clip-path: ${SEPTAGON_CLIP};
+        }
+
+        /* A genuine ${TODAY_BOX}px box, exactly like .freq-today — not a
+           smaller box with an invisible hit-area hack — so the current
+           week's tap target lands at the identical offset from the row's
+           right edge as every other type's "today" token, regardless of
+           which type a given row is. */
+        .septagon-week.current {
+          inline-size: ${TODAY_BOX}px;
+          block-size: ${TODAY_BOX}px;
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+        }
+
+        .septagon-week.current .septagon-fill {
+          position: static;
+          grid-area: 1 / 1; /* stack fill + ring SVG in the same cell */
+          inset: auto;
+          inline-size: ${SEPTAGON_CURRENT_SIZE}px;
+          block-size: ${SEPTAGON_CURRENT_SIZE}px;
+        }
+
+        /* A real stroke-only ring, same technique as .freq-ring (an SVG
+           shape, not a background peeking through a smaller inset) — a
+           genuinely separated outline with its own ${(SEPTAGON_RING_SIZE - SEPTAGON_CURRENT_SIZE) / 2}px gap to the fill, matching
+           weekly/monthly's actual ring/dot relationship instead of
+           approximating it with layered backgrounds. Visible specifically
+           when today has a recorded slip — the same role .freq-today.logged
+           plays for weekly/monthly. */
+        .septagon-ring {
+          grid-area: 1 / 1;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+        .septagon-week.current.logged .septagon-ring { opacity: 1; }
+        .septagon-ring .progress { fill: none; stroke: var(--color-danger); stroke-width: 2; }
 
         .drag-btn {
           position: relative;
@@ -503,6 +640,7 @@ class GoalItem extends Gestures(AppElement) {
         <span class="desc-icon" aria-hidden="true">${icons.info}</span>
         ${urgencyBadgeMarkup}
         <span class="pct-label" hidden></span>
+        <span class="septagon-strip" aria-hidden="true"></span>
         <span class="freq-cluster" aria-hidden="true">
           <span class="freq-dots"></span>
           <span class="freq-today">
@@ -523,6 +661,7 @@ class GoalItem extends Gestures(AppElement) {
     this._title = this.shadowRoot.querySelector('.title');
     this._stripEl = this.shadowRoot.querySelector('.tag-strip');
     this._pctLabel = this.shadowRoot.querySelector('.pct-label');
+    this._septagonStrip = this.shadowRoot.querySelector('.septagon-strip');
     this._freqDots = this.shadowRoot.querySelector('.freq-dots');
     this._freqToday = this.shadowRoot.querySelector('.freq-today');
     this._freqTodayDot = this._freqToday.querySelector('.freq-dot');
@@ -540,7 +679,13 @@ class GoalItem extends Gestures(AppElement) {
     // composedPath() would silently return []. Reading it live here and stashing
     // a plain boolean is what makes the check usable later.
     this._onPointerDownCapture = e => {
-      this._tapOnToday = e.composedPath().includes(this._freqToday);
+      const path = e.composedPath();
+      // The septagon strip is rebuilt (replaceChildren) on every render, so
+      // its current-week node can't be cached at subscribe time like
+      // _freqToday — queried fresh here instead, while the event is still
+      // dispatching and composedPath() is valid.
+      const septagonCurrent = this._septagonStrip.querySelector('.septagon-week.current');
+      this._tapOnToday = path.includes(this._freqToday) || (septagonCurrent && path.includes(septagonCurrent));
     };
     this.addEventListener('pointerdown', this._onPointerDownCapture, true);
 
@@ -618,7 +763,7 @@ class GoalItem extends Gestures(AppElement) {
       this._closeReveal();
       return;
     }
-    if (isFrequency(this._goal) && this._tapOnToday) {
+    if (isEntryBased(this._goal) && this._tapOnToday) {
       this._toggleLog();
       return;
     }
@@ -637,21 +782,21 @@ class GoalItem extends Gestures(AppElement) {
 
   onHoldDragStart() {
     this._closeReveal();
-    if (isFrequency(this._goal)) { this._toggleLog(); return; }
+    if (isEntryBased(this._goal)) { this._toggleLog(); return; }
     this.classList.add('hold-active');
     this._bar.style.transition = 'none';
     this._setDragMode(true);
   }
 
   onHoldDragKey(dir) {
-    if (isFrequency(this._goal)) { this._toggleLog(); return; } // either arrow — it's a toggle, not a scrub
+    if (isEntryBased(this._goal)) { this._toggleLog(); return; } // either arrow — it's a toggle, not a scrub
     this._setPct(dir === 'right' ? Math.min(100, this._pct + 5) : Math.max(0, this._pct - 5));
     if (this._pct === 100) this._celebrate();
     this._emitProgress();
   }
 
   onHoldDrag(e) {
-    if (isFrequency(this._goal)) return;
+    if (isEntryBased(this._goal)) return;
     const rect = this._bar.getBoundingClientRect();
     if (!rect.width) return;
     const pct = Math.round(Math.max(0, Math.min(100, (e.endX - rect.left) / rect.width * 100)));
@@ -659,7 +804,7 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   onHoldDragEnd() {
-    if (isFrequency(this._goal)) return;
+    if (isEntryBased(this._goal)) return;
     this.classList.remove('hold-active');
     this._bar.style.transition = '';
     this._setDragMode(false);
@@ -717,7 +862,7 @@ class GoalItem extends Gestures(AppElement) {
   _setPct(pct) {
     this._pct = Math.max(0, Math.min(100, pct));
     this._fill.style.width = `${this._pct}%`;
-    if (!isFrequency(this._goal)) this._bar.setAttribute('aria-valuenow', String(this._pct));
+    if (!isEntryBased(this._goal)) this._bar.setAttribute('aria-valuenow', String(this._pct));
     if (this._pctLabel) this._pctLabel.textContent = `${this._pct}%`;
   }
 
@@ -772,9 +917,30 @@ class GoalItem extends Gestures(AppElement) {
     setTimeout(() => this.classList.remove('celebrating'), 1700);
   }
 
+  // The base label is just the title, or title+urgency if a deadline is
+  // active; frequency and decreasing goals each layer their own count/target
+  // (and a "logged"/"slipped today" suffix) on top of that same base.
+  _buildAriaLabel({ isFreq, isDecr, title, urgency }) {
+    let label = urgency === 'none' ? title : t('goal-item.duedate-aria', { title, when: t(`urgency.${urgency}`) });
+    if (isFreq) {
+      const { type, target } = this._goal.tracking;
+      const count = currentPeriodCount(this._goal.tracking);
+      label = t(`goal-item.freq-aria-${type}`, { title: label, count, target });
+      if (isLoggedOn(this._goal)) label += t('goal-item.freq-logged-suffix');
+    } else if (isDecr) {
+      const { target } = this._goal.tracking;
+      const count = currentPeriodCount(this._goal.tracking);
+      label = t('goal-item.decr-aria', { title: label, pct: this._pct, count, target });
+      if (isLoggedOn(this._goal)) label += t('goal-item.decr-logged-suffix');
+    }
+    return label;
+  }
+
   _update() {
     if (!this._bar) return;
     const isFreq = isFrequency(this._goal);
+    const isEntry = isEntryBased(this._goal);
+    const isDecr = isDecreasing(this._goal);
     const pct = percentValue(this._goal);
     const prevPct = this._pct;
     this._pct = Math.max(0, pct);
@@ -783,18 +949,12 @@ class GoalItem extends Gestures(AppElement) {
     const urgency = urgencyOf(this._goal?.dueDate, active);
     this._title.textContent = title;
 
-    let label = urgency === 'none' ? title : t('goal-item.duedate-aria', { title, when: t(`urgency.${urgency}`) });
-    if (isFreq) {
-      const { type, target } = this._goal.tracking;
-      const count = currentPeriodCount(this._goal.tracking);
-      label = t(`goal-item.freq-aria-${type}`, { title: label, count, target });
-      if (isLoggedOn(this._goal)) label += t('goal-item.freq-logged-suffix');
-    }
-    this._bar.setAttribute('aria-label', label);
+    this._bar.setAttribute('aria-label', this._buildAriaLabel({ isFreq, isDecr, title, urgency }));
 
     this._bar.dataset.hasDesc = String(!!this._goal?.notes);
     this.dataset.archived = String(!!this._goal?.archived);
     this.dataset.urgency = urgency;
+    this._bar.dataset.type = this._goal?.tracking?.type ?? 'percentage';
     this._setPct(this._pct);
     if (this._pct === 100 && prevPct !== undefined && prevPct < 100) this._celebrate();
     if (this._stripEl) {
@@ -803,12 +963,13 @@ class GoalItem extends Gestures(AppElement) {
       this._stripEl.hidden = !bg;
     }
 
-    // role="slider" only makes sense for a continuous, draggable value — a
-    // frequency goal's row is closer to a toggle (hold logs/unlogs today),
-    // so it drops the slider role and its min/max/now triad entirely rather
-    // than carry attributes that would misdescribe it.
-    this._bar.setAttribute('role', isFreq ? 'button' : 'slider');
-    if (isFreq) {
+    // role="slider" only makes sense for a continuous, draggable value — an
+    // entry-based goal's row (weekly/monthly/decreasing) is closer to a
+    // toggle (hold logs/unlogs today), so it drops the slider role and its
+    // min/max/now triad entirely rather than carry attributes that would
+    // misdescribe it.
+    this._bar.setAttribute('role', isEntry ? 'button' : 'slider');
+    if (isEntry) {
       this._bar.removeAttribute('aria-valuemin');
       this._bar.removeAttribute('aria-valuemax');
       this._bar.removeAttribute('aria-valuenow');
@@ -824,6 +985,50 @@ class GoalItem extends Gestures(AppElement) {
       this._bar.dataset.freqType = this._goal.tracking.type;
       this._renderFreqCluster();
     }
+    if (isDecr) {
+      // pct-label stays in its template-default hidden state — never
+      // unhidden by _setDragMode (decreasing never enters drag mode), same
+      // as frequency types. The septagon strip's own coloring already
+      // carries the score; a redundant number next to it isn't shown.
+      this._renderSeptagonStrip();
+    }
+  }
+
+  // Six septagons, oldest → current (see recentWeekStates in tracking.js) —
+  // replaces the frequency dot-cluster entirely for this type. Rebuilt via
+  // replaceChildren each render, same convention as _renderFreqCluster's dot
+  // row below, since the row only re-renders on real state changes, not
+  // per-frame.
+  _renderSeptagonStrip() {
+    const weeks = recentWeekStates(this._goal);
+    const nodes = weeks.map((days, wi) => {
+      const isCurrent = wi === weeks.length - 1;
+      const el = document.createElement('span');
+      el.className = 'septagon-week' + (isCurrent ? ' current' : '');
+      const fill = document.createElement('span');
+      fill.className = 'septagon-fill';
+      fill.style.background = septagonGradient(days);
+      el.appendChild(fill);
+      if (isCurrent) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'septagon-ring');
+        svg.setAttribute('viewBox', `0 0 ${TODAY_BOX} ${TODAY_BOX}`);
+        svg.setAttribute('width', String(TODAY_BOX));
+        svg.setAttribute('height', String(TODAY_BOX));
+        const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        polygon.setAttribute('class', 'progress');
+        polygon.setAttribute('points', SEPTAGON_RING_POINTS);
+        svg.appendChild(polygon);
+        el.appendChild(svg);
+      }
+      return el;
+    });
+    this._septagonStrip.replaceChildren(...nodes);
+
+    const logged = isLoggedOn(this._goal);
+    nodes[nodes.length - 1].classList.toggle('logged', logged);
+    if (this._wasLoggedToday !== undefined && logged && !this._wasLoggedToday) this._logTick();
+    this._wasLoggedToday = logged;
   }
 
   // Dot-strip (read-only, whatever recentDots() returns — up to DOT_WINDOW[type]
