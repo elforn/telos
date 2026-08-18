@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.4.0] — 2026-08-19
+
+### Added
+- **A fourth goal type: "Avoid", for anti-habits** — "don't eat ice cream" rather than "exercise 3×/week". Unlike every other type, it starts at 100% and drops as you log slip-ups, recovering as clean weeks pass. A weekly allowance (0–6 free slip-ups, default 0) is set the same way weekly/monthly's target is — slips within the allowance cost nothing; going past it costs more, and the cost accelerates the further over you go.
+- **A new "septagon" strip replaces the dot-cluster for Avoid goals**: six small 7-sided wedge shapes, one per scored week (oldest → current), plus a larger current-week septagon as the tap target — tap it to log or undo today's slip, same interaction as weekly/monthly's hold-to-log. Each wedge shows that day's state as an opacity of the year's accent colour — full for clean, faded for a forgiven (within-allowance) slip, nearly drained for an over-allowance one, fully transparent for a day in the current week that hasn't happened yet — so the strip never needs a second colour and can't clash with whatever accent colour is set for the year.
+- **Fix-a-day works for Avoid goals too**, same 6-week backfill span as weekly, with chips worded as "slipped"/"not slipped" instead of "logged"/"not logged".
+
+### Changed
+- **The "Percentage" type-pill label is now "Percent"** — needed to fit four pills across the row at phone width without clipping.
+- **Today's dot/ring on weekly and monthly goals shrank slightly** (dot 30→27px, ring 34→31px, monthly's ring corner radius 8→7) so it lines up visually with the new Avoid septagon's current-week token.
+- **"Fix a day" for monthly goals now reaches 180 days back, not 120** — matches how far the glance strip itself already shows, so backfilling isn't capped short of what's visible.
+
+### Fixed
+- **Avoid goals were letting slips inside the weekly allowance fully cancel out the ones past it.** A week with slips both within and over the allowance now scores the over-allowance ones against the shrinking remainder of the week, so going over always costs something instead of being masked by the free slips already used.
+- **Avoid goals could show inflated (or briefly rising) scores.** The still-open current week no longer gets credit for days that haven't happened yet, and continuing to slip can no longer make the displayed percentage go up.
+
 ## [2.3.0] — 2026-08-17
 
 ### Changed
