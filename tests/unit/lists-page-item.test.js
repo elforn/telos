@@ -2,7 +2,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/lists-page-item/lists-page-item.js';
-import { COLOR_PALETTE } from '../../app/components/lists-page-item/lists-page-item.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
@@ -22,24 +21,6 @@ function tap(el) {
 }
 
 afterEach(() => { document.body.innerHTML = ''; });
-
-// ── COLOR_PALETTE export ──────────────────────────────────────────────────────
-
-describe('COLOR_PALETTE', () => {
-  it('starts with null (no colour)', () => {
-    expect(COLOR_PALETTE[0]).toBeNull();
-  });
-
-  it('has 8 entries', () => {
-    expect(COLOR_PALETTE).toHaveLength(8);
-  });
-
-  it('all non-null entries are hex colour strings', () => {
-    COLOR_PALETTE.filter(Boolean).forEach(c => {
-      expect(c).toMatch(/^#[0-9A-Fa-f]{6}$/);
-    });
-  });
-});
 
 // ── Structure ─────────────────────────────────────────────────────────────────
 

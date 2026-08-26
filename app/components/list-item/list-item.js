@@ -7,7 +7,7 @@ import { urgencyOf } from '../../utils/urgency.js';
 import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 
-const DONE_WIDTH = 48;   // square-ish done button
+const COLOR_WIDTH = 48;   // left-side colour panel, revealed by swiping right — mirrors lists-page-item
 const DELETE_WIDTH = 60;   // icon-only delete button
 const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
@@ -59,15 +59,16 @@ class ListItem extends Gestures(AppElement) {
           justify-content: center;
         }
 
-        /* done — left side, revealed by swiping row right */
-        .done-btn {
+        /* Colour panel — left side, revealed by swiping row right. Mirrors
+           lists-page-item's own .color-panel/swipe exactly: a momentary
+           reveal that always snaps back (see onSwipe below), not a
+           persisted state like the delete panel's left-swipe. */
+        .color-panel {
+          position: absolute;
+          inset-block: 0;
           inset-inline-start: 0;
-          inline-size: ${DONE_WIDTH}px;
-          background: var(--color-success);
-        }
-
-        .done-btn.is-restore {
-          background: var(--color-app-accent);
+          inline-size: ${COLOR_WIDTH}px;
+          background: var(--color-panel-bg, var(--color-surface-raised));
         }
 
         /* delete — right side, revealed by swiping row left */
@@ -89,9 +90,11 @@ class ListItem extends Gestures(AppElement) {
           min-block-size: var(--goal-item-height, 44px);
           background: var(--color-surface);
           border: 0.5px solid var(--color-border);
+          border-inline-start: 3px solid var(--item-color, transparent);
           display: flex;
           align-items: center;
-          padding-inline: var(--space-3);
+          padding-inline-start: calc(var(--space-3) - 3px + 0.5px);
+          padding-inline-end: var(--space-3);
           gap: 6px;
           cursor: pointer;
           user-select: none;
@@ -256,7 +259,7 @@ class ListItem extends Gestures(AppElement) {
         }
       </style>
 
-      <button class="action-btn done-btn" id="done-btn" aria-label=""></button>
+      <div class="color-panel" id="color-panel" aria-hidden="true"></div>
       <button class="action-btn delete-btn" id="delete-btn" aria-label="${t('list-item.delete')}">${icons.trash}</button>
       <div class="row" tabindex="0" role="button" aria-label="">
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
@@ -279,30 +282,12 @@ class ListItem extends Gestures(AppElement) {
     this._urlIcon = this.shadowRoot.querySelector('.url-icon');
     this._badge = this.shadowRoot.querySelector('.badge');
     this._deleteEl = this.shadowRoot.querySelector('#delete-btn');
-    this._doneEl = this.shadowRoot.querySelector('#done-btn');
+    this._colorPanel = this.shadowRoot.querySelector('#color-panel');
     this._revealedDir = null;
 
     this._update();
 
     this._stopPointerDown = e => e.stopPropagation();
-
-    this._onDoneBtn = (useDelay = false) => {
-      const willBeDone = this._item?.status !== 'done';
-      const fire = () => {
-        this.dispatchEvent(new CustomEvent('item-done-toggle', {
-          bubbles: true, composed: true, detail: { item: this._item },
-        }));
-        this._closeReveal();
-        if (willBeDone) this._celebrate();
-      };
-      if (useDelay) requestAnimationFrame(fire);
-      else fire();
-    };
-    this._onDonePointerUp = e => { e.stopPropagation(); e.preventDefault(); this._onDoneBtn(true); };
-    this._onDoneBtnKey = e => { e.stopPropagation(); if (e.detail === 0) this._onDoneBtn(); };
-    this._doneEl.addEventListener('pointerdown', this._stopPointerDown);
-    this._doneEl.addEventListener('pointerup', this._onDonePointerUp);
-    this._doneEl.addEventListener('click', this._onDoneBtnKey);
 
     // useDelay: rAF lets the browser's synthesized click fire on the still-present button before DOM removal
     this._onDeleteBtn = (useDelay = false) => {
@@ -371,9 +356,6 @@ class ListItem extends Gestures(AppElement) {
   }
 
   unsubscribe() {
-    this._doneEl?.removeEventListener('pointerdown', this._stopPointerDown);
-    this._doneEl?.removeEventListener('pointerup', this._onDonePointerUp);
-    this._doneEl?.removeEventListener('click', this._onDoneBtnKey);
     this._deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
     this._deleteEl?.removeEventListener('pointerup', this._onDeletePointerUp);
     this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
@@ -418,7 +400,7 @@ class ListItem extends Gestures(AppElement) {
       offset = Math.min(0, -DELETE_WIDTH + e.dx);
     } else {
       const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : Math.min(0, e.dx + SWIPE_DEAD_ZONE);
-      offset = Math.max(-DELETE_WIDTH, Math.min(DONE_WIDTH, dx));
+      offset = Math.max(-DELETE_WIDTH, Math.min(COLOR_WIDTH, dx));
     }
     this._row.style.transform = `translateX(${offset}px)`;
   }
@@ -427,14 +409,16 @@ class ListItem extends Gestures(AppElement) {
     if (this._revealedDir) { this._closeReveal(); return; }
     if (this._selectionMode) return;
 
+    // Right swipe cycles colour — a momentary reveal that always snaps back
+    // (mirrors lists-page-item exactly), unlike left-swipe delete below,
+    // which persists open until confirmed or dismissed. Marking an item done
+    // now happens via the status badge (tap-to-cycle) instead of a swipe.
     if (e.direction === 'right') {
-      const commit = e.distance >= DONE_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
+      const commit = e.distance >= COLOR_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
       if (commit) {
-        const willBeDone = this._item?.status !== 'done';
-        this.dispatchEvent(new CustomEvent('item-done-toggle', {
+        this.dispatchEvent(new CustomEvent('item-color-cycle', {
           bubbles: true, composed: true, detail: { item: this._item },
         }));
-        if (willBeDone) this._celebrate();
       }
       this._closeReveal();
       return;
@@ -452,7 +436,8 @@ class ListItem extends Gestures(AppElement) {
   // ── Private ───────────────────────────────────────────────────────────────
 
   _closeReveal() {
-    this._row.style.transition = 'transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this._row.style.transition = reduced ? 'none' : 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
     this._row.style.transform = '';
     this._revealedDir = null;
   }
@@ -468,7 +453,6 @@ class ListItem extends Gestures(AppElement) {
     if (!this._row) return;
     const title = this._item?.title ?? '';
     const status = this._item?.status ?? 'open';
-    const isDone = status === 'done';
     const active = status !== 'done' && status !== 'closed';
     const urgency = urgencyOf(this._item?.dueDate, active);
     this._title.textContent = title;
@@ -480,14 +464,15 @@ class ListItem extends Gestures(AppElement) {
     this.dataset.urgency = urgency;
     this._badge.textContent = t(`item-dialog.status-${status}`);
     this._badge.dataset.status = status;
-    this._doneEl.innerHTML = isDone ? icons.undo : icons.check;
-    this._doneEl.setAttribute('aria-label', isDone ? t('list-item.restore') : t('list-item.mark-done'));
-    this._doneEl.classList.toggle('is-restore', isDone);
     if (this._stripEl) {
       const bg = tagStrip(this._item?.tags ?? []);
       this._stripEl.style.background = bg;
       this._stripEl.hidden = !bg;
     }
+    const color = this._item?.color ?? null;
+    this._row.style.setProperty('--item-color', color ?? 'transparent');
+    if (color) this._colorPanel.style.setProperty('--color-panel-bg', color);
+    else this._colorPanel.style.removeProperty('--color-panel-bg');
   }
 }
 

@@ -4,7 +4,7 @@ import { boot, setState, getState, setRuntimeState, reset } from '../../_lib/cor
 import '../../app/strings.js';
 import '../../app/pages/lists-page.js';
 import '../../app/components/list-dialog/list-dialog.js';
-import { COLOR_PALETTE } from '../../app/components/lists-page-item/lists-page-item.js';
+import { COLOR_PALETTE } from '../../app/utils/color-palette.js';
 import { _resetToast } from '../../_lib/modules/toast/toast.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};

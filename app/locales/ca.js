@@ -298,8 +298,6 @@ defineStrings({
   'item-dialog.picker-clear':           'Esborra la selecció',
 
   'list-item.delete':          'Elimina',
-  'list-item.mark-done': 'Marca com a fet',
-  'list-item.restore':   'Restaura',
   'list-item.drag':      'Arrossega per reordenar',
   'list-item.duedate-aria': '{title}, {when}',
 
@@ -366,4 +364,13 @@ defineStrings({
   'toast.close':  'Tanca',
   'tag.remove':   'Elimina {tag}',
   'dialog.saved-sr': 'Desat',
+
+  'color-picker.none':   'Cap color',
+  'color-picker.red':    'Vermell',
+  'color-picker.orange': 'Taronja',
+  'color-picker.yellow': 'Groc',
+  'color-picker.green':  'Verd',
+  'color-picker.teal':   'Verd blavós',
+  'color-picker.blue':   'Blau',
+  'color-picker.purple': 'Violeta',
 }, 'ca');

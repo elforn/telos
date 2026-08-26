@@ -12,6 +12,7 @@ import {
 } from '../../utils/tracking.js';
 
 const REVEAL_WIDTH = 60;
+const COLOR_WIDTH = 48;    // left-side colour panel, revealed by swiping right — mirrors lists-page-item
 const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
 const SWIPE_DEAD_ZONE = 15;   // px of drag before bar starts moving
@@ -121,16 +122,30 @@ class GoalItem extends Gestures(AppElement) {
           background: var(--color-danger);
         }
 
+        /* ── Colour panel — left side, revealed by swiping right ─────────
+           Mirrors lists-page-item's own .color-panel/swipe exactly: a
+           momentary reveal that always snaps back (see onSwipe below), not
+           a persisted state like the delete panel's left-swipe. */
+        .color-panel {
+          position: absolute;
+          inset-block: 0;
+          inset-inline-start: 0;
+          inline-size: ${COLOR_WIDTH}px;
+          background: var(--color-panel-bg, var(--color-surface-raised));
+        }
+
         .bar {
           position: relative;
           z-index: 1;
           block-size: var(--goal-item-height, 44px);
           background: var(--color-surface);
           border: 0.5px solid var(--color-border);
+          border-inline-start: 3px solid var(--goal-item-color, transparent);
           overflow: hidden;
           display: flex;
           align-items: center;
-          padding-inline: var(--space-3);
+          padding-inline-start: calc(var(--space-3) - 3px + 0.5px);
+          padding-inline-end: var(--space-3);
           cursor: pointer;
           user-select: none;
           touch-action: pan-y;
@@ -260,6 +275,38 @@ class GoalItem extends Gestures(AppElement) {
           /* Same size as weekly's dot — border-radius is the only thing
              that should differ between the two shapes. */
           border-radius: 6px;
+        }
+
+        /* The goal's target (e.g. "3" for 3x/week) rendered inside the
+           today-token dot — a static number, not a count, so it doesn't need
+           its own re-render trigger beyond the goal's own tracking.target.
+           Absolutely positioned over the dot (same technique as .freq-ring)
+           rather than a grid child, since .freq-today's implicit grid would
+           otherwise place it in its own column instead of stacking it.
+           mix-blend-mode: difference (not a fixed/state-keyed colour) is
+           the only approach that stays legible in every case here: the
+           dot's fill is a conic-gradient split between --color-accent and
+           --color-border for 'partial' (the split point moves with the
+           fraction, so a fixed colour picked for "mostly accent" fails once
+           the wedge is mostly border, and vice versa), and --color-accent
+           itself is a user-customisable per-year hex with no guaranteed
+           lightness. White XOR'd against any of those always resolves to a
+           contrasting colour per-pixel — confirmed against the 'partial'
+           gradient specifically (see CHANGELOG), where a fixed
+           --color-text-inverse fill went invisible over the >50%-border
+           portion of the wedge. */
+        .freq-target-num {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: var(--font-size-micro);
+          font-weight: var(--font-weight-bold);
+          font-variant-numeric: tabular-nums;
+          color: #FFFFFF;
+          mix-blend-mode: difference;
+          pointer-events: none;
         }
 
         /* Plain complete stroke, no sweep animation — the 500ms hold is
@@ -622,6 +669,7 @@ class GoalItem extends Gestures(AppElement) {
         }
       </style>
 
+      <div class="color-panel" id="color-panel" aria-hidden="true"></div>
       <button class="action-btn delete-btn" id="delete-btn" aria-label="${t('goal-item.delete')}">${icons.trash}</button>
       <div class="bar"
            tabindex="0"
@@ -645,6 +693,7 @@ class GoalItem extends Gestures(AppElement) {
           <span class="freq-dots"></span>
           <span class="freq-today">
             <span class="freq-dot"></span>
+            <span class="freq-target-num" aria-hidden="true"></span>
             <svg class="freq-ring" viewBox="0 0 ${TODAY_BOX} ${TODAY_BOX}" width="${TODAY_BOX}" height="${TODAY_BOX}">
               <rect class="progress" x="${TODAY_RING_INSET}" y="${TODAY_RING_INSET}" width="${TODAY_RING_SIZE}" height="${TODAY_RING_SIZE}" rx="${TODAY_RING_SIZE / 2}"></rect>
             </svg>
@@ -665,7 +714,9 @@ class GoalItem extends Gestures(AppElement) {
     this._freqDots = this.shadowRoot.querySelector('.freq-dots');
     this._freqToday = this.shadowRoot.querySelector('.freq-today');
     this._freqTodayDot = this._freqToday.querySelector('.freq-dot');
+    this._freqTargetNum = this._freqToday.querySelector('.freq-target-num');
     this._freqRing = this.shadowRoot.querySelector('.freq-ring .progress');
+    this._colorPanel = this.shadowRoot.querySelector('#color-panel');
     this._revealedDir = null;
     this._wasLoggedToday = undefined; // undefined (not false) so the first _update() never ticks — mirrors _celebrate()'s prevPct guard below
 
@@ -823,8 +874,8 @@ class GoalItem extends Gestures(AppElement) {
     if (this._revealedDir === 'left') {
       offset = Math.min(0, -REVEAL_WIDTH + e.dx);
     } else {
-      const dx = e.dx < 0 ? Math.min(0, e.dx + SWIPE_DEAD_ZONE) : 0;
-      offset = Math.max(-REVEAL_WIDTH, dx);
+      const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : Math.min(0, e.dx + SWIPE_DEAD_ZONE);
+      offset = Math.max(-REVEAL_WIDTH, Math.min(COLOR_WIDTH, dx));
     }
     this._bar.style.transform = `translateX(${offset}px)`;
   }
@@ -835,9 +886,23 @@ class GoalItem extends Gestures(AppElement) {
       return;
     }
 
+    // Right swipe cycles colour — a momentary reveal that always snaps back
+    // (mirrors lists-page-item exactly), unlike left-swipe delete below,
+    // which persists open until confirmed or dismissed.
+    if (e.direction === 'right') {
+      const commit = e.distance >= COLOR_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
+      if (commit) {
+        this.dispatchEvent(new CustomEvent('goal-color-cycle', {
+          bubbles: true, composed: true, detail: { goal: this._goal },
+        }));
+      }
+      this._closeReveal();
+      return;
+    }
+
     const commit = e.distance >= REVEAL_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
 
-    if (commit && e.direction === 'left') {
+    if (commit) {
       this._bar.style.transform = `translateX(-${REVEAL_WIDTH}px)`;
       this._revealedDir = 'left';
     } else {
@@ -854,7 +919,8 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   _closeReveal() {
-    this._bar.style.transition = 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this._bar.style.transition = reduced ? 'none' : 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
     this._bar.style.transform = '';
     this._revealedDir = null;
   }
@@ -963,6 +1029,11 @@ class GoalItem extends Gestures(AppElement) {
       this._stripEl.hidden = !bg;
     }
 
+    const color = this._goal?.color ?? null;
+    this._bar.style.setProperty('--goal-item-color', color ?? 'transparent');
+    if (color) this._colorPanel.style.setProperty('--color-panel-bg', color);
+    else this._colorPanel.style.removeProperty('--color-panel-bg');
+
     // role="slider" only makes sense for a continuous, draggable value — an
     // entry-based goal's row (weekly/monthly/decreasing) is closer to a
     // toggle (hold logs/unlogs today), so it drops the slider role and its
@@ -1053,6 +1124,7 @@ class GoalItem extends Gestures(AppElement) {
     this._freqTodayDot.className = 'freq-dot' + (today.state === 'met' ? ' met' : today.state === 'partial' ? ' partial' : '');
     if (today.state === 'partial') this._freqTodayDot.style.setProperty('--frac', `${Math.round(today.fraction * 100)}%`);
     else this._freqTodayDot.style.removeProperty('--frac');
+    this._freqTargetNum.textContent = String(this._goal.tracking.target);
 
     const rx = TODAY_RING_RX[this._goal.tracking.type];
     this._freqRing.setAttribute('rx', rx);

@@ -218,10 +218,10 @@ describe('goal-item — swipe', () => {
     expect(el.shadowRoot.querySelector('.bar').style.transform).toBe('translateX(0px)');
   });
 
-  it('right swipe (dx=20) does not move the bar', () => {
+  it('right swipe past dead zone moves the bar right (dx=20 → offset 5)', () => {
     const el = mount();
     el.onSwipeMove({ dx: 20 });
-    expect(el.shadowRoot.querySelector('.bar').style.transform).toBe('translateX(0px)');
+    expect(el.shadowRoot.querySelector('.bar').style.transform).toBe('translateX(5px)');
   });
 
   it('bar moves negatively by dx plus dead zone when swiping left past dead zone (dx=-20)', () => {
@@ -242,7 +242,7 @@ describe('goal-item — swipe', () => {
     expect(el._revealedDir).toBe('left');
   });
 
-  it('right swipe does not commit', () => {
+  it('right swipe past commit threshold never persists a reveal (colour cycle is momentary)', () => {
     const el = mount();
     el.onSwipe({ direction: 'right', distance: 160, velocity: 0 });
     expect(el._revealedDir).toBeNull();
@@ -254,11 +254,78 @@ describe('goal-item — swipe', () => {
     expect(el._revealedDir).toBe('left');
   });
 
-  it('_closeReveal applies spring snap-back transition', () => {
+  it('_closeReveal applies spring snap-back transition when reduced motion is off', () => {
     const el = mount();
+    window.matchMedia = () => ({ matches: false });
     el._closeReveal();
     expect(el.shadowRoot.querySelector('.bar').style.transition)
       .toBe('transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)');
+  });
+
+  it('_closeReveal uses transition:none when prefers-reduced-motion is set', () => {
+    const el = mount();
+    window.matchMedia = () => ({ matches: true });
+    el._closeReveal();
+    expect(el.shadowRoot.querySelector('.bar').style.transition).toBe('none');
+  });
+});
+
+describe('goal-item — colour', () => {
+  it('right swipe at 2× colour-panel width (96px) dispatches goal-color-cycle', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('goal-color-cycle', e => events.push(e));
+    el.onSwipe({ direction: 'right', distance: 96, velocity: 0 });
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.goal.id).toBe('g1');
+  });
+
+  it('right swipe below commit threshold does not dispatch goal-color-cycle', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('goal-color-cycle', e => events.push(e));
+    el.onSwipe({ direction: 'right', distance: 95, velocity: 0 });
+    expect(events).toHaveLength(0);
+  });
+
+  it('fast right flick commits colour cycle regardless of distance', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('goal-color-cycle', e => events.push(e));
+    el.onSwipe({ direction: 'right', distance: 10, velocity: 0.5 });
+    expect(events).toHaveLength(1);
+  });
+
+  it('left swipe does not dispatch goal-color-cycle', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('goal-color-cycle', e => events.push(e));
+    el.onSwipe({ direction: 'left', distance: 160, velocity: 0 });
+    expect(events).toHaveLength(0);
+  });
+
+  it('applies colour to bar via CSS custom property', () => {
+    const el = mount({ id: 'g1', title: 'Move my body', color: '#ff0000', tracking: { type: 'percentage', value: 0 } });
+    const val = el.shadowRoot.querySelector('.bar').style.getPropertyValue('--goal-item-color');
+    expect(val).toBe('#ff0000');
+  });
+
+  it('applies transparent when no colour set', () => {
+    const el = mount();
+    const val = el.shadowRoot.querySelector('.bar').style.getPropertyValue('--goal-item-color');
+    expect(val).toBe('transparent');
+  });
+
+  it('sets color-panel background when goal has a colour', () => {
+    const el = mount({ id: 'g1', title: 'Move my body', color: '#3DAD6A', tracking: { type: 'percentage', value: 0 } });
+    const val = el.shadowRoot.querySelector('#color-panel').style.getPropertyValue('--color-panel-bg');
+    expect(val).toBe('#3DAD6A');
+  });
+
+  it('removes color-panel background when goal has no colour', () => {
+    const el = mount();
+    const val = el.shadowRoot.querySelector('#color-panel').style.getPropertyValue('--color-panel-bg');
+    expect(val).toBe('');
   });
 });
 

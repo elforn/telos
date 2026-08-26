@@ -1,15 +1,11 @@
 import { AppElement } from '../../../_lib/core/app-element.js';
 import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
-import { COLOR_PALETTE } from '../lists-page-item/lists-page-item.js';
+import { swatches } from '../../utils/color-palette.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
 
 const SNAPSHOT_KEY = 'telos:snapshot.new-list';
-
-// Labels parallel COLOR_PALETTE — update both together when adding/removing colours.
-const SWATCH_LABELS = ['No colour', 'Red', 'Orange', 'Yellow', 'Green', 'Teal', 'Blue', 'Purple'];
-const SWATCHES = COLOR_PALETTE.map((color, i) => ({ color, label: SWATCH_LABELS[i] }));
 
 class ListDialog extends AppElement {
   open(list = null) {
@@ -180,7 +176,7 @@ class ListDialog extends AppElement {
 
       <modal-dialog id="modal">
         <div class="color-swatches">
-          ${SWATCHES.map(({ color, label }) => `
+          ${swatches().map(({ color, label }) => `
             <button type="button"
               class="swatch${!color ? ' swatch-none' : ''}"
               data-color="${color ?? ''}"

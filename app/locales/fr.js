@@ -298,8 +298,6 @@ defineStrings({
   'item-dialog.picker-clear':           'Effacer la sélection',
 
   'list-item.delete':          'Supprimer',
-  'list-item.mark-done': 'Marquer comme terminé',
-  'list-item.restore':   'Restaurer',
   'list-item.drag':      'Glisser pour réordonner',
   'list-item.duedate-aria': '{title}, {when}',
 
@@ -366,4 +364,13 @@ defineStrings({
   'toast.close':  'Fermer',
   'tag.remove':   'Retirer {tag}',
   'dialog.saved-sr': 'Enregistré',
+
+  'color-picker.none':   'Aucune couleur',
+  'color-picker.red':    'Rouge',
+  'color-picker.orange': 'Orange',
+  'color-picker.yellow': 'Jaune',
+  'color-picker.green':  'Vert',
+  'color-picker.teal':   'Sarcelle',
+  'color-picker.blue':   'Bleu',
+  'color-picker.purple': 'Violet',
 }, 'fr');

@@ -216,99 +216,80 @@ describe('list-item — item-delete event', () => {
   });
 });
 
-describe('list-item — item-done-toggle event', () => {
-  it('dispatches item-done-toggle on right swipe past commit threshold (96px)', () => {
+describe('list-item — item-color-cycle event', () => {
+  it('dispatches item-color-cycle on right swipe past commit threshold (96px)', () => {
     const el = mount();
     const events = [];
-    el.addEventListener('item-done-toggle', e => events.push(e));
+    el.addEventListener('item-color-cycle', e => events.push(e));
     el.onSwipe({ direction: 'right', distance: 96, velocity: 0 });
     expect(events).toHaveLength(1);
   });
 
-  it('item-done-toggle detail contains the item', () => {
+  it('item-color-cycle detail contains the item', () => {
     const el = mount();
     const events = [];
-    el.addEventListener('item-done-toggle', e => events.push(e));
+    el.addEventListener('item-color-cycle', e => events.push(e));
     el.onSwipe({ direction: 'right', distance: 96, velocity: 0 });
     expect(events[0].detail.item.id).toBe('i1');
   });
 
-  it('item-done-toggle bubbles and is composed', () => {
+  it('item-color-cycle bubbles and is composed', () => {
     const el = mount();
     const events = [];
-    el.addEventListener('item-done-toggle', e => events.push(e));
+    el.addEventListener('item-color-cycle', e => events.push(e));
     el.onSwipe({ direction: 'right', distance: 96, velocity: 0 });
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
   });
 
-  it('short right swipe (95px) does not dispatch item-done-toggle', () => {
+  it('short right swipe (95px) does not dispatch item-color-cycle', () => {
     const el = mount();
     const events = [];
-    el.addEventListener('item-done-toggle', e => events.push(e));
+    el.addEventListener('item-color-cycle', e => events.push(e));
     el.onSwipe({ direction: 'right', distance: 95, velocity: 0 });
     expect(events).toHaveLength(0);
   });
 
-  it('fast right flick dispatches item-done-toggle despite short distance', () => {
+  it('fast right flick dispatches item-color-cycle despite short distance', () => {
     const el = mount();
     const events = [];
-    el.addEventListener('item-done-toggle', e => events.push(e));
+    el.addEventListener('item-color-cycle', e => events.push(e));
     el.onSwipe({ direction: 'right', distance: 10, velocity: 0.5 });
     expect(events).toHaveLength(1);
   });
 
-  it('dispatches item-done-toggle when done button is clicked directly', () => {
+  it('left swipe does not dispatch item-color-cycle', () => {
     const el = mount();
     const events = [];
-    el.addEventListener('item-done-toggle', e => events.push(e));
-    el.shadowRoot.querySelector('#done-btn').click();
-    expect(events).toHaveLength(1);
-  });
-
-  it('done button click on a done item also dispatches item-done-toggle', () => {
-    const el = mount({ ...ITEM, status: 'done' });
-    const events = [];
-    el.addEventListener('item-done-toggle', e => events.push(e));
-    el.shadowRoot.querySelector('#done-btn').click();
-    expect(events).toHaveLength(1);
+    el.addEventListener('item-color-cycle', e => events.push(e));
+    el.onSwipe({ direction: 'left', distance: 160, velocity: 0 });
+    expect(events).toHaveLength(0);
   });
 });
 
-describe('list-item — done button icon', () => {
-  it('done button contains an svg icon for open items', () => {
-    const el = mount({ ...ITEM, status: 'open' });
-    expect(el.shadowRoot.querySelector('#done-btn svg')).not.toBeNull();
+describe('list-item — colour', () => {
+  it('applies colour to row via CSS custom property', () => {
+    const el = mount({ ...ITEM, color: '#ff0000' });
+    const val = el.shadowRoot.querySelector('.row').style.getPropertyValue('--item-color');
+    expect(val).toBe('#ff0000');
   });
 
-  it('done button contains an svg icon for done items', () => {
-    const el = mount({ ...ITEM, status: 'done' });
-    expect(el.shadowRoot.querySelector('#done-btn svg')).not.toBeNull();
+  it('applies transparent when no colour set', () => {
+    const el = mount();
+    const val = el.shadowRoot.querySelector('.row').style.getPropertyValue('--item-color');
+    expect(val).toBe('transparent');
   });
 
-  it('done button has is-restore class for done items', () => {
-    const el = mount({ ...ITEM, status: 'done' });
-    expect(el.shadowRoot.querySelector('#done-btn').classList.contains('is-restore')).toBe(true);
+  it('sets color-panel background when item has a colour', () => {
+    const el = mount({ ...ITEM, color: '#3DAD6A' });
+    const val = el.shadowRoot.querySelector('#color-panel').style.getPropertyValue('--color-panel-bg');
+    expect(val).toBe('#3DAD6A');
   });
 
-  it('done button does not have is-restore class for open items', () => {
-    const el = mount({ ...ITEM, status: 'open' });
-    expect(el.shadowRoot.querySelector('#done-btn').classList.contains('is-restore')).toBe(false);
-  });
-
-  it('done button aria-label updates when item status changes to done', () => {
-    const el = mount({ ...ITEM, status: 'open' });
-    expect(el.shadowRoot.querySelector('#done-btn').getAttribute('aria-label')).toBeTruthy();
-    el.item = { ...ITEM, status: 'done' };
-    expect(el.shadowRoot.querySelector('#done-btn svg')).not.toBeNull();
-    expect(el.shadowRoot.querySelector('#done-btn').classList.contains('is-restore')).toBe(true);
-  });
-
-  it('done button aria-label updates when item status changes back to open', () => {
-    const el = mount({ ...ITEM, status: 'done' });
-    el.item = { ...ITEM, status: 'open' };
-    expect(el.shadowRoot.querySelector('#done-btn svg')).not.toBeNull();
-    expect(el.shadowRoot.querySelector('#done-btn').classList.contains('is-restore')).toBe(false);
+  it('removes color-panel background when item has no colour', () => {
+    const el = mount();
+    const val = el.shadowRoot.querySelector('#color-panel').style.getPropertyValue('--color-panel-bg');
+    expect(val).toBe('');
   });
 });
 
@@ -325,28 +306,6 @@ describe('list-item — done row styling', () => {
 });
 
 describe('list-item — aria labels', () => {
-  it('done button has aria-label "Mark done" for open items', () => {
-    const el = mount({ ...ITEM, status: 'open' });
-    expect(el.shadowRoot.querySelector('#done-btn').getAttribute('aria-label')).toBe('Mark done');
-  });
-
-  it('done button has aria-label "Restore" for done items', () => {
-    const el = mount({ ...ITEM, status: 'done' });
-    expect(el.shadowRoot.querySelector('#done-btn').getAttribute('aria-label')).toBe('Restore');
-  });
-
-  it('done button aria-label updates when status changes to done', () => {
-    const el = mount({ ...ITEM, status: 'open' });
-    el.item = { ...ITEM, status: 'done' };
-    expect(el.shadowRoot.querySelector('#done-btn').getAttribute('aria-label')).toBe('Restore');
-  });
-
-  it('done button aria-label updates when status changes back to open', () => {
-    const el = mount({ ...ITEM, status: 'done' });
-    el.item = { ...ITEM, status: 'open' };
-    expect(el.shadowRoot.querySelector('#done-btn').getAttribute('aria-label')).toBe('Mark done');
-  });
-
   it('row has aria-label matching item title', () => {
     const el = mount();
     expect(el.shadowRoot.querySelector('.row').getAttribute('aria-label')).toBe('Buy flowers');
@@ -396,11 +355,19 @@ describe('list-item — swipe', () => {
     expect(el._revealedDir).toBe('left');
   });
 
-  it('_closeReveal applies spring snap-back transition', () => {
+  it('_closeReveal applies spring snap-back transition when reduced motion is off', () => {
     const el = mount();
+    window.matchMedia = () => ({ matches: false });
     el._closeReveal();
     expect(el.shadowRoot.querySelector('.row').style.transition)
-      .toBe('transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)');
+      .toBe('transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)');
+  });
+
+  it('_closeReveal uses transition:none when prefers-reduced-motion is set', () => {
+    const el = mount();
+    window.matchMedia = () => ({ matches: true });
+    el._closeReveal();
+    expect(el.shadowRoot.querySelector('.row').style.transition).toBe('none');
   });
 });
 

@@ -3,13 +3,12 @@ import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
+import { COLOR_PALETTE } from '../../utils/color-palette.js';
 
 const COLOR_WIDTH     = 48;
 const COMMIT_RATIO    = 2.0;
 const COMMIT_VELOCITY = 0.35;
 const SWIPE_DEAD_ZONE = 15;
-
-export const COLOR_PALETTE = [null, '#E5534B', '#E07633', '#D4A928', '#3DAD6A', '#29A8A1', '#4A94D4', '#8B67D6'];
 
 class ListsPageItem extends Gestures(AppElement) {
   set list(value) {

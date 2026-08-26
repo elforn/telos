@@ -12,9 +12,6 @@ export const icons = {
   check:
     i('<polyline points="20 6 9 17 4 12"/>'),
 
-  undo:
-    i('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.48"/>'),
-
   xMark:
     i('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'),
 

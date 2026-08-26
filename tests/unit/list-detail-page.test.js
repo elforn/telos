@@ -350,6 +350,35 @@ describe('list-detail-page — edit item (blur-save)', () => {
     }));
     await vi.waitFor(() => expect(getState().lists[0].items[0].dueDate).toBe('2026-09-01'));
   });
+
+  it('updates colour when item-color-changed fires after item-tap', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: ITEM },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-color-changed', {
+      bubbles: true, composed: true, detail: { color: '#E5534B' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].items[0].color).toBe('#E5534B'));
+  });
+
+  it('removes colour when item-color-changed fires with null', async () => {
+    const coloredItem = { ...ITEM, color: '#4A94D4' };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [coloredItem] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-tap', {
+      bubbles: true, composed: true, detail: { item: coloredItem },
+    }));
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('item-color-changed', {
+      bubbles: true, composed: true, detail: { color: null },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].items[0].color).toBeUndefined());
+  });
 });
 
 describe('list-detail-page — delete item', () => {
@@ -379,26 +408,26 @@ describe('list-detail-page — delete item', () => {
   });
 });
 
-describe('list-detail-page — done toggle', () => {
-  it('toggles item status from open to done on item-done-toggle', async () => {
+describe('list-detail-page — colour cycle', () => {
+  it('cycles item colour from none to the first palette colour on item-color-cycle', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
-    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-done-toggle', {
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-color-cycle', {
       bubbles: true, composed: true, detail: { item: ITEM },
     }));
-    await vi.waitFor(() => expect(getState().lists[0].items[0].status).toBe('done'));
+    await vi.waitFor(() => expect(getState().lists[0].items[0].color).toBe('#E5534B'));
   });
 
-  it('toggles item status from done back to open on item-done-toggle', async () => {
-    const doneItem = { ...ITEM, status: 'done' };
-    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [doneItem] }] } });
+  it('cycles item colour back to none (no color key) after the last palette colour', async () => {
+    const purpleItem = { ...ITEM, color: '#8B67D6' };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [purpleItem] }] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
-    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-done-toggle', {
-      bubbles: true, composed: true, detail: { item: doneItem },
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-color-cycle', {
+      bubbles: true, composed: true, detail: { item: purpleItem },
     }));
-    await vi.waitFor(() => expect(getState().lists[0].items[0].status).toBe('open'));
+    await vi.waitFor(() => expect(getState().lists[0].items[0].color).toBeUndefined());
   });
 });
 

@@ -377,6 +377,38 @@ describe('home-page — goal mutations', () => {
     );
   });
 
+  it('advances colour to the next palette entry on goal-color-cycle event', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-color-cycle', {
+      bubbles: true, composed: true, detail: { goal: { id: 'c1' } },
+    }));
+    await vi.waitFor(() =>
+      expect(getState().goals['2026'].capstone[0].color).toBe('#E5534B')
+    );
+  });
+
+  it('wraps colour from last palette entry back to no colour', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 }, color: '#8B67D6' }], milestones: [], wow: [] },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    el.shadowRoot.querySelector('#capstone-list').dispatchEvent(new CustomEvent('goal-color-cycle', {
+      bubbles: true, composed: true, detail: { goal: { id: 'c1', color: '#8B67D6' } },
+    }));
+    await vi.waitFor(() =>
+      expect(getState().goals['2026'].capstone[0]).not.toHaveProperty('color')
+    );
+  });
+
   it('stores notes when goal-created includes one', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);

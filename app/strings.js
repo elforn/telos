@@ -288,8 +288,6 @@ defineStrings({
   'item-dialog.picker-clear':           'Clear selection',
 
   'list-item.delete':          'Delete',
-  'list-item.mark-done': 'Mark done',
-  'list-item.restore':   'Restore',
   'list-item.drag':      'Drag to reorder',
   'list-item.duedate-aria': '{title}, {when}',
 
@@ -367,4 +365,16 @@ defineStrings({
   'filter.toast-show': 'Show',
   'toast.close':  'Close',
   'tag.remove':   'Remove {tag}',
+
+  // Shared colour-swatch picker (list-dialog, item-dialog, goal-dialog) — one
+  // namespace since all three render the same COLOR_PALETTE from
+  // app/utils/color-palette.js.
+  'color-picker.none':   'No colour',
+  'color-picker.red':    'Red',
+  'color-picker.orange': 'Orange',
+  'color-picker.yellow': 'Yellow',
+  'color-picker.green':  'Green',
+  'color-picker.teal':   'Teal',
+  'color-picker.blue':   'Blue',
+  'color-picker.purple': 'Purple',
 });

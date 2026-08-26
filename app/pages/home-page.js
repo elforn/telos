@@ -23,6 +23,7 @@ import { percentValue, setPercent, logEntry, unlogEntry, isLoggedOn } from '../u
 import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
 import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
 import { shareMarkdown } from '../utils/share-markdown.js';
+import { nextColor } from '../utils/color-palette.js';
 
 const FILTER_SHAPE = {
   query:          { kind: 'string' },
@@ -450,6 +451,9 @@ class HomePage extends AppElement {
     this._onCapstoneDelete = e => this._deleteGoalWithUndo('capstone', e.detail.goal.id);
     this.listen(this._capstoneList, 'goal-delete', this._onCapstoneDelete);
 
+    this._onCapstoneColorCycle = e => this._cycleGoalColor('capstone', e.detail.goal.id);
+    this.listen(this._capstoneList, 'goal-color-cycle', this._onCapstoneColorCycle);
+
     this._onAddCapstone = () => {
       this._editingSection = 'capstone';
       this._editingGoal    = null;
@@ -477,6 +481,9 @@ class HomePage extends AppElement {
     this._onMilestoneDelete = e => this._deleteGoalWithUndo('milestones', e.detail.goal.id);
     this.listen(this._milestoneList, 'goal-delete', this._onMilestoneDelete);
 
+    this._onMilestoneColorCycle = e => this._cycleGoalColor('milestones', e.detail.goal.id);
+    this.listen(this._milestoneList, 'goal-color-cycle', this._onMilestoneColorCycle);
+
     this._onAddMilestone = makeSectionAdder('milestones', this._milestoneSection);
     this.listen(this.shadowRoot.querySelector('#add-milestone'), 'click', this._onAddMilestone);
 
@@ -500,6 +507,9 @@ class HomePage extends AppElement {
     this._onWowDelete = e => this._deleteGoalWithUndo('wow', e.detail.goal.id);
     this.listen(this._wowList, 'goal-delete', this._onWowDelete);
 
+    this._onWowColorCycle = e => this._cycleGoalColor('wow', e.detail.goal.id);
+    this.listen(this._wowList, 'goal-color-cycle', this._onWowColorCycle);
+
     this._onAddWow = makeSectionAdder('wow', this._wowSection);
     this.listen(this.shadowRoot.querySelector('#add-wow'), 'click', this._onAddWow);
 
@@ -522,6 +532,9 @@ class HomePage extends AppElement {
 
     this._onFocusDelete = e => this._deleteGoalWithUndo('focus', e.detail.goal.id);
     this.listen(this._focusList, 'goal-delete', this._onFocusDelete);
+
+    this._onFocusColorCycle = e => this._cycleGoalColor('focus', e.detail.goal.id);
+    this.listen(this._focusList, 'goal-color-cycle', this._onFocusColorCycle);
 
     this._onAddFocus = makeSectionAdder('focus', this._focusSection);
     this.listen(this.shadowRoot.querySelector('#add-focus'), 'click', this._onAddFocus);
@@ -575,6 +588,16 @@ class HomePage extends AppElement {
     };
     this.listen(this.shadowRoot, 'goal-duedate-changed', this._onGoalDueDateChanged);
 
+    this._onGoalColorChanged = e => {
+      if (!this._editingGoal) return;
+      this._mutateSection(this._editingSection, list => list.map(g => {
+        if (g.id !== this._editingGoal.id) return g;
+        const { color: _, ...rest } = g;
+        return e.detail.color ? { ...rest, color: e.detail.color } : rest;
+      }));
+    };
+    this.listen(this.shadowRoot, 'goal-color-changed', this._onGoalColorChanged);
+
     this._onGoalEntryToggle = e => {
       if (!this._editingGoal) return;
       this._toggleEntryOn(this._editingSection, this._editingGoal.id, e.detail.iso);
@@ -622,9 +645,9 @@ class HomePage extends AppElement {
     this.listen(this.shadowRoot, 'goal-closed', this._onGoalClosed);
 
     this._onGoalCreated = e => {
-      const { title, notes, dueDate, tags, tracking } = e.detail;
+      const { title, notes, dueDate, tags, color, tracking } = e.detail;
       const snapshot = getState().goals;
-      const goal = this._addGoal(this._editingSection, title, notes, dueDate, tags, tracking);
+      const goal = this._addGoal(this._editingSection, title, notes, dueDate, tags, tracking, color);
       // goal-created now fires on title blur (commit-on-blur) while the dialog is
       // still open, so track the new goal as the one being edited — later
       // notes/tag/due-date changes in the same session update it in place.
@@ -687,6 +710,7 @@ class HomePage extends AppElement {
         status: 'open',
         dueDate: goal.dueDate,
         tags: [...(goal.tags ?? [])],
+        color: goal.color,
         inGoals: [],
       };
 
@@ -811,8 +835,8 @@ class HomePage extends AppElement {
     setState('goals', { ...getState().goals, [year]: { ...yg, [section]: fn(yg[section] ?? []) } });
   }
 
-  _addGoal(section, title, notes, dueDate, tags, tracking = { type: 'percentage', value: 0 }) {
-    const goal = { id: crypto.randomUUID(), title, notes, dueDate, tags: tags ?? [], tracking };
+  _addGoal(section, title, notes, dueDate, tags, tracking = { type: 'percentage', value: 0 }, color) {
+    const goal = { id: crypto.randomUUID(), title, notes, dueDate, tags: tags ?? [], tracking, color };
     this._mutateSection(section, list => [...list, goal]);
     return goal;
   }
@@ -837,6 +861,15 @@ class HomePage extends AppElement {
 
   _setArchived(section, id, archived) {
     this._mutateSection(section, list => list.map(g => g.id === id ? { ...g, archived } : g));
+  }
+
+  _cycleGoalColor(section, id) {
+    this._mutateSection(section, list => list.map(g => {
+      if (g.id !== id) return g;
+      const color = nextColor(g.color);
+      const { color: _, ...rest } = g;
+      return color ? { ...rest, color } : rest;
+    }));
   }
 
   _deleteGoal(section, id) {

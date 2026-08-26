@@ -25,6 +25,7 @@ import '../components/export-sheet/export-sheet.js';
 import '../components/date-filter-row/date-filter-row.js';
 import { exportListMarkdown, exportItemsMarkdown } from '../utils/export-markdown.js';
 import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
+import { nextColor } from '../utils/color-palette.js';
 import { buildListHandoff, buildItemHandoff, buildItemsHandoff, shareHandoff } from '../utils/handoff.js';
 import { shareMarkdown } from '../utils/share-markdown.js';
 
@@ -730,12 +731,20 @@ class ListDetailPage extends AppElement {
     };
     this.listen(this._itemList, 'item-delete', this._onItemDelete);
 
-    this._onItemDoneToggle = e => {
-      const item = e.detail.item;
-      const newStatus = item.status === 'done' ? 'open' : 'done';
-      this._editItem(item.id, { title: item.title, status: newStatus });
+    // Marking an item done now happens via the status badge (tap-to-cycle)
+    // rather than a swipe — right-swipe on list-item cycles colour instead
+    // (item-color-cycle), mirroring list-color-cycle's own cycle-in-place.
+    this._onItemColorCycle = e => {
+      const item = e.detail?.item;
+      if (!item) return;
+      const color = nextColor(item.color);
+      this._mutateItems(items => items.map(i => {
+        if (i.id !== item.id) return i;
+        const { color: _, ...rest } = i;
+        return color ? { ...rest, color } : rest;
+      }));
     };
-    this.listen(this._itemList, 'item-done-toggle', this._onItemDoneToggle);
+    this.listen(this._itemList, 'item-color-cycle', this._onItemColorCycle);
 
     this._onItemStatusCycle = e => {
       const { item, next } = e.detail;
@@ -752,9 +761,9 @@ class ListDetailPage extends AppElement {
     this.listen(this._itemList, 'item-status-cycle', this._onItemStatusCycle);
 
     this._onItemCreated = e => {
-      const { id, title, status, note, url, dueDate, tags } = e.detail;
-      this._addItem({ id, title, status, note, url, dueDate, tags });
-      this._editingItem = { id, title, status, note, url, dueDate, tags, inGoals: [] };
+      const { id, title, status, note, url, dueDate, tags, color } = e.detail;
+      this._addItem({ id, title, status, note, url, dueDate, tags, color });
+      this._editingItem = { id, title, status, note, url, dueDate, tags, color, inGoals: [] };
       this._createdItemId = id;
     };
     this.listen(this.shadowRoot, 'item-created', this._onItemCreated);
@@ -835,6 +844,16 @@ class ListDetailPage extends AppElement {
     };
     this.listen(this._dialog, 'item-duedate-changed', this._onItemDueDateChanged);
 
+    this._onItemColorChanged = e => {
+      if (!this._editingItem) return;
+      this._mutateItems(items => items.map(i => {
+        if (i.id !== this._editingItem.id) return i;
+        const { color: _, ...rest } = i;
+        return e.detail.color ? { ...rest, color: e.detail.color } : rest;
+      }));
+    };
+    this.listen(this._dialog, 'item-color-changed', this._onItemColorChanged);
+
     this._onItemStatusChanged = e => {
       if (!this._editingItem) return;
       const { status } = e.detail;
@@ -864,9 +883,9 @@ class ListDetailPage extends AppElement {
 
     this._onItemMove = e => {
       if (!this._editingItem) return;
-      const { title, status, note, url, dueDate, tags, targetListIds, newListName, copy } = e.detail;
+      const { title, status, note, url, dueDate, tags, color, targetListIds, newListName, copy } = e.detail;
       const item         = this._editingItem;
-      const updatedItem  = { ...item, title, status, note, url, dueDate, tags };
+      const updatedItem  = { ...item, title, status, note, url, dueDate, tags, color };
       const currentLists = getState().lists ?? [];
       const targetNames  = currentLists
         .filter(l => targetListIds.includes(l.id))
@@ -901,10 +920,10 @@ class ListDetailPage extends AppElement {
 
     this._onItemPromote = e => {
       if (!this._editingItem) return;
-      const { title, status, note, url, dueDate, tags, year, section } = e.detail;
+      const { title, status, note, url, dueDate, tags, color, year, section } = e.detail;
       const item    = this._editingItem;
       const goalId  = crypto.randomUUID();
-      const goal    = { id: goalId, title, tags: [...(tags ?? [])], dueDate, tracking: { type: 'percentage', value: 0 } };
+      const goal    = { id: goalId, title, tags: [...(tags ?? [])], dueDate, color, tracking: { type: 'percentage', value: 0 } };
       const state   = getState();
       const yearStr = String(year);
       const existing = state.goals?.[yearStr] ?? { capstone: [], milestones: [], wow: [], focus: [] };
@@ -915,7 +934,7 @@ class ListDetailPage extends AppElement {
       });
 
       const updatedItem = {
-        ...item, title, status, note, url, dueDate, tags,
+        ...item, title, status, note, url, dueDate, tags, color,
         inGoals: [...(item.inGoals ?? []), { year: yearStr, section, goalId }],
       };
       setState('lists', (getState().lists ?? []).map(l =>
@@ -1384,10 +1403,10 @@ class ListDetailPage extends AppElement {
     ));
   }
 
-  _addItem({ id, title, status, note, url, dueDate, tags }) {
+  _addItem({ id, title, status, note, url, dueDate, tags, color }) {
     const item = {
       id: id ?? crypto.randomUUID(), title, status,
-      note, url, dueDate,
+      note, url, dueDate, color,
       tags: tags ?? [], inGoals: [],
     };
     this._mutateItems(items => [...items, item]);

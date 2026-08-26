@@ -7,9 +7,10 @@ import { Reorder } from '../../_lib/modules/reorder/reorder.js';
 import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/list-dialog/list-dialog.js';
+import '../components/lists-page-item/lists-page-item.js';
 import '../components/add-row/add-row.js';
 import '../../_lib/modules/modal-dialog/modal-dialog.js';
-import { COLOR_PALETTE } from '../components/lists-page-item/lists-page-item.js';
+import { nextColor } from '../utils/color-palette.js';
 import '../components/date-filter-row/date-filter-row.js';
 import { icons } from '../icons.js';
 import { matchesDateBucket } from '../utils/urgency.js';
@@ -212,12 +213,11 @@ class ListsPage extends AppElement {
     this._onListColorCycle = e => {
       const list = e.detail?.list;
       if (!list) return;
-      const currentIdx = COLOR_PALETTE.findIndex(c => c === (list.color ?? null));
-      const nextColor = COLOR_PALETTE[(currentIdx + 1) % COLOR_PALETTE.length];
+      const color = nextColor(list.color);
       setState('lists', (getState().lists ?? []).map(l => {
         if (l.id !== list.id) return l;
         const { color: _, ...rest } = l;
-        return nextColor ? { ...rest, color: nextColor } : rest;
+        return color ? { ...rest, color } : rest;
       }));
     };
     this.listen(this._container, 'list-color-cycle', this._onListColorCycle);

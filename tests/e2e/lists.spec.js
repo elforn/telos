@@ -1034,30 +1034,40 @@ test.describe('Lists — swipe gestures', () => {
     });
   });
 
-  test('swipe right then click done marks the item as done', async ({ page }) => {
-    await swipeListItemRight(page);
+  test('swipe right cycles the item colour', async ({ page }) => {
+    // Dispatched pointer events (pointerId 1, matching the primary mouse
+    // pointer) rather than a page.mouse drag — setPointerCapture requires an
+    // OS-level active pointer session that a synthetic mouse drag doesn't
+    // reliably establish in this environment for the full commit distance,
+    // even though the same technique works fine for the reveal-only left
+    // swipe above (which commits via a separately dispatched pointerup on
+    // #delete-btn, not the drag's own release).
     await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
+      const row = document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
         .querySelector('list-item').shadowRoot
-        .querySelector('#done-btn').dispatchEvent(
-          new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 })
-        );
+        .querySelector('.row');
+      const rect = row.getBoundingClientRect();
+      const startX = rect.x + 20, y = rect.y + rect.height / 2, endX = rect.x + rect.width - 20;
+      row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerId: 1, clientX: startX, clientY: y, button: 0 }));
+      row.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, composed: true, pointerId: 1, clientX: startX + 30, clientY: y }));
+      row.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, composed: true, pointerId: 1, clientX: endX, clientY: y }));
+      row.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1, clientX: endX, clientY: y, button: 0 }));
     });
     await page.waitForFunction(() => {
-      const badge = document.querySelector('app-router')?.shadowRoot
+      const row = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('list-item')?.shadowRoot?.querySelector('.badge');
-      return badge?.dataset.status === 'done';
+        ?.querySelector('list-item')?.shadowRoot?.querySelector('.row');
+      return row?.style.getPropertyValue('--item-color') === '#E5534B';
     });
   });
 
-  test('clicking done button on a done item restores it to open', async ({ page }) => {
+  test('tapping the status badge marks the item as done', async ({ page }) => {
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
         .querySelector('list-item').shadowRoot
-        .querySelector('#done-btn').dispatchEvent(
+        .querySelector('#badge-btn').dispatchEvent(
           new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 })
         );
     });
@@ -1066,20 +1076,6 @@ test.describe('Lists — swipe gestures', () => {
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('list-item')?.shadowRoot?.querySelector('.badge');
       return badge?.dataset.status === 'done';
-    });
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('list-detail-page').shadowRoot
-        .querySelector('list-item').shadowRoot
-        .querySelector('#done-btn').dispatchEvent(
-          new PointerEvent('pointerup', { bubbles: true, composed: true, pointerId: 1 })
-        );
-    });
-    await page.waitForFunction(() => {
-      const badge = document.querySelector('app-router')?.shadowRoot
-        ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('list-item')?.shadowRoot?.querySelector('.badge');
-      return badge?.dataset.status === 'open';
     });
   });
 });
