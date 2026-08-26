@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.5.0] — 2026-08-26
+
+### Added
+- **Goals and list items can now be given a decorative colour**, same swipe-right-to-cycle gesture and colour panel already used on lists — a coloured stripe shows down the start edge of the row. Purely organisational; it carries no meaning of its own. Also settable from a swatch row at the top of the goal/item dialog.
+- **Weekly and monthly goals now show their numeric target as a small numeral inside the "today" dot** (e.g. a "3" for a 3×/week goal), so the target is visible at a glance without opening the dialog.
+
+### Changed
+- **Deadline (goals) and Due date / Link (list items) moved out of the ⋮ overflow menu onto the dialog card itself**, as compact icon-only buttons next to Close. Tapping one reveals the field inline, with a brief highlight and an automatic scroll to bring it into view — collapsed by default, so the dialog stays compact when those fields are unused. Tapping it again to hide the field flashes the notes field instead, showing where the layout settled.
+- **Colour swatches now sit above the title in every dialog** (list, goal, item) instead of further down the card.
+- **List items no longer swipe-to-complete.** Marking an item done is now solely via its status badge, freeing up the swipe gesture for the new colour-cycle action. Swipe-to-delete is unchanged.
+- **In a list's "⋮" menu, the tag-colour toggle now sits above the status toggle** (was below) — reordered by how often each is actually touched.
+
+### Fixed
+- **The snap-back animation after a swipe was weaker and slightly slower on list items than on lists and goals.** Aligned the duration and easing so all three feel the same, and list items now also respect reduced-motion the same way the others already did.
+- **Revealing a second collapsed field (e.g. opening Due date, then Link) didn't scroll to or highlight the newly-shown field.** The scroll now runs after the card finishes resizing for the new field, instead of racing it.
+- **Dialogs could show two independent scrollbars at once** (the modal itself, and its internal content area), letting the header and footer drift out of place during a scroll. The modal now scrolls only in its intended internal region.
+- **Tapping the Deadline / Due date toggle button while typing elsewhere in the dialog dismissed the on-screen keyboard.** Revealing the date field no longer moves focus onto it — the keyboard now stays open on whatever field you were actually editing.
+
 ## [2.4.0] — 2026-08-19
 
 ### Added
