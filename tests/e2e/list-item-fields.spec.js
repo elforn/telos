@@ -134,26 +134,7 @@ async function toggleUrlField(page) {
     document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
       .querySelector('item-dialog').shadowRoot
-      .querySelector('#menu-btn').click();
-  });
-  await page.waitForFunction(() =>
-    document.querySelector('app-router')?.shadowRoot
-      ?.querySelector('list-detail-page')?.shadowRoot
-      ?.querySelector('item-dialog')?.shadowRoot
-      ?.querySelector('#action-sheet')?.shadowRoot
-      ?.querySelector('dialog')?.open
-  );
-  await page.evaluate(() => {
-    document.querySelector('app-router').shadowRoot
-      .querySelector('list-detail-page').shadowRoot
-      .querySelector('item-dialog').shadowRoot
-      .querySelector('#action-url-toggle').click();
-  });
-  await page.evaluate(() => {
-    document.querySelector('app-router').shadowRoot
-      .querySelector('list-detail-page').shadowRoot
-      .querySelector('item-dialog').shadowRoot
-      .querySelector('#action-sheet').close();
+      .querySelector('#url-chip').click();
   });
 }
 

@@ -6,6 +6,14 @@ import '../../app/components/item-dialog/item-dialog.js';
 const ITEM = { id: 'i1', title: 'Buy flowers', status: 'paused', note: 'From the corner shop', url: 'https://example.com', tags: [], inGoals: [] };
 const ITEM_IN_GOALS = { ...ITEM, inGoals: [{ year: '2026', section: 'milestones', goalId: 'g1' }] };
 
+// The field-toggle handlers flash/scroll the revealed field inside a
+// requestAnimationFrame callback (see _onDueDateToggle/_onUrlToggle) so the
+// scroll always targets layout already settled by _syncNoteHeight — tests
+// that assert on flash-reveal or a scrollIntoView spy need to wait a frame.
+function nextFrame() {
+  return new Promise(resolve => requestAnimationFrame(resolve));
+}
+
 function stubModal(el) {
   const modal = el.shadowRoot.querySelector('#modal');
   modal.show  = vi.fn();
@@ -122,21 +130,35 @@ describe('item-dialog — open', () => {
   it('url-toggle sets aria-pressed to true when url field is shown', () => {
     const el = mount();
     el.open(ITEM);
-    const btn = el.shadowRoot.querySelector('#action-url-toggle');
+    const btn = el.shadowRoot.querySelector('#url-chip');
     expect(btn.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('url-toggle sets aria-pressed to false when url field is hidden', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('#action-url-toggle').getAttribute('aria-pressed')).toBe('false');
+    expect(el.shadowRoot.querySelector('#url-chip').getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('clicking url-toggle (in the overflow menu) reveals the url field', () => {
+  it('clicking url-toggle (the card chip) reveals the url field', () => {
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#action-url-toggle').click();
+    el.shadowRoot.querySelector('#url-chip').click();
     expect(el.shadowRoot.querySelector('.url-row').hidden).toBe(false);
+  });
+
+  it('flashes the url field when revealed via the toggle', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#url-chip').click();
+    await nextFrame();
+    expect(el.shadowRoot.querySelector('.url-row').classList.contains('flash-reveal')).toBe(true);
+  });
+
+  it('does not flash the url field when it is already open on load', () => {
+    const el = mount();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('.url-row').classList.contains('flash-reveal')).toBe(false);
   });
 
   it('url open button is hidden when url is empty', () => {
@@ -151,10 +173,10 @@ describe('item-dialog — open', () => {
     expect(el.shadowRoot.querySelector('#url-open').hidden).toBe(false);
   });
 
-  it('due-date field is shown by default on new item', () => {
+  it('due-date field is hidden by default on new item', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(true);
   });
 
   it('due-date field is shown automatically when item has a dueDate', () => {
@@ -164,39 +186,50 @@ describe('item-dialog — open', () => {
     expect(el.shadowRoot.querySelector('#duedate-input').value).toBe('2026-08-01');
   });
 
-  it('clicking duedate-toggle (in the overflow menu) hides the shown due-date field', () => {
+  it('clicking duedate-toggle (the card chip) reveals the due-date field', () => {
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#action-duedate-toggle').click();
-    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(true);
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
+  });
+
+  it('flashes the due-date field when revealed via the toggle', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    await nextFrame();
+    expect(el.shadowRoot.querySelector('.duedate-field').classList.contains('flash-reveal')).toBe(true);
+  });
+
+  it('does not flash the due-date field when it is already open on load', () => {
+    const el = mount();
+    el.open({ ...ITEM, dueDate: '2026-08-01' });
+    expect(el.shadowRoot.querySelector('.duedate-field').classList.contains('flash-reveal')).toBe(false);
   });
 
   it('duedate-toggle sets aria-pressed to true when due-date field is shown', () => {
     const el = mount();
     el.open({ ...ITEM, dueDate: '2026-08-01' });
-    const btn = el.shadowRoot.querySelector('#action-duedate-toggle');
+    const btn = el.shadowRoot.querySelector('#duedate-chip');
     expect(btn.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('duedate-toggle sets aria-pressed to false after the field is hidden', () => {
+  it('duedate-toggle sets aria-pressed to false when due-date field is hidden', () => {
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#action-duedate-toggle').click();
-    expect(el.shadowRoot.querySelector('#action-duedate-toggle').getAttribute('aria-pressed')).toBe('false');
+    expect(el.shadowRoot.querySelector('#duedate-chip').getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('duedate-toggle closes the overflow menu', () => {
+  it('pre-selects no colour when item has no colour', () => {
     const el = mount();
-    el.open(null);
-    el.shadowRoot.querySelector('#action-duedate-toggle').click();
-    expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
+    el.open(ITEM);
+    expect(el.shadowRoot.querySelector('.swatch[data-color=""]').getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('url-toggle closes the overflow menu', () => {
+  it('pre-selects the item colour swatch', () => {
     const el = mount();
-    el.open(null);
-    el.shadowRoot.querySelector('#action-url-toggle').click();
-    expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
+    el.open({ ...ITEM, color: '#4A94D4' });
+    expect(el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('pre-selects the item status radio', () => {
@@ -223,6 +256,151 @@ describe('item-dialog — open', () => {
     const el = mount();
     el.open(null);
     expect(el.shadowRoot.querySelector('#delete').hidden).toBe(true);
+  });
+});
+
+// ── footer layout ─────────────────────────────────────────────────────────────
+
+describe('item-dialog — field toggle footer placement', () => {
+  it('duedate-chip and url-chip live inside .actions-end, next to Close', () => {
+    const el = mount();
+    el.open(null);
+    const actionsEnd = el.shadowRoot.querySelector('.actions-end');
+    expect(actionsEnd.contains(el.shadowRoot.querySelector('#duedate-chip'))).toBe(true);
+    expect(actionsEnd.contains(el.shadowRoot.querySelector('#url-chip'))).toBe(true);
+  });
+
+  it('duedate-chip and url-chip have a visible title tooltip, not just aria-label', () => {
+    const el = mount();
+    el.open(null);
+    const dueDateBtn = el.shadowRoot.querySelector('#duedate-chip');
+    const urlBtn = el.shadowRoot.querySelector('#url-chip');
+    expect(dueDateBtn.getAttribute('title')).toBeTruthy();
+    expect(dueDateBtn.getAttribute('title')).toBe(dueDateBtn.getAttribute('aria-label'));
+    expect(urlBtn.getAttribute('title')).toBeTruthy();
+    expect(urlBtn.getAttribute('title')).toBe(urlBtn.getAttribute('aria-label'));
+  });
+
+  it('duedate-chip and url-chip are not inside the left-hand button cluster with Delete', () => {
+    const el = mount();
+    el.open(null);
+    const footer = el.shadowRoot.querySelector('.footer-main');
+    const deleteBtn = footer.querySelector('#delete');
+    const dueDateBtn = footer.querySelector('#duedate-chip');
+    // Delete precedes the icon buttons in DOM order — confirms they sit on
+    // the Close side of the footer, not adjacent to Delete.
+    expect(deleteBtn.compareDocumentPosition(dueDateBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('flashes the url field even when the due-date field was revealed first', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    await nextFrame();
+    el.shadowRoot.querySelector('#url-chip').click();
+    await nextFrame();
+    expect(el.shadowRoot.querySelector('.duedate-field').classList.contains('flash-reveal')).toBe(true);
+    expect(el.shadowRoot.querySelector('.url-row').classList.contains('flash-reveal')).toBe(true);
+  });
+
+  it('scrolls the revealed url field into view only after the note height resync (so the scroll targets settled layout)', async () => {
+    const el = mount();
+    el.open(null);
+    const urlRow = el.shadowRoot.querySelector('.url-row');
+    const calls = [];
+    urlRow.scrollIntoView = () => calls.push('scroll');
+    const syncSpy = vi.spyOn(el, '_syncNoteHeight');
+    el.shadowRoot.querySelector('#url-chip').click();
+    expect(calls).toHaveLength(0); // not yet — still inside the same synchronous click handler
+    await nextFrame();
+    expect(syncSpy).toHaveBeenCalled();
+    expect(calls).toHaveLength(1);
+  });
+
+  it('scrolls the revealed due-date field into view', async () => {
+    const el = mount();
+    el.open(null);
+    const dueDateField = el.shadowRoot.querySelector('.duedate-field');
+    const scrollSpy = vi.fn();
+    dueDateField.scrollIntoView = scrollSpy;
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    await nextFrame();
+    expect(scrollSpy).toHaveBeenCalled();
+  });
+
+  it('centers the revealed field rather than scrolling the minimum amount', async () => {
+    const el = mount();
+    el.open(null);
+    const urlRow = el.shadowRoot.querySelector('.url-row');
+    const scrollSpy = vi.fn();
+    urlRow.scrollIntoView = scrollSpy;
+    el.shadowRoot.querySelector('#url-chip').click();
+    await nextFrame();
+    expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ block: 'center' }));
+  });
+
+  it('focuses the revealed url input so it visibly becomes the active field, not just scrolled to', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#url-chip').click();
+    await nextFrame();
+    expect(el.shadowRoot.activeElement).toBe(el.shadowRoot.querySelector('#url-input'));
+  });
+
+  it('does not focus the revealed due-date input — a native date control would swap away the on-screen keyboard', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    await nextFrame();
+    expect(el.shadowRoot.activeElement).not.toBe(el.shadowRoot.querySelector('#duedate-input'));
+  });
+
+  it('leaves the note field focused (keyboard open) when the due-date field is revealed', async () => {
+    const el = mount();
+    el.open(null);
+    const noteInput = el.shadowRoot.querySelector('#note-input');
+    noteInput.focus();
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    await nextFrame();
+    expect(el.shadowRoot.activeElement).toBe(noteInput);
+  });
+
+  it('focus does not steal scroll control from the deliberate centered scroll (preventScroll used)', async () => {
+    const el = mount();
+    el.open(null);
+    const urlInput = el.shadowRoot.querySelector('#url-input');
+    const focusSpy = vi.spyOn(urlInput, 'focus');
+    el.shadowRoot.querySelector('#url-chip').click();
+    await nextFrame();
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+  });
+
+  it('flashes the note field when the due-date field is hidden again', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-chip').click(); // open
+    await nextFrame();
+    el.shadowRoot.querySelector('#duedate-chip').click(); // close
+    await nextFrame();
+    expect(el.shadowRoot.querySelector('.textarea-wrap').classList.contains('flash-reveal')).toBe(true);
+  });
+
+  it('flashes the note field when the url field is hidden again', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#url-chip').click(); // open
+    await nextFrame();
+    el.shadowRoot.querySelector('#url-chip').click(); // close
+    await nextFrame();
+    expect(el.shadowRoot.querySelector('.textarea-wrap').classList.contains('flash-reveal')).toBe(true);
+  });
+
+  it('does not flash the note field while a due-date/url field is being revealed', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-chip').click(); // open
+    await nextFrame();
+    expect(el.shadowRoot.querySelector('.textarea-wrap').classList.contains('flash-reveal')).toBe(false);
   });
 });
 
@@ -322,6 +500,27 @@ describe('item-dialog — new item creation', () => {
     el.shadowRoot.querySelector('#title-input').value = 'Item';
     el.shadowRoot.querySelector('#modal').close();
     expect(events[0].detail.dueDate).toBeUndefined();
+  });
+
+  it('includes color in item-created when a swatch is selected', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.color).toBe('#4A94D4');
+  });
+
+  it('color is undefined in item-created when no swatch is selected', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-created', e => events.push(e));
+    el.shadowRoot.querySelector('#title-input').value = 'Item';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.color).toBeUndefined();
   });
 
   it('dispatches item-created on Enter key when title is non-empty', () => {
@@ -518,6 +717,54 @@ describe('item-dialog — edit existing (blur-save)', () => {
       new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
     );
     expect(modal.close).toHaveBeenCalledOnce();
+  });
+});
+
+// ── colour picker ────────────────────────────────────────────────────────────
+
+describe('item-dialog — colour picker', () => {
+  it('color swatches are always visible without any interaction', () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('.color-swatches').hidden).toBe(false);
+  });
+
+  it('color swatches render above the title input', () => {
+    const el = mount();
+    el.open(null);
+    const view = el.shadowRoot.querySelector('#view-main');
+    const swatches = view.querySelector('.color-swatches');
+    const input = view.querySelector('#title-input');
+    expect(swatches.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('selected swatch gets aria-pressed true, others false', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    el.shadowRoot.querySelector('.swatch[data-color="#E5534B"]').click();
+    const pressed = [...el.shadowRoot.querySelectorAll('.swatch[aria-pressed="true"]')];
+    expect(pressed).toHaveLength(1);
+    expect(pressed[0].dataset.color).toBe('#E5534B');
+  });
+
+  it('dispatches item-color-changed when a swatch is clicked on an existing item', () => {
+    const el = mount();
+    el.open(ITEM);
+    const events = [];
+    el.addEventListener('item-color-changed', e => events.push(e));
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.color).toBe('#4A94D4');
+  });
+
+  it('does not dispatch item-color-changed while the item is new', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('item-color-changed', e => events.push(e));
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    expect(events).toHaveLength(0);
   });
 });
 

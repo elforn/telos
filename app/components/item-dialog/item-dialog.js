@@ -7,6 +7,7 @@ import '../tag-input/tag-input.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
+import { swatches } from '../../utils/color-palette.js';
 
 const STATUSES = ['open', 'paused', 'done', 'closed'];
 const SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
@@ -76,10 +77,10 @@ class ItemDialog extends AppElement {
     this._showUrlField(!!item?.url);
 
     this._dueDateInput.value = item?.dueDate ?? '';
-    // Due date is a first-class field for list items — shown by default (URL stays collapsed).
-    this._showDueDateField(true);
+    this._showDueDateField(!!item?.dueDate);
 
     this._tagInputEl.tags = item?.tags ?? [];
+    this._selectColor(item?.color ?? null);
 
     this._menuBtn.hidden = false;
 
@@ -95,8 +96,8 @@ class ItemDialog extends AppElement {
 
     // Draft recovery: target is blank for a new entry, the stored record for an existing one.
     const targetValues = item
-      ? { title: item.title ?? '', note: item.note, url: item.url, dueDate: item.dueDate, tags: [...(item.tags ?? [])] }
-      : { title: '', note: undefined, url: undefined, dueDate: undefined, tags: [] };
+      ? { title: item.title ?? '', note: item.note, url: item.url, dueDate: item.dueDate, tags: [...(item.tags ?? [])], color: item.color ?? null }
+      : { title: '', note: undefined, url: undefined, dueDate: undefined, tags: [], color: null };
     // Existing records: a draft is only ever offered via the button, never silently
     // applied over the real value the form already shows (peek() doesn't write it).
     // New entries: nothing committed to protect, so recovering the draft on open
@@ -283,6 +284,93 @@ class ItemDialog extends AppElement {
           outline-offset: 2px;
         }
 
+        /* ── Colour swatches (always visible, mirrors list-dialog exactly) ── */
+
+        .color-swatches {
+          display: flex;
+          gap: var(--space-3);
+          flex-wrap: wrap;
+          padding-inline-start: var(--space-1);
+          margin-block-end: var(--space-4);
+          padding-top: var(--space-2);
+        }
+
+        .swatch {
+          inline-size: 28px;
+          block-size: 28px;
+          border-radius: var(--radius-full);
+          border: none;
+          cursor: pointer;
+          padding: 0;
+          flex-shrink: 0;
+          box-shadow: inset 0 0 0 1px var(--color-border);
+          transition: box-shadow 0.1s;
+          min-block-size: auto;
+        }
+
+        .swatch:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .swatch[aria-pressed="true"] {
+          box-shadow: 0 0 0 2.5px var(--color-surface), 0 0 0 5px var(--color-text-primary);
+        }
+
+        .swatch-none {
+          background: var(--color-surface-raised);
+          box-shadow: inset 0 0 0 1px var(--color-border);
+        }
+
+        .swatch-none[aria-pressed="true"] {
+          box-shadow: 0 0 0 2.5px var(--color-surface), 0 0 0 5px var(--color-text-secondary);
+        }
+
+        tag-input {
+          margin-block-end: var(--space-4);
+        }
+
+        /* ── Field toggle icons — compact, icon-only footer buttons that
+           reveal the Deadline / URL fields directly below the tags,
+           replacing an earlier icon-in-the-tags-row placement (itself a
+           replacement for a full-width text-label chip row, itself a
+           replacement for the original overflow-menu toggles — each
+           iteration traded discoverability for compactness). Live inside
+           .actions-end, immediately left of Close — deliberately far from
+           Delete on the other end of the footer so a mis-tap can't delete
+           the record. Both fields start collapsed (shown only if already
+           set — see _resetForm/_applyFormValues) so the compact default
+           stays compact. Filled accent when the field is open, plain
+           outline when closed — same idiom as the pressed pill state
+           elsewhere. ── */
+        .field-icon-btn {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
+          padding: 0;
+          border-radius: var(--radius-full);
+          border: 0.5px solid var(--color-border);
+          background: var(--color-surface-raised);
+          color: var(--color-text-secondary);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .field-icon-btn svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); }
+
+        .field-icon-btn[aria-pressed="true"] {
+          background: var(--color-accent-subtle);
+          border-color: var(--color-accent);
+          color: var(--color-accent);
+        }
+
+        .field-icon-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
         /* ── URL row — full width, matches input[type=text] styling ──────── */
         .url-row {
           display: flex;
@@ -387,10 +475,30 @@ class ItemDialog extends AppElement {
           outline-offset: 2px;
         }
 
-        /* ── Tags — chip/suggestion styling lives in <tag-input> now ─────── */
-
-        tag-input {
-          margin-block-end: var(--space-4);
+        /* Brief highlight the instant a field is revealed via its footer
+           toggle — not shown when the field is already open because the
+           item already has a value (see _resetForm/_applyFormValues, which
+           never add this class). An outline ring rather than a background
+           wash so it reads the same regardless of the field's own
+           background (the due-date box has one, the URL row doesn't).
+           .textarea-wrap gets the same treatment when a field is *hidden*
+           instead — collapsing due-date/URL shifts the layout the same way
+           revealing it did, so the note field is flashed to show where
+           things settled (see _onDueDateToggle/_onUrlToggle). */
+        @keyframes field-flash-ring {
+          0%   { outline-color: transparent; }
+          25%  { outline-color: color-mix(in srgb, var(--color-accent) 70%, transparent); }
+          100% { outline-color: transparent; }
+        }
+        .duedate-field.flash-reveal,
+        .url-row.flash-reveal,
+        .textarea-wrap.flash-reveal {
+          outline: 2px solid transparent;
+          outline-offset: 2px;
+          animation: field-flash-ring 700ms ease-out;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .duedate-field.flash-reveal, .url-row.flash-reveal, .textarea-wrap.flash-reveal { animation: none; }
         }
 
         /* ── Action sheet ────────────────────────────────────────────────── */
@@ -416,37 +524,6 @@ class ItemDialog extends AppElement {
         .sheet-item:focus-visible {
           outline: 2px solid var(--color-accent);
           outline-offset: -2px;
-        }
-
-        /* Toggle-type sheet items get a leading icon and a trailing checkmark
-           (shown only when active) so they read as switches, not actions. */
-        .sheet-item-toggle { gap: var(--space-3); }
-
-        .sheet-toggle-icon {
-          display: flex;
-          flex-shrink: 0;
-          color: var(--color-text-secondary);
-        }
-
-        .sheet-toggle-icon svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); }
-
-        .sheet-toggle-label { flex: 1; }
-
-        .sheet-toggle-check {
-          display: flex;
-          flex-shrink: 0;
-          color: var(--color-accent);
-          visibility: hidden;
-        }
-
-        .sheet-toggle-check svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); }
-
-        .sheet-item-toggle[aria-pressed="true"] .sheet-toggle-check { visibility: visible; }
-
-        .sheet-divider {
-          border: none;
-          border-block-start: 0.5px solid var(--color-border);
-          margin-block: var(--space-1);
         }
 
         /* ── Picker views (goal-promoter) ───────────────────────────────── */
@@ -598,6 +675,7 @@ class ItemDialog extends AppElement {
 
         .actions-end {
           display: flex;
+          align-items: center;
           gap: var(--space-2);
           margin-inline-start: auto;
         }
@@ -608,6 +686,17 @@ class ItemDialog extends AppElement {
 
         <!-- ── View 1: Main form ──────────────────────────────────────────── -->
         <div id="view-main">
+          <div class="color-swatches">
+            ${swatches().map(({ color, label }) => `
+              <button type="button"
+                class="swatch${!color ? ' swatch-none' : ''}"
+                data-color="${color ?? ''}"
+                aria-label="${label}"
+                aria-pressed="false"
+                ${color ? `style="background:${color}"` : ''}
+              ></button>
+            `).join('')}
+          </div>
           <input id="title-input"
                  type="text"
                  aria-label="${t('item-dialog.title-placeholder')}"
@@ -633,6 +722,13 @@ class ItemDialog extends AppElement {
                       enterkeyhint="newline"></textarea>
             <button type="button" class="copy-btn" id="note-copy-btn" aria-label="${t('item-dialog.copy-note')}" title="${t('item-dialog.copy-note')}">${icons.copy}</button>
           </div>
+          <tag-input id="tag-input"></tag-input>
+          <div class="duedate-field" hidden>
+            <input id="duedate-input"
+                   type="date"
+                   aria-label="${t('item-dialog.duedate-toggle')}" />
+            <button type="button" id="duedate-clear" aria-label="${t('item-dialog.duedate-clear')}">${icons.xMark}</button>
+          </div>
           <div class="url-row" hidden>
             <input id="url-input"
                    type="text"
@@ -642,13 +738,6 @@ class ItemDialog extends AppElement {
                    inputmode="url" />
             <button type="button" id="url-open" hidden>${t('item-dialog.url-open')}</button>
           </div>
-          <div class="duedate-field" hidden>
-            <input id="duedate-input"
-                   type="date"
-                   aria-label="${t('item-dialog.duedate-toggle')}" />
-            <button type="button" id="duedate-clear" aria-label="${t('item-dialog.duedate-clear')}">${icons.xMark}</button>
-          </div>
-          <tag-input id="tag-input"></tag-input>
         </div>
 
         <!-- ── View 2: Goal promoter ──────────────────────────────────────── -->
@@ -676,6 +765,8 @@ class ItemDialog extends AppElement {
           <button type="button" id="delete" hidden>${t('item-dialog.delete')}</button>
           <button type="button" id="draft-toggle-btn" hidden></button>
           <div class="actions-end">
+            <button type="button" class="field-icon-btn" id="duedate-chip" aria-pressed="false" aria-label="${t('item-dialog.duedate-toggle')}" title="${t('item-dialog.duedate-toggle')}">${icons.calendar}</button>
+            <button type="button" class="field-icon-btn" id="url-chip" aria-pressed="false" aria-label="${t('item-dialog.url-toggle')}" title="${t('item-dialog.url-toggle')}">${icons.link}</button>
             <button type="button" id="close" aria-label="${t('item-dialog.close')}">${t('item-dialog.close')}</button>
           </div>
         </div>
@@ -690,17 +781,6 @@ class ItemDialog extends AppElement {
       </modal-dialog>
 
       <modal-dialog id="action-sheet" aria-label="${t('item-dialog.more-actions')}">
-        <button type="button" id="action-duedate-toggle" class="sheet-item sheet-item-toggle" aria-pressed="false">
-          <span class="sheet-toggle-icon">${icons.calendar}</span>
-          <span class="sheet-toggle-label">${t('item-dialog.duedate-toggle')}</span>
-          <span class="sheet-toggle-check">${icons.check}</span>
-        </button>
-        <button type="button" id="action-url-toggle" class="sheet-item sheet-item-toggle" aria-pressed="false">
-          <span class="sheet-toggle-icon">${icons.link}</span>
-          <span class="sheet-toggle-label">${t('item-dialog.url-toggle')}</span>
-          <span class="sheet-toggle-check">${icons.check}</span>
-        </button>
-        <hr class="sheet-divider">
         <button type="button" id="action-move-btn" class="sheet-item">${t('item-dialog.move-to-list')}</button>
         <button type="button" id="action-promote-btn" class="sheet-item">${t('item-dialog.add-to-goal')}</button>
         <button type="button" id="action-export-btn" class="sheet-item">${t('item-dialog.extract-markdown')}</button>
@@ -726,6 +806,7 @@ class ItemDialog extends AppElement {
     this.shadowRoot.addEventListener('pointerdown', this._onButtonPointerDown);
     this._titleInput = this.shadowRoot.querySelector('#title-input');
     this._noteInput = this.shadowRoot.querySelector('#note-input');
+    this._textareaWrap = this.shadowRoot.querySelector('.textarea-wrap');
     this._noteHighlight = attachMarkdownHighlight(
       this._noteInput,
       this.shadowRoot.querySelector('.md-highlight'),
@@ -733,14 +814,16 @@ class ItemDialog extends AppElement {
     this._noteCopyBtn = this.shadowRoot.querySelector('#note-copy-btn');
     this._urlInput = this.shadowRoot.querySelector('#url-input');
     this._urlOpen = this.shadowRoot.querySelector('#url-open');
-    this._urlToggle = this.shadowRoot.querySelector('#action-url-toggle');
+    this._urlToggle = this.shadowRoot.querySelector('#url-chip');
     this._urlRow = this.shadowRoot.querySelector('.url-row');
     this._dueDateInput = this.shadowRoot.querySelector('#duedate-input');
     this._dueDateClear = this.shadowRoot.querySelector('#duedate-clear');
-    this._dueDateToggle = this.shadowRoot.querySelector('#action-duedate-toggle');
+    this._dueDateToggle = this.shadowRoot.querySelector('#duedate-chip');
     this._dueDateRow = this.shadowRoot.querySelector('.duedate-field');
     this._tagInputEl = this.shadowRoot.querySelector('#tag-input');
     this._tagInputEl.existingTags = this._existingTags ?? [];
+    this._colorSwatches = this.shadowRoot.querySelector('.color-swatches');
+    this._selectedColor = null;
     this._deleteBtn = this.shadowRoot.querySelector('#delete');
     this._menuBtn = this.shadowRoot.querySelector('#menu-btn');
     this._closeBtn = this.shadowRoot.querySelector('#close');
@@ -771,14 +854,14 @@ class ItemDialog extends AppElement {
       const v = this._titleInput.value.trim();
       if (this._isNew) {
         if (!v) return;
-        const { status, note, url, dueDate, tags } = this._getFormValues();
+        const { status, note, url, dueDate, tags, color } = this._getFormValues();
         const id = crypto.randomUUID();
         // Clear while _item is still null, so _snapshotRecordId() resolves to the
         // new:<listId> key the draft was actually captured/read under — clearing
         // after assigning _item below would target the fresh item's id instead,
         // a key nothing was ever written to, leaving the real draft un-cleared.
         this._snapshot?.clear(); // committed — drop any hide-time snapshot
-        this._item = { id, title: v, status, note, url, dueDate, tags, inGoals: [] };
+        this._item = { id, title: v, status, note, url, dueDate, tags, color, inGoals: [] };
         this._isNew = false;
         this._lastValidTitle   = v;
         this._lastValidNote    = note;
@@ -786,7 +869,7 @@ class ItemDialog extends AppElement {
         this._lastValidDueDate = dueDate ?? '';
         this.dispatchEvent(new CustomEvent('item-created', {
           bubbles: true, composed: true,
-          detail: { id, title: v, status, note, url, dueDate, tags },
+          detail: { id, title: v, status, note, url, dueDate, tags, color },
         }));
         this._closeBtn.setAttribute('aria-label', t('item-dialog.close'));
         this._modal.shadowRoot?.querySelector('dialog')?.setAttribute('aria-label',
@@ -843,16 +926,35 @@ class ItemDialog extends AppElement {
       this._announceSaved();
     };
 
-    // Triggered from the overflow menu — closes the sheet (the real use case
-    // is "turn this on and go fill it in", not toggling several fields in one
-    // visit), but still doesn't auto-focus the revealed field: focusing it
-    // right after a menu interaction would be a jarring second focus change
-    // (and would dismiss the on-screen keyboard if title/note had it open).
-    // Let the user tap in when they're ready.
+    // Focuses the revealed input itself (not just its container): a URL
+    // field is text, so moving focus there keeps the on-screen keyboard up
+    // (just retargeted), which reads better than leaving the note textarea
+    // "selected" while a different field is visibly highlighted below it.
+    // `preventScroll: true` stops the browser's own default focus-scroll
+    // (usually block:'nearest') from fighting the deliberate block:'center'
+    // scroll _flashField does right after — that call is left as the sole
+    // authority on final position. _flashField (which scrolls the field into
+    // view) must run *after* _syncNoteHeight, not before: _syncNoteHeight
+    // resizes the note textarea's wrap to make room for the newly-revealed
+    // field, and that resize lands a frame later than this handler.
+    // Scrolling first and resizing second scrolls to a position the layout
+    // shift then moves out from under it — the field ends up back
+    // off-screen. Both run inside the same rAF now so the scroll always
+    // targets the settled layout. Closing (hiding) the field instead flashes
+    // the note field — collapsing it shifts the layout the same way opening
+    // it did, so the same "here's what moved" cue applies in reverse.
     this._onUrlToggle = () => {
-      this._showUrlField(this._urlRow.hidden);
-      requestAnimationFrame(() => this._syncNoteHeight());
-      this._actionSheet.close();
+      const opening = this._urlRow.hidden;
+      this._showUrlField(opening);
+      requestAnimationFrame(() => {
+        this._syncNoteHeight();
+        if (opening) {
+          this._urlInput.focus({ preventScroll: true });
+          this._flashField(this._urlRow);
+        } else {
+          this._flashField(this._textareaWrap);
+        }
+      });
     };
 
     this._onUrlOpen = () => {
@@ -871,10 +973,22 @@ class ItemDialog extends AppElement {
       this._announceSaved();
     };
 
+    // Unlike _onUrlToggle above, this deliberately does *not* focus the
+    // revealed input: a native date control isn't a text field, so focusing
+    // it would swap away whatever on-screen keyboard was up for the field
+    // the user was actually editing (e.g. the note) instead of just leaving
+    // it be — the scroll+flash below is enough to show the field appeared.
+    // _flashField must still run after _syncNoteHeight so the scroll targets
+    // the settled post-resize layout (see the note above). Closing (hiding)
+    // the field flashes the note field instead, same as _onUrlToggle.
     this._onDueDateToggle = () => {
-      this._showDueDateField(this._dueDateRow.hidden);
-      requestAnimationFrame(() => this._syncNoteHeight());
-      this._actionSheet.close();
+      const opening = this._dueDateRow.hidden;
+      this._showDueDateField(opening);
+      requestAnimationFrame(() => {
+        this._syncNoteHeight();
+        if (opening) this._flashField(this._dueDateRow);
+        else this._flashField(this._textareaWrap);
+      });
     };
 
     this._onDueDateClear = () => {
@@ -895,14 +1009,14 @@ class ItemDialog extends AppElement {
         // _skipCreate: move/promote already dispatched item-move/item-promote
         // directly — don't also create it here.
         if (!this._skipCreate) {
-          const { title, status, note, url, dueDate, tags } = this._getFormValues();
+          const { title, status, note, url, dueDate, tags, color } = this._getFormValues();
           if (title) {
             const id = crypto.randomUUID();
             this._isNew = false;
             this._lastValidTitle = title;
             this._snapshot?.clear(); // committed — drop any hide-time snapshot
             this.dispatchEvent(new CustomEvent('item-created', {
-              bubbles: true, composed: true, detail: { id, title, status, note, url, dueDate, tags },
+              bubbles: true, composed: true, detail: { id, title, status, note, url, dueDate, tags, color },
             }));
           } else {
             this._snapshot?.capture(); // can't commit without a title — preserve note/url/tags
@@ -958,6 +1072,24 @@ class ItemDialog extends AppElement {
     };
     this._tagInputEl.addEventListener('tags-changed', this._onTagsChanged);
 
+    // ── Colour swatches ──────────────────────────────────────────────────────
+    // Mirrors list-dialog exactly: a new item just tracks _selectedColor for
+    // item-created to pick up; an existing item commits immediately.
+    this._onSwatchClick = e => {
+      const swatch = e.target.closest('.swatch');
+      if (!swatch) return;
+      this._selectColor(swatch.dataset.color || null);
+      if (!this._isNew) {
+        this.dispatchEvent(new CustomEvent('item-color-changed', {
+          bubbles: true, composed: true,
+          detail: { color: this._selectedColor },
+        }));
+      }
+    };
+    this._onSwatchPointerDown = e => e.preventDefault();
+    this._colorSwatches.addEventListener('pointerdown', this._onSwatchPointerDown);
+    this._colorSwatches.addEventListener('click', this._onSwatchClick);
+
     this._titleInput.addEventListener('keydown', this._onKeyDown);
     this._titleInput.addEventListener('blur',    this._onTitleBlur);
     this._noteInput.addEventListener('input', this._onNoteInput);
@@ -967,9 +1099,11 @@ class ItemDialog extends AppElement {
     this._urlInput.addEventListener('input', this._onUrlInput);
     this._urlInput.addEventListener('blur',  this._onUrlBlur);
     this._urlOpen.addEventListener('click', this._onUrlOpen);
+    this._urlToggle.addEventListener('click', this._onUrlToggle);
     this._dueDateInput.addEventListener('change', this._onDueDateInput);
     this._dueDateClear.addEventListener('pointerdown', e => e.preventDefault());
     this._dueDateClear.addEventListener('click', this._onDueDateClear);
+    this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this._closeBtn.addEventListener('click', this._onClose);
     this._draftToggle = installDraftToggle(this, {
@@ -1036,9 +1170,6 @@ class ItemDialog extends AppElement {
     };
     this._actionSheet.addEventListener('click', this._onSheetBackdrop);
 
-    this._urlToggle.addEventListener('click', this._onUrlToggle);
-    this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
-
     this._onActionMove = () => {
       this._sheetReturnFocus = null;
       this._actionSheet.close();
@@ -1075,11 +1206,11 @@ class ItemDialog extends AppElement {
 
     this._onListPick = e => {
       const { targetListIds, newListName, copy } = e.detail;
-      const { title, status, note, url, dueDate, tags } = this._getFormValues();
+      const { title, status, note, url, dueDate, tags, color } = this._getFormValues();
       if (this._isNew) { this._skipCreate = true; this._snapshot?.clear(); }
       this.dispatchEvent(new CustomEvent('item-move', {
         bubbles: true, composed: true,
-        detail: { title, status, note, url, dueDate, tags, targetListIds, newListName, copy },
+        detail: { title, status, note, url, dueDate, tags, color, targetListIds, newListName, copy },
       }));
       this._modal.close();
     };
@@ -1105,16 +1236,16 @@ class ItemDialog extends AppElement {
       recordId: () => this._snapshotRecordId(),
       snapshot: () => {
         if (this._isNew) {
-          const { title, note, url, dueDate, tags } = this._getFormValues();
-          return (title || note || url || dueDate || tags.length) ? { title, note, url, dueDate, tags } : null;
+          const { title, note, url, dueDate, tags, color } = this._getFormValues();
+          return (title || note || url || dueDate || tags.length || color) ? { title, note, url, dueDate, tags, color } : null;
         }
-        // existing: only if a text field has an unsaved edit (tags/status/dueDate commit immediately)
+        // existing: only if a text field has an unsaved edit (tags/status/dueDate/colour commit immediately)
         const dirty = this._titleInput.value !== this._lastValidTitle
           || this._noteInput.value !== this._lastValidNote
           || this._urlInput.value !== this._lastValidUrl;
         if (!dirty) return null;
-        const { title, note, url, dueDate, tags } = this._getFormValues();
-        return { title, note, url, dueDate, tags };
+        const { title, note, url, dueDate, tags, color } = this._getFormValues();
+        return { title, note, url, dueDate, tags, color };
       },
       restore: data => this._applyFormValues(data),
     });
@@ -1128,6 +1259,8 @@ class ItemDialog extends AppElement {
     this._noteInput?.removeEventListener('input', this._onNoteInput);
     this._noteInput?.removeEventListener('blur',  this._onNoteBlur);
     this._noteCopyBtn?.removeEventListener('click', this._onNoteCopy);
+    this._colorSwatches?.removeEventListener('pointerdown', this._onSwatchPointerDown);
+    this._colorSwatches?.removeEventListener('click', this._onSwatchClick);
     this._urlInput?.removeEventListener('input', this._onUrlInput);
     this._urlInput?.removeEventListener('blur',  this._onUrlBlur);
     this._urlToggle?.removeEventListener('click', this._onUrlToggle);
@@ -1223,11 +1356,11 @@ class ItemDialog extends AppElement {
     const year = this._yearSelect?.value;
     const section = this._checkedSection();
     if (!year || !section) return;
-    const { title, status, note, url, dueDate, tags } = this._getFormValues();
+    const { title, status, note, url, dueDate, tags, color } = this._getFormValues();
     if (this._isNew) { this._skipCreate = true; this._snapshot?.clear(); }
     this.dispatchEvent(new CustomEvent('item-promote', {
       bubbles: true, composed: true,
-      detail: { title, status, note, url, dueDate, tags, year, section },
+      detail: { title, status, note, url, dueDate, tags, color, year, section },
     }));
     this._modal.close();
   }
@@ -1241,7 +1374,7 @@ class ItemDialog extends AppElement {
     return this._item?.id ?? `new:${this.sourceListId ?? ''}`;
   }
 
-  _applyFormValues({ title, note, url, dueDate, tags }) {
+  _applyFormValues({ title, note, url, dueDate, tags, color }) {
     this._titleInput.value = title ?? '';
     this._noteInput.value  = note ?? '';
     this._noteHighlight?.sync();
@@ -1251,6 +1384,14 @@ class ItemDialog extends AppElement {
     this._dueDateInput.value = dueDate ?? '';
     this._showDueDateField(!!dueDate);
     this._tagInputEl.tags = tags ?? [];
+    this._selectColor(color ?? null);
+  }
+
+  _selectColor(color) {
+    this._selectedColor = color;
+    this._colorSwatches.querySelectorAll('.swatch').forEach(s => {
+      s.setAttribute('aria-pressed', String((s.dataset.color || null) === color));
+    });
   }
 
   // ── Shared helpers ────────────────────────────────────────────────────────
@@ -1262,7 +1403,7 @@ class ItemDialog extends AppElement {
     const note = this._noteInput.value.trim() || undefined;
     const url = this._urlInput.value.trim() || undefined;
     const dueDate = this._dueDateInput.value || undefined;
-    return { title, status, note, url, dueDate, tags };
+    return { title, status, note, url, dueDate, tags, color: this._selectedColor ?? undefined };
   }
 
   _syncNoteHeight() {
@@ -1294,6 +1435,31 @@ class ItemDialog extends AppElement {
   _showDueDateField(show) {
     this._dueDateRow.hidden = !show;
     this._dueDateToggle.setAttribute('aria-pressed', String(show));
+  }
+
+  // A brief outline pulse marking a field that just appeared via its footer
+  // toggle — never called when a field opens because it already had a value
+  // (see _resetForm/_applyFormValues, which call _showUrlField/
+  // _showDueDateField directly). scrollIntoView matters here: toggling the
+  // *second* field (e.g. due date already open, then URL) can reveal it
+  // below the fold of the scrollable dialog — flashing an off-screen field
+  // is invisible, so the field is always brought into view first.
+  // block: 'center' (not 'nearest') so the card visibly jumps to the new
+  // field even when it's already marginally on-screen — 'nearest' can end
+  // up scrolling by 0px in that case, reading as if nothing happened.
+  // Uses setTimeout rather than animationend, matching goal-item's _logTick —
+  // under prefers-reduced-motion the animation is `none`, so animationend
+  // would never fire and the class would stick until the next toggle removed
+  // it; the timer is stashed on the element itself (not `this`) since two
+  // different fields can each have their own flash in flight independently.
+  _flashField(el) {
+    clearTimeout(el._flashTimer);
+    el.classList.remove('flash-reveal');
+    void el.offsetWidth; // force reflow so a rapid re-toggle restarts the animation
+    el.classList.add('flash-reveal');
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
+    el._flashTimer = setTimeout(() => el.classList.remove('flash-reveal'), 700);
   }
 
   _announceSaved() {

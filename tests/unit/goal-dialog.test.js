@@ -6,6 +6,14 @@ import '../../app/components/goal-dialog/goal-dialog.js';
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
 
+// The field-toggle handler flashes/scrolls the revealed field inside a
+// requestAnimationFrame callback (see _onDueDateToggle) so the scroll
+// always targets layout already settled by _syncDescHeight — tests that
+// assert on flash-reveal or a scrollIntoView spy need to wait a frame.
+function nextFrame() {
+  return new Promise(resolve => requestAnimationFrame(resolve));
+}
+
 function stubModal(el) {
   const modal = el.shadowRoot.querySelector('#modal');
   modal.show  = vi.fn();
@@ -75,31 +83,208 @@ describe('goal-dialog — open', () => {
     expect(el.shadowRoot.querySelector('#duedate-input').value).toBe('2026-12-31');
   });
 
-  it('clicking duedate-toggle (in the overflow menu) reveals the deadline field', () => {
+  it('clicking duedate-toggle (the card chip) reveals the deadline field', () => {
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#action-duedate-toggle').click();
+    el.shadowRoot.querySelector('#duedate-chip').click();
     expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
+  });
+
+  it('flashes the deadline field when revealed via the toggle', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    await nextFrame();
+    expect(el.shadowRoot.querySelector('.duedate-field').classList.contains('flash-reveal')).toBe(true);
+  });
+
+  it('does not flash the deadline field when it is already open on load', () => {
+    const el = mount();
+    el.open({ title: 'Grand Capstone', dueDate: '2026-12-31' });
+    expect(el.shadowRoot.querySelector('.duedate-field').classList.contains('flash-reveal')).toBe(false);
+  });
+
+  it('does not flash the deadline field when the toggle hides it', () => {
+    const el = mount();
+    el.open({ title: 'Grand Capstone', dueDate: '2026-12-31' });
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    expect(el.shadowRoot.querySelector('.duedate-field').classList.contains('flash-reveal')).toBe(false);
   });
 
   it('duedate-toggle sets aria-pressed to true when shown', () => {
     const el = mount();
     el.open({ title: 'Grand Capstone', dueDate: '2026-12-31' });
-    const btn = el.shadowRoot.querySelector('#action-duedate-toggle');
+    const btn = el.shadowRoot.querySelector('#duedate-chip');
     expect(btn.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('duedate-toggle sets aria-pressed to false when hidden', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('#action-duedate-toggle').getAttribute('aria-pressed')).toBe('false');
+    expect(el.shadowRoot.querySelector('#duedate-chip').getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('duedate-toggle closes the overflow menu', () => {
+  it('pre-selects no colour when goal has no colour', () => {
+    const el = mount();
+    el.open({ title: 'Grand Capstone' });
+    expect(el.shadowRoot.querySelector('.swatch[data-color=""]').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('pre-selects the goal colour swatch', () => {
+    const el = mount();
+    el.open({ title: 'Grand Capstone', color: '#4A94D4' });
+    expect(el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+describe('goal-dialog — colour picker', () => {
+  it('color swatches are always visible without any interaction', () => {
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#action-duedate-toggle').click();
-    expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
+    expect(el.shadowRoot.querySelector('.color-swatches').hidden).toBe(false);
+  });
+
+  it('color swatches render above the title input', () => {
+    const el = mount();
+    el.open(null);
+    const view = el.shadowRoot.querySelector('#view-main');
+    const swatches = view.querySelector('.color-swatches');
+    const input = view.querySelector('#input');
+    expect(swatches.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('selected swatch gets aria-pressed true, others false', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    el.shadowRoot.querySelector('.swatch[data-color="#E5534B"]').click();
+    const pressed = [...el.shadowRoot.querySelectorAll('.swatch[aria-pressed="true"]')];
+    expect(pressed).toHaveLength(1);
+    expect(pressed[0].dataset.color).toBe('#E5534B');
+  });
+
+  it('dispatches goal-color-changed when a swatch is clicked on an existing goal', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'Grand Capstone' });
+    const events = [];
+    el.addEventListener('goal-color-changed', e => events.push(e));
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.color).toBe('#4A94D4');
+  });
+
+  it('does not dispatch goal-color-changed while the goal is new', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('goal-color-changed', e => events.push(e));
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    expect(events).toHaveLength(0);
+  });
+
+  it('includes color in goal-created when a swatch is selected', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'New goal';
+    el.shadowRoot.querySelector('.swatch[data-color="#4A94D4"]').click();
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.color).toBe('#4A94D4');
+  });
+
+  it('color is undefined in goal-created when no swatch is selected', () => {
+    const el = mount();
+    el.open(null);
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'New goal';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.color).toBeUndefined();
+  });
+});
+
+describe('goal-dialog — field toggle footer placement', () => {
+  it('duedate-chip lives inside .actions-end, next to Close', () => {
+    const el = mount();
+    el.open(null);
+    const actionsEnd = el.shadowRoot.querySelector('.actions-end');
+    expect(actionsEnd.contains(el.shadowRoot.querySelector('#duedate-chip'))).toBe(true);
+  });
+
+  it('duedate-chip has a visible title tooltip, not just aria-label', () => {
+    const el = mount();
+    el.open(null);
+    const dueDateBtn = el.shadowRoot.querySelector('#duedate-chip');
+    expect(dueDateBtn.getAttribute('title')).toBeTruthy();
+    expect(dueDateBtn.getAttribute('title')).toBe(dueDateBtn.getAttribute('aria-label'));
+  });
+
+  it('duedate-chip is not adjacent to Delete', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'Grand Capstone' });
+    const footer = el.shadowRoot.querySelector('.footer-main');
+    const deleteBtn = footer.querySelector('#delete');
+    const dueDateBtn = footer.querySelector('#duedate-chip');
+    expect(deleteBtn.compareDocumentPosition(dueDateBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('scrolls the revealed deadline field into view', async () => {
+    const el = mount();
+    el.open(null);
+    const dueDateField = el.shadowRoot.querySelector('.duedate-field');
+    const scrollSpy = vi.fn();
+    dueDateField.scrollIntoView = scrollSpy;
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    await nextFrame();
+    expect(scrollSpy).toHaveBeenCalled();
+  });
+
+  it('centers the revealed field rather than scrolling the minimum amount', async () => {
+    const el = mount();
+    el.open(null);
+    const dueDateField = el.shadowRoot.querySelector('.duedate-field');
+    const scrollSpy = vi.fn();
+    dueDateField.scrollIntoView = scrollSpy;
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    await nextFrame();
+    expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ block: 'center' }));
+  });
+
+  it('does not focus the revealed deadline input — a native date control would swap away the on-screen keyboard', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    await nextFrame();
+    expect(el.shadowRoot.activeElement).not.toBe(el.shadowRoot.querySelector('#duedate-input'));
+  });
+
+  it('leaves the notes field focused (keyboard open) when the deadline field is revealed', async () => {
+    const el = mount();
+    el.open(null);
+    const descInput = el.shadowRoot.querySelector('#desc-input');
+    descInput.focus();
+    el.shadowRoot.querySelector('#duedate-chip').click();
+    await nextFrame();
+    expect(el.shadowRoot.activeElement).toBe(descInput);
+  });
+
+  it('flashes the notes field when the deadline field is hidden again', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-chip').click(); // open
+    await nextFrame();
+    el.shadowRoot.querySelector('#duedate-chip').click(); // close
+    await nextFrame();
+    expect(el.shadowRoot.querySelector('.textarea-wrap').classList.contains('flash-reveal')).toBe(true);
+  });
+
+  it('does not flash the notes field while the deadline field is being revealed', async () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-chip').click(); // open
+    await nextFrame();
+    expect(el.shadowRoot.querySelector('.textarea-wrap').classList.contains('flash-reveal')).toBe(false);
   });
 });
 
