@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { defineStrings, setLocale, getLocale, t, reset, _snapshot, _restore } from './strings.js';
+import { guardSingleton } from './test-helpers.js';
 
 const _ls = (() => {
   let store = {};
@@ -15,15 +16,7 @@ const _ls = (() => {
 // worker. A consuming app's `app/strings.js` may have already registered real strings
 // as a module-load side effect before this file runs — snapshot/restore around the whole
 // suite so this file's reset()/defineStrings() calls never leak past it.
-let _preExistingSnapshot;
-
-beforeAll(() => {
-  _preExistingSnapshot = _snapshot();
-});
-
-afterAll(() => {
-  _restore(_preExistingSnapshot);
-});
+guardSingleton(_snapshot, _restore);
 
 beforeEach(() => {
   vi.stubGlobal('localStorage', _ls);

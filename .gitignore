@@ -9,3 +9,4 @@ brand/
 tests/results/
 tests/results-perf/
 tests/playwright-report/
+strings-order.log

@@ -1,9 +1,16 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { reset as resetStore, setState, boot } from '../../store/store.js';
-import { defineStrings, reset as resetStrings } from '../../strings.js';
+import { defineStrings, reset as resetStrings, _snapshot, _restore } from '../../strings.js';
+import { guardSingleton } from '../../test-helpers.js';
 
 const reducer = s => s ?? {};
+
+// Under vitest `isolate: false`, strings.js's _locales registry is shared with every
+// other test file in the worker. Snapshot/restore around the whole suite so this file's
+// resetStrings()/defineStrings() cycle never leaks past it and wipes a consuming app's
+// real registrations for the rest of the worker's life (see core/strings.test.js).
+guardSingleton(_snapshot, _restore);
 
 beforeEach(async () => {
   // Fire rAF synchronously so --update-banner-height is set in the same tick.

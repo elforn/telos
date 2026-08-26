@@ -180,6 +180,16 @@ describe('modal-dialog — slots and structure', () => {
     expect(bareRule).toMatch(/max-block-size:/);
   });
 
+  it('bare dialog rule sets overflow: hidden so only .body ever scrolls', () => {
+    // Without this, the UA default lets <dialog> itself become a second scroll
+    // container once slotted content exceeds max-block-size, and the fixed
+    // .handle/.footer regions drift with it instead of staying pinned.
+    const el = mount();
+    const css = el.shadowRoot.querySelector('style').textContent;
+    const bareRule = css.slice(css.indexOf('dialog {'), css.indexOf('dialog[open]'));
+    expect(bareRule).toMatch(/overflow:\s*hidden/);
+  });
+
   it('.body has overflow-y: auto and flex sizing that allows it to shrink', () => {
     const el = mount();
     const css = el.shadowRoot.querySelector('style').textContent;

@@ -34,6 +34,7 @@ class ModalDialog extends AppElement {
           font-size: var(--font-size-body);
           box-shadow: var(--shadow-sheet);
           max-block-size: min(85vh, 600px);
+          overflow: hidden;
         }
 
         dialog[open] {
