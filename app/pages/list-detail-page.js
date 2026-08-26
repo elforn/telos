@@ -501,17 +501,17 @@ class ListDetailPage extends AppElement {
 
       <modal-dialog id="menu" aria-label="${t('list-detail.menu')}">
         <div class="menu-section">
-          <p class="menu-section-label">${t('list-detail.status-label')}</p>
-          <div class="status-pill-group" role="group" aria-label="${t('list-detail.status-label')}">
-            <button class="status-pill" id="status-show-btn">${t('list-detail.status-show')}</button>
-            <button class="status-pill" id="status-hide-btn">${t('list-detail.status-hide')}</button>
-          </div>
-        </div>
-        <div class="menu-section">
           <p class="menu-section-label">${t('settings.tag-strip')}</p>
           <div class="status-pill-group" role="group" aria-label="${t('settings.tag-strip')}">
             <button class="status-pill" id="tags-show-btn">${t('settings.reminder-on')}</button>
             <button class="status-pill" id="tags-hide-btn">${t('settings.reminder-off')}</button>
+          </div>
+        </div>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('list-detail.status-label')}</p>
+          <div class="status-pill-group" role="group" aria-label="${t('list-detail.status-label')}">
+            <button class="status-pill" id="status-show-btn">${t('list-detail.status-show')}</button>
+            <button class="status-pill" id="status-hide-btn">${t('list-detail.status-hide')}</button>
           </div>
         </div>
         <div class="menu-section">
