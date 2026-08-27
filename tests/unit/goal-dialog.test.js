@@ -229,26 +229,26 @@ describe('goal-dialog — field toggle footer placement', () => {
     expect(deleteBtn.compareDocumentPosition(dueDateBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('scrolls the revealed deadline field into view', async () => {
+  it('scrolls the revealed deadline field into view by moving the modal body, not the field itself', async () => {
     const el = mount();
     el.open(null);
-    const dueDateField = el.shadowRoot.querySelector('.duedate-field');
+    const body = el.shadowRoot.querySelector('#modal').shadowRoot.querySelector('.body');
     const scrollSpy = vi.fn();
-    dueDateField.scrollIntoView = scrollSpy;
+    body.scrollTo = scrollSpy;
     el.shadowRoot.querySelector('#duedate-chip').click();
     await nextFrame();
     expect(scrollSpy).toHaveBeenCalled();
   });
 
-  it('centers the revealed field rather than scrolling the minimum amount', async () => {
+  it('never calls el.scrollIntoView() directly — it walks every scrollable ancestor including the dialog\'s own overflow:hidden box, silently accumulating scroll offset there', async () => {
     const el = mount();
     el.open(null);
     const dueDateField = el.shadowRoot.querySelector('.duedate-field');
-    const scrollSpy = vi.fn();
-    dueDateField.scrollIntoView = scrollSpy;
+    const scrollIntoViewSpy = vi.fn();
+    dueDateField.scrollIntoView = scrollIntoViewSpy;
     el.shadowRoot.querySelector('#duedate-chip').click();
     await nextFrame();
-    expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ block: 'center' }));
+    expect(scrollIntoViewSpy).not.toHaveBeenCalled();
   });
 
   it('does not focus the revealed deadline input — a native date control would swap away the on-screen keyboard', async () => {

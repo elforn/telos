@@ -1619,9 +1619,31 @@ class GoalDialog extends AppElement {
     el.classList.remove('flash-reveal');
     void el.offsetWidth; // force reflow so a rapid re-toggle restarts the animation
     el.classList.add('flash-reveal');
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
+    this._scrollWithinModalBody(el);
     el._flashTimer = setTimeout(() => el.classList.remove('flash-reveal'), 700);
+  }
+
+  // el.scrollIntoView() walks *every* scrollable ancestor, including
+  // modal-dialog's own <dialog> element — which has overflow:hidden (no
+  // scrollbar, never user-scrollable) but is still a valid scroll container
+  // per spec, so scrollIntoView silently nudges its scrollTop too. That
+  // offset has no way to reset itself (nothing lets the user scroll it
+  // back), so it accumulates across every reveal/hide, progressively
+  // shifting the whole card upward — the drag handle can end up pushed
+  // above the visible card entirely (confirmed via dialog.scrollTop
+  // climbing on repeated reveals in on-device + desktop testing, see
+  // item-dialog.js's identical fix). Scrolling `.body` (the modal's actual
+  // intended scroll region) directly, instead of asking the browser to walk
+  // the whole ancestor chain, avoids ever touching dialog's own scrollTop.
+  _scrollWithinModalBody(el) {
+    const body = this._modal?.shadowRoot?.querySelector('.body');
+    if (!body) return;
+    const bodyRect = body.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const elCenterInBody = (elRect.top - bodyRect.top) + body.scrollTop + elRect.height / 2;
+    const targetScrollTop = Math.max(0, elCenterInBody - body.clientHeight / 2);
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    body.scrollTo({ top: targetScrollTop, behavior: reduced ? 'auto' : 'smooth' });
   }
 
   _showView(name) {

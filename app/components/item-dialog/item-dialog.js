@@ -945,14 +945,25 @@ class ItemDialog extends AppElement {
     // it did, so the same "here's what moved" cue applies in reverse.
     this._onUrlToggle = () => {
       const opening = this._urlRow.hidden;
+      if (!opening) {
+        // Focus notes synchronously, in the same click, before hiding the
+        // field — not deferred to the rAF below. Hiding the focused
+        // url-input would otherwise blur it and close the on-screen
+        // keyboard; focusing notes directly instead keeps the keyboard
+        // open (just retargeted), and lets the browser's own native
+        // focus-into-view handling scroll it above the keyboard, rather
+        // than us trying to replicate that ourselves with scrollIntoView
+        // timed against a still-animating viewport. .textarea-wrap's
+        // existing :focus-within border-color rule doubles as the
+        // highlight, so no separate flash/ring is needed for this case.
+        this._noteInput.focus();
+      }
       this._showUrlField(opening);
       requestAnimationFrame(() => {
         this._syncNoteHeight();
         if (opening) {
           this._urlInput.focus({ preventScroll: true });
           this._flashField(this._urlRow);
-        } else {
-          this._flashField(this._textareaWrap);
         }
       });
     };
@@ -1457,9 +1468,32 @@ class ItemDialog extends AppElement {
     el.classList.remove('flash-reveal');
     void el.offsetWidth; // force reflow so a rapid re-toggle restarts the animation
     el.classList.add('flash-reveal');
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
+    this._scrollWithinModalBody(el);
     el._flashTimer = setTimeout(() => el.classList.remove('flash-reveal'), 700);
+  }
+
+  // el.scrollIntoView() walks *every* scrollable ancestor, including
+  // modal-dialog's own <dialog> element — which has overflow:hidden (no
+  // scrollbar, never user-scrollable) but is still a valid scroll container
+  // per spec, so scrollIntoView silently nudges its scrollTop too. That
+  // offset has no way to reset itself (nothing lets the user scroll it
+  // back), so it accumulates across every reveal/hide, progressively
+  // shifting the whole card upward — the drag handle can end up pushed
+  // above the visible card entirely after opening two fields in sequence
+  // (confirmed via dialog.scrollTop climbing 0 → 25 → 88 across successive
+  // reveals in on-device + desktop testing). Scrolling `.body` (the modal's
+  // actual intended scroll region) directly, instead of asking the browser
+  // to walk the whole ancestor chain, avoids ever touching dialog's own
+  // scrollTop.
+  _scrollWithinModalBody(el) {
+    const body = this._modal?.shadowRoot?.querySelector('.body');
+    if (!body) return;
+    const bodyRect = body.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const elCenterInBody = (elRect.top - bodyRect.top) + body.scrollTop + elRect.height / 2;
+    const targetScrollTop = Math.max(0, elCenterInBody - body.clientHeight / 2);
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    body.scrollTo({ top: targetScrollTop, behavior: reduced ? 'auto' : 'smooth' });
   }
 
   _announceSaved() {

@@ -303,12 +303,12 @@ describe('item-dialog — field toggle footer placement', () => {
     expect(el.shadowRoot.querySelector('.url-row').classList.contains('flash-reveal')).toBe(true);
   });
 
-  it('scrolls the revealed url field into view only after the note height resync (so the scroll targets settled layout)', async () => {
+  it('scrolls the modal body (not el.scrollIntoView) only after the note height resync (so the scroll targets settled layout)', async () => {
     const el = mount();
     el.open(null);
-    const urlRow = el.shadowRoot.querySelector('.url-row');
+    const body = el.shadowRoot.querySelector('#modal').shadowRoot.querySelector('.body');
     const calls = [];
-    urlRow.scrollIntoView = () => calls.push('scroll');
+    body.scrollTo = () => calls.push('scroll');
     const syncSpy = vi.spyOn(el, '_syncNoteHeight');
     el.shadowRoot.querySelector('#url-chip').click();
     expect(calls).toHaveLength(0); // not yet — still inside the same synchronous click handler
@@ -317,26 +317,26 @@ describe('item-dialog — field toggle footer placement', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('scrolls the revealed due-date field into view', async () => {
+  it('scrolls the revealed due-date field into view by moving the modal body, not the field itself', async () => {
     const el = mount();
     el.open(null);
-    const dueDateField = el.shadowRoot.querySelector('.duedate-field');
+    const body = el.shadowRoot.querySelector('#modal').shadowRoot.querySelector('.body');
     const scrollSpy = vi.fn();
-    dueDateField.scrollIntoView = scrollSpy;
+    body.scrollTo = scrollSpy;
     el.shadowRoot.querySelector('#duedate-chip').click();
     await nextFrame();
     expect(scrollSpy).toHaveBeenCalled();
   });
 
-  it('centers the revealed field rather than scrolling the minimum amount', async () => {
+  it('never calls el.scrollIntoView() directly — it walks every scrollable ancestor including the dialog\'s own overflow:hidden box, silently accumulating scroll offset there', async () => {
     const el = mount();
     el.open(null);
     const urlRow = el.shadowRoot.querySelector('.url-row');
-    const scrollSpy = vi.fn();
-    urlRow.scrollIntoView = scrollSpy;
+    const scrollIntoViewSpy = vi.fn();
+    urlRow.scrollIntoView = scrollIntoViewSpy;
     el.shadowRoot.querySelector('#url-chip').click();
     await nextFrame();
-    expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ block: 'center' }));
+    expect(scrollIntoViewSpy).not.toHaveBeenCalled();
   });
 
   it('focuses the revealed url input so it visibly becomes the active field, not just scrolled to', async () => {
@@ -385,14 +385,18 @@ describe('item-dialog — field toggle footer placement', () => {
     expect(el.shadowRoot.querySelector('.textarea-wrap').classList.contains('flash-reveal')).toBe(true);
   });
 
-  it('flashes the note field when the url field is hidden again', async () => {
+  it('focuses the note field (rather than flashing it) when the url field is hidden again', () => {
     const el = mount();
     el.open(null);
-    el.shadowRoot.querySelector('#url-chip').click(); // open
-    await nextFrame();
+    el.shadowRoot.querySelector('#url-chip').click(); // open — focuses #url-input
     el.shadowRoot.querySelector('#url-chip').click(); // close
-    await nextFrame();
-    expect(el.shadowRoot.querySelector('.textarea-wrap').classList.contains('flash-reveal')).toBe(true);
+    // Synchronous, not deferred: hiding the focused url-input would
+    // otherwise blur it and close the on-screen keyboard, so notes is
+    // focused directly (in the same click) to keep the keyboard open,
+    // retargeted — the existing :focus-within border-color rule on
+    // .textarea-wrap doubles as the highlight, no flash class needed here.
+    expect(el.shadowRoot.activeElement).toBe(el.shadowRoot.querySelector('#note-input'));
+    expect(el.shadowRoot.querySelector('.textarea-wrap').classList.contains('flash-reveal')).toBe(false);
   });
 
   it('does not flash the note field while a due-date/url field is being revealed', async () => {
