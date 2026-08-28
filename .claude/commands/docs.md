@@ -1,30 +1,15 @@
 # /docs
 
-Maintain app documentation. Run this when a feature is complete and before /commit.
-Documentation is not optional — a feature without docs is not done.
+Maintain app documentation. Only two documents exist in this project:
+`README.md` and `CHANGELOG.md`. No `docs/` folder, no per-feature doc files —
+do not create one, even implicitly.
 
 ## Usage
 /docs <scope>
 
 Scopes:
-- `feature <name>` — document a newly completed feature
-- `changelog`       — add entries to CHANGELOG.md for work done this session
-- `readme`          — update README.md
-
----
-
-## Scope: `feature <name>`
-
-Document a newly completed feature.
-
-1. **Update `README.md`** if the feature is significant enough to affect the app overview or usage instructions.
-
-2. **Add a section to `docs/features.md`** (create it if it doesn't exist) describing:
-   - What the feature does and why
-   - How to use it (code example if relevant)
-   - Any constraints or gotchas
-
-3. **Report** which files were updated and what sections changed.
+- `changelog` — add entries to CHANGELOG.md for work done this session
+- `readme`    — propose an update to README.md
 
 ---
 
@@ -61,7 +46,14 @@ Read `git log --oneline` since the last changelog entry and translate commits in
 
 ## Scope: `readme`
 
-Update `README.md`. Keep it scannable in 30 seconds.
+`README.md` is held to a strict bar: it is the *only* place beyond
+`CHANGELOG.md` where documentation is allowed to live, so nothing goes in
+without deliberate approval. **Never edit README.md without asking first** —
+propose the specific addition/change and wait for an explicit go-ahead, even
+when a feature clearly seems README-worthy. This applies every time, not just
+once per session.
+
+Keep it scannable in 30 seconds.
 
 Structure:
 ```markdown
@@ -85,7 +77,7 @@ How to deploy (GitHub Pages via push to main).
 Rules:
 - No marketing language
 - Every code block must be correct and runnable
-- README stays under 100 lines — if it grows past that, content belongs in docs/
+- README stays under 100 lines — if it grows past that, cut content rather than spilling into a new file
 
 ---
 

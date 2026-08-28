@@ -72,14 +72,13 @@ This project ships with a `CLAUDE.md` that configures [Claude Code](https://clau
 | `/test <file>` | Write or complete tests for a file |
 | `/a11y` | Accessibility audit |
 | `/review <file>` | Code review against project standards |
-| `/docs feature <name>` | Document a completed feature |
 | `/test-pwa` | PWA and offline behaviour tests |
 | `/status` | Summarise what's done and what's left |
 | `/commit` | Stage and commit with a generated message |
 | `/contribution-scan` | Scan components for ones general-purpose enough to contribute back to Socle |
 | `/contribute <file>` | Check eligibility, clean up, and package a component for contribution to Socle |
 
-Feature workflow: → `/scope` → build → `/component` → `/test` → `/a11y` → `/i18n` → `/review` → `/docs feature` → `/commit`
+Feature workflow: → `/scope` → build → `/component` → `/test` → `/a11y` → `/i18n` → `/review` → `/commit`
 
 Pre-ship workflow: `/migration` → `/test-pwa` → `/status` → `/docs changelog` → `/commit`
 

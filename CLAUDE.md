@@ -169,7 +169,7 @@ npm run test:e2e     # Playwright E2E tests
 - CSS logical properties throughout (`margin-inline-start`, not `margin-left`)
 - Elements with `position: sticky` or `fixed` at the top use `padding-block-start: var(--safe-area-top)` to avoid the notch; bottom elements use `padding-block-end: calc(var(--space-N) + var(--safe-area-bottom, 0px))`
 - All custom events must use `{ bubbles: true, composed: true }` — without `composed: true`, events fired inside a shadow root are swallowed and never reach parent listeners
-- Every new feature passes `/i18n`, `/a11y`, `/test`, `/docs`, and `/review` before `/commit`.
+- Every new feature passes `/i18n`, `/a11y`, `/test`, and `/review` before `/commit`. Documentation is `CHANGELOG.md` only (updated via `/docs changelog` before shipping) plus `README.md`, which is edited only on explicit request — no `docs/` folder, no per-feature doc files.
 - And to always run `/test-pwa` and bump at least a patch version for the app before pushing (commit the new version and push after the commit).
 
 ---
@@ -293,7 +293,7 @@ Cert files (`*.pem`, `*.key`, `*.crt`) are gitignored — never commit them.
 - `/component <name> <tier>` — scaffold a new Web Component
 - `/migration <version> <description>` — scaffold a schema migration
 
-**After completing a feature:** `/i18n` → `/a11y` → `/test` → `/review` → `/docs feature` → `/commit`
+**After completing a feature:** `/i18n` → `/a11y` → `/test` → `/review` → `/commit`
 
 **Before shipping:** `/test-pwa` → `/status` → `/docs changelog` → bump at least patch version → `/commit` → git push
 
