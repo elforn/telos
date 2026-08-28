@@ -229,7 +229,7 @@ class HomePage extends AppElement {
 
   subscribe() {
     this._year = Number(this.params?.year);
-    if (!Number.isInteger(this._year) || this._year < 2000 || this._year > 2500) {
+    if (!Number.isInteger(this._year) || this._year < 1900 || this._year > 2500) {
       navigate(`${BASE_PATH}not-found`);
       return;
     }

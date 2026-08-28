@@ -152,6 +152,9 @@ defineStrings({
   'year-header.theme-system':    'Système',
   'year-header.extract-markdown': 'Partager en Markdown',
   'year-header.share-year':       'Partager sur Telos',
+  'year-header.change-year':         'Changer d\'année ({year})',
+  'year-header.year-picker-heading': 'Aller à une année',
+  'year-header.jump-to-today':       "Aujourd'hui",
 
   'not-found.heading':           'Rien ici',
   'not-found.body':              'Cette page n\'existe pas — mais vos objectifs vous attendent.',

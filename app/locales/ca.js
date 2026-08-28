@@ -152,6 +152,9 @@ defineStrings({
   'year-header.theme-system':    'Sistema',
   'year-header.extract-markdown': 'Comparteix en Markdown',
   'year-header.share-year':       'Comparteix a Telos',
+  'year-header.change-year':         'Canvia d\'any ({year})',
+  'year-header.year-picker-heading': 'Vés a un any',
+  'year-header.jump-to-today':       'Avui',
 
   'not-found.heading':           'Res aquí',
   'not-found.body':              'Aquesta pàgina no existeix — però els teus objectius t\'esperen.',

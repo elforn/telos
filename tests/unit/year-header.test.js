@@ -247,6 +247,202 @@ describe('year-header — tag strip toggle', () => {
   });
 });
 
+describe('year-header — year picker', () => {
+  it('opens the year picker dialog when the year title is tapped', () => {
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    expect(nativeDialog(el.shadowRoot.querySelector('#year-picker')).open).toBe(true);
+  });
+
+  it('lists the full router-valid year range, not just a window around the current year', () => {
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    const years = [...el.shadowRoot.querySelectorAll('.year-row')].map(r => r.dataset.year);
+    expect(years[0]).toBe('1900');
+    expect(years.at(-1)).toBe('2100');
+    expect(years).toContain('2026');
+    // Distant years with no content are still present and reachable by scrolling —
+    // the list is never capped to a window around the current year or around content.
+    expect(years).toContain('2015');
+    expect(years).toContain('2040');
+  });
+
+  it('marks the currently displayed year as active/selected', () => {
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    const active = el.shadowRoot.querySelector('.year-row.active');
+    expect(active?.dataset.year).toBe('2026');
+    expect(active?.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('centres the active row in the list when the sheet opens', () => {
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    const list = el.shadowRoot.querySelector('#year-picker-list');
+    const active = list.querySelector('.year-row.active');
+    Object.defineProperty(list, 'clientHeight', { value: 200, configurable: true });
+    Object.defineProperty(active, 'offsetTop', { value: 1000, configurable: true });
+    Object.defineProperty(active, 'offsetHeight', { value: 40, configurable: true });
+    el._scrollYearPickerToActive();
+    expect(list.scrollTop).toBe(1000 - 200 / 2 + 40 / 2);
+  });
+
+  it('renders a Today button in the picker header', () => {
+    const el = mount(2026);
+    expect(el.shadowRoot.querySelector('#year-picker-today-btn')).not.toBeNull();
+  });
+
+  it('clicking Today centres the list on the real current year without navigating or closing the sheet', () => {
+    const currentYear = new Date().getFullYear();
+    // Anchor far from today so the today row is distinguishable from the active row.
+    const el = mount(currentYear + 30);
+    el.shadowRoot.querySelector('#year').click();
+    const list = el.shadowRoot.querySelector('#year-picker-list');
+    const todayRow = list.querySelector(`.year-row[data-year="${currentYear}"]`);
+    Object.defineProperty(list, 'clientHeight', { value: 200, configurable: true });
+    Object.defineProperty(todayRow, 'offsetTop', { value: 500, configurable: true });
+    Object.defineProperty(todayRow, 'offsetHeight', { value: 40, configurable: true });
+
+    let fired = false;
+    el.addEventListener('year-navigate', () => { fired = true; });
+    el.shadowRoot.querySelector('#year-picker-today-btn').click();
+
+    expect(list.scrollTop).toBe(500 - 200 / 2 + 40 / 2);
+    expect(fired).toBe(false);
+    expect(nativeDialog(el.shadowRoot.querySelector('#year-picker')).open).toBe(true);
+  });
+
+  it('flags a distant year with goals with a filled dot without limiting what else is listed', () => {
+    Store.setState('goals', { 2015: { capstone: [{ id: 'g1', title: 'x', tags: [], tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [], focus: [] } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    const row = [...el.shadowRoot.querySelectorAll('.year-row')].find(r => r.dataset.year === '2015');
+    expect(row.querySelector('.year-row-dot').classList.contains('empty')).toBe(false);
+    Store.setState('goals', {});
+  });
+
+  it('shows a filled dot on years with goals', () => {
+    Store.setState('goals', { 2027: { capstone: [{ id: 'g1', title: 'x', tags: [], tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [], focus: [] } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    const row = [...el.shadowRoot.querySelectorAll('.year-row')].find(r => r.dataset.year === '2027');
+    expect(row.querySelector('.year-row-dot').classList.contains('empty')).toBe(false);
+    Store.setState('goals', {});
+  });
+
+  it('shows a filled dot on years with a photo', () => {
+    Store.setState('images', { 2023: 'blob-id' });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    const row = [...el.shadowRoot.querySelectorAll('.year-row')].find(r => r.dataset.year === '2023');
+    expect(row.querySelector('.year-row-dot').classList.contains('empty')).toBe(false);
+    Store.setState('images', {});
+  });
+
+  it('renders an empty (layout-reserving) dot placeholder on years with no content', () => {
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    const row = [...el.shadowRoot.querySelectorAll('.year-row')].find(r => r.dataset.year === '2030');
+    const dot = row.querySelector('.year-row-dot');
+    expect(dot).not.toBeNull();
+    expect(dot.classList.contains('empty')).toBe(true);
+  });
+
+  it('an empty goals section for a year does not count as content', () => {
+    Store.setState('goals', { 2028: { capstone: [], milestones: [], wow: [], focus: [] } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    const row = [...el.shadowRoot.querySelectorAll('.year-row')].find(r => r.dataset.year === '2028');
+    expect(row.querySelector('.year-row-dot').classList.contains('empty')).toBe(true);
+    Store.setState('goals', {});
+  });
+
+  it('every row renders a year-row-label with the year text, kept separate from the dot', () => {
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    const row = [...el.shadowRoot.querySelectorAll('.year-row')].find(r => r.dataset.year === '2026');
+    expect(row.querySelector('.year-row-label').textContent).toBe('2026');
+  });
+
+  it('colours the dot with the year\'s accent colour when one is set', () => {
+    Store.setState('goals', { 2027: { capstone: [{ id: 'g1', title: 'x', tags: [], tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [], focus: [] } });
+    Store.setState('accentColors', { '2027': '#3B82F6' });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    const row = [...el.shadowRoot.querySelectorAll('.year-row')].find(r => r.dataset.year === '2027');
+    expect(row.querySelector('.year-row-dot').style.background).toBe('#3B82F6');
+    Store.setState('goals', {});
+    Store.setState('accentColors', {});
+  });
+
+  it('does not apply a background colour to an empty dot even when the year has an accent colour set', () => {
+    // accentColors can be set on a year with no goals/photo (colour picked, then content removed) —
+    // the dot should stay an invisible placeholder, not surface a colour for a year with nothing in it.
+    Store.setState('accentColors', { '2030': '#3B82F6' });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#year').click();
+    const row = [...el.shadowRoot.querySelectorAll('.year-row')].find(r => r.dataset.year === '2030');
+    const dot = row.querySelector('.year-row-dot');
+    expect(dot.classList.contains('empty')).toBe(true);
+    expect(dot.style.background).toBe('');
+    Store.setState('accentColors', {});
+  });
+
+  it('emits year-navigate and closes the sheet when a year row is clicked', () => {
+    const el = mount(2026);
+    let detail;
+    el.addEventListener('year-navigate', e => { detail = e.detail; });
+    el.shadowRoot.querySelector('#year').click();
+    const row = [...el.shadowRoot.querySelectorAll('.year-row')].find(r => r.dataset.year === '2029');
+    row.click();
+    expect(detail).toEqual({ year: 2029 });
+    expect(nativeDialog(el.shadowRoot.querySelector('#year-picker')).open).toBe(false);
+  });
+
+  it('year-navigate from the picker bubbles and is composed', () => {
+    const el = mount(2026);
+    let event;
+    document.addEventListener('year-navigate', e => { event = e; }, { once: true });
+    el.shadowRoot.querySelector('#year').click();
+    const row = [...el.shadowRoot.querySelectorAll('.year-row')].find(r => r.dataset.year === '2029');
+    row.click();
+    expect(event?.bubbles).toBe(true);
+    expect(event?.composed).toBe(true);
+  });
+
+  it('clicking the already-active year closes the sheet without dispatching year-navigate', () => {
+    const el = mount(2026);
+    let fired = false;
+    el.addEventListener('year-navigate', () => { fired = true; });
+    el.shadowRoot.querySelector('#year').click();
+    el.shadowRoot.querySelector('.year-row.active').click();
+    expect(fired).toBe(false);
+    expect(nativeDialog(el.shadowRoot.querySelector('#year-picker')).open).toBe(false);
+  });
+
+  it('the year title button has an accessible label including the year', () => {
+    const el = mount(2026);
+    expect(el.shadowRoot.querySelector('#year').getAttribute('aria-label')).toContain('2026');
+  });
+
+  it('sets aria-expanded="true" on the year button when the picker opens, and resets it on close', () => {
+    const el = mount(2026);
+    const btn = el.shadowRoot.querySelector('#year');
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+    btn.click();
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+    el.shadowRoot.querySelector('#year-picker').close();
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('the list floor matches the router\'s valid year floor regardless of the current year', () => {
+    const el = mount(1905);
+    el.shadowRoot.querySelector('#year').click();
+    const years = [...el.shadowRoot.querySelectorAll('.year-row')].map(r => r.dataset.year);
+    expect(years[0]).toBe('1900');
+  });
+});
+
 describe('year-header — deadline markers toggle', () => {
   const CURRENT = new Date().getFullYear();
   const PAST = CURRENT - 1;

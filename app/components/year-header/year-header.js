@@ -34,7 +34,7 @@ class YearHeader extends Gestures(AppElement) {
         @media (prefers-reduced-motion: reduce) {
           .menu-sheet { animation: none; }
           .header-img { animation: none; }
-          .header-bg, h1, .nav-btn, .menu-btn, .filter-btn { transition: none; }
+          .header-bg, .year-btn, .nav-btn, .menu-btn, .filter-btn { transition: none; }
         }
 
         :host {
@@ -87,7 +87,7 @@ class YearHeader extends Gestures(AppElement) {
           pointer-events: none;
         }
 
-        h1, .nav-btn, .menu-btn, .filter-btn {
+        .year-btn, .nav-btn, .menu-btn, .filter-btn {
           transition: color 0.3s ease-out;
         }
 
@@ -151,7 +151,7 @@ class YearHeader extends Gestures(AppElement) {
           padding-inline: var(--page-padding);
         }
 
-        :host([data-has-image]:not(.compact)) h1,
+        :host([data-has-image]:not(.compact)) .year-btn,
         :host([data-has-image]:not(.compact)) .nav-btn {
           color: white;
         }
@@ -161,6 +161,7 @@ class YearHeader extends Gestures(AppElement) {
           color: rgba(255,255,255,0.55);
         }
 
+        :host([data-has-image]:not(.compact)) .year-btn:focus-visible,
         :host([data-has-image]:not(.compact)) .nav-btn:focus-visible,
         :host([data-has-image]:not(.compact)) .menu-btn:focus-visible,
         :host([data-has-image]:not(.compact)) .filter-btn:focus-visible {
@@ -222,13 +223,28 @@ class YearHeader extends Gestures(AppElement) {
         }
 
         h1 {
+          margin: 0;
+        }
+
+        .year-btn {
+          min-block-size: var(--touch-target);
+          min-inline-size: 4ch;
+          padding-inline: var(--space-2);
+          background: none;
+          border: none;
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          font-family: var(--font-family);
           font-size: var(--font-size-title);
           font-weight: var(--font-weight-bold);
           color: var(--color-text-primary);
           line-height: 1;
-          margin: 0;
-          min-inline-size: 4ch;
           text-align: center;
+        }
+
+        .year-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
         }
 
         .menu-btn {
@@ -271,7 +287,7 @@ class YearHeader extends Gestures(AppElement) {
         /* ── Menu / sheets ─────────────────────────────────────────────── */
 
         /* Consistent modal padding across the app: --space-5 on both axes. */
-        #menu, #color-sheet, #photo-sheet { --space-6: var(--space-5); }
+        #menu, #color-sheet, #photo-sheet, #year-picker { --space-6: var(--space-5); }
 
         .menu-item {
           display: flex;
@@ -383,6 +399,120 @@ class YearHeader extends Gestures(AppElement) {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
+
+        /* ── Year picker ───────────────────────────────────────────────── */
+
+        .year-picker-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: var(--space-3);
+        }
+
+        .year-picker-header .menu-section-label {
+          margin: 0;
+        }
+
+        /* color is --color-text-primary, not --color-accent — accent is
+           icon/fill-only in this app; at caption size, accent-as-text falls
+           well short of the 4.5:1 AA minimum against the sheet surface. */
+        .year-picker-today-btn {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          padding-inline: var(--space-2);
+          background: none;
+          border: none;
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          font-family: var(--font-family);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-text-primary);
+        }
+
+        .year-picker-today-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .year-picker-list {
+          /* Establishes this as the offsetParent for its .year-row children —
+             without it, row.offsetTop (used to centre the active/today row,
+             see _scrollYearPickerRowIntoView) is measured against whatever
+             positioned ancestor happens to be further up the tree instead of
+             this list's own content box, throwing the centring off by a
+             consistent but wrong amount. */
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
+          max-block-size: 50vh;
+          overflow-y: auto;
+          padding-block: var(--space-4);
+          border-block-start: 0.5px solid var(--color-border);
+        }
+
+        /* Three columns (flex / auto / flex) so the year digits stay dead-
+           centred in the row whether or not that row has a dot — a dot slot
+           sized to content would otherwise pull the centred label sideways
+           on rows where it's the only content-bearing row nearby. */
+        .year-row {
+          display: grid;
+          grid-template-columns: 1fr auto 1fr;
+          align-items: center;
+          min-block-size: var(--touch-target);
+          flex-shrink: 0;
+          border-radius: var(--radius-sm);
+          border: none;
+          background: none;
+          cursor: pointer;
+          font-family: var(--font-family);
+          font-size: var(--font-size-body);
+          font-weight: var(--font-weight-medium);
+          color: var(--color-text-primary);
+        }
+
+        .year-row-label {
+          grid-column: 2;
+        }
+
+        /* Text stays --color-text-primary rather than --color-accent — accent
+           is icon/fill-only in this app (insufficient contrast as body text at
+           this size); background tint + bold weight + aria-selected carry the
+           "selected" signal instead, matching .status-pill.active elsewhere in
+           this file. */
+        .year-row.active {
+          background: var(--color-accent-subtle);
+          color: var(--color-text-primary);
+          font-weight: var(--font-weight-bold);
+        }
+
+        .year-row:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: -2px;
+        }
+
+        /* Always occupies column 3, whether or not the year has content —
+           visibility:hidden (rather than omitting the element) keeps its box
+           in the layout so the label in column 2 never shifts. */
+        .year-row-dot {
+          grid-column: 3;
+          justify-self: start;
+          margin-inline-start: var(--space-2);
+          inline-size: 6px;
+          block-size: 6px;
+          border-radius: 50%;
+          background: currentColor;
+          opacity: 0.6;
+        }
+
+        .year-row-dot.empty {
+          visibility: hidden;
+        }
+
+        .year-row.active .year-row-dot {
+          opacity: 1;
+        }
       </style>
 
       <div class="header-bg" aria-hidden="true">
@@ -393,7 +523,7 @@ class YearHeader extends Gestures(AppElement) {
       <div class="top-row">
         <nav class="year-nav" aria-label="${t('home-page.year-progress')}">
           <button id="prev" class="nav-btn" aria-label="${t('home-page.prev-year')}">${icons.chevronLeft}</button>
-          <h1 id="year">${year}</h1>
+          <h1><button id="year" class="year-btn" aria-haspopup="dialog" aria-expanded="false" aria-label="${t('year-header.change-year', { year })}">${year}</button></h1>
           <button id="next" class="nav-btn" aria-label="${t('home-page.next-year')}">${icons.chevronRight}</button>
         </nav>
         <div class="header-actions">
@@ -471,6 +601,14 @@ class YearHeader extends Gestures(AppElement) {
           <span>${t('year-header.photo-remove')}</span>
         </button>
       </modal-dialog>
+
+      <modal-dialog id="year-picker">
+        <div class="year-picker-header">
+          <p class="menu-section-label">${t('year-header.year-picker-heading')}</p>
+          <button type="button" id="year-picker-today-btn" class="year-picker-today-btn">${t('year-header.jump-to-today')}</button>
+        </div>
+        <div class="year-picker-list" id="year-picker-list" role="listbox" aria-label="${t('year-header.year-picker-heading')}"></div>
+      </modal-dialog>
     `;
   }
 
@@ -492,9 +630,11 @@ class YearHeader extends Gestures(AppElement) {
   }
 
   subscribe() {
-    this._yearEl     = this.shadowRoot.querySelector('#year');
-    this._stripFill  = this.shadowRoot.querySelector('#strip-fill');
-    this._menuDialog = this.shadowRoot.querySelector('#menu');
+    this._yearEl         = this.shadowRoot.querySelector('#year');
+    this._stripFill      = this.shadowRoot.querySelector('#strip-fill');
+    this._menuDialog     = this.shadowRoot.querySelector('#menu');
+    this._yearPickerDialog = this.shadowRoot.querySelector('#year-picker');
+    this._yearPickerList   = this.shadowRoot.querySelector('#year-picker-list');
     this._compact    = false;
     this._imageUrl   = null;
 
@@ -563,11 +703,12 @@ class YearHeader extends Gestures(AppElement) {
     this._setupFilterBtn();
     this._setupTags();
     this._setupDeadlines();
+    this._setupYearPicker();
   }
 
   onTap() {
     const isOpen = el => !!el?.shadowRoot?.querySelector('dialog')?.open;
-    if (isOpen(this._menuDialog) || isOpen(this._colorSheet) || isOpen(this._photoSheet) || isOpen(this._exportSheet?._dialog)) return;
+    if (isOpen(this._menuDialog) || isOpen(this._colorSheet) || isOpen(this._photoSheet) || isOpen(this._exportSheet?._dialog) || isOpen(this._yearPickerDialog)) return;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -600,6 +741,10 @@ class YearHeader extends Gestures(AppElement) {
     this.shadowRoot.querySelector('#year-export-btn')?.removeEventListener('click', this._onYearExportBtn);
     this.shadowRoot.querySelector('#export-sheet')?.removeEventListener('extract-confirm', this._onExportConfirm);
     this.shadowRoot.querySelector('#year-share-btn')?.removeEventListener('click', this._onYearShareBtn);
+    this.shadowRoot.querySelector('#year')?.removeEventListener('click', this._onYearBtn);
+    this._yearPickerDialog?.removeEventListener('modal-close', this._onYearPickerClose);
+    this._yearPickerList?.removeEventListener('click', this._onYearPickerClick);
+    this.shadowRoot.querySelector('#year-picker-today-btn')?.removeEventListener('click', this._onYearPickerTodayBtn);
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--year-header-height');
     document.documentElement.style.overflowAnchor = '';
@@ -856,6 +1001,99 @@ class YearHeader extends Gestures(AppElement) {
     this.shadowRoot.querySelector('#deadlines-hide-btn').addEventListener('click', this._onDeadlinesHideBtn);
   }
 
+  _setupYearPicker() {
+    const yearBtn = this.shadowRoot.querySelector('#year');
+    this._onYearBtn = () => {
+      this._renderYearPicker();
+      this._yearPickerDialog.show();
+      this._scrollYearPickerToActive();
+      yearBtn.setAttribute('aria-expanded', 'true');
+    };
+    yearBtn.addEventListener('click', this._onYearBtn);
+
+    this._onYearPickerClose = () => yearBtn.setAttribute('aria-expanded', 'false');
+    this._yearPickerDialog.addEventListener('modal-close', this._onYearPickerClose);
+
+    this._onYearPickerClick = e => {
+      const row = e.target.closest('.year-row');
+      if (!row) return;
+      const year = Number(row.dataset.year);
+      this._yearPickerDialog.close();
+      if (year === this._year) return;
+      this.dispatchEvent(new CustomEvent('year-navigate', {
+        bubbles: true, composed: true, detail: { year },
+      }));
+    };
+    this._yearPickerList.addEventListener('click', this._onYearPickerClick);
+
+    // Re-centres the (already open) list on today's real calendar year, distinct
+    // from this._year — a scroll shortcut, not a navigation, so browsing stays
+    // uninterrupted; tap a row same as ever to actually jump there.
+    this._onYearPickerTodayBtn = () => {
+      const today = new Date().getFullYear();
+      const row = this._yearPickerList.querySelector(`.year-row[data-year="${today}"]`);
+      this._scrollYearPickerRowIntoView(row);
+    };
+    this.shadowRoot.querySelector('#year-picker-today-btn').addEventListener('click', this._onYearPickerTodayBtn);
+  }
+
+  // Covers the router's entire valid year range (see MIN_YEAR/MAX_YEAR) — the
+  // picker is a scrollable list, not a capped window, so any year is reachable
+  // by scrolling regardless of content. It opens scrolled to the currently
+  // displayed year (this._year, not today's real date — prev/next already
+  // treat it that way, and it guarantees the row you're on is where you land).
+  _renderYearPicker() {
+    const { goals, images, accentColors } = Store.getState();
+    const contentYears = yearsWithContent(goals, images);
+
+    this._yearPickerList.replaceChildren();
+    this._activeYearRow = null;
+    for (let y = MIN_YEAR; y <= MAX_YEAR; y++) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'year-row';
+      row.setAttribute('role', 'option');
+      row.dataset.year = String(y);
+      const active = y === this._year;
+      row.classList.toggle('active', active);
+      row.setAttribute('aria-selected', String(active));
+
+      const label = document.createElement('span');
+      label.className = 'year-row-label';
+      label.textContent = String(y);
+      row.appendChild(label);
+
+      // The dot always occupies its grid column (see .year-row-dot.empty) so the
+      // label above stays centred whether or not this row has one.
+      const hasContent = contentYears.has(y);
+      const dot = document.createElement('span');
+      dot.className = `year-row-dot${hasContent ? '' : ' empty'}`;
+      dot.setAttribute('aria-hidden', 'true');
+      const yearColor = accentColors?.[String(y)];
+      if (hasContent && yearColor) dot.style.background = yearColor;
+      row.appendChild(dot);
+
+      if (active) this._activeYearRow = row;
+      this._yearPickerList.appendChild(row);
+    }
+  }
+
+  // Sets scrollTop on #year-picker-list directly instead of row.scrollIntoView() —
+  // see the scroll note on goal-dialog's _scrollWithinModalBody for why: scrollIntoView
+  // walks every scrollable ancestor, including modal-dialog's own <dialog> (overflow:
+  // hidden, never user-scrollable but still a valid scroll container), silently
+  // accumulating drift there. Only meaningful here because #year-picker-list is itself
+  // the bounded scroll region — modal-dialog's .body never needs to scroll.
+  _scrollYearPickerToActive() {
+    this._scrollYearPickerRowIntoView(this._activeYearRow);
+  }
+
+  _scrollYearPickerRowIntoView(row) {
+    const list = this._yearPickerList;
+    if (!row || !list) return;
+    list.scrollTop = Math.max(0, row.offsetTop - list.clientHeight / 2 + row.offsetHeight / 2);
+  }
+
   _setupFilterBtn() {
     const btn = this.shadowRoot.querySelector('#filter-btn');
     this._onFilterBtnClick = () => {
@@ -885,7 +1123,10 @@ class YearHeader extends Gestures(AppElement) {
 
   _updateYear() {
     const year = this._year ?? new Date().getFullYear();
-    if (this._yearEl) this._yearEl.textContent = String(year);
+    if (this._yearEl) {
+      this._yearEl.textContent = String(year);
+      this._yearEl.setAttribute('aria-label', t('year-header.change-year', { year }));
+    }
     const pct = yearProgress(year);
     if (this._stripFill) this._stripFill.style.width = `${pct}%`;
     this._updateImageFor(year);
@@ -932,6 +1173,24 @@ class YearHeader extends Gestures(AppElement) {
     if (changeBtn) changeBtn.hidden = !hasImage;
     if (removeBtn) removeBtn.hidden = !hasImage;
   }
+}
+
+// MIN_YEAR mirrors the router's year-param floor (home-page.js) — the picker must
+// never offer a year below that, which would redirect to not-found. MAX_YEAR is
+// well inside the router's own ceiling (2500) — kept lower here just to keep the
+// picker's scrollable list to a reasonable size; nothing stops it moving if the
+// router's ceiling ever does.
+const MIN_YEAR = 1900;
+const MAX_YEAR = 2100;
+
+function yearsWithContent(goals, images) {
+  const years = new Set();
+  for (const [y, yg] of Object.entries(goals ?? {})) {
+    const hasGoals = ['capstone', 'milestones', 'wow', 'focus'].some(s => (yg?.[s]?.length ?? 0) > 0);
+    if (hasGoals) years.add(Number(y));
+  }
+  for (const y of Object.keys(images ?? {})) years.add(Number(y));
+  return years;
 }
 
 function yearProgress(year) {

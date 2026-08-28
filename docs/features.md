@@ -74,3 +74,47 @@ actions" overflow sheet; `list-dialog.js` has no such sheet, so list archiving l
 `list-detail-page.js`'s own "⋮" menu instead (`#archive-active-btn` / `#archive-archived-btn`,
 directly wired to `setState('lists', ...)` — no cross-component event needed). See the
 `List` schema entry in `CLAUDE.md` for the exact field shape (`archived?: boolean`).
+
+## Year selector overlay
+
+Tap the year title in the Goals header to open a bottom sheet listing years, so you can
+jump further than one swipe at a time. This is a fast-jump alternative to the existing
+swipe/prev/next navigation, not a replacement for it.
+
+The list always covers the full 1900–2100 range and scrolls freely in both directions —
+it's not a window around the current year, so any year in range is reachable by
+scrolling regardless of whether it has content, including filling in older years
+retroactively. It opens scrolled to the year you're currently viewing (not today's real
+calendar year — if you've swiped away from today, the picker opens centred on wherever
+you are). The floor (1900) mirrors the router's own year-param floor (`home-page.js`) —
+a year below that redirects to not-found, so the two must move together; raising the
+picker's floor without also raising the router's would silently break every row below
+the new floor. The ceiling (2100) is just a practical cap on the list's length, well
+inside the router's own ceiling (2500); nothing else depends on it.
+
+Years with content show a small dot, tinted with that year's accent colour
+(`accentColors[year]`, the same "Year colour" set from the "⋮" menu) when one is set,
+falling back to a neutral dot otherwise. The dot sits in a fixed-width column to the
+right of the year digits rather than next to them inline — an empty, invisible
+placeholder still occupies that column on content-free years, so the digits stay
+dead-centred across every row instead of drifting sideways on the rows that happen to
+have a dot. The currently viewed year is highlighted, and the sheet always opens with
+that row centred in the list (not just scrolled into view — vertically centred, the
+same math the Today button below reuses). Tapping a year dispatches the same
+`year-navigate` event the existing prev/next buttons and swipe gesture already use, so
+`home-page.js` needed no new wiring — it already listens for that event and calls
+`navigate()`.
+
+A **Today** button in the sheet's header re-centres the (already open) list on today's
+real calendar year — distinct from the highlighted row, which tracks the year you're
+*viewing*, not today's date. It's a scroll shortcut, not a navigation: the sheet stays
+open and no `year-navigate` fires, so browsing isn't interrupted — tap a row same as
+ever to actually jump there.
+
+Implemented entirely in `app/components/year-header/year-header.js` as a second
+`<modal-dialog>` sheet (mirroring the existing "⋮" menu sheet in the same file), rather
+than a new component — the row list has its own bounded, internally-scrolling container
+(`#year-picker-list`), so scrolling the active row into view sets that container's
+`scrollTop` directly instead of `el.scrollIntoView()` — see the scroll note on
+`goal-dialog.js`'s `_scrollWithinModalBody` in `CLAUDE.md` for why `scrollIntoView` is
+avoided on anything nested inside a `modal-dialog`.

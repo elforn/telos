@@ -151,6 +151,9 @@ defineStrings({
   'year-header.theme-system': 'System',
   'year-header.extract-markdown': 'Share Markdown',
   'year-header.share-year':       'Share to Telos',
+  'year-header.change-year':        'Change year ({year})',
+  'year-header.year-picker-heading': 'Jump to year',
+  'year-header.jump-to-today':       'Today',
 
   'not-found.heading': 'Nothing here',
   'not-found.body':    "This page doesn't exist — but your goals are waiting.",
