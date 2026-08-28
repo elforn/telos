@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.6.0] — 2026-08-28
+
+### Changed
+- **"Fix a day" is now an icon-only footer toggle**, sitting between Deadline and Close — same as the Deadline/Due date/Link chips. It no longer unfolds from a labelled row inside the dialog with its own "Fix a day" heading and chevron; tapping the icon directly shows or hides the day-chip strip, with no other change to how backfilling a day works.
+
 ## [2.5.3] — 2026-08-28
 
 ### Fixed
