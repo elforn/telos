@@ -7,7 +7,7 @@ import '../tag-input/tag-input.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
-import { TARGET_LIMITS, FIX_DAY_SPAN, DEFAULT_TARGET, isEntryType, isDecreasing } from '../../utils/tracking.js';
+import { FIX_DAY_SPAN, DEFAULT_TARGET, DEFAULT_ALLOWANCE_PERIOD, targetLimitsFor, isEntryType, isDecreasing } from '../../utils/tracking.js';
 import { todayISO } from '../../utils/today-iso.js';
 import { swatches } from '../../utils/color-palette.js';
 
@@ -82,6 +82,11 @@ class GoalDialog extends AppElement {
     // the trailing `?? DEFAULT_TARGET.weekly` only matters for 'percentage',
     // which has no entry of its own and never reads _draftTarget anyway.
     this._draftTarget = goal?.tracking?.target ?? DEFAULT_TARGET[this._draftType] ?? DEFAULT_TARGET.weekly;
+    // Decreasing-only; kept even when the current type isn't decreasing so a
+    // goal that's been decreasing before (or gets switched to it later)
+    // recovers its last-chosen period, same "never drops the inactive side"
+    // spirit as value/entries above — see _commitTrackingChange.
+    this._draftAllowancePeriod = goal?.tracking?.allowancePeriod ?? DEFAULT_ALLOWANCE_PERIOD;
     this._typeExpanded = false;
     this._fixDayExpanded = false;
     this._renderTypeSection();
@@ -833,6 +838,7 @@ class GoalDialog extends AppElement {
                   <button type="button" class="stepper-btn" id="target-up" aria-label="${t('goal-dialog.target-increase')}">+</button>
                 </div>
                 <button type="button" class="preset-chip" id="everyday-chip" hidden>${t('goal-dialog.everyday-preset')}</button>
+                <button type="button" class="preset-chip" id="allowance-period-chip" hidden aria-pressed="false">${t('goal-dialog.allowance-period-toggle')}</button>
               </div>
             </div>
             <div class="fixday-block" id="fixday-inline" hidden>
@@ -955,6 +961,7 @@ class GoalDialog extends AppElement {
     this._targetDownBtn  = this.shadowRoot.querySelector('#target-down');
     this._targetUpBtn    = this.shadowRoot.querySelector('#target-up');
     this._everydayChip   = this.shadowRoot.querySelector('#everyday-chip');
+    this._allowancePeriodChip = this.shadowRoot.querySelector('#allowance-period-chip');
 
     this._fixDayToggle   = this.shadowRoot.querySelector('#fixday-chip');
     this._fixDayInline   = this.shadowRoot.querySelector('#fixday-inline');
@@ -1309,7 +1316,7 @@ class GoalDialog extends AppElement {
     this._typePills.forEach(p => p.addEventListener('click', this._onTypePillClick));
 
     this._onTargetDown = () => {
-      const [min] = TARGET_LIMITS[this._draftType];
+      const [min] = targetLimitsFor(this._draftType, this._draftAllowancePeriod);
       this._draftTarget = Math.max(min, this._draftTarget - 1);
       this._renderTypeSection();
       if (!this._isNew) this._commitTrackingChange();
@@ -1317,7 +1324,7 @@ class GoalDialog extends AppElement {
     this._targetDownBtn.addEventListener('click', this._onTargetDown);
 
     this._onTargetUp = () => {
-      const [, max] = TARGET_LIMITS[this._draftType];
+      const [, max] = targetLimitsFor(this._draftType, this._draftAllowancePeriod);
       this._draftTarget = Math.min(max, this._draftTarget + 1);
       this._renderTypeSection();
       if (!this._isNew) this._commitTrackingChange();
@@ -1330,6 +1337,21 @@ class GoalDialog extends AppElement {
       if (!this._isNew) this._commitTrackingChange();
     };
     this._everydayChip.addEventListener('click', this._onEverydayChip);
+
+    // Exactly two states and no separate control (like the stepper) can
+    // land on either independently, so — unlike everyday-chip, which only
+    // ever jumps target to 7 — this chip has to be a real toggle.
+    this._onAllowancePeriodChipClick = () => {
+      this._draftAllowancePeriod = this._draftAllowancePeriod === '4weeks' ? 'week' : '4weeks';
+      // week's max (6) is far below 4weeks' (27) — clamp down rather than
+      // reset, since unlike a type switch (different kind of value entirely)
+      // this is still "how many slips", just a narrower ceiling.
+      const [, max] = targetLimitsFor(this._draftType, this._draftAllowancePeriod);
+      this._draftTarget = Math.min(this._draftTarget, max);
+      this._renderTypeSection();
+      if (!this._isNew) this._commitTrackingChange();
+    };
+    this._allowancePeriodChip.addEventListener('click', this._onAllowancePeriodChipClick);
 
     // ── List picker (Create list item) ────────────────────────────────────────
 
@@ -1407,6 +1429,7 @@ class GoalDialog extends AppElement {
     this._targetDownBtn?.removeEventListener('click', this._onTargetDown);
     this._targetUpBtn?.removeEventListener('click', this._onTargetUp);
     this._everydayChip?.removeEventListener('click', this._onEverydayChip);
+    this._allowancePeriodChip?.removeEventListener('click', this._onAllowancePeriodChipClick);
   }
 
   // ── Draft recovery toggle ─────────────────────────────────────────────────
@@ -1440,8 +1463,11 @@ class GoalDialog extends AppElement {
   // Full widened shape from the start (see tracking.js) — value/target/
   // entries all present regardless of which type is picked, so a brand-new
   // goal already conforms to the same shape a switched-type goal would.
+  // allowancePeriod rides along too, even for non-decreasing goals — it's
+  // inert everywhere else, and keeping it present means a later switch into
+  // decreasing sees whatever was last chosen rather than a missing field.
   _draftTracking() {
-    return { type: this._draftType, value: 0, target: this._draftTarget, entries: [] };
+    return { type: this._draftType, value: 0, target: this._draftTarget, entries: [], allowancePeriod: this._draftAllowancePeriod };
   }
 
   // Existing goal: no presence on the main view at all until "Change type"
@@ -1463,9 +1489,11 @@ class GoalDialog extends AppElement {
     // 'percentage' is the one type with no target concept at all — every
     // other type (including any future one) uses its own type-summary-*
     // string rather than silently falling back to "Percentage" here.
+    // Decreasing additionally forks on allowancePeriod, since "N slips
+    // allowed" means something different per week vs. per 4 weeks.
     this._changeTypeValue.textContent = this._draftType === 'percentage'
       ? t('goal-dialog.type-percentage')
-      : t(`goal-dialog.type-summary-${this._draftType}`, { target: this._draftTarget });
+      : t(`goal-dialog.type-summary-${this._draftType}${this._draftType === 'decreasing' ? '-' + this._draftAllowancePeriod : ''}`, { target: this._draftTarget });
 
     if (!showTypeEditor) {
       this._targetBlock.hidden = true;
@@ -1478,18 +1506,25 @@ class GoalDialog extends AppElement {
     this._targetBlock.hidden = !showTarget;
     if (!showTarget) return;
 
-    const [min, max] = TARGET_LIMITS[this._draftType];
+    const [min, max] = targetLimitsFor(this._draftType, this._draftAllowancePeriod);
+    const isDecreasingType = this._draftType === 'decreasing';
     this._targetValueEl.textContent = String(this._draftTarget);
-    this._targetLabel.textContent = t(`goal-dialog.target-label-${this._draftType}`);
+    this._targetLabel.textContent = isDecreasingType
+      ? t(`goal-dialog.target-label-decreasing-${this._draftAllowancePeriod}`)
+      : t(`goal-dialog.target-label-${this._draftType}`);
     // Weekly/monthly leave the label screen-reader-only — the bare stepper
-    // number reads fine next to the "Every day" chip for context. Decreasing
-    // has no such chip, so a bare "0" next to nothing would be opaque —
-    // this is the one type whose label actually needs to be seen.
-    this._targetLabel.classList.toggle('sr-only', this._draftType !== 'decreasing');
+    // number reads fine next to the "Every day" chip for context. Decreasing's
+    // own neighbour chip (below) names the allowance period, not the number
+    // itself, so a bare "0" next to it would still be opaque — this is the
+    // one type whose label actually needs to be seen.
+    this._targetLabel.classList.toggle('sr-only', !isDecreasingType);
     this._targetDownBtn.disabled = this._draftTarget <= min;
     this._targetUpBtn.disabled = this._draftTarget >= max;
     this._everydayChip.hidden = this._draftType !== 'weekly';
     this._everydayChip.setAttribute('aria-pressed', String(this._draftType === 'weekly' && this._draftTarget === 7));
+
+    this._allowancePeriodChip.hidden = !isDecreasingType;
+    this._allowancePeriodChip.setAttribute('aria-pressed', String(this._draftAllowancePeriod === '4weeks'));
   }
 
   // Fix-a-day: an icon-only footer toggle (see _onFixDayToggleClick),
@@ -1526,6 +1561,7 @@ class GoalDialog extends AppElement {
       value: this._goal?.tracking?.value ?? 0,
       target: this._draftTarget,
       entries: this._goal?.tracking?.entries ?? [],
+      allowancePeriod: this._draftAllowancePeriod,
     };
     if (this._goal) this._goal = { ...this._goal, tracking };
     this.dispatchEvent(new CustomEvent('goal-tracking-changed', {

@@ -36,6 +36,16 @@ async function clickTargetUp(page) {
   });
 }
 
+// Single toggle chip, not a pill group — one click flips week <-> 4weeks.
+async function toggleAllowancePeriodChip(page) {
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot
+      .querySelector('goal-dialog').shadowRoot
+      .querySelector('#allowance-period-chip').click();
+  });
+}
+
 async function saveDialog(page, title) {
   await page.evaluate(t => {
     const inp = document.querySelector('app-router').shadowRoot
@@ -379,5 +389,96 @@ test.describe('Avoid goals', () => {
     });
     tracking = await goalItemTracking(page);
     expect(tracking.entries).toContain(loggedIso);
+  });
+
+  test('creating an Avoid goal with the 4-week allowance chip persists allowancePeriod through to IDB and a reload', async ({ page }) => {
+    await openDialog(page, '#add-capstone');
+    await selectType(page, 'decreasing');
+    await clickTargetUp(page); // allowance 0 -> 1
+    await toggleAllowancePeriodChip(page);
+    await saveDialog(page, 'No takeout');
+
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+
+    let tracking = await goalItemTracking(page);
+    expect(tracking.allowancePeriod).toBe('4weeks');
+    expect(tracking.target).toBe(1);
+
+    await waitForIDBFlush(page);
+    await page.reload();
+    await waitForPage(page);
+
+    tracking = await goalItemTracking(page);
+    expect(tracking.allowancePeriod).toBe('4weeks');
+  });
+
+  test('the septagon strip reflects the pooled 4-week allowance, not a fresh weekly one', async ({ page }) => {
+    await openDialog(page, '#add-capstone');
+    await selectType(page, 'decreasing');
+    await clickTargetUp(page); // allowance 0 -> 1
+    await clickTargetUp(page); // allowance 1 -> 2
+    await toggleAllowancePeriodChip(page);
+    await saveDialog(page, 'No takeout');
+    await page.waitForFunction(() => {
+      const list = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
+      return list?.querySelectorAll('goal-item').length === 1;
+    });
+
+    // Spend the whole allowance (2) in the block-start week (3 weeks ago —
+    // still inside the same 4-week block as this week) via Fix a day.
+    await tapBar(page);
+    await openFixDay(page);
+    const blockStartIsos = await page.evaluate(() => {
+      const d = new Date();
+      d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - 21); // Monday, 3 weeks ago
+      const iso = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+      const tue = new Date(d); tue.setDate(tue.getDate() + 1);
+      return [iso(d), iso(tue)];
+    });
+    for (const iso of blockStartIsos) {
+      await page.evaluate(i => {
+        document.querySelector('app-router').shadowRoot
+          .querySelector('home-page').shadowRoot
+          .querySelector('goal-dialog').shadowRoot
+          .querySelector(`#fixday-chips .day-chip[data-iso="${i}"]`).click();
+      }, iso);
+    }
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#close').click();
+    });
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return (item?._goal?.tracking?.entries?.length ?? 0) === 2;
+    });
+
+    // Log today too — the block's allowance is already spent, so this
+    // should render as "over" (20% opacity), not "within" (60%), even
+    // though it's the only slip in *this particular week*.
+    await tapCurrentSeptagon(page);
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return (item?._goal?.tracking?.entries?.length ?? 0) === 3;
+    });
+
+    const currentFillBackground = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return item.shadowRoot.querySelector('.septagon-week.current .septagon-fill').style.background;
+    });
+    expect(currentFillBackground).toContain('20%, transparent)'); // the "over" wedge colour
+    expect(currentFillBackground).not.toContain('60%, transparent)'); // never rendered as merely "within"
   });
 });

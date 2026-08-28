@@ -14,13 +14,15 @@
 //
 // `decreasing` ("Avoid" in the UI) is the anti-habit type — it starts at
 // 100% and drops as `entries` (days you slipped, not completed) accumulate.
-// Its `target` is repurposed as an *allowance*: free slips per week (0–6,
-// default 0) that cost nothing; the fraction denominator is always 7 (days
-// in a week), never scaled by the allowance. Switching an existing
-// weekly/monthly goal to decreasing (or back) reinterprets `entries`'
-// meaning — completions become slips or vice versa — rather than discarding
-// them, the same class of tradeoff the "never drops the inactive side" rule
-// above already accepts.
+// Its `target` is repurposed as an *allowance*: free slips (0–6, default 0)
+// that cost nothing. `allowancePeriod` ('week' | '4weeks', default 'week' —
+// see DEFAULT_ALLOWANCE_PERIOD) decides how often that allowance refills:
+// every week (the fraction denominator is 7, the original behaviour) or
+// pooled across a rolling 4-week block (denominator 28, stricter). Switching
+// an existing weekly/monthly goal to decreasing (or back) reinterprets
+// `entries`' meaning — completions become slips or vice versa — rather than
+// discarding them, the same class of tradeoff the "never drops the inactive
+// side" rule above already accepts.
 //
 // percentValue() works identically for every type — nothing outside this
 // module should read `.tracking` directly.
@@ -57,6 +59,16 @@ const PERIOD_FRACTION = {
 // Target/allowance defaults for a type that's never had one set (a fresh
 // goal, or one switching into weekly/monthly/decreasing for the first time).
 export const DEFAULT_TARGET = { weekly: 3, monthly: 4, decreasing: 0 };
+
+// Decreasing-only: how often the allowance itself refills. 'week' (default —
+// every goal without this field reads as 'week', so nothing about an
+// existing goal's score changes) grants `target` free slips every single
+// week, exactly the original behaviour. '4weeks' pools that same `target`
+// number across a rolling 4-week block instead: the budget only refills once
+// the block rolls over, so it's the stricter of the two. Purely a decreasing
+// setting — every other type ignores it.
+export const DEFAULT_ALLOWANCE_PERIOD = 'week';
+export const ALLOWANCE_PERIOD_WEEKS = { week: 1, '4weeks': 4 };
 
 // Periods considered for the weighted average — weekly and monthly get
 // separate lengths because a "period" is such a different wall-clock span
@@ -95,7 +107,23 @@ export const FIX_DAY_SPAN = {
   decreasing: 7 * DOT_WINDOW.decreasing,
 };
 
-export const TARGET_LIMITS = { weekly: [1, 7], monthly: [1, 31], decreasing: [0, 6] };
+// Decreasing's max allowance scales with allowancePeriod — capped one day
+// below the full block (6 of 7 days for 'week', 27 of 28 for '4weeks') so
+// at least one day in the block can still cost something; a max equal to
+// the full block would make every day free, i.e. stop tracking anything.
+export const TARGET_LIMITS = {
+  weekly: [1, 7],
+  monthly: [1, 31],
+  decreasing: { week: [0, 6], '4weeks': [0, 27] },
+};
+
+// The single place that resolves a type (+ allowancePeriod, for decreasing)
+// down to a concrete [min, max] pair — every caller (the stepper's clamp,
+// its disabled states) goes through this rather than indexing TARGET_LIMITS
+// directly, since decreasing's entry isn't a plain array like the others.
+export function targetLimitsFor(type, allowancePeriod = DEFAULT_ALLOWANCE_PERIOD) {
+  return type === 'decreasing' ? TARGET_LIMITS.decreasing[allowancePeriod] : TARGET_LIMITS[type];
+}
 
 export function isFrequency(goal) {
   const type = goal?.tracking?.type;
@@ -145,15 +173,39 @@ export function isDecreasing(goal) { return goal?.tracking?.type === 'decreasing
 // judging the fraction against elapsedDays instead keeps it strictly
 // non-increasing on a fail (a fail day always raises the ratio of
 // slips-to-elapsed-days, never lowers it), which removes the paradox.
+//
+// `allowancePeriod` generalizes the same shape rather than changing it: each
+// week's fraction judges the *cumulative* count since its allowance block
+// started against the days elapsed in that block, instead of always judging
+// just that single week against 7 days. A block of 1 week (allowancePeriod
+// 'week', the default) makes every week its own block start, so
+// weeksIntoBlock is always 0 and this collapses to exactly the original
+// per-week formula above — no behavior change for any goal that predates
+// this setting or never touches it. A block of 4 weeks ('4weeks') instead
+// carries a week's unspent (or overspent) allowance into the next week of
+// the same block, only resetting once the block rolls over — the two
+// corrections above still apply to whichever week is current, just measured
+// against the block's elapsed days rather than the week's.
 function decreasingWeightedAverage(tracking, todayIso) {
-  const fractions = periodFractions(tracking, todayIso); // PERIOD_WINDOW.decreasing = 6, oldest -> current
-  const elapsedDaysThisWeek = ((localDate(todayIso).getDay() + 6) % 7) + 1; // Mon=1 .. Sun=7
+  const blockWeeks = ALLOWANCE_PERIOD_WEEKS[tracking.allowancePeriod ?? DEFAULT_ALLOWANCE_PERIOD];
+  const weekKeys = recentPeriods('decreasing', PERIOD_WINDOW.decreasing, todayIso); // oldest -> current
+  const counts = countByPeriod(tracking.entries, 'decreasing');
   const allowance = tracking.target ?? 0;
-  const currentCount = currentPeriodCount(tracking, todayIso);
-  fractions[fractions.length - 1] = Math.max(
-    0,
-    1 - Math.max(0, currentCount - allowance) / Math.max(1, elapsedDaysThisWeek - allowance)
-  );
+  const elapsedDaysThisWeek = ((localDate(todayIso).getDay() + 6) % 7) + 1; // Mon=1 .. Sun=7
+
+  const fractions = weekKeys.map((_, i) => {
+    const weeksAgo = weekKeys.length - 1 - i; // 0 = current
+    const weeksIntoBlock = blockWeeks - 1 - (weeksAgo % blockWeeks); // 0 = this week starts a fresh block
+    let cumulative = 0;
+    for (let b = 0; b <= weeksIntoBlock; b++) {
+      const idx = i - b;
+      if (idx < 0) break; // block start predates the scored window — treated as clean, same as "goal didn't exist yet"
+      cumulative += counts.get(weekKeys[idx]) ?? 0;
+    }
+    const isCurrent = i === weekKeys.length - 1;
+    const daysIntoBlock = 7 * weeksIntoBlock + (isCurrent ? elapsedDaysThisWeek : 7);
+    return Math.max(0, 1 - Math.max(0, cumulative - allowance) / Math.max(1, daysIntoBlock - allowance));
+  });
 
   let weightedSum = 0, weightSum = 0;
   fractions.forEach((f, i) => {
@@ -333,19 +385,46 @@ function weekDates(todayIso, weeksAgo = 0) {
   });
 }
 
+// How much of the allowance a 4-week block has already spent in the weeks
+// *before* `weeksAgo`, so weekDayStates can seed its own chronological
+// ranking already part-way through the budget instead of starting every
+// week fresh — the septagon-viz counterpart to decreasingWeightedAverage's
+// cumulative block math above. 'week' mode (blockWeeks 1) always returns 0:
+// every week is its own block, so this is a no-op and weekDayStates behaves
+// exactly as it did before allowancePeriod existed.
+function blockCarrySpent(tracking, todayIso, weeksAgo) {
+  const blockWeeks = ALLOWANCE_PERIOD_WEEKS[tracking.allowancePeriod ?? DEFAULT_ALLOWANCE_PERIOD];
+  if (blockWeeks === 1) return 0;
+  const weeksIntoBlock = blockWeeks - 1 - (weeksAgo % blockWeeks); // 0 = this week starts a fresh block
+  if (weeksIntoBlock === 0) return 0;
+  const logged = new Set(tracking.entries ?? []);
+  let count = 0;
+  for (let d = 1; d <= weeksIntoBlock; d++) {
+    for (const iso of weekDates(todayIso, weeksAgo + d)) {
+      if (logged.has(iso)) count++;
+    }
+  }
+  return count;
+}
+
 // Day-states for the week `weeksAgo` weeks before the week containing
 // `todayIso` (0 = current). Each day is 'clean' | 'within' | 'over', ranked
-// by that week's slips in date order against the allowance — same ranking
-// logic regardless of which week. Backfilling an earlier slip via Fix-a-day
-// can re-rank a later slip from 'within' to 'over' — intentional, the
-// allowance is spent chronologically, not per-day. Feeds goal-item's
-// septagon strip directly, mirroring how recentDots feeds the frequency
-// dot-strip.
+// in date order against the allowance — chronologically *within the whole
+// allowance block* (see blockCarrySpent), not reset at every week boundary,
+// so a 4-week allowancePeriod visibly shows the pooled budget running out
+// partway through the block rather than every week looking freshly funded.
+// 'week' mode keeps the original per-week ranking (blockCarrySpent is a
+// no-op there). Backfilling an earlier slip via Fix-a-day can re-rank a
+// later slip — anywhere in the same block, not just the same week — from
+// 'within' to 'over': intentional, the allowance is spent chronologically,
+// not per-day. Feeds goal-item's septagon strip directly, mirroring how
+// recentDots feeds the frequency dot-strip.
 export function weekDayStates(goal, todayIso = todayISO(), weeksAgo = 0) {
-  const { entries = [], target = 0 } = goal?.tracking ?? {};
+  const tracking = goal?.tracking ?? {};
+  const { entries = [], target = 0 } = tracking;
   const logged = new Set(entries);
   const days = weekDates(todayIso, weeksAgo);
-  let spent = 0;
+  let spent = blockCarrySpent(tracking, todayIso, weeksAgo);
   return days.map(iso => {
     let state = 'clean';
     if (logged.has(iso)) { state = spent < target ? 'within' : 'over'; spent++; }

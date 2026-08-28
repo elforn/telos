@@ -1376,6 +1376,9 @@ describe('goal-dialog — type selector (new goal)', () => {
   function pill(el, type) {
     return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
   }
+  function allowancePeriodChip(el) {
+    return el.shadowRoot.querySelector('#allowance-period-chip');
+  }
   function create(el, detail = {}) {
     el.open(null);
     const events = [];
@@ -1447,7 +1450,7 @@ describe('goal-dialog — type selector (new goal)', () => {
   it('goal-created carries a full percentage tracking object by default (value/target/entries all present)', () => {
     const el = mount();
     const events = create(el);
-    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 0, target: 3, entries: [] });
+    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 0, target: 3, entries: [], allowancePeriod: 'week' });
   });
 
   it('goal-created carries the selected weekly type/target, with a dormant value alongside empty entries', () => {
@@ -1459,7 +1462,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'Move my body';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: [] });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: [], allowancePeriod: 'week' });
   });
 
   it('stepper increments/decrements and clamps to TARGET_LIMITS.monthly (1–31)', () => {
@@ -1485,7 +1488,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'Call parents';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'monthly', value: 0, target: 5, entries: [] });
+    expect(events[0].detail.tracking).toEqual({ type: 'monthly', value: 0, target: 5, entries: [], allowancePeriod: 'week' });
   });
 
   it('resets to percentage default after a quick-add commit (Enter) starts the next entry', () => {
@@ -1523,6 +1526,29 @@ describe('goal-dialog — type selector (new goal)', () => {
     expect(up.disabled).toBe(true);
   });
 
+  it('switching to the 4-week allowance raises the stepper\'s ceiling to 27, not 6', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'decreasing').click();
+    allowancePeriodChip(el).click(); // week -> 4weeks
+    const up = el.shadowRoot.querySelector('#target-up');
+    for (let i = 0; i < 40; i++) up.click(); // would clamp at 6 in "week" mode
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('27');
+    expect(up.disabled).toBe(true);
+  });
+
+  it('switching back from 4-week to week clamps a now-out-of-range target down to 6, rather than leaving it invalid', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'decreasing').click();
+    allowancePeriodChip(el).click(); // week -> 4weeks
+    const up = el.shadowRoot.querySelector('#target-up');
+    for (let i = 0; i < 20; i++) up.click(); // well above 6, valid for 4weeks (up to 27)
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('20');
+    allowancePeriodChip(el).click(); // 4weeks -> week
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('6');
+  });
+
   it('Avoid\'s target label is visible (not screen-reader-only, unlike weekly/monthly)', () => {
     const el = mount();
     el.open(null);
@@ -1541,13 +1567,69 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'No ice cream';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 1, entries: [] });
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 1, entries: [], allowancePeriod: 'week' });
+  });
+
+  it('the allowance-period toggle chip is hidden for every type except Avoid — never visible alongside the Every-day chip', () => {
+    const el = mount();
+    el.open(null);
+    expect(allowancePeriodChip(el).hidden).toBe(true);
+    pill(el, 'weekly').click();
+    expect(allowancePeriodChip(el).hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#everyday-chip').hidden).toBe(false); // the two share a row, never shown together
+    pill(el, 'monthly').click();
+    expect(allowancePeriodChip(el).hidden).toBe(true);
+    pill(el, 'decreasing').click();
+    expect(allowancePeriodChip(el).hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#everyday-chip').hidden).toBe(true);
+  });
+
+  it('Avoid defaults the allowance period to "week" — the toggle chip starts unpressed', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'decreasing').click();
+    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('tapping the chip flips to the 4-week allowance and back', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'decreasing').click();
+    allowancePeriodChip(el).click();
+    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('true');
+    allowancePeriodChip(el).click();
+    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('goal-created carries the selected allowance period', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'decreasing').click();
+    allowancePeriodChip(el).click();
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'No takeout';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.tracking.allowancePeriod).toBe('4weeks');
+  });
+
+  it('switching away from Avoid and back preserves the previously chosen allowance period, mirroring how value/entries survive a type switch', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'decreasing').click();
+    allowancePeriodChip(el).click();
+    pill(el, 'weekly').click(); // switch away
+    pill(el, 'decreasing').click(); // switch back
+    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('true');
   });
 });
 
 describe('goal-dialog — type/target: no main-view presence for an existing goal, changed via the ⋮ menu', () => {
   function pill(el, type) {
     return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
+  }
+  function allowancePeriodChip(el) {
+    return el.shadowRoot.querySelector('#allowance-period-chip');
   }
   // "Change type" lives in the action sheet — nothing on the main view to tap.
   function expand(el) {
@@ -1601,7 +1683,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'weekly').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 62, target: 3, entries: [] });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 62, target: 3, entries: [], allowancePeriod: 'week' });
   });
 
   it('switching a frequency goal to percentage preserves entries dormant and surfaces the last value', () => {
@@ -1612,7 +1694,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'percentage').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 62, target: 5, entries: ['2026-08-01'] });
+    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 62, target: 5, entries: ['2026-08-01'], allowancePeriod: 'week' });
   });
 
   it('switching back and forth (weekly → percentage → weekly) recovers the original entries — nothing is destroyed', () => {
@@ -1643,7 +1725,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'weekly').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 3, entries: ['2026-07-01', '2026-08-01'] });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 3, entries: ['2026-07-01', '2026-08-01'], allowancePeriod: 'week' });
     expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('3');
   });
 
@@ -1655,7 +1737,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     el.shadowRoot.querySelector('#target-up').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: ['2026-08-01'] });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: ['2026-08-01'], allowancePeriod: 'week' });
     expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('4');
   });
 
@@ -1722,6 +1804,39 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('Avoid, 2 slip/wk allowed');
   });
 
+  it('the change-type summary string switches to the 4-week wording once that allowance period is picked', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', value: 0, target: 2, entries: [], allowancePeriod: '4weeks' } });
+    expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('Avoid, 2 slip/4wks allowed');
+  });
+
+  it('the allowance-period chip is hidden until "Change type" is expanded, then reflects the goal\'s current period', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', value: 0, target: 2, entries: [], allowancePeriod: '4weeks' } });
+    expect(allowancePeriodChip(el).hidden).toBe(true);
+    expand(el);
+    expect(allowancePeriodChip(el).hidden).toBe(false);
+    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('a goal saved before this setting existed (no allowancePeriod) defaults its chip to unpressed ("week")', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', value: 0, target: 2, entries: [] } });
+    expand(el);
+    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('tapping the chip on an existing goal commits immediately via goal-tracking-changed', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', value: 0, target: 2, entries: ['2026-08-01'] } });
+    expand(el);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e));
+    allowancePeriodChip(el).click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 2, entries: ['2026-08-01'], allowancePeriod: '4weeks' });
+  });
+
   it('switching an existing goal to Avoid preserves entries dormant and defaults the allowance to 0', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: ['2026-08-01'] } });
@@ -1730,7 +1845,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'decreasing').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 0, entries: ['2026-08-01'] });
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 0, entries: ['2026-08-01'], allowancePeriod: 'week' });
   });
 
   it('switching back and forth (weekly → Avoid → weekly) recovers the original entries — nothing is destroyed', () => {

@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.8.0] — 2026-08-29
+
+### Added
+- **Avoid goals can now set their allowance as "per week" (unchanged default) or "per 4 weeks"**, via a compact toggle chip sitting right next to the target stepper. "Per 4 weeks" pools the same allowance across a rolling 4-week block instead of refilling it every week, so it takes longer to earn back once spent — including in the weekly septagon strip, which now shows a slip as "over" partway through the block once the pooled allowance runs out, rather than every week looking freshly funded. The stepper's ceiling scales with it too: up to 27 slips for a 4-week allowance (one below the full 28-day block), not the 6-per-week ceiling.
+
 ## [2.7.0] — 2026-08-29
 
 ### Added
