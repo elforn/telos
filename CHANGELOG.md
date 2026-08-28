@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [2.5.1] — 2026-08-28
+## [2.5.3] — 2026-08-28
 
 ### Fixed
 - **Opening two card-footer fields in a row (e.g. Deadline, then Link) could visibly displace the whole dialog card upward** — extra blank space appearing below the footer buttons, with the drag handle pushed above the visible card. Every reveal/hide was inadvertently scrolling the modal's own outer frame, not just its intended internal scroll region, and that offset had no way to reset itself — so it kept accumulating with each field toggled. The scroll is now aimed only at the modal's actual scrollable region.
