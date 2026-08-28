@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
-import { septagonGradient } from '../../app/components/goal-item/goal-item.js';
+import { septagonWedgeState } from '../../app/components/goal-item/goal-item.js';
 import { _resetDeleteGuard } from '../../app/utils/delete-ghost-guard.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
@@ -532,37 +532,55 @@ describe('goal-item — decreasing: rendering', () => {
     expect(weeks[weeks.length - 1].classList.contains('current')).toBe(true);
   });
 
-  it('septagonGradient fades accent to 60% for within-allowance and 20% for over-allowance — an opacity "draining" escalation, never a second hue', () => {
-    // All three states use color-mix() (or, for clean, a bare var()) in a
-    // way happy-dom's limited CSS parser can't round-trip through
-    // element.style.background (it rejects the whole value when any
-    // segment it can't parse — confirmed fine in real Chromium/Firefox), so
-    // this is verified at the pure string-output level instead of via DOM.
-    const days = [
-      { state: 'clean' }, { state: 'within' }, { state: 'over' },
-      { state: 'clean' }, { state: 'clean' }, { state: 'clean' }, { state: 'clean' },
-    ];
-    const gradient = septagonGradient(days);
-    expect(gradient).toContain('var(--color-accent)');
-    expect(gradient).toContain('color-mix(in srgb, var(--color-accent) 60%, transparent)');
-    expect(gradient).toContain('color-mix(in srgb, var(--color-accent) 20%, transparent)');
-    expect(gradient).not.toContain('--color-success');
-    expect(gradient).not.toContain('--color-warning');
-    expect(gradient).not.toContain('--color-danger');
-    expect(gradient.startsWith('conic-gradient(from 0deg,')).toBe(true);
+  it('septagonWedgeState resolves the day\'s tracked state, with `future` always overriding it (a not-yet-elapsed day never shows as clean/within/over)', () => {
+    expect(septagonWedgeState({ state: 'clean', future: false })).toBe('clean');
+    expect(septagonWedgeState({ state: 'within', future: false })).toBe('within');
+    expect(septagonWedgeState({ state: 'over', future: false })).toBe('over');
+    expect(septagonWedgeState({ state: 'clean', future: true })).toBe('future');
   });
 
-  it('septagonGradient renders a not-yet-happened day as plain transparent, overriding its (always-clean) state', () => {
-    expect(septagonGradient([{ state: 'clean', future: true }]))
-      .toBe('conic-gradient(from 0deg, transparent 0.000deg 51.429deg)');
-  });
-
-  it('a clean goal\'s current week is all --color-accent wedges (theme-aligned, matching weekly\'s met-dot)', () => {
+  it('a clean goal\'s current week is 7 wedges, each data-state "clean" or "future" — no hatch fill, no within-dot, no second hue anywhere', () => {
     const el = mount(decreasingGoal());
     const current = el.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
-    expect(current.style.background).toContain('--color-accent');
-    expect(current.style.background).not.toContain('--color-success');
-    expect(current.style.background).not.toContain('--color-warning');
+    const wedges = [...current.querySelectorAll('path')];
+    expect(wedges).toHaveLength(7);
+    wedges.forEach(w => expect(['clean', 'future']).toContain(w.getAttribute('data-state')));
+    wedges.forEach(w => expect(w.getAttribute('fill')).toBeNull()); // fill comes from CSS, never inline (the hatch pattern is the only state that sets it)
+    expect(current.querySelector('.septagon-within-dot')).toBeNull();
+    expect(current.outerHTML).not.toContain('--color-success');
+    expect(current.outerHTML).not.toContain('--color-warning');
+    expect(current.outerHTML).not.toContain('--color-danger');
+  });
+
+  it('a slip within the allowance renders that wedge data-state="within", solid-filled via CSS (no inline fill override) plus a knockout dot marking it', () => {
+    const el = mount(decreasingGoal([isoDaysFromNow(0)], 1)); // allowance 1, 1 slip today -> within
+    const current = el.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
+    const wedge = current.querySelector('path[data-state="within"]');
+    expect(wedge).not.toBeNull();
+    expect(wedge.getAttribute('fill')).toBeNull(); // fill comes from the CSS rule, same as "clean"
+    expect(current.querySelectorAll('.septagon-within-dot')).toHaveLength(1);
+  });
+
+  it('a slip past the allowance renders that wedge data-state="over", filled inline via a per-week hatch <pattern> (not a plain colour, never a second hue)', () => {
+    const el = mount(decreasingGoal([isoDaysFromNow(0)], 0)); // allowance 0 -> any slip is immediately over
+    const current = el.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
+    const wedge = current.querySelector('path[data-state="over"]');
+    expect(wedge).not.toBeNull();
+    const fillAttr = wedge.getAttribute('fill');
+    expect(fillAttr).toMatch(/^url\(#septagon-hatch-\d+\)$/);
+    const hatchId = fillAttr.slice(5, -1);
+    const pattern = current.querySelector(`pattern#${hatchId}`);
+    expect(pattern).not.toBeNull();
+    expect(pattern.querySelector('rect').getAttribute('fill')).toBe('var(--color-accent)'); // hatch stripes are the accent colour, not a second hue
+    expect(current.querySelector('.septagon-within-dot')).toBeNull(); // "over" never also gets the within-dot
+  });
+
+  it('each week\'s hatch pattern id is scoped to its own SVG (no id collisions across the 6-septagon strip)', () => {
+    const el = mount(decreasingGoal([isoDaysFromWeekStart(0)], 0)); // a slip early this week -> "over" in the current septagon only
+    const fills = [...el.shadowRoot.querySelectorAll('.septagon-strip .septagon-fill')];
+    expect(fills).toHaveLength(6);
+    const patternIds = fills.map(f => f.querySelector('pattern')?.id).filter(Boolean);
+    expect(new Set(patternIds).size).toBe(patternIds.length); // every id is unique
   });
 
   it('history weeks are a plain filled heptagon with no separate border/ring element — only the current week ever gets a ring', () => {

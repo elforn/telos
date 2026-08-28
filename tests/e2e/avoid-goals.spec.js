@@ -461,9 +461,10 @@ test.describe('Avoid goals', () => {
       return (item?._goal?.tracking?.entries?.length ?? 0) === 2;
     });
 
-    // Log today too — the block's allowance is already spent, so this
-    // should render as "over" (20% opacity), not "within" (60%), even
-    // though it's the only slip in *this particular week*.
+    // Log today too — the block's allowance is already spent, so today's
+    // wedge should render as "over" (the hatch pattern), not "within" (a
+    // solid fill + knockout dot), even though it's the only slip in *this
+    // particular week*.
     await tapCurrentSeptagon(page);
     await page.waitForFunction(() => {
       const item = document.querySelector('app-router').shadowRoot
@@ -472,13 +473,19 @@ test.describe('Avoid goals', () => {
       return (item?._goal?.tracking?.entries?.length ?? 0) === 3;
     });
 
-    const currentFillBackground = await page.evaluate(() => {
+    const todayWedgeState = await page.evaluate(() => {
       const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('#capstone-list goal-item');
-      return item.shadowRoot.querySelector('.septagon-week.current .septagon-fill').style.background;
+      const fill = item.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
+      const todayIso = (() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      })();
+      const todayPath = fill.querySelector(`path[data-iso="${todayIso}"]`);
+      return { state: todayPath.getAttribute('data-state'), fill: todayPath.getAttribute('fill') };
     });
-    expect(currentFillBackground).toContain('20%, transparent)'); // the "over" wedge colour
-    expect(currentFillBackground).not.toContain('60%, transparent)'); // never rendered as merely "within"
+    expect(todayWedgeState.state).toBe('over');
+    expect(todayWedgeState.fill).toMatch(/^url\(#septagon-hatch-\d+\)$/); // the hatch pattern, never a plain colour
   });
 });

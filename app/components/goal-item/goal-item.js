@@ -28,35 +28,58 @@ const TODAY_RING_SIZE = 31;   // the <rect>'s width/height, inset within TODAY_B
 const TODAY_RING_INSET = (TODAY_BOX - TODAY_RING_SIZE) / 2;
 const TODAY_RING_RX = { weekly: TODAY_RING_SIZE / 2, monthly: 7 }; // monthly's corner radius scaled down with it (was 8 at the old 34px ring)
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
 // Decreasing goals' "septagon" strip — 7-wedge heptagons, one per scored
-// week, oldest → current. Regular 7-gon, vertex 0 at 12 o'clock, clockwise —
-// matches conic-gradient's own 0deg-at-top, clockwise convention exactly, so
-// wedge boundaries land precisely on vertices with no seam.
+// week, oldest → current. Regular 7-gon, vertex 0 at 12 o'clock, clockwise.
+// Each wedge is drawn as its own SVG <path>: the triangle from the
+// septagon's center to two adjacent vertices. The 7 triangles tile the
+// heptagon exactly (no seams, no outer clip needed — whatever's outside the
+// polygon, i.e. the square viewBox's corners, is simply never drawn).
+//
+// State is encoded without a second hue, same principle as the opacity
+// scheme this replaced, but readable at 13px where opacity steps weren't
+// (0.13s round-trip through a real device confirmed 60%-vs-20%-opacity was
+// too close to call at a glance): `clean` and `within` both get a full,
+// solid accent-colour wedge — `within` additionally gets a small knockout
+// dot (punched through to the row's own background) marking "this one used
+// the allowance but stayed free"; `over` swaps to a diagonal accent hatch
+// instead of a flatter fill, since texture reads as "flagged" at a glance
+// regardless of size, the same way hazard stripes do. `future` (a day in
+// the current week that hasn't happened yet) stays fully transparent.
 const SEPTAGON_SIDES = 7;
 const SEPTAGON_STEP = 360 / SEPTAGON_SIDES;
-const SEPTAGON_CLIP = `polygon(${
-  Array.from({ length: SEPTAGON_SIDES }, (_, i) => {
-    const a = (-90 + i * SEPTAGON_STEP) * Math.PI / 180;
-    return `${(50 + 50 * Math.cos(a)).toFixed(2)}% ${(50 + 50 * Math.sin(a)).toFixed(2)}%`;
-  }).join(', ')
-})`;
-// The three logged states are the same accent color at different
-// opacities — a "draining" metaphor instead of a hue-based escalation:
-// full accent when clean, still mostly full at 60% for a forgiven slip,
-// down to 20% once you're over. Never competes with a second hue at all,
-// so it's collision-proof against any accent choice by construction, not
-// by picking colors that happen not to clash with it. `future` (a day in
-// the current week that hasn't happened yet) is a 4th, separate state —
-// fully transparent, not a color at all — so it can never be mistaken for
-// "over" (hence 10% -> 20%: at 10% the two were too close to tell apart)
-// and never silently counts as "clean" the way an un-logged day otherwise
-// would.
-const SEPTAGON_WEDGE_COLOR = {
-  clean: 'var(--color-accent)',
-  within: 'color-mix(in srgb, var(--color-accent) 60%, transparent)',
-  over: 'color-mix(in srgb, var(--color-accent) 20%, transparent)',
-  future: 'transparent',
-};
+// Internal SVG coordinate space — deliberately decoupled from the element's
+// real rendered size (13px history, 29px current), which CSS controls via
+// width/height on the <svg class="septagon-fill">.
+const SEPTAGON_VB = 100;
+const SEPTAGON_CENTER = SEPTAGON_VB / 2;
+const SEPTAGON_VERTICES = Array.from({ length: SEPTAGON_SIDES }, (_, i) => {
+  const a = (-90 + i * SEPTAGON_STEP) * Math.PI / 180;
+  return [SEPTAGON_CENTER + SEPTAGON_CENTER * Math.cos(a), SEPTAGON_CENTER + SEPTAGON_CENTER * Math.sin(a)];
+});
+// Exported alongside the rest of this geometry purely so unit tests can
+// assert on it directly (pure functions, no DOM) — mirrors why
+// septagonGradient used to be exported here before this rewrite.
+export function septagonWedgePath(i) {
+  const [x0, y0] = SEPTAGON_VERTICES[i];
+  const [x1, y1] = SEPTAGON_VERTICES[(i + 1) % SEPTAGON_SIDES];
+  return `M${SEPTAGON_CENTER},${SEPTAGON_CENTER} L${x0.toFixed(3)},${y0.toFixed(3)} L${x1.toFixed(3)},${y1.toFixed(3)} Z`;
+}
+// Centroid of wedge i (mean of its 3 corners) — where the "within" knockout
+// dot is centered.
+export function septagonWedgeCentroid(i) {
+  const [x0, y0] = SEPTAGON_VERTICES[i];
+  const [x1, y1] = SEPTAGON_VERTICES[(i + 1) % SEPTAGON_SIDES];
+  return [(SEPTAGON_CENTER + x0 + x1) / 3, (SEPTAGON_CENTER + y0 + y1) / 3];
+}
+const SEPTAGON_WITHIN_DOT_RADIUS = 7; // viewBox units (of 100)
+const SEPTAGON_HATCH_PERIOD = 22; // viewBox units per stripe pair — a handful of repeats across the shape, coarse enough to still read as "textured" at 13px
+
+// `future` always wins over whatever `state` a not-yet-elapsed day
+// nominally carries (see weekDayStates in tracking.js).
+export function septagonWedgeState(day) { return day.future ? 'future' : day.state; }
+
 // Exact pixel match to freq-dot's history size (13) — literal, not
 // perceptually-compensated.
 const SEPTAGON_HISTORY_SIZE = 13;
@@ -70,18 +93,6 @@ const SEPTAGON_RING_POINTS = Array.from({ length: SEPTAGON_SIDES }, (_, i) => {
   const c = TODAY_BOX / 2, r = SEPTAGON_RING_SIZE / 2;
   return `${(c + r * Math.cos(a)).toFixed(2)},${(c + r * Math.sin(a)).toFixed(2)}`;
 }).join(' ');
-
-// Exported (unusually, for an internal helper) purely so tests can check its
-// string output directly — happy-dom's CSS parser rejects the whole
-// `style.background` value outright when it contains color-mix() nested in
-// conic-gradient() (real Firefox/Chrome handle it fine, confirmed live),
-// so DOM-level assertions can't observe the 'within' wedge color at all.
-export function septagonGradient(days) {
-  const stops = days.map((d, i) =>
-    `${SEPTAGON_WEDGE_COLOR[d.future ? 'future' : d.state]} ${(i * SEPTAGON_STEP).toFixed(3)}deg ${((i + 1) * SEPTAGON_STEP).toFixed(3)}deg`
-  ).join(', ');
-  return `conic-gradient(from 0deg, ${stops})`;
-}
 
 class GoalItem extends Gestures(AppElement) {
   set goal(value) {
@@ -364,12 +375,10 @@ class GoalItem extends Gestures(AppElement) {
            dot-cluster entirely for this type — pct-label stays hidden, same
            as frequency types, since the strip itself carries the score. The
            bar/fill deliberately get NO color override here — it keeps the
-           same accent styling every other type's .fill uses; the septagon
-           wedges layer a value-based escalation on top (see
-           SEPTAGON_WEDGE_COLOR): full accent -> faded accent -> nearly
-           drained, plus fully transparent for a day that hasn't happened
-           yet — collision-proof against any accent choice since it never
-           competes with a second hue. */
+           same accent styling every other type's .fill uses; each wedge is
+           an SVG <path> whose fill/pattern is driven by [data-state] below
+           (see the geometry/state comment above SEPTAGON_SIDES) — never a
+           second hue, collision-proof against any accent choice. */
 
         .septagon-strip {
           position: relative;
@@ -394,11 +403,26 @@ class GoalItem extends Gestures(AppElement) {
           block-size: ${SEPTAGON_HISTORY_SIZE}px;
         }
 
+        /* No clip-path needed: the 7 wedge <path>s already tile exactly to
+           the heptagon outline, so nothing is ever drawn outside it. */
         .septagon-fill {
           position: absolute;
           inset: 0;
-          clip-path: ${SEPTAGON_CLIP};
         }
+
+        .septagon-fill path[data-state="clean"],
+        .septagon-fill path[data-state="within"] {
+          fill: var(--color-accent);
+        }
+        .septagon-fill path[data-state="future"] { fill: transparent; }
+        /* [data-state="over"] gets its fill (a diagonal hatch pattern)
+           inline, per element — it references a per-wedge <pattern> id, which
+           a static CSS rule can't express. */
+
+        /* Knockout dot marking a forgiven (within-allowance) slip — punched
+           through to the row's own background rather than a second hue, so
+           it reads correctly in both themes and against any accent choice. */
+        .septagon-within-dot { fill: var(--color-surface); }
 
         /* A genuine ${TODAY_BOX}px box, exactly like .freq-today — not a
            smaller box with an invisible hit-area hack — so the current
@@ -1065,6 +1089,55 @@ class GoalItem extends Gestures(AppElement) {
     }
   }
 
+  // Builds the wedge-fill SVG for one septagon: 7 <path> wedges (see
+  // septagonWedgePath) plus a per-wedge <defs><pattern> for the "over" hatch
+  // — defined locally in each week's own SVG (id scoped to `weekIndex`, not
+  // shared across the strip) so multiple septagons in the same shadow root
+  // never fight over the same pattern id.
+  _buildSeptagonFill(days, weekIndex) {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'septagon-fill');
+    svg.setAttribute('viewBox', `0 0 ${SEPTAGON_VB} ${SEPTAGON_VB}`);
+
+    const hatchId = `septagon-hatch-${weekIndex}`;
+    const defs = document.createElementNS(SVG_NS, 'defs');
+    const pattern = document.createElementNS(SVG_NS, 'pattern');
+    pattern.setAttribute('id', hatchId);
+    pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+    pattern.setAttribute('width', String(SEPTAGON_HATCH_PERIOD));
+    pattern.setAttribute('height', String(SEPTAGON_HATCH_PERIOD));
+    pattern.setAttribute('patternTransform', 'rotate(45)');
+    const stripe = document.createElementNS(SVG_NS, 'rect');
+    stripe.setAttribute('width', String(SEPTAGON_HATCH_PERIOD / 2));
+    stripe.setAttribute('height', String(SEPTAGON_HATCH_PERIOD));
+    stripe.setAttribute('fill', 'var(--color-accent)');
+    pattern.appendChild(stripe);
+    defs.appendChild(pattern);
+    svg.appendChild(defs);
+
+    days.forEach((day, i) => {
+      const state = septagonWedgeState(day);
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', septagonWedgePath(i));
+      path.setAttribute('data-state', state);
+      path.setAttribute('data-iso', day.iso);
+      if (state === 'over') path.setAttribute('fill', `url(#${hatchId})`);
+      svg.appendChild(path);
+
+      if (state === 'within') {
+        const [cx, cy] = septagonWedgeCentroid(i);
+        const dot = document.createElementNS(SVG_NS, 'circle');
+        dot.setAttribute('class', 'septagon-within-dot');
+        dot.setAttribute('cx', cx.toFixed(3));
+        dot.setAttribute('cy', cy.toFixed(3));
+        dot.setAttribute('r', String(SEPTAGON_WITHIN_DOT_RADIUS));
+        svg.appendChild(dot);
+      }
+    });
+
+    return svg;
+  }
+
   // Six septagons, oldest → current (see recentWeekStates in tracking.js) —
   // replaces the frequency dot-cluster entirely for this type. Rebuilt via
   // replaceChildren each render, same convention as _renderFreqCluster's dot
@@ -1076,17 +1149,14 @@ class GoalItem extends Gestures(AppElement) {
       const isCurrent = wi === weeks.length - 1;
       const el = document.createElement('span');
       el.className = 'septagon-week' + (isCurrent ? ' current' : '');
-      const fill = document.createElement('span');
-      fill.className = 'septagon-fill';
-      fill.style.background = septagonGradient(days);
-      el.appendChild(fill);
+      el.appendChild(this._buildSeptagonFill(days, wi));
       if (isCurrent) {
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const svg = document.createElementNS(SVG_NS, 'svg');
         svg.setAttribute('class', 'septagon-ring');
         svg.setAttribute('viewBox', `0 0 ${TODAY_BOX} ${TODAY_BOX}`);
         svg.setAttribute('width', String(TODAY_BOX));
         svg.setAttribute('height', String(TODAY_BOX));
-        const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        const polygon = document.createElementNS(SVG_NS, 'polygon');
         polygon.setAttribute('class', 'progress');
         polygon.setAttribute('points', SEPTAGON_RING_POINTS);
         svg.appendChild(polygon);
