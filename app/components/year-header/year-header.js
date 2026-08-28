@@ -443,8 +443,8 @@ class YearHeader extends Gestures(AppElement) {
              this list's own content box, throwing the centring off by a
              consistent but wrong amount. */
           position: relative;
-          display: flex;
-          flex-direction: column;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
           gap: var(--space-2);
           max-block-size: 50vh;
           overflow-y: auto;
@@ -452,28 +452,21 @@ class YearHeader extends Gestures(AppElement) {
           border-block-start: 0.5px solid var(--color-border);
         }
 
-        /* Three columns (flex / auto / flex) so the year digits stay dead-
-           centred in the row whether or not that row has a dot — a dot slot
-           sized to content would otherwise pull the centred label sideways
-           on rows where it's the only content-bearing row nearby. */
         .year-row {
-          display: grid;
-          grid-template-columns: 1fr auto 1fr;
+          display: flex;
+          flex-direction: column;
           align-items: center;
+          justify-content: center;
+          gap: var(--space-1);
           min-block-size: var(--touch-target);
-          flex-shrink: 0;
           border-radius: var(--radius-sm);
           border: none;
           background: none;
           cursor: pointer;
           font-family: var(--font-family);
-          font-size: var(--font-size-body);
+          font-size: var(--font-size-subheading);
           font-weight: var(--font-weight-medium);
           color: var(--color-text-primary);
-        }
-
-        .year-row-label {
-          grid-column: 2;
         }
 
         /* Text stays --color-text-primary rather than --color-accent — accent
@@ -492,13 +485,10 @@ class YearHeader extends Gestures(AppElement) {
           outline-offset: -2px;
         }
 
-        /* Always occupies column 3, whether or not the year has content —
+        /* Always rendered, whether or not the year has content —
            visibility:hidden (rather than omitting the element) keeps its box
-           in the layout so the label in column 2 never shifts. */
+           in the flex column so the label above never shifts vertically. */
         .year-row-dot {
-          grid-column: 3;
-          justify-self: start;
-          margin-inline-start: var(--space-2);
           inline-size: 6px;
           block-size: 6px;
           border-radius: 50%;
