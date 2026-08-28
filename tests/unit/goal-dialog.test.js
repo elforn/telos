@@ -229,6 +229,26 @@ describe('goal-dialog — field toggle footer placement', () => {
     expect(deleteBtn.compareDocumentPosition(dueDateBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('fixday-chip lives inside .actions-end, between Deadline and Close', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
+    const actionsEnd = el.shadowRoot.querySelector('.actions-end');
+    const dueDateBtn = actionsEnd.querySelector('#duedate-chip');
+    const fixDayBtn   = actionsEnd.querySelector('#fixday-chip');
+    const closeBtn    = actionsEnd.querySelector('#close');
+    expect(actionsEnd.contains(fixDayBtn)).toBe(true);
+    expect(dueDateBtn.compareDocumentPosition(fixDayBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(fixDayBtn.compareDocumentPosition(closeBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('fixday-chip has a visible title tooltip, not just aria-label', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
+    const fixDayBtn = el.shadowRoot.querySelector('#fixday-chip');
+    expect(fixDayBtn.getAttribute('title')).toBeTruthy();
+    expect(fixDayBtn.getAttribute('title')).toBe(fixDayBtn.getAttribute('aria-label'));
+  });
+
   it('scrolls the revealed deadline field into view by moving the modal body, not the field itself', async () => {
     const el = mount();
     el.open(null);
@@ -1678,22 +1698,22 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     expect(events[0].detail.tracking.target).toBe(7);
   });
 
-  it('switching an existing frequency goal to percentage hides the Fix-a-day summary live', () => {
+  it('switching an existing frequency goal to percentage hides the Fix-a-day toggle live', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
     expand(el);
-    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
     pill(el, 'percentage').click();
-    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(true);
   });
 
-  it('switching an existing percentage goal to weekly reveals the Fix-a-day summary live', () => {
+  it('switching an existing percentage goal to weekly reveals the Fix-a-day toggle live', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0, target: 3, entries: [] } });
     expand(el);
-    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(true);
     pill(el, 'weekly').click();
-    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
   });
 
   it('the change-type summary string is correct for an existing Avoid goal, not the old "Percentage" mis-render', () => {
@@ -1724,48 +1744,48 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     expect(events[0].detail.tracking.entries).toEqual(['2026-08-01', '2026-08-08']);
   });
 
-  it('switching an existing goal to Avoid reveals the Fix-a-day summary live', () => {
+  it('switching an existing goal to Avoid reveals the Fix-a-day toggle live', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0, target: 3, entries: [] } });
     expand(el);
-    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(true);
     pill(el, 'decreasing').click();
-    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
   });
 });
 
-describe('goal-dialog — Fix a day (frequency goals only, inline, a real expand/collapse toggle)', () => {
+describe('goal-dialog — Fix a day (frequency goals only, icon-only footer toggle)', () => {
   function expandFixDay(el) {
-    el.shadowRoot.querySelector('#fixday-summary').click();
+    el.shadowRoot.querySelector('#fixday-chip').click();
   }
 
-  it('the Fix-a-day summary is hidden for a percentage goal', () => {
+  it('the Fix-a-day toggle is hidden for a percentage goal', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 } });
-    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(true);
   });
 
-  it('the Fix-a-day summary is hidden for a brand-new (unsaved) goal', () => {
+  it('the Fix-a-day toggle is hidden for a brand-new (unsaved) goal', () => {
     const el = mount();
     el.open(null);
-    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(true);
   });
 
-  it('the Fix-a-day summary is visible (collapsed) for an existing frequency goal', () => {
+  it('the Fix-a-day toggle is visible (collapsed) for an existing frequency goal', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
-    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#fixday-inline').hidden).toBe(true);
   });
 
-  it('tapping the summary unfolds the strip inline — no separate view, main view stays put, the trigger itself stays visible', () => {
+  it('tapping the toggle unfolds the strip inline — no separate view, main view stays put, the trigger itself stays visible', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
     expandFixDay(el);
     expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#fixday-inline').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false); // unlike type/target, never hides itself
-    expect(el.shadowRoot.querySelector('#fixday-summary').getAttribute('aria-expanded')).toBe('true');
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false); // unlike type/target, never hides itself
+    expect(el.shadowRoot.querySelector('#fixday-chip').getAttribute('aria-pressed')).toBe('true');
     expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(42); // 7 × PERIOD_WINDOW.weekly
   });
 
@@ -1798,7 +1818,7 @@ describe('goal-dialog — Fix a day (frequency goals only, inline, a real expand
     expect(chips.scrollLeft).toBe(999);
   });
 
-  it('no heading text — the chip strip and its own trigger label carry the context now', () => {
+  it('no heading text — just the icon button and the chip strip', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
     expandFixDay(el);
@@ -1806,21 +1826,21 @@ describe('goal-dialog — Fix a day (frequency goals only, inline, a real expand
     expect(el.shadowRoot.querySelector('#fixday-inline').querySelector('.picker-heading')).toBeNull();
   });
 
-  it('is a real toggle — tapping again while expanded collapses it back, chevron state (aria-expanded) flips both ways', () => {
+  it('is a real toggle — tapping again while expanded collapses it back, pressed state (aria-pressed) flips both ways', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
-    const summary = el.shadowRoot.querySelector('#fixday-summary');
-    expect(summary.getAttribute('aria-expanded')).toBe('false');
+    const toggle = el.shadowRoot.querySelector('#fixday-chip');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
 
     expandFixDay(el);
     expect(el.shadowRoot.querySelector('#fixday-inline').hidden).toBe(false);
-    expect(summary.getAttribute('aria-expanded')).toBe('true');
-    expect(summary.hidden).toBe(false); // still there, ready to collapse
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.hidden).toBe(false); // still there, ready to collapse
 
     expandFixDay(el); // tap again — collapses
     expect(el.shadowRoot.querySelector('#fixday-inline').hidden).toBe(true);
-    expect(summary.getAttribute('aria-expanded')).toBe('false');
-    expect(summary.hidden).toBe(false); // stays visible, unlike type/target's reveal-once trigger
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(toggle.hidden).toBe(false); // stays visible, unlike type/target's reveal-once trigger
   });
 
   it('type/target and Fix-a-day are independent now — both can be expanded at the same time', () => {
@@ -1870,7 +1890,7 @@ describe('goal-dialog — Fix a day (frequency goals only, inline, a real expand
   it('is visible for an existing Avoid goal and renders 42 day chips (7 × PERIOD_WINDOW.decreasing), same span as weekly', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', target: 0, entries: [] } });
-    expect(el.shadowRoot.querySelector('#fixday-summary').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
     expandFixDay(el);
     expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(42);
   });

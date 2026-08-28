@@ -101,7 +101,7 @@ defineStrings({
   'goal-dialog.target-label-weekly':    'Times per week',
   'goal-dialog.target-label-monthly':   'Times per month',
   'goal-dialog.target-label-decreasing':'Slip-ups allowed per week',
-  'goal-dialog.fixday-summary':         'Fix a day',
+  'goal-dialog.fixday-toggle':          'Fix a day',
   'goal-dialog.fixday-logged':          'logged',
   'goal-dialog.fixday-slipped':         'slipped',
   'goal-dialog.dow-sun':                'Sun',

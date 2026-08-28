@@ -350,40 +350,6 @@ class GoalDialog extends AppElement {
           color: var(--color-text-muted);
         }
 
-        /* Fix-a-day: a real expand/collapse toggle, unlike type/target's
-           menu-triggered reveal — stays visible in both states, chevron
-           flips to signal which way tapping it goes. Plain muted label, not
-           button chrome — inherits touch-target sizing and cursor from the
-           generic button rule above, but overrides padding/background so it
-           reads as text, not a control (matches the old locked-label's
-           visual weight, and the "minor control" category the copy button
-           uses --touch-target-small for — tapped occasionally, not the
-           frequently-tapped stepper, which does need the full 40px; see the
-           target-hint a11y note in CHANGELOG). */
-        .summary-toggle {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          min-block-size: var(--touch-target-small);
-          padding-inline: 0;
-          background: none;
-          color: var(--color-text-secondary);
-          font-size: var(--font-size-body);
-          font-family: var(--font-family);
-          font-weight: normal;
-        }
-
-        .summary-toggle svg {
-          inline-size: var(--icon-size-sm);
-          block-size: var(--icon-size-sm);
-          flex-shrink: 0;
-          transition: transform 0.15s;
-        }
-
-        .summary-toggle[aria-expanded="true"] svg {
-          transform: rotate(180deg);
-        }
-
         .field-label {
           font-size: var(--font-size-caption);
           font-weight: var(--font-weight-semibold);
@@ -428,6 +394,16 @@ class GoalDialog extends AppElement {
           margin-block-start: var(--space-3);
           padding-block-start: var(--space-3);
           border-block-start: 0.5px solid var(--color-border);
+        }
+
+        /* Fix-a-day's chip strip: no border-top separator like target-block's
+           — that line made sense only when the strip sat directly beneath the
+           type pills/target stepper it shared a container with. Now that it's
+           revealed independently via its own footer toggle, it's usually the
+           first (only) visible thing in .type-field, so a floating rule above
+           it with nothing to separate from just reads as stray. */
+        .fixday-block {
+          margin-block-start: var(--space-3);
         }
 
         .target-row {
@@ -859,11 +835,7 @@ class GoalDialog extends AppElement {
                 <button type="button" class="preset-chip" id="everyday-chip" hidden>${t('goal-dialog.everyday-preset')}</button>
               </div>
             </div>
-            <button type="button" class="summary-toggle" id="fixday-summary" hidden aria-expanded="false">
-              <span>${t('goal-dialog.fixday-summary')}</span>
-              ${icons.chevronDown}
-            </button>
-            <div class="target-block" id="fixday-inline" hidden>
+            <div class="fixday-block" id="fixday-inline" hidden>
               <div class="day-chips" id="fixday-chips"></div>
             </div>
           </div>
@@ -892,6 +864,7 @@ class GoalDialog extends AppElement {
           <button type="button" id="draft-toggle-btn" hidden></button>
           <div class="actions-end">
             <button type="button" class="field-icon-btn" id="duedate-chip" aria-pressed="false" aria-label="${t('goal-dialog.duedate-toggle')}" title="${t('goal-dialog.duedate-toggle')}">${icons.calendar}</button>
+            <button type="button" class="field-icon-btn" id="fixday-chip" hidden aria-pressed="false" aria-label="${t('goal-dialog.fixday-toggle')}" title="${t('goal-dialog.fixday-toggle')}">${icons.calendarCheck}</button>
             <button type="button" id="close" aria-label="${t('goal-dialog.close')}">${t('goal-dialog.close')}</button>
           </div>
         </div>
@@ -983,7 +956,7 @@ class GoalDialog extends AppElement {
     this._targetUpBtn    = this.shadowRoot.querySelector('#target-up');
     this._everydayChip   = this.shadowRoot.querySelector('#everyday-chip');
 
-    this._fixDaySummary  = this.shadowRoot.querySelector('#fixday-summary');
+    this._fixDayToggle   = this.shadowRoot.querySelector('#fixday-chip');
     this._fixDayInline   = this.shadowRoot.querySelector('#fixday-inline');
     this._fixDayChips    = this.shadowRoot.querySelector('#fixday-chips');
 
@@ -1268,18 +1241,20 @@ class GoalDialog extends AppElement {
     this._onCopyCta = () => this._commitMove(true);
     this._moveCopyBtn.addEventListener('click', this._onCopyCta);
 
-    // ── Fix-a-day (frequency goals only) — inline, a real expand/collapse
-    // toggle (unlike type/target's menu-triggered, one-way reveal below).
+    // ── Fix-a-day (frequency goals only) — an icon-only footer toggle,
+    // sitting immediately to the right of the Deadline chip (a real
+    // show/hide toggle, unlike type/target's menu-triggered, one-way
+    // reveal below).
 
-    this._onFixDaySummaryClick = () => {
+    this._onFixDayToggleClick = () => {
       this._fixDayExpanded = !this._fixDayExpanded;
-      this._renderFixDaySummary();
+      this._renderFixDayToggle();
       // Land on today, not the oldest day, each time it opens — the strip
       // can run back up to 4 months, and the days worth fixing are almost
       // always recent ones.
       if (this._fixDayExpanded) this._fixDayChips.scrollLeft = this._fixDayChips.scrollWidth;
     };
-    this._fixDaySummary.addEventListener('click', this._onFixDaySummaryClick);
+    this._fixDayToggle.addEventListener('click', this._onFixDayToggleClick);
 
     this._onFixDayChipClick = e => {
       const chip = e.target.closest('.day-chip');
@@ -1425,7 +1400,7 @@ class GoalDialog extends AppElement {
     this._moveMoveBtn?.removeEventListener('click', this._onMoveCta);
     this._moveCopyBtn?.removeEventListener('click', this._onCopyCta);
     this._listPickerDialog?.removeEventListener('list-pick', this._onListPick);
-    this._fixDaySummary?.removeEventListener('click', this._onFixDaySummaryClick);
+    this._fixDayToggle?.removeEventListener('click', this._onFixDayToggleClick);
     this._fixDayChips?.removeEventListener('click', this._onFixDayChipClick);
     this._changeTypeBtn?.removeEventListener('click', this._onActionChangeType);
     this._typePills?.forEach(p => p.removeEventListener('click', this._onTypePillClick));
@@ -1477,13 +1452,13 @@ class GoalDialog extends AppElement {
   // the menu, no re-collapse control — same idiom as the due-date field
   // toggle. A brand-new goal never collapses at all — picking a type is the
   // point of creating one, so the full picker always shows immediately.
-  // Independent of Fix-a-day (see _renderFixDaySummary) — the two used to
+  // Independent of Fix-a-day (see _renderFixDayToggle) — the two used to
   // share one expansion slot; they no longer do, since type is menu-gated
   // now and doesn't need to coordinate with anything.
   _renderTypeSection() {
     const showTypeEditor = this._isNew || this._typeExpanded;
     this._typePillGroup.hidden = !showTypeEditor;
-    this._renderFixDaySummary();
+    this._renderFixDayToggle();
 
     // 'percentage' is the one type with no target concept at all — every
     // other type (including any future one) uses its own type-summary-*
@@ -1517,19 +1492,20 @@ class GoalDialog extends AppElement {
     this._everydayChip.setAttribute('aria-pressed', String(this._draftType === 'weekly' && this._draftTarget === 7));
   }
 
-  // Fix-a-day: a real expand/collapse toggle (see _onFixDaySummaryClick),
+  // Fix-a-day: an icon-only footer toggle (see _onFixDayToggleClick),
   // visible whenever the goal is currently frequency regardless of expand
   // state — unlike type/target's reveal-once menu trigger, this button
-  // never hides itself, just flips its chevron. Derived from _draftType,
-  // not this._goal — callers set _draftType and call _renderTypeSection
-  // (which calls this) before _commitTrackingChange() has updated
-  // this._goal, so this._goal.tracking.type would still read the stale,
-  // pre-switch value here.
-  _renderFixDaySummary() {
+  // never hides itself once shown for the goal's current type, just flips
+  // its pressed state, mirroring the Deadline chip beside it. Derived from
+  // _draftType, not this._goal — callers set _draftType and call
+  // _renderTypeSection (which calls this) before _commitTrackingChange()
+  // has updated this._goal, so this._goal.tracking.type would still read
+  // the stale, pre-switch value here.
+  _renderFixDayToggle() {
     const canFixDay = !this._isNew && isEntryType(this._draftType);
     if (!canFixDay && this._fixDayExpanded) this._fixDayExpanded = false;
-    this._fixDaySummary.hidden = !canFixDay;
-    this._fixDaySummary.setAttribute('aria-expanded', String(this._fixDayExpanded));
+    this._fixDayToggle.hidden = !canFixDay;
+    this._fixDayToggle.setAttribute('aria-pressed', String(this._fixDayExpanded));
     this._fixDayInline.hidden = !this._fixDayExpanded;
     if (this._fixDayExpanded) this._renderFixDayChips();
   }

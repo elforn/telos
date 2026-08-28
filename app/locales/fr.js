@@ -102,7 +102,7 @@ defineStrings({
   'goal-dialog.target-label-weekly':      'Fois par semaine',
   'goal-dialog.target-label-monthly':     'Fois par mois',
   'goal-dialog.target-label-decreasing':  'Écarts autorisés par semaine',
-  'goal-dialog.fixday-summary':           'Corriger un jour',
+  'goal-dialog.fixday-toggle':            'Corriger un jour',
   'goal-dialog.fixday-logged':            'enregistré',
   'goal-dialog.fixday-slipped':           'écart',
   'goal-dialog.dow-sun':                  'dim',

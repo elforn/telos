@@ -89,14 +89,14 @@ async function tapBar(page) {
   });
 }
 
-// Fix-a-day is inline, a real toggle — tap the summary to unfold the
+// Fix-a-day is an icon-only footer toggle — tap it to unfold the
 // day-chip strip in place (tapping again would collapse it back).
 async function openFixDay(page) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
       .querySelector('goal-dialog').shadowRoot
-      .querySelector('#fixday-summary').click();
+      .querySelector('#fixday-chip').click();
   });
   await page.waitForFunction(() => {
     const inline = document.querySelector('app-router')?.shadowRoot
@@ -658,7 +658,7 @@ test.describe('Frequency goals', () => {
     expect(scrolledToEnd).toBe(true);
   });
 
-  test('type/target (via the ⋮ menu) and Fix-a-day (inline toggle) are independent — both can be open together, Fix-a-day collapses back on a second tap', async ({ page }) => {
+  test('type/target (via the ⋮ menu) and Fix-a-day (footer icon toggle) are independent — both can be open together, Fix-a-day collapses back on a second tap', async ({ page }) => {
     await openDialog(page, '#add-capstone');
     await selectType(page, 'weekly');
     await saveDialog(page, 'Move my body');
@@ -671,20 +671,20 @@ test.describe('Frequency goals', () => {
     await tapBar(page);
 
     // Collapsed on first open: no pill group for type (value only visible
-    // via the ⋮ menu), a collapsed toggle for Fix-a-day, no day-chip strip yet.
+    // via the ⋮ menu), a collapsed icon toggle for Fix-a-day, no day-chip strip yet.
     let state = await page.evaluate(() => {
       const root = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot;
       return {
         pillsHidden: root.querySelector('#type-pills').hidden,
-        fixdaySummaryHidden: root.querySelector('#fixday-summary').hidden,
-        fixdayExpanded: root.querySelector('#fixday-summary').getAttribute('aria-expanded'),
+        fixdayToggleHidden: root.querySelector('#fixday-chip').hidden,
+        fixdayPressed: root.querySelector('#fixday-chip').getAttribute('aria-pressed'),
       };
     });
     expect(state.pillsHidden).toBe(true);
-    expect(state.fixdaySummaryHidden).toBe(false);
-    expect(state.fixdayExpanded).toBe('false');
+    expect(state.fixdayToggleHidden).toBe(false);
+    expect(state.fixdayPressed).toBe('false');
 
     // Opening type via the menu and Fix-a-day via its own toggle — both end
     // up expanded simultaneously, unlike the old shared-row design.
@@ -702,13 +702,13 @@ test.describe('Frequency goals', () => {
     expect(state.pillsHidden).toBe(false);
     expect(state.fixdayInlineHidden).toBe(false);
 
-    // Tapping the Fix-a-day summary again collapses it back — a real
-    // toggle, not a reveal-once control like type/target's menu trigger.
+    // Tapping the Fix-a-day icon again collapses it back — a real toggle,
+    // not a reveal-once control like type/target's menu trigger.
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('#fixday-summary').click();
+        .querySelector('#fixday-chip').click();
     });
     state = await page.evaluate(() => {
       const root = document.querySelector('app-router').shadowRoot
@@ -716,14 +716,14 @@ test.describe('Frequency goals', () => {
         .querySelector('goal-dialog').shadowRoot;
       return {
         fixdayInlineHidden: root.querySelector('#fixday-inline').hidden,
-        fixdaySummaryHidden: root.querySelector('#fixday-summary').hidden,
-        fixdayExpanded: root.querySelector('#fixday-summary').getAttribute('aria-expanded'),
+        fixdayToggleHidden: root.querySelector('#fixday-chip').hidden,
+        fixdayPressed: root.querySelector('#fixday-chip').getAttribute('aria-pressed'),
         pillsHidden: root.querySelector('#type-pills').hidden, // untouched by the fixday collapse
       };
     });
     expect(state.fixdayInlineHidden).toBe(true);
-    expect(state.fixdaySummaryHidden).toBe(false); // stays visible, doesn't disappear
-    expect(state.fixdayExpanded).toBe('false');
+    expect(state.fixdayToggleHidden).toBe(false); // stays visible, doesn't disappear
+    expect(state.fixdayPressed).toBe('false');
     expect(state.pillsHidden).toBe(false);
   });
 });

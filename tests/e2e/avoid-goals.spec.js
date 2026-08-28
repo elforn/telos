@@ -102,7 +102,7 @@ async function openFixDay(page) {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
       .querySelector('goal-dialog').shadowRoot
-      .querySelector('#fixday-summary').click();
+      .querySelector('#fixday-chip').click();
   });
   await page.waitForFunction(() => {
     const inline = document.querySelector('app-router')?.shadowRoot
@@ -285,7 +285,7 @@ test.describe('Avoid goals', () => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('#fixday-summary').click(); // collapse
+        .querySelector('#fixday-chip').click(); // collapse
     });
     await openFixDay(page); // re-expand -> fresh render
 

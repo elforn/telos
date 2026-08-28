@@ -102,7 +102,7 @@ defineStrings({
   'goal-dialog.target-label-weekly':      'Vegades per setmana',
   'goal-dialog.target-label-monthly':     'Vegades per mes',
   'goal-dialog.target-label-decreasing':  'Faltes permeses per setmana',
-  'goal-dialog.fixday-summary':           'Corregeix un dia',
+  'goal-dialog.fixday-toggle':            'Corregeix un dia',
   'goal-dialog.fixday-logged':            'registrat',
   'goal-dialog.fixday-slipped':           'falta',
   'goal-dialog.dow-sun':                  'dg',
