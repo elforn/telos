@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [2.7.0] — 2026-08-29
 
 ### Added
 - **Tap the year title to jump to any year 1900–2100**, instead of swiping or tapping prev/next one year at a time. Opens a scrollable grid centred on the year you're currently viewing, with a dot on any year that has a goal or a year photo (tinted with that year's own colour, when it has one). A **Today** button re-centres the grid on the real current year without navigating away from what you're browsing.
