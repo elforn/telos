@@ -129,6 +129,30 @@ describe('year-header — year navigation', () => {
   });
 });
 
+describe('year-header — year photo clearing', () => {
+  it('removes the src attribute entirely when clearing the header image, rather than setting it to an empty string', () => {
+    // img.src = '' resolves to the current page's own URL, so the browser briefly
+    // tries (and fails) to decode the HTML document as an image — flashing the
+    // broken-image icon on every swipe/select into a year with no photo.
+    const el = mount(2026);
+    const img = el.shadowRoot.querySelector('#header-img');
+    img.src = 'blob:fake-object-url-for-test';
+    el.setAttribute('data-has-image', '');
+
+    el._clearImage();
+
+    expect(img.hasAttribute('src')).toBe(false);
+    expect(el.hasAttribute('data-has-image')).toBe(false);
+  });
+
+  it('clearing an image that was never set is a no-op, not an error', () => {
+    const el = mount(2026);
+    const img = el.shadowRoot.querySelector('#header-img');
+    expect(() => el._clearImage()).not.toThrow();
+    expect(img.hasAttribute('src')).toBe(false);
+  });
+});
+
 describe('year-header — scroll to top on background tap', () => {
   it('onTap scrolls to the top when no dialog is open', () => {
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});

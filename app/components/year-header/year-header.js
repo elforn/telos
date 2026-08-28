@@ -1150,7 +1150,11 @@ class YearHeader extends Gestures(AppElement) {
       this._imageUrl = null;
     }
     const img = this.shadowRoot?.querySelector('#header-img');
-    if (img) img.src = '';
+    // removeAttribute, not img.src = '' — an empty string resolves to the
+    // current page's own URL as the image source, so the browser briefly
+    // tries (and fails) to decode the HTML document as an image, flashing
+    // the broken-image icon. Removing the attribute triggers no request.
+    if (img) img.removeAttribute('src');
     this.removeAttribute('data-has-image');
     this._updatePhotoMenu(false);
   }

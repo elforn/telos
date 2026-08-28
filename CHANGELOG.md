@@ -10,6 +10,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - **Tap the year title to jump to any year 1900–2100**, instead of swiping or tapping prev/next one year at a time. Opens a scrollable grid centred on the year you're currently viewing, with a dot on any year that has a goal or a year photo (tinted with that year's own colour, when it has one). A **Today** button re-centres the grid on the real current year without navigating away from what you're browsing.
 
+### Fixed
+- **Swiping or jumping to a year with no photo could flash a broken-image icon for an instant.** The header image was being cleared by setting its `src` to an empty string, which the browser resolves to the page's own URL and briefly tries to decode as an image; it's now cleared by removing the `src` attribute entirely.
+
 ## [2.6.0] — 2026-08-28
 
 ### Changed
