@@ -838,7 +838,7 @@ class GoalDialog extends AppElement {
                   <button type="button" class="stepper-btn" id="target-up" aria-label="${t('goal-dialog.target-increase')}">+</button>
                 </div>
                 <button type="button" class="preset-chip" id="everyday-chip" hidden>${t('goal-dialog.everyday-preset')}</button>
-                <button type="button" class="preset-chip" id="allowance-period-chip" hidden aria-pressed="false">${t('goal-dialog.allowance-period-toggle')}</button>
+                <button type="button" class="preset-chip" id="allowance-period-chip" hidden></button>
               </div>
             </div>
             <div class="fixday-block" id="fixday-inline" hidden>
@@ -1509,22 +1509,28 @@ class GoalDialog extends AppElement {
     const [min, max] = targetLimitsFor(this._draftType, this._draftAllowancePeriod);
     const isDecreasingType = this._draftType === 'decreasing';
     this._targetValueEl.textContent = String(this._draftTarget);
-    this._targetLabel.textContent = isDecreasingType
-      ? t(`goal-dialog.target-label-decreasing-${this._draftAllowancePeriod}`)
-      : t(`goal-dialog.target-label-${this._draftType}`);
+    this._targetLabel.textContent = t(`goal-dialog.target-label-${this._draftType}`);
     // Weekly/monthly leave the label screen-reader-only — the bare stepper
     // number reads fine next to the "Every day" chip for context. Decreasing's
-    // own neighbour chip (below) names the allowance period, not the number
-    // itself, so a bare "0" next to it would still be opaque — this is the
-    // one type whose label actually needs to be seen.
+    // own neighbour chip (below) names the allowance period itself, so a
+    // bare "0" next to it would still be opaque — this is the one type
+    // whose label actually needs to be seen.
     this._targetLabel.classList.toggle('sr-only', !isDecreasingType);
     this._targetDownBtn.disabled = this._draftTarget <= min;
     this._targetUpBtn.disabled = this._draftTarget >= max;
     this._everydayChip.hidden = this._draftType !== 'weekly';
     this._everydayChip.setAttribute('aria-pressed', String(this._draftType === 'weekly' && this._draftTarget === 7));
 
+    // No aria-pressed here (unlike everyday-chip above) — this isn't an
+    // on/off toggle, it's a two-valued setting, and its own visible text
+    // ("Per week" / "Per 4 weeks") already names the current value. Neither
+    // value is more "active" than the other, so it stays a plain neutral
+    // chip regardless of which one is showing — same idiom as the
+    // "Change type" menu item's trailing value text elsewhere in this file.
     this._allowancePeriodChip.hidden = !isDecreasingType;
-    this._allowancePeriodChip.setAttribute('aria-pressed', String(this._draftAllowancePeriod === '4weeks'));
+    if (isDecreasingType) {
+      this._allowancePeriodChip.textContent = t(`goal-dialog.allowance-period-${this._draftAllowancePeriod}`);
+    }
   }
 
   // Fix-a-day: an icon-only footer toggle (see _onFixDayToggleClick),

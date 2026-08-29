@@ -497,6 +497,6 @@ test.describe('Avoid goals', () => {
     expect(todayWedgeState.state).toBe('over');
     expect(todayWedgeState.todayFill).not.toBe(todayWedgeState.cleanFill); // hollow, not the solid accent fill a clean wedge gets
     expect(todayWedgeState.todayStroke).not.toBe('none'); // outlined
-    expect(todayWedgeState.cleanStroke).toBe('none'); // clean wedges have no outline at all
+    expect(todayWedgeState.todayStroke).toBe(todayWedgeState.cleanStroke); // same accent border as every other non-future wedge, so seams stay consistent across the strip
   });
 });

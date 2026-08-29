@@ -1584,21 +1584,21 @@ describe('goal-dialog — type selector (new goal)', () => {
     expect(el.shadowRoot.querySelector('#everyday-chip').hidden).toBe(true);
   });
 
-  it('Avoid defaults the allowance period to "week" — the toggle chip starts unpressed', () => {
+  it('Avoid defaults the allowance period to "week" — the chip reads "Per week"', () => {
     const el = mount();
     el.open(null);
     pill(el, 'decreasing').click();
-    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('false');
+    expect(allowancePeriodChip(el).textContent).toBe('Per week');
   });
 
-  it('tapping the chip flips to the 4-week allowance and back', () => {
+  it('tapping the chip flips its own text between "Per week" and "Per 4 weeks"', () => {
     const el = mount();
     el.open(null);
     pill(el, 'decreasing').click();
     allowancePeriodChip(el).click();
-    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('true');
+    expect(allowancePeriodChip(el).textContent).toBe('Per 4 weeks');
     allowancePeriodChip(el).click();
-    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('false');
+    expect(allowancePeriodChip(el).textContent).toBe('Per week');
   });
 
   it('goal-created carries the selected allowance period', () => {
@@ -1620,7 +1620,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     allowancePeriodChip(el).click();
     pill(el, 'weekly').click(); // switch away
     pill(el, 'decreasing').click(); // switch back
-    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('true');
+    expect(allowancePeriodChip(el).textContent).toBe('Per 4 weeks');
   });
 });
 
@@ -1816,14 +1816,14 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     expect(allowancePeriodChip(el).hidden).toBe(true);
     expand(el);
     expect(allowancePeriodChip(el).hidden).toBe(false);
-    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('true');
+    expect(allowancePeriodChip(el).textContent).toBe('Per 4 weeks');
   });
 
-  it('a goal saved before this setting existed (no allowancePeriod) defaults its chip to unpressed ("week")', () => {
+  it('a goal saved before this setting existed (no allowancePeriod) defaults its chip to "Per week"', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', value: 0, target: 2, entries: [] } });
     expand(el);
-    expect(allowancePeriodChip(el).getAttribute('aria-pressed')).toBe('false');
+    expect(allowancePeriodChip(el).textContent).toBe('Per week');
   });
 
   it('tapping the chip on an existing goal commits immediately via goal-tracking-changed', () => {

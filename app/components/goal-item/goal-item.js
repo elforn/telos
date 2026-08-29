@@ -77,7 +77,7 @@ export function septagonWedgeCentroid(i) {
   const [x1, y1] = SEPTAGON_VERTICES[(i + 1) % SEPTAGON_SIDES];
   return [(SEPTAGON_CENTER + x0 + x1) / 3, (SEPTAGON_CENTER + y0 + y1) / 3];
 }
-const SEPTAGON_WITHIN_DOT_RADIUS = 7; // viewBox units (of 100)
+const SEPTAGON_WITHIN_DOT_RADIUS = 6; // viewBox units (of 100)
 
 // `future` always wins over whatever `state` a not-yet-elapsed day
 // nominally carries (see weekDayStates in tracking.js).
@@ -413,6 +413,26 @@ class GoalItem extends Gestures(AppElement) {
           inset: 0;
         }
 
+        /* Every wedge except "future" gets the same hairline accent border
+           — including "clean" and "within", where it sits right on top of
+           the matching accent fill and is invisible on its own. Without it,
+           an "over" wedge's border (see below) reads as an odd one-sided
+           seam against a borderless "clean"/"within" neighbour; with it,
+           every wedge boundary in the strip looks consistent regardless of
+           the mix of states next to it. vector-effect keeps the border a
+           constant on-screen width regardless of which of the two real
+           sizes (13px history, 29px current) this particular SVG renders
+           at — without it, the same stroke-width value would render
+           visibly thinner at 13px than at 29px, since both are the same
+           100-unit viewBox scaled by CSS to very different pixel sizes. */
+        .septagon-fill path[data-state="clean"],
+        .septagon-fill path[data-state="within"],
+        .septagon-fill path[data-state="over"] {
+          stroke: var(--color-accent);
+          stroke-width: 0.5px;
+          stroke-linejoin: round;
+          vector-effect: non-scaling-stroke;
+        }
         .septagon-fill path[data-state="clean"],
         .septagon-fill path[data-state="within"] {
           fill: var(--color-accent);
@@ -420,20 +440,12 @@ class GoalItem extends Gestures(AppElement) {
         .septagon-fill path[data-state="future"] { fill: transparent; }
 
         /* "Over": the fill drops out entirely (knocked out like the within
-           dot below) with just an accent outline — reads as "drained/empty"
-           at a glance, distinct from both the solid states and the fully
-           transparent "future" one. vector-effect keeps the stroke a
-           constant on-screen width regardless of which of the two real
-           sizes (13px history, 29px current) this particular SVG renders
-           at — without it, the same stroke-width value would render
-           visibly thinner at 13px than at 29px, since both are the same
-           100-unit viewBox scaled by CSS to very different pixel sizes. */
+           dot below), leaving just the accent border above — reads as
+           "drained/empty" at a glance, distinct from both the solid states
+           and the fully transparent "future" one (which gets no border at
+           all — there's nothing there to outline). */
         .septagon-fill path[data-state="over"] {
           fill: var(--color-surface);
-          stroke: var(--color-accent);
-          stroke-width: 1.5px;
-          stroke-linejoin: round;
-          vector-effect: non-scaling-stroke;
         }
 
         /* Knockout dot marking a forgiven (within-allowance) slip — punched
