@@ -11,7 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Avoid goals can now set their allowance as "per week" (unchanged default) or "per 4 weeks"**, via a compact toggle chip sitting right next to the target stepper. "Per 4 weeks" pools the same allowance across a rolling 4-week block instead of refilling it every week, so it takes longer to earn back once spent — including in the weekly septagon strip, which now shows a slip as "over" partway through the block once the pooled allowance runs out, rather than every week looking freshly funded. The stepper's ceiling scales with it too: up to 27 slips for a 4-week allowance (one below the full 28-day block), not the 6-per-week ceiling.
 
 ### Changed
-- **The septagon strip's clean/within/over states no longer rely on opacity alone**, which was hard to tell apart at a glance (especially the 20%-vs-60% split the 4-week allowance change above just introduced). "Within" now gets a small knockout dot on an otherwise full-strength wedge; "over" switches to a diagonal accent hatch instead of a faded fill — still no second hue, just texture and a marker doing the work opacity used to.
+- **The septagon strip's clean/within/over states no longer rely on opacity alone**, which was hard to tell apart at a glance (especially the 20%-vs-60% split the 4-week allowance change above just introduced). "Within" now gets a small knockout dot on an otherwise full-strength wedge; "over" drops its fill entirely for a hollow, outlined wedge — reading as "drained/empty" the way an unchecked box reads unchecked. Still no second hue, just shape and fill doing the work opacity used to.
 
 ## [2.7.0] — 2026-08-29
 

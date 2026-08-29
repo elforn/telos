@@ -539,13 +539,13 @@ describe('goal-item — decreasing: rendering', () => {
     expect(septagonWedgeState({ state: 'clean', future: true })).toBe('future');
   });
 
-  it('a clean goal\'s current week is 7 wedges, each data-state "clean" or "future" — no hatch fill, no within-dot, no second hue anywhere', () => {
+  it('a clean goal\'s current week is 7 wedges, each data-state "clean" or "future" — no within-dot, no second hue anywhere', () => {
     const el = mount(decreasingGoal());
     const current = el.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
     const wedges = [...current.querySelectorAll('path')];
     expect(wedges).toHaveLength(7);
     wedges.forEach(w => expect(['clean', 'future']).toContain(w.getAttribute('data-state')));
-    wedges.forEach(w => expect(w.getAttribute('fill')).toBeNull()); // fill comes from CSS, never inline (the hatch pattern is the only state that sets it)
+    wedges.forEach(w => expect(w.getAttribute('fill')).toBeNull()); // fill/stroke always come from CSS, never inline
     expect(current.querySelector('.septagon-within-dot')).toBeNull();
     expect(current.outerHTML).not.toContain('--color-success');
     expect(current.outerHTML).not.toContain('--color-warning');
@@ -561,26 +561,26 @@ describe('goal-item — decreasing: rendering', () => {
     expect(current.querySelectorAll('.septagon-within-dot')).toHaveLength(1);
   });
 
-  it('a slip past the allowance renders that wedge data-state="over", filled inline via a per-week hatch <pattern> (not a plain colour, never a second hue)', () => {
+  it('a slip past the allowance renders that wedge data-state="over", solid-filled via CSS same as clean/within (no inline fill override, never a second hue)', () => {
     const el = mount(decreasingGoal([isoDaysFromNow(0)], 0)); // allowance 0 -> any slip is immediately over
     const current = el.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
     const wedge = current.querySelector('path[data-state="over"]');
     expect(wedge).not.toBeNull();
-    const fillAttr = wedge.getAttribute('fill');
-    expect(fillAttr).toMatch(/^url\(#septagon-hatch-\d+\)$/);
-    const hatchId = fillAttr.slice(5, -1);
-    const pattern = current.querySelector(`pattern#${hatchId}`);
-    expect(pattern).not.toBeNull();
-    expect(pattern.querySelector('rect').getAttribute('fill')).toBe('var(--color-accent)'); // hatch stripes are the accent colour, not a second hue
+    expect(wedge.getAttribute('fill')).toBeNull(); // fill/stroke both come from the CSS [data-state="over"] rule
     expect(current.querySelector('.septagon-within-dot')).toBeNull(); // "over" never also gets the within-dot
+    expect(current.outerHTML).not.toContain('--color-success');
+    expect(current.outerHTML).not.toContain('--color-warning');
+    expect(current.outerHTML).not.toContain('--color-danger');
   });
 
-  it('each week\'s hatch pattern id is scoped to its own SVG (no id collisions across the 6-septagon strip)', () => {
-    const el = mount(decreasingGoal([isoDaysFromWeekStart(0)], 0)); // a slip early this week -> "over" in the current septagon only
+  it('no <pattern>/<defs> anywhere in the strip — the hollow-wedge "over" state needs no per-instance SVG defs, unlike the hatch fill it replaced', () => {
+    const el = mount(decreasingGoal([isoDaysFromWeekStart(0)], 0)); // a slip early this week -> "over" in the current septagon
     const fills = [...el.shadowRoot.querySelectorAll('.septagon-strip .septagon-fill')];
     expect(fills).toHaveLength(6);
-    const patternIds = fills.map(f => f.querySelector('pattern')?.id).filter(Boolean);
-    expect(new Set(patternIds).size).toBe(patternIds.length); // every id is unique
+    fills.forEach(f => {
+      expect(f.querySelector('pattern')).toBeNull();
+      expect(f.querySelector('defs')).toBeNull();
+    });
   });
 
   it('history weeks are a plain filled heptagon with no separate border/ring element — only the current week ever gets a ring', () => {

@@ -462,9 +462,9 @@ test.describe('Avoid goals', () => {
     });
 
     // Log today too — the block's allowance is already spent, so today's
-    // wedge should render as "over" (the hatch pattern), not "within" (a
-    // solid fill + knockout dot), even though it's the only slip in *this
-    // particular week*.
+    // wedge should render as "over" (a hollow, stroked wedge), not "within"
+    // (a solid fill + knockout dot), even though it's the only slip in
+    // *this particular week*.
     await tapCurrentSeptagon(page);
     await page.waitForFunction(() => {
       const item = document.querySelector('app-router').shadowRoot
@@ -477,15 +477,26 @@ test.describe('Avoid goals', () => {
       const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('#capstone-list goal-item');
-      const fill = item.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
+      const currentFill = item.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
       const todayIso = (() => {
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       })();
-      const todayPath = fill.querySelector(`path[data-iso="${todayIso}"]`);
-      return { state: todayPath.getAttribute('data-state'), fill: todayPath.getAttribute('fill') };
+      const todayPath = currentFill.querySelector(`path[data-iso="${todayIso}"]`);
+      const cleanPath = item.shadowRoot.querySelector('.septagon-strip path[data-state="clean"]');
+      const todayStyle = getComputedStyle(todayPath);
+      const cleanStyle = getComputedStyle(cleanPath);
+      return {
+        state: todayPath.getAttribute('data-state'),
+        todayFill: todayStyle.fill,
+        todayStroke: todayStyle.stroke,
+        cleanFill: cleanStyle.fill,
+        cleanStroke: cleanStyle.stroke,
+      };
     });
     expect(todayWedgeState.state).toBe('over');
-    expect(todayWedgeState.fill).toMatch(/^url\(#septagon-hatch-\d+\)$/); // the hatch pattern, never a plain colour
+    expect(todayWedgeState.todayFill).not.toBe(todayWedgeState.cleanFill); // hollow, not the solid accent fill a clean wedge gets
+    expect(todayWedgeState.todayStroke).not.toBe('none'); // outlined
+    expect(todayWedgeState.cleanStroke).toBe('none'); // clean wedges have no outline at all
   });
 });

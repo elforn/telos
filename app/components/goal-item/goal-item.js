@@ -38,15 +38,19 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 // polygon, i.e. the square viewBox's corners, is simply never drawn).
 //
 // State is encoded without a second hue, same principle as the opacity
-// scheme this replaced, but readable at 13px where opacity steps weren't
-// (0.13s round-trip through a real device confirmed 60%-vs-20%-opacity was
-// too close to call at a glance): `clean` and `within` both get a full,
-// solid accent-colour wedge — `within` additionally gets a small knockout
-// dot (punched through to the row's own background) marking "this one used
-// the allowance but stayed free"; `over` swaps to a diagonal accent hatch
-// instead of a flatter fill, since texture reads as "flagged" at a glance
-// regardless of size, the same way hazard stripes do. `future` (a day in
-// the current week that hasn't happened yet) stays fully transparent.
+// scheme this originally shipped with, but readable at 13px where opacity
+// steps weren't (round-tripped through a real device twice: 60%-vs-20%
+// opacity was too close to call at a glance, and a diagonal hatch fill
+// tried next didn't read as textured at this size either — confirmed via
+// side-by-side comparison with the product owner). `clean` and `within`
+// both get a full, solid accent-colour wedge — `within` additionally gets
+// a small knockout dot (punched through to the row's own background)
+// marking "this one used the allowance but stayed free"; `over` drops the
+// fill entirely — knocked out like the dot, with just an accent stroke
+// outline — reading as "drained/empty" the way an unchecked box reads
+// unchecked, distinct at a glance from both the solid states and the fully
+// transparent one. `future` (a day in the current week that hasn't
+// happened yet) stays fully transparent, no stroke at all.
 const SEPTAGON_SIDES = 7;
 const SEPTAGON_STEP = 360 / SEPTAGON_SIDES;
 // Internal SVG coordinate space — deliberately decoupled from the element's
@@ -74,7 +78,6 @@ export function septagonWedgeCentroid(i) {
   return [(SEPTAGON_CENTER + x0 + x1) / 3, (SEPTAGON_CENTER + y0 + y1) / 3];
 }
 const SEPTAGON_WITHIN_DOT_RADIUS = 7; // viewBox units (of 100)
-const SEPTAGON_HATCH_PERIOD = 22; // viewBox units per stripe pair — a handful of repeats across the shape, coarse enough to still read as "textured" at 13px
 
 // `future` always wins over whatever `state` a not-yet-elapsed day
 // nominally carries (see weekDayStates in tracking.js).
@@ -415,9 +418,23 @@ class GoalItem extends Gestures(AppElement) {
           fill: var(--color-accent);
         }
         .septagon-fill path[data-state="future"] { fill: transparent; }
-        /* [data-state="over"] gets its fill (a diagonal hatch pattern)
-           inline, per element — it references a per-wedge <pattern> id, which
-           a static CSS rule can't express. */
+
+        /* "Over": the fill drops out entirely (knocked out like the within
+           dot below) with just an accent outline — reads as "drained/empty"
+           at a glance, distinct from both the solid states and the fully
+           transparent "future" one. vector-effect keeps the stroke a
+           constant on-screen width regardless of which of the two real
+           sizes (13px history, 29px current) this particular SVG renders
+           at — without it, the same stroke-width value would render
+           visibly thinner at 13px than at 29px, since both are the same
+           100-unit viewBox scaled by CSS to very different pixel sizes. */
+        .septagon-fill path[data-state="over"] {
+          fill: var(--color-surface);
+          stroke: var(--color-accent);
+          stroke-width: 1.5px;
+          stroke-linejoin: round;
+          vector-effect: non-scaling-stroke;
+        }
 
         /* Knockout dot marking a forgiven (within-allowance) slip — punched
            through to the row's own background rather than a second hue, so
@@ -1090,30 +1107,13 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   // Builds the wedge-fill SVG for one septagon: 7 <path> wedges (see
-  // septagonWedgePath) plus a per-wedge <defs><pattern> for the "over" hatch
-  // — defined locally in each week's own SVG (id scoped to `weekIndex`, not
-  // shared across the strip) so multiple septagons in the same shadow root
-  // never fight over the same pattern id.
-  _buildSeptagonFill(days, weekIndex) {
+  // septagonWedgePath), each carrying its resolved state as a data
+  // attribute so the CSS in template() can drive fill/stroke per state —
+  // only the "within" dot needs anything built here beyond the path itself.
+  _buildSeptagonFill(days) {
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('class', 'septagon-fill');
     svg.setAttribute('viewBox', `0 0 ${SEPTAGON_VB} ${SEPTAGON_VB}`);
-
-    const hatchId = `septagon-hatch-${weekIndex}`;
-    const defs = document.createElementNS(SVG_NS, 'defs');
-    const pattern = document.createElementNS(SVG_NS, 'pattern');
-    pattern.setAttribute('id', hatchId);
-    pattern.setAttribute('patternUnits', 'userSpaceOnUse');
-    pattern.setAttribute('width', String(SEPTAGON_HATCH_PERIOD));
-    pattern.setAttribute('height', String(SEPTAGON_HATCH_PERIOD));
-    pattern.setAttribute('patternTransform', 'rotate(45)');
-    const stripe = document.createElementNS(SVG_NS, 'rect');
-    stripe.setAttribute('width', String(SEPTAGON_HATCH_PERIOD / 2));
-    stripe.setAttribute('height', String(SEPTAGON_HATCH_PERIOD));
-    stripe.setAttribute('fill', 'var(--color-accent)');
-    pattern.appendChild(stripe);
-    defs.appendChild(pattern);
-    svg.appendChild(defs);
 
     days.forEach((day, i) => {
       const state = septagonWedgeState(day);
@@ -1121,7 +1121,6 @@ class GoalItem extends Gestures(AppElement) {
       path.setAttribute('d', septagonWedgePath(i));
       path.setAttribute('data-state', state);
       path.setAttribute('data-iso', day.iso);
-      if (state === 'over') path.setAttribute('fill', `url(#${hatchId})`);
       svg.appendChild(path);
 
       if (state === 'within') {
@@ -1149,7 +1148,7 @@ class GoalItem extends Gestures(AppElement) {
       const isCurrent = wi === weeks.length - 1;
       const el = document.createElement('span');
       el.className = 'septagon-week' + (isCurrent ? ' current' : '');
-      el.appendChild(this._buildSeptagonFill(days, wi));
+      el.appendChild(this._buildSeptagonFill(days));
       if (isCurrent) {
         const svg = document.createElementNS(SVG_NS, 'svg');
         svg.setAttribute('class', 'septagon-ring');
