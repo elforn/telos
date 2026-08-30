@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.9.0] — 2026-08-30
+
+### Added
+- **Reflections: a yearly report you can rate and write up**, from a new "Reflection" item in the year menu. Rate five life aspects — People, Health, Wealth, Contribution, Wonder — from 1 to 5 stars each (with a live-updating average as you go), and add a "Highlights" note. A summary card appears at the top of the year page once you've started one, showing the average and the start of your highlights — tap it to reopen and edit. A toggle in the dialog lets you hide that card from the year page without deleting the reflection underneath it. One report per year; reopening always edits the existing one.
+- **A year's reflection can now be included in its Markdown export**, via an opt-in "Reflection" checkbox next to Metadata and Notes — off by default, so existing exports are unaffected unless you tick it.
+
 ## [2.8.0] — 2026-08-29
 
 ### Added
