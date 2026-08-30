@@ -24,7 +24,7 @@ import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
 import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
 import { shareMarkdown } from '../utils/share-markdown.js';
 import { nextColor } from '../utils/color-palette.js';
-import { aggregateScore } from '../utils/reflection.js';
+import { aggregateScore, historicalAspectAverages, REFLECTION_ASPECTS } from '../utils/reflection.js';
 
 const FILTER_SHAPE = {
   query:          { kind: 'string' },
@@ -34,6 +34,15 @@ const FILTER_SHAPE = {
   panelExpanded:  { kind: 'boolean' },
   barExpanded:    { kind: 'boolean' },
 };
+
+// Reflection-card equalizer bars: --radius-sm (6px, the smallest token in
+// the scale) reads as a near-full semicircle on a bar this narrow, so the
+// track uses a deliberate one-off below the token scale instead. Named
+// (mirrors goal-item.js's TODAY_BOX/TODAY_RING_INSET pattern) because the
+// fill's own corner radius is derived from it — one inside the other by
+// exactly the track's border width, so the two stay in sync if this ever
+// changes rather than silently drifting apart as two separately-typed numbers.
+const BAR_RADIUS = 2; // px
 
 class HomePage extends AppElement {
   template() {
@@ -112,8 +121,8 @@ class HomePage extends AppElement {
              ever sets that gap. */
         .reflection-card {
           display: flex;
-          align-items: center;
-          gap: var(--space-3);
+          flex-direction: column;
+          gap: var(--space-2);
           margin-block-start: calc(-1 * var(--space-3));
           margin-inline: calc(-1 * var(--page-padding));
           padding: var(--space-3) var(--page-padding);
@@ -132,28 +141,91 @@ class HomePage extends AppElement {
           outline-offset: 2px;
         }
 
-        .reflection-card-score {
+        /* Score + per-aspect breakdown in one row: the number stands alone
+           against a hairline divider, and the five bars spread across the
+           rest of the width via justify-content:space-between rather than
+           bunching to one side — the number no longer needs a paired "avg"
+           readout to read as balanced against the bars. */
+        .reflection-card-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: var(--space-4);
+        }
+
+        .reflection-card-num {
           flex-shrink: 0;
+          font-size: var(--font-size-heading);
+          font-weight: var(--font-weight-bold);
+          line-height: 1;
+          color: var(--color-accent);
+          font-variant-numeric: tabular-nums;
+          padding-inline-end: var(--space-3);
+          border-inline-end: 1px solid var(--color-border);
+        }
+
+        .reflection-card-bars {
+          display: flex;
+          align-items: flex-end;
+          flex: 1;
+          min-inline-size: 0;
+          justify-content: space-between;
+        }
+
+        .reflection-card-bar-wrap {
           display: flex;
           flex-direction: column;
           align-items: center;
-          color: var(--color-accent);
+          gap: 2px;
         }
 
-        .reflection-card-score-star {
-          font-size: var(--font-size-body);
-          line-height: 1;
+        .reflection-card-bar-wrap span {
+          font-size: var(--font-size-micro);
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-text-muted);
         }
 
-        .reflection-card-score-num {
-          font-size: var(--font-size-subheading);
-          font-weight: var(--font-weight-bold);
-          line-height: 1.2;
+        /* BAR_RADIUS explained above, at its definition. Border in
+           --color-text-muted rather than --color-border: the two neutrals
+           are close enough in tone that the border is otherwise very hard to
+           make out against the card's own --color-surface-raised background. */
+        .reflection-card-bar-track {
+          position: relative;
+          inline-size: 10px;
+          block-size: 26px;
+          border-radius: ${BAR_RADIUS}px ${BAR_RADIUS}px 0 0;
+          border: 1px solid var(--color-text-muted);
+          background: var(--color-border);
+          display: flex;
+          align-items: flex-end;
+        }
+
+        .reflection-card-bar-fill {
+          inline-size: 100%;
+          block-size: var(--bar-fill, 0%);
+          border-radius: ${BAR_RADIUS - 1}px ${BAR_RADIUS - 1}px 0 0;
+          background: var(--color-accent);
+        }
+
+        /* The historical-average marker for this aspect — omitted (not just
+           hidden at 0) when there's no other year to compare against yet.
+           It can sit over the accent-filled portion of the bar or the plain
+           border-coloured track, in either theme — a fixed colour picked for
+           one case goes invisible in another (same problem goal-item's
+           .freq-target-num solves). White XOR'd via mix-blend-mode:difference
+           resolves a contrasting colour per-pixel regardless of what's under
+           it, so it stays visible in every combination without a
+           theme-conditional colour. */
+        .reflection-card-bar-tick {
+          position: absolute;
+          inset-inline: 0;
+          inset-block-end: var(--bar-avg, 0%);
+          block-size: 2px;
+          background: #FFFFFF;
+          mix-blend-mode: difference;
         }
 
         .reflection-card-comment {
-          flex: 1;
-          min-inline-size: 0;
           display: -webkit-box;
           -webkit-line-clamp: 4;
           -webkit-box-orient: vertical;
@@ -269,10 +341,21 @@ class HomePage extends AppElement {
 
       <main>
         <button type="button" class="reflection-card" id="reflection-card" hidden>
-          <span class="reflection-card-score" id="reflection-card-score">
-            <span class="reflection-card-score-star" aria-hidden="true">★</span>
-            <span class="reflection-card-score-num" id="reflection-card-score-num"></span>
-          </span>
+          <div class="reflection-card-row" id="reflection-card-row">
+            <span class="reflection-card-num" id="reflection-card-num"></span>
+            <div class="reflection-card-bars" id="reflection-card-bars">
+              ${REFLECTION_ASPECTS.map(a => `
+                <div class="reflection-card-bar-wrap" data-aspect="${a.key}">
+                  <div class="reflection-card-bar-track">
+                    <div class="reflection-card-bar-tick" hidden></div>
+                    <div class="reflection-card-bar-fill"></div>
+                  </div>
+                  <span aria-hidden="true">${t(a.abbrKey)}</span>
+                </div>
+              `).join('')}
+            </div>
+            <span class="sr-only" id="reflection-card-bars-sr"></span>
+          </div>
           <span class="reflection-card-comment" id="reflection-card-comment"></span>
         </button>
 
@@ -352,17 +435,43 @@ class HomePage extends AppElement {
     // the same `openReflection()`.
 
     this._reflectionCard        = this.shadowRoot.querySelector('#reflection-card');
-    this._reflectionCardScore   = this.shadowRoot.querySelector('#reflection-card-score');
-    this._reflectionCardScoreNum = this.shadowRoot.querySelector('#reflection-card-score-num');
+    this._reflectionCardRow     = this.shadowRoot.querySelector('#reflection-card-row');
+    this._reflectionCardNum     = this.shadowRoot.querySelector('#reflection-card-num');
+    this._reflectionCardBarsSr  = this.shadowRoot.querySelector('#reflection-card-bars-sr');
     this._reflectionCardComment = this.shadowRoot.querySelector('#reflection-card-comment');
+    // One { fill, tick } pair per aspect, keyed by aspect key — the wraps
+    // themselves are static (rendered once from REFLECTION_ASPECTS), only
+    // their fill height / tick position change per year.
+    this._reflectionCardBars = {};
+    this.shadowRoot.querySelectorAll('.reflection-card-bar-wrap').forEach(wrap => {
+      this._reflectionCardBars[wrap.dataset.aspect] = {
+        fill: wrap.querySelector('.reflection-card-bar-fill'),
+        tick: wrap.querySelector('.reflection-card-bar-tick'),
+      };
+    });
 
     this._onReflections = reflections => {
       const reflection = reflections?.[String(this._year)];
       const score      = aggregateScore(reflection);
       this._reflectionCard.hidden = !reflection || reflection.showCard === false;
       if (this._reflectionCard.hidden) return;
-      this._reflectionCardScore.hidden = score == null;
-      this._reflectionCardScoreNum.textContent = score != null ? score.toFixed(1) : '';
+
+      this._reflectionCardRow.hidden = score == null;
+      this._reflectionCardNum.textContent = score != null ? score.toFixed(1) : '';
+
+      const averages = historicalAspectAverages(reflections, this._year);
+      const summaryParts = [];
+      for (const aspect of REFLECTION_ASPECTS) {
+        const { fill, tick } = this._reflectionCardBars[aspect.key];
+        const value = reflection.scores?.[aspect.key];
+        fill.style.setProperty('--bar-fill', value ? `${(value / 5) * 100}%` : '0%');
+        const avg = averages[aspect.key];
+        tick.hidden = avg == null;
+        if (avg != null) tick.style.setProperty('--bar-avg', `${(avg / 5) * 100}%`);
+        if (value) summaryParts.push(t('reflection.card-aspect-summary', { label: t(aspect.labelKey), value }));
+      }
+      this._reflectionCardBarsSr.textContent = summaryParts.join(', ');
+
       this._reflectionCardComment.hidden = !reflection.comment;
       this._reflectionCardComment.textContent = reflection.comment ?? '';
     };

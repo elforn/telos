@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.9.2] — 2026-08-31
+
+### Changed
+- **Reflection summary card redesigned:** the star icon is gone — the aggregate score stands on its own, sized up. Next to it, five small bars show each life aspect's rating for the year, with a tick mark showing how that aspect compares to your average across your other years (once you have more than one year of reflections to compare against).
+
 ## [2.9.1] — 2026-08-30
 
 ### Changed

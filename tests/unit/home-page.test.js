@@ -1140,18 +1140,51 @@ describe('home-page — reflection summary card', () => {
     });
     const el = mount(2026);
     expect(el.shadowRoot.querySelector('#reflection-card').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#reflection-card-score-num').textContent).toBe('4.0');
+    expect(el.shadowRoot.querySelector('#reflection-card-num').textContent).toBe('4.0');
     expect(el.shadowRoot.querySelector('#reflection-card-comment').textContent).toBe('Good year');
   });
 
-  it('hides the score line when nothing is scored yet but a comment exists', async () => {
+  it('hides the score row when nothing is scored yet but a comment exists', async () => {
     await boot({
       dbName: freshName(),
       initialState: { goals: {}, reflections: { '2026': { scores: {}, comment: 'Just a note' } } },
     });
     const el = mount(2026);
     expect(el.shadowRoot.querySelector('#reflection-card').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#reflection-card-score').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#reflection-card-row').hidden).toBe(true);
+  });
+
+  it('sets a fill height for every rated aspect and leaves unrated ones at 0', async () => {
+    await boot({
+      dbName: freshName(),
+      initialState: { goals: {}, reflections: { '2026': { scores: { people: 4, wealth: 5 } } } },
+    });
+    const el = mount(2026);
+    const bars = el.shadowRoot.querySelectorAll('.reflection-card-bar-wrap');
+    const byAspect = Object.fromEntries([...bars].map(w => [w.dataset.aspect, w]));
+    expect(byAspect.people.querySelector('.reflection-card-bar-fill').style.getPropertyValue('--bar-fill')).toBe('80%');
+    expect(byAspect.wealth.querySelector('.reflection-card-bar-fill').style.getPropertyValue('--bar-fill')).toBe('100%');
+    expect(byAspect.health.querySelector('.reflection-card-bar-fill').style.getPropertyValue('--bar-fill')).toBe('0%');
+  });
+
+  it('shows an average tick only for aspects rated in another year, never the current one', async () => {
+    await boot({
+      dbName: freshName(),
+      initialState: {
+        goals: {},
+        reflections: {
+          '2025': { scores: { people: 2 } },
+          '2026': { scores: { people: 4, wealth: 5 } },
+        },
+      },
+    });
+    const el = mount(2026);
+    const bars = el.shadowRoot.querySelectorAll('.reflection-card-bar-wrap');
+    const byAspect = Object.fromEntries([...bars].map(w => [w.dataset.aspect, w]));
+    // people has a prior year (2025) to compare against
+    expect(byAspect.people.querySelector('.reflection-card-bar-tick').hidden).toBe(false);
+    // wealth has no other year rated for it at all
+    expect(byAspect.wealth.querySelector('.reflection-card-bar-tick').hidden).toBe(true);
   });
 
   it('stays hidden when showCard is explicitly false, even with scores/comment set', async () => {
@@ -1183,7 +1216,7 @@ describe('home-page — reflection summary card', () => {
     setState('reflections', { '2026': { scores: { people: 5 }, comment: 'Added later' } });
 
     expect(el.shadowRoot.querySelector('#reflection-card').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#reflection-card-score-num').textContent).toBe('5.0');
+    expect(el.shadowRoot.querySelector('#reflection-card-num').textContent).toBe('5.0');
     expect(el.shadowRoot.querySelector('#reflection-card-comment').textContent).toBe('Added later');
   });
 });

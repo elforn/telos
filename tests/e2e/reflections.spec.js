@@ -109,7 +109,7 @@ function cardScoreText(page) {
   return page.evaluate(() =>
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
-      .querySelector('#reflection-card-score-num').textContent
+      .querySelector('#reflection-card-num').textContent
   );
 }
 
