@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.9.1] — 2026-08-30
+
+### Changed
+- **Internal cleanup, no visible change:** the default accent color's two darker/subtler shades (used when a year has no custom accent set) now read from the same fixed set of colors as the other two, instead of being written out separately. Reduces the chance of the two drifting apart in a future edit.
+
 ## [2.9.0] — 2026-08-30
 
 ### Added

@@ -926,8 +926,8 @@ class HomePage extends AppElement {
       const root = getComputedStyle(document.documentElement);
       s.setProperty('--color-accent',        root.getPropertyValue('--color-app-accent').trim());
       s.setProperty('--color-accent-light',  root.getPropertyValue('--color-app-accent-light').trim());
-      s.setProperty('--color-accent-dark',   '#3A93CC');
-      s.setProperty('--color-accent-subtle', 'rgba(91, 173, 224, 0.12)');
+      s.setProperty('--color-accent-dark',   root.getPropertyValue('--color-app-accent-dark').trim());
+      s.setProperty('--color-accent-subtle', root.getPropertyValue('--color-app-accent-subtle').trim());
       return;
     }
     const r = parseInt(hex.slice(1, 3), 16);
