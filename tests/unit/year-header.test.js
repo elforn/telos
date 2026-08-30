@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import * as Store from '../../_lib/core/store/store.js';
+import { _resetToast } from '../../_lib/modules/toast/toast.js';
 
 HTMLElement.prototype.setPointerCapture = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
@@ -39,6 +40,7 @@ function nativeDialog(modalDialogEl) {
 beforeEach(() => {
   Store.setState('images', {});
   Store.setState('accentColors', {});
+  Store.setState('reflections', {});
 });
 
 afterEach(() => {
@@ -512,6 +514,162 @@ describe('year-header — deadline markers toggle', () => {
     const shown = mount(PAST);
     expect(shown.shadowRoot.querySelector('#deadlines-show-btn').classList.contains('active')).toBe(true);
     expect(displayVar()).toBe('block');
+  });
+});
+
+// ── year-header — reflection ─────────────────────────────────────────────────
+
+describe('year-header — reflection menu entry', () => {
+  it('renders a Reflection button in the menu', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#year-reflection-btn')).not.toBeNull();
+  });
+
+  it('shows "Add" as the trailing value when no reflection exists for the year', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#reflection-menu-value').textContent).toBe('Add ›');
+  });
+
+  it('shows the aggregate score as the trailing value once one exists', () => {
+    Store.setState('reflections', { '2026': { scores: { people: 4, health: 4 } } });
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#reflection-menu-value').textContent).toBe('★ 4.0 ›');
+  });
+
+  it('opens the reflection dialog and closes the menu when clicked', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#year-reflection-btn').click();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    expect(nativeDialog(dialog.shadowRoot.querySelector('#dialog')).open).toBe(true);
+    expect(nativeDialog(el.shadowRoot.querySelector('#menu')).open).toBe(false);
+  });
+
+  it('pre-fills the dialog with the existing reflection for the year', () => {
+    Store.setState('reflections', { '2026': { scores: { wonder: 3 }, comment: 'good year' } });
+    const el = mount();
+    el.shadowRoot.querySelector('#menu-btn').click();
+    el.shadowRoot.querySelector('#year-reflection-btn').click();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    expect(dialog.shadowRoot.querySelector('#reflection-comment').value).toBe('good year');
+    expect(dialog.shadowRoot.querySelector('.star-group[data-aspect="wonder"] .star-btn[data-value="3"]').classList.contains('filled')).toBe(true);
+  });
+});
+
+describe('year-header — reflection edits commit immediately', () => {
+  it('a star tap commits the score to the store right away', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#year-reflection-btn').click();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    dialog.shadowRoot.querySelector('.star-group[data-aspect="health"] .star-btn[data-value="4"]').click();
+    expect(Store.getState().reflections?.['2026']?.scores?.health).toBe(4);
+  });
+
+  it('preserves other aspects already scored when a different one is tapped', () => {
+    Store.setState('reflections', { '2026': { scores: { people: 5 } } });
+    const el = mount();
+    el.shadowRoot.querySelector('#year-reflection-btn').click();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    dialog.shadowRoot.querySelector('.star-group[data-aspect="wealth"] .star-btn[data-value="2"]').click();
+    expect(Store.getState().reflections?.['2026']?.scores).toEqual({ people: 5, wealth: 2 });
+  });
+
+  it('a comment blur commits the comment to the store', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#year-reflection-btn').click();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    const textarea = dialog.shadowRoot.querySelector('#reflection-comment');
+    textarea.value = 'Solid year.';
+    textarea.dispatchEvent(new FocusEvent('blur'));
+    expect(Store.getState().reflections?.['2026']?.comment).toBe('Solid year.');
+  });
+});
+
+describe('year-header — reflection session-undo toast', () => {
+  it('shows an undo toast on close when something changed, and Undo restores the prior value', async () => {
+    _resetToast();
+    Store.setState('reflections', { '2026': { scores: { people: 5 } } });
+    const el = mount();
+    el.shadowRoot.querySelector('#year-reflection-btn').click();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    dialog.shadowRoot.querySelector('.star-group[data-aspect="health"] .star-btn[data-value="3"]').click();
+    nativeDialog(dialog.shadowRoot.querySelector('#dialog')).close();
+
+    await vi.waitFor(() => {
+      const toastEl = document.querySelector('#toast-container .socle-toast-success');
+      expect(toastEl?.textContent).toContain('Reflection saved');
+    });
+    document.querySelector('#toast-container .socle-toast-btn').click();
+    expect(Store.getState().reflections?.['2026']).toEqual({ scores: { people: 5 } });
+  });
+
+  it('shows no toast on close when nothing changed', async () => {
+    _resetToast();
+    const el = mount();
+    el.shadowRoot.querySelector('#year-reflection-btn').click();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    nativeDialog(dialog.shadowRoot.querySelector('#dialog')).close();
+    await new Promise(r => setTimeout(r, 0));
+    expect(document.querySelector('#toast-container .socle-toast-success')).toBeNull();
+  });
+
+  it('undo removes the year entirely when it did not exist before the edit', async () => {
+    _resetToast();
+    const el = mount();
+    el.shadowRoot.querySelector('#year-reflection-btn').click();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    dialog.shadowRoot.querySelector('.star-group[data-aspect="health"] .star-btn[data-value="3"]').click();
+    nativeDialog(dialog.shadowRoot.querySelector('#dialog')).close();
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('#toast-container .socle-toast-btn')).not.toBeNull();
+    });
+    document.querySelector('#toast-container .socle-toast-btn').click();
+    expect(Store.getState().reflections?.['2026']).toBeUndefined();
+  });
+});
+
+// The on-page summary element itself now lives in home-page.js (a plain
+// scrollable-area element above Capstone, not owned by this fixed header —
+// see home-page.test.js) after two earlier attempts at owning it here (tied
+// to this component's own fixed positioning, with independent scroll-fold
+// logic) broke in real testing. year-header.js's own public openReflection()
+// is what that element calls; test it directly here.
+describe('year-header — openReflection() public API', () => {
+  it('opens the dialog pre-filled with the existing reflection for the year', () => {
+    Store.setState('reflections', { '2026': { scores: { people: 4 }, comment: 'Good year' } });
+    const el = mount();
+    el.openReflection();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    expect(nativeDialog(dialog.shadowRoot.querySelector('#dialog')).open).toBe(true);
+    expect(dialog.shadowRoot.querySelector('#reflection-comment').value).toBe('Good year');
+  });
+
+  it('opens blank for a year with no reflection yet', () => {
+    const el = mount();
+    el.openReflection();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    expect(dialog.shadowRoot.querySelector('#reflection-comment').value).toBe('');
+  });
+});
+
+describe('year-header — reflection visibility toggle', () => {
+  it('toggling off in the dialog sets showCard:false in the store', () => {
+    Store.setState('reflections', { '2026': { scores: { people: 4 } } });
+    const el = mount();
+    el.shadowRoot.querySelector('#year-reflection-btn').click();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    dialog.shadowRoot.querySelector('#reflection-visibility-btn').click();
+    expect(Store.getState().reflections?.['2026']?.showCard).toBe(false);
+  });
+
+  it('toggling back on omits showCard entirely rather than storing true', () => {
+    Store.setState('reflections', { '2026': { scores: { people: 4 }, showCard: false } });
+    const el = mount();
+    el.shadowRoot.querySelector('#year-reflection-btn').click();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    dialog.shadowRoot.querySelector('#reflection-visibility-btn').click();
+    expect(Store.getState().reflections['2026']).not.toHaveProperty('showCard');
   });
 });
 

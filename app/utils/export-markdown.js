@@ -1,4 +1,5 @@
 import { percentValue } from './tracking.js';
+import { REFLECTION_ASPECTS } from './reflection.js';
 
 const SECTION_LABELS = {
   capstone:   'Capstone',
@@ -8,6 +9,32 @@ const SECTION_LABELS = {
 };
 
 const SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
+
+// Hardcoded English, like SECTION_LABELS above — this module ignores i18n
+// entirely regardless of the active locale. Only the label text is
+// duplicated here; the aspect list/order itself still comes from
+// REFLECTION_ASPECTS so there's one place that ever changes it.
+const REFLECTION_LABELS = {
+  people:       'People',
+  health:       'Health',
+  wealth:       'Wealth',
+  contribution: 'Contribution',
+  wonder:       'Wonder',
+};
+
+function _reflectionBlock(reflection) {
+  const scoreLines = REFLECTION_ASPECTS
+    .map(({ key }) => [key, reflection?.scores?.[key]])
+    .filter(([, score]) => score != null)
+    .map(([key, score]) => `- ${REFLECTION_LABELS[key]}: ${score}/5`);
+
+  if (!scoreLines.length && !reflection?.comment) return null;
+
+  const lines = ['## Reflection', ''];
+  lines.push(...scoreLines);
+  if (reflection.comment) lines.push('', reflection.comment);
+  return lines.join('\n');
+}
 
 function _formatDate(iso) {
   return iso ? iso.replace(/-/g, '.') : null;
@@ -52,7 +79,7 @@ function _goalContentBlock(goal, metadata) {
   return lines.join('\n');
 }
 
-export function exportGoalsMarkdown(yearGoals, year, { metadata = false, notes = false } = {}) {
+export function exportGoalsMarkdown(yearGoals, year, { metadata = false, notes = false, reflection = null } = {}) {
   const lines = [`# ${year}`];
 
   for (const section of SECTIONS) {
@@ -73,6 +100,9 @@ export function exportGoalsMarkdown(yearGoals, year, { metadata = false, notes =
       }
     }
   }
+
+  const reflectionBlock = _reflectionBlock(reflection);
+  if (reflectionBlock) lines.push('', reflectionBlock);
 
   return lines.join('\n');
 }

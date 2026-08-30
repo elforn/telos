@@ -1080,4 +1080,110 @@ describe('home-page — export year markdown', () => {
       expect(toastEl).not.toBeNull();
     });
   });
+
+  it('includes the reflection block only when the reflection option is checked', async () => {
+    await boot({
+      dbName: freshName(),
+      initialState: {
+        goals: {},
+        reflections: { '2026': { scores: { people: 5 }, comment: 'Great year' } },
+      },
+    });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('year-header').dispatchEvent(new CustomEvent('year-export-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false, reflection: true },
+    }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText.mock.calls[0][0]).toContain('Great year');
+  });
+
+  it('omits the reflection block when the reflection option is unchecked, even if a reflection exists', async () => {
+    await boot({
+      dbName: freshName(),
+      initialState: {
+        goals: {},
+        reflections: { '2026': { scores: { people: 5 }, comment: 'Great year' } },
+      },
+    });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('year-header').dispatchEvent(new CustomEvent('year-export-confirm', {
+      bubbles: true, composed: true, detail: { metadata: false, notes: false, reflection: false },
+    }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText.mock.calls[0][0]).not.toContain('Great year');
+  });
+});
+
+// A plain scrollable-area element above Capstone — no fold/unfold-on-scroll
+// behaviour (that lived on year-header.js's own fixed positioning in two
+// earlier, reverted attempts; both broke in real testing). Opening the
+// dialog itself is still owned by year-header.js (openReflection(), see
+// year-header.test.js) — this only covers the card's own render + click.
+describe('home-page — reflection summary card', () => {
+  function stubReflectionDialog(el) {
+    const dialog = el.shadowRoot.querySelector('year-header').shadowRoot.querySelector('#reflection-dialog');
+    dialog._dialog.show  = vi.fn();
+    dialog._dialog.close = vi.fn();
+    return dialog;
+  }
+
+  it('is hidden when no reflection exists for the year', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    expect(el.shadowRoot.querySelector('#reflection-card').hidden).toBe(true);
+  });
+
+  it('shows the aggregate and comment once a reflection exists', async () => {
+    await boot({
+      dbName: freshName(),
+      initialState: { goals: {}, reflections: { '2026': { scores: { people: 4, health: 4 }, comment: 'Good year' } } },
+    });
+    const el = mount(2026);
+    expect(el.shadowRoot.querySelector('#reflection-card').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#reflection-card-score-num').textContent).toBe('4.0');
+    expect(el.shadowRoot.querySelector('#reflection-card-comment').textContent).toBe('Good year');
+  });
+
+  it('hides the score line when nothing is scored yet but a comment exists', async () => {
+    await boot({
+      dbName: freshName(),
+      initialState: { goals: {}, reflections: { '2026': { scores: {}, comment: 'Just a note' } } },
+    });
+    const el = mount(2026);
+    expect(el.shadowRoot.querySelector('#reflection-card').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#reflection-card-score').hidden).toBe(true);
+  });
+
+  it('stays hidden when showCard is explicitly false, even with scores/comment set', async () => {
+    await boot({
+      dbName: freshName(),
+      initialState: { goals: {}, reflections: { '2026': { scores: { people: 4 }, comment: 'hi', showCard: false } } },
+    });
+    const el = mount(2026);
+    expect(el.shadowRoot.querySelector('#reflection-card').hidden).toBe(true);
+  });
+
+  it('clicking the card calls year-header\'s openReflection(), pre-filled', async () => {
+    await boot({
+      dbName: freshName(),
+      initialState: { goals: {}, reflections: { '2026': { scores: { people: 4 }, comment: 'Good year' } } },
+    });
+    const el = mount(2026);
+    const dialog = stubReflectionDialog(el);
+    el.shadowRoot.querySelector('#reflection-card').click();
+    expect(dialog._dialog.show).toHaveBeenCalledOnce();
+    expect(dialog.shadowRoot.querySelector('#reflection-comment').value).toBe('Good year');
+  });
+
+  it('updates reactively when reflections changes after mount, not just on initial render', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    expect(el.shadowRoot.querySelector('#reflection-card').hidden).toBe(true);
+
+    setState('reflections', { '2026': { scores: { people: 5 }, comment: 'Added later' } });
+
+    expect(el.shadowRoot.querySelector('#reflection-card').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#reflection-card-score-num').textContent).toBe('5.0');
+    expect(el.shadowRoot.querySelector('#reflection-card-comment').textContent).toBe('Added later');
+  });
 });

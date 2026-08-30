@@ -3,9 +3,12 @@ import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import * as Store from '../../../_lib/core/store/store.js';
 import { compressImage } from '../../../_lib/modules/images/images.js';
+import { toast } from '../../../_lib/modules/toast/toast.js';
 import '../export-sheet/export-sheet.js';
+import '../reflection-dialog/reflection-dialog.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import { icons } from '../../icons.js';
+import { aggregateScore } from '../../utils/reflection.js';
 
 const PALETTE = [
   { hex: '#5BADE0', key: 'year-header.color-sky-blue' },
@@ -557,6 +560,10 @@ class YearHeader extends Gestures(AppElement) {
           <span>${t('year-header.color')}</span>
           <span class="menu-item-value"><span class="color-dot"></span> ›</span>
         </button>
+        <button class="menu-item" id="year-reflection-btn">
+          <span>${t('year-header.reflection')}</span>
+          <span class="menu-item-value" id="reflection-menu-value">${t('year-header.reflection-add')} ›</span>
+        </button>
         <button class="menu-item" id="year-export-btn">
           <span>${t('year-header.extract-markdown')}</span>
           <span class="menu-item-value">›</span>
@@ -568,6 +575,8 @@ class YearHeader extends Gestures(AppElement) {
       </modal-dialog>
 
       <export-sheet id="export-sheet"></export-sheet>
+
+      <reflection-dialog id="reflection-dialog"></reflection-dialog>
 
       <modal-dialog id="color-sheet">
         <p class="menu-section-label">${t('year-header.color')}</p>
@@ -653,6 +662,12 @@ class YearHeader extends Gestures(AppElement) {
     };
     Store.subscribe('goalsDeadlinesVisible', this._onGoalsDeadlinesVisible);
 
+    this._onReflections = reflections => {
+      this._reflectionsState = reflections;
+      this._renderReflectionSummary();
+    };
+    Store.subscribe('reflections', this._onReflections);
+
     this._updateYear();
 
     this._scrollCompacting = false;
@@ -694,11 +709,12 @@ class YearHeader extends Gestures(AppElement) {
     this._setupTags();
     this._setupDeadlines();
     this._setupYearPicker();
+    this._setupReflection();
   }
 
   onTap() {
     const isOpen = el => !!el?.shadowRoot?.querySelector('dialog')?.open;
-    if (isOpen(this._menuDialog) || isOpen(this._colorSheet) || isOpen(this._photoSheet) || isOpen(this._exportSheet?._dialog) || isOpen(this._yearPickerDialog)) return;
+    if (isOpen(this._menuDialog) || isOpen(this._colorSheet) || isOpen(this._photoSheet) || isOpen(this._exportSheet?._dialog) || isOpen(this._yearPickerDialog) || isOpen(this._reflectionDialog?._dialog)) return;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -706,6 +722,7 @@ class YearHeader extends Gestures(AppElement) {
     Store.unsubscribe('images', this._onImages);
     Store.unsubscribe('goalsTagsVisible', this._onGoalsTagsVisible);
     Store.unsubscribe('goalsDeadlinesVisible', this._onGoalsDeadlinesVisible);
+    Store.unsubscribe('reflections', this._onReflections);
     this.shadowRoot?.querySelector('#tags-show-btn')?.removeEventListener('click', this._onTagsShowBtn);
     this.shadowRoot?.querySelector('#tags-hide-btn')?.removeEventListener('click', this._onTagsHideBtn);
     this.shadowRoot?.querySelector('#deadlines-show-btn')?.removeEventListener('click', this._onDeadlinesShowBtn);
@@ -731,6 +748,11 @@ class YearHeader extends Gestures(AppElement) {
     this.shadowRoot.querySelector('#year-export-btn')?.removeEventListener('click', this._onYearExportBtn);
     this.shadowRoot.querySelector('#export-sheet')?.removeEventListener('extract-confirm', this._onExportConfirm);
     this.shadowRoot.querySelector('#year-share-btn')?.removeEventListener('click', this._onYearShareBtn);
+    this.shadowRoot.querySelector('#year-reflection-btn')?.removeEventListener('click', this._onReflectionMenuBtn);
+    this._reflectionDialog?.removeEventListener('reflection-score-changed', this._onReflectionScoreChanged);
+    this._reflectionDialog?.removeEventListener('reflection-comment-changed', this._onReflectionCommentChanged);
+    this._reflectionDialog?.removeEventListener('reflection-visibility-changed', this._onReflectionVisibilityChanged);
+    this._reflectionDialog?.removeEventListener('modal-close', this._onReflectionClose);
     this.shadowRoot.querySelector('#year')?.removeEventListener('click', this._onYearBtn);
     this._yearPickerDialog?.removeEventListener('modal-close', this._onYearPickerClose);
     this._yearPickerList?.removeEventListener('click', this._onYearPickerClick);
@@ -791,6 +813,7 @@ class YearHeader extends Gestures(AppElement) {
 
     this._onScroll = () => {
       const y = window.scrollY;
+
       // Track direction so scrolling *down* from y=0 while compact doesn't
       // trigger the back-threshold check (which would falsely UN-COMPACT).
       const scrollingUp = y < this._lastScrollY;
@@ -943,7 +966,7 @@ class YearHeader extends Gestures(AppElement) {
 
     this._onYearExportBtn = () => {
       this._menuDialog.close();
-      this._exportSheet.show();
+      this._exportSheet.show({ showReflection: true });
     };
     this.shadowRoot.querySelector('#year-export-btn').addEventListener('click', this._onYearExportBtn);
 
@@ -1084,6 +1107,93 @@ class YearHeader extends Gestures(AppElement) {
     list.scrollTop = Math.max(0, row.offsetTop - list.clientHeight / 2 + row.offsetHeight / 2);
   }
 
+  // One report per year — reopening (from either entry point) edits the
+  // existing one, no separate create/edit branching. Individual field edits
+  // inside the dialog commit to the store immediately (see
+  // reflection-score-changed/reflection-comment-changed below); the snapshot
+  // taken here only powers a single session-undo toast on close, mirroring
+  // goal-dialog's blur-save + home.toast-goal-saved flow.
+  _setupReflection() {
+    this._reflectionDialog     = this.shadowRoot.querySelector('#reflection-dialog');
+    this._reflectionMenuValue  = this.shadowRoot.querySelector('#reflection-menu-value');
+
+    this._onReflectionMenuBtn = () => {
+      this._menuDialog.close();
+      this.openReflection();
+    };
+    this.shadowRoot.querySelector('#year-reflection-btn').addEventListener('click', this._onReflectionMenuBtn);
+
+    this._onReflectionScoreChanged = e => {
+      const { key, value } = e.detail;
+      this._commitReflection(r => ({ ...r, scores: { ...r?.scores, [key]: value } }));
+    };
+    this._reflectionDialog.addEventListener('reflection-score-changed', this._onReflectionScoreChanged);
+
+    this._onReflectionCommentChanged = e => {
+      this._commitReflection(r => ({ ...r, comment: e.detail.comment }));
+    };
+    this._reflectionDialog.addEventListener('reflection-comment-changed', this._onReflectionCommentChanged);
+
+    // showCard omitted entirely when true (visible is the default) — only an
+    // explicit false is ever stored, mirroring the Goal.color "omit rather
+    // than store the default" convention (just inverted: absent means shown).
+    this._onReflectionVisibilityChanged = e => {
+      this._commitReflection(r => {
+        if (e.detail.visible) { const { showCard: _drop, ...rest } = r; return rest; }
+        return { ...r, showCard: false };
+      });
+    };
+    this._reflectionDialog.addEventListener('reflection-visibility-changed', this._onReflectionVisibilityChanged);
+
+    this._onReflectionClose = () => {
+      const year   = String(this._year);
+      const before = this._reflectionSnapshot;
+      const after  = Store.getState().reflections?.[year] ?? null;
+      if (JSON.stringify(before) === JSON.stringify(after)) return;
+      toast(t('year-header.reflection-saved'), 'success', {
+        action: {
+          label: t('undo.button'),
+          onClick: () => {
+            const reflections = { ...Store.getState().reflections };
+            if (before) reflections[year] = before; else delete reflections[year];
+            Store.setState('reflections', reflections);
+          },
+        },
+      });
+    };
+    this._reflectionDialog.addEventListener('modal-close', this._onReflectionClose);
+  }
+
+  // Public: the on-page summary element (home-page.js, rendered as a normal
+  // scrollable-area element above Capstone — not owned by this component)
+  // calls this to open the same dialog the "⋮" menu entry does.
+  openReflection() {
+    this._reflectionSnapshot = Store.getState().reflections?.[String(this._year)] ?? null;
+    this._reflectionDialog.open(this._reflectionSnapshot);
+  }
+
+  _commitReflection(update) {
+    const year        = String(this._year);
+    const reflections = Store.getState().reflections ?? {};
+    Store.setState('reflections', { ...reflections, [year]: update(reflections[year] ?? {}) });
+  }
+
+  // Queries the shadow root fresh rather than caching an element ref (matching
+  // _onGoalsTagsVisible/_onGoalsDeadlinesVisible above) — _updateYear() calls
+  // this before _setupReflection() has run on first connect, so a cached ref
+  // would still be undefined the first time. The on-page summary itself lives
+  // in home-page.js now (a normal scrollable-area element above Capstone,
+  // not part of this fixed header) — this only drives the menu's own
+  // trailing value.
+  _renderReflectionSummary() {
+    const reflection = this._reflectionsState?.[String(this._year)];
+    const score       = aggregateScore(reflection);
+    const scoreLabel  = score != null ? t('year-header.reflection-score', { score: score.toFixed(1) }) : null;
+
+    const menuValue = this.shadowRoot?.querySelector('#reflection-menu-value');
+    if (menuValue) menuValue.textContent = `${scoreLabel ?? t('year-header.reflection-add')} ›`;
+  }
+
   _setupFilterBtn() {
     const btn = this.shadowRoot.querySelector('#filter-btn');
     this._onFilterBtnClick = () => {
@@ -1122,6 +1232,7 @@ class YearHeader extends Gestures(AppElement) {
     this._updateImageFor(year);
     if (this._onGoalsTagsVisible) this._onGoalsTagsVisible(Store.getState().goalsTagsVisible);
     if (this._onGoalsDeadlinesVisible) this._onGoalsDeadlinesVisible(Store.getState().goalsDeadlinesVisible);
+    if (this._onReflections) this._onReflections(Store.getState().reflections);
   }
 
   async _updateImageFor(year) {

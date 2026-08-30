@@ -184,12 +184,22 @@ describe('mergeStrategy — year-keyed data (accentColors, reflections, images)'
   });
 
   it('local wins for existing year in reflections', () => {
-    const r = { note: 'local', stars: 5 };
+    const r = { scores: { people: 5, health: 4, wealth: 3, contribution: 5, wonder: 2 }, comment: 'local' };
     const result = mergeStrategy(
-      state({ reflections: { '2025': { annual: r } } }),
-      state({ reflections: { '2025': { annual: { note: 'imported', stars: 3 } } } }),
+      state({ reflections: { '2025': r } }),
+      state({ reflections: { '2025': { scores: { people: 1, health: 1, wealth: 1, contribution: 1, wonder: 1 }, comment: 'imported' } } }),
     );
-    expect(result.reflections['2025'].annual).toEqual(r);
+    expect(result.reflections['2025']).toEqual(r);
+  });
+
+  it('adds new year from import in reflections', () => {
+    const imported = { scores: { people: 3, health: 3, wealth: 3, contribution: 3, wonder: 3 }, comment: 'new year' };
+    const result = mergeStrategy(
+      state({ reflections: { '2025': { scores: { people: 5 }, comment: 'local' } } }),
+      state({ reflections: { '2026': imported } }),
+    );
+    expect(result.reflections['2025'].comment).toBe('local');
+    expect(result.reflections['2026']).toEqual(imported);
   });
 
   it('local wins for existing year image mapping', () => {

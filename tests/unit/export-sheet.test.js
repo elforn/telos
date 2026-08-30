@@ -51,18 +51,37 @@ describe('export-sheet — show()', () => {
     el.show();
     expect(el.shadowRoot.querySelector('#notes-check').checked).toBe(false);
   });
+
+  it('hides the reflection row by default (list/item exports have no reflection)', () => {
+    const el = mount();
+    el.show();
+    expect(el.shadowRoot.querySelector('#reflection-row').hidden).toBe(true);
+  });
+
+  it('shows the reflection row when showReflection is passed (year export)', () => {
+    const el = mount();
+    el.show({ showReflection: true });
+    expect(el.shadowRoot.querySelector('#reflection-row').hidden).toBe(false);
+  });
+
+  it('resets reflection checkbox to unchecked', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#reflection-check').checked = true;
+    el.show({ showReflection: true });
+    expect(el.shadowRoot.querySelector('#reflection-check').checked).toBe(false);
+  });
 });
 
 // ── extract-confirm event ──────────────────────────────────────────────────────
 
 describe('export-sheet — extract-confirm event', () => {
-  it('dispatches extract-confirm with metadata=false, notes=false when no options are checked', () => {
+  it('dispatches extract-confirm with metadata=false, notes=false, reflection=false when no options are checked', () => {
     const el = mount();
     let detail;
     el.addEventListener('extract-confirm', e => { detail = e.detail; });
     el.show();
     el.shadowRoot.querySelector('#copy-btn').click();
-    expect(detail).toEqual({ metadata: false, notes: false });
+    expect(detail).toEqual({ metadata: false, notes: false, reflection: false });
   });
 
   it('dispatches extract-confirm with metadata=true when metadata is checked', () => {
@@ -72,7 +91,7 @@ describe('export-sheet — extract-confirm event', () => {
     el.show();
     el.shadowRoot.querySelector('#metadata-check').checked = true;
     el.shadowRoot.querySelector('#copy-btn').click();
-    expect(detail).toEqual({ metadata: true, notes: false });
+    expect(detail).toEqual({ metadata: true, notes: false, reflection: false });
   });
 
   it('dispatches extract-confirm with notes=true when notes is checked', () => {
@@ -82,7 +101,17 @@ describe('export-sheet — extract-confirm event', () => {
     el.show();
     el.shadowRoot.querySelector('#notes-check').checked = true;
     el.shadowRoot.querySelector('#copy-btn').click();
-    expect(detail).toEqual({ metadata: false, notes: true });
+    expect(detail).toEqual({ metadata: false, notes: true, reflection: false });
+  });
+
+  it('dispatches extract-confirm with reflection=true when the reflection option is shown and checked', () => {
+    const el = mount();
+    let detail;
+    el.addEventListener('extract-confirm', e => { detail = e.detail; });
+    el.show({ showReflection: true });
+    el.shadowRoot.querySelector('#reflection-check').checked = true;
+    el.shadowRoot.querySelector('#copy-btn').click();
+    expect(detail).toEqual({ metadata: false, notes: false, reflection: true });
   });
 
   it('closes the dialog after dispatching', () => {

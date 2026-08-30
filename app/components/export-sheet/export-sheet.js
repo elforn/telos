@@ -92,22 +92,29 @@ class ExportSheet extends AppElement {
           <span>${t('export-sheet.notes')}</span>
           <input type="checkbox" id="notes-check">
         </label>
+        <label class="option-row" id="reflection-row" hidden>
+          <span>${t('export-sheet.reflection')}</span>
+          <input type="checkbox" id="reflection-check">
+        </label>
         <button class="copy-btn" id="copy-btn">${t('export-sheet.extract')}</button>
       </modal-dialog>
     `;
   }
 
   subscribe() {
-    this._dialog       = this.shadowRoot.querySelector('#sheet');
-    this._metadataCheck = this.shadowRoot.querySelector('#metadata-check');
-    this._notesCheck    = this.shadowRoot.querySelector('#notes-check');
+    this._dialog         = this.shadowRoot.querySelector('#sheet');
+    this._metadataCheck  = this.shadowRoot.querySelector('#metadata-check');
+    this._notesCheck     = this.shadowRoot.querySelector('#notes-check');
+    this._reflectionRow   = this.shadowRoot.querySelector('#reflection-row');
+    this._reflectionCheck = this.shadowRoot.querySelector('#reflection-check');
 
     this._onCopy = () => {
-      const metadata = this._metadataCheck.checked;
-      const notes    = this._notesCheck.checked;
+      const metadata   = this._metadataCheck.checked;
+      const notes      = this._notesCheck.checked;
+      const reflection = this._reflectionCheck.checked;
       this._dialog.close();
       this.dispatchEvent(new CustomEvent('extract-confirm', {
-        bubbles: true, composed: true, detail: { metadata, notes },
+        bubbles: true, composed: true, detail: { metadata, notes, reflection },
       }));
     };
     this.shadowRoot.querySelector('#copy-btn').addEventListener('click', this._onCopy);
@@ -117,9 +124,15 @@ class ExportSheet extends AppElement {
     this.shadowRoot.querySelector('#copy-btn').removeEventListener('click', this._onCopy);
   }
 
-  show() {
-    this._metadataCheck.checked = false;
-    this._notesCheck.checked    = false;
+  // showReflection: only the year export (home-page.js, via year-header.js)
+  // has a reflection to offer including — list/item exports (list-detail-page.js)
+  // never pass this, so the row stays hidden and `reflection` in the emitted
+  // detail is simply ignored by that caller.
+  show({ showReflection = false } = {}) {
+    this._metadataCheck.checked   = false;
+    this._notesCheck.checked      = false;
+    this._reflectionCheck.checked = false;
+    this._reflectionRow.hidden    = !showReflection;
     this._dialog.show();
   }
 }

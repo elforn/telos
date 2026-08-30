@@ -24,6 +24,7 @@ import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
 import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
 import { shareMarkdown } from '../utils/share-markdown.js';
 import { nextColor } from '../utils/color-palette.js';
+import { aggregateScore } from '../utils/reflection.js';
 
 const FILTER_SHAPE = {
   query:          { kind: 'string' },
@@ -78,6 +79,87 @@ class HomePage extends AppElement {
           display: flex;
           flex-direction: column;
           gap: var(--space-2);
+        }
+
+        /* A normal, plain scrollable-area element — no special show/hide
+           mechanism, no fixed/overlay positioning: it scrolls away with
+           everything else, same as any other content on this page. (Two
+           earlier attempts tied it to year-header's own fixed positioning
+           instead, with independent scroll-fold logic — both broke in real
+           testing; this is deliberately the simple version.)
+           Full-bleed and flush against the header, matching how it looked
+           before this element existed as its own thing:
+           - No inline-size set. It's a flex item of main (display:flex,
+             flex-direction:column), so it stretches (the default align-self)
+             to the container's content width minus its own margin — a
+             negative margin-inline then genuinely widens the stretched box,
+             the same way a plain block element's width:auto would. Setting
+             inline-size:100% explicitly instead pins the box to main's
+             already-inset content width and does NOT grow to compensate —
+             shipped that bug once already, caught by measuring
+             getBoundingClientRect() against the real viewport width.
+           - margin-inline cancels main's own padding-inline (the same
+             technique year-header.js's .strip-bar uses).
+           - margin-block-start cancels the --space-3 breathing-room buffer
+             main's own padding-block-start adds on top of clearing the
+             fixed header (a buffer meant for whatever's normally first
+             inside it, i.e. Capstone) — this card wants zero gap instead,
+             so it lands its own top edge exactly at the header's bottom
+             edge. main has no overflow:hidden, so rendering into its own
+             padding area like this is safe.
+           - No margin-block-end: main's own gap (space-2) is what separates
+             this card from Capstone below, so there's only one place that
+             ever sets that gap. */
+        .reflection-card {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+          margin-block-start: calc(-1 * var(--space-3));
+          margin-inline: calc(-1 * var(--page-padding));
+          padding: var(--space-3) var(--page-padding);
+          background: var(--color-surface-raised);
+          border: none;
+          border-end-start-radius: var(--radius-md);
+          border-end-end-radius: var(--radius-md);
+          box-shadow: var(--shadow-card);
+          cursor: pointer;
+          text-align: start;
+          font-family: var(--font-family);
+        }
+
+        .reflection-card:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .reflection-card-score {
+          flex-shrink: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          color: var(--color-accent);
+        }
+
+        .reflection-card-score-star {
+          font-size: var(--font-size-body);
+          line-height: 1;
+        }
+
+        .reflection-card-score-num {
+          font-size: var(--font-size-subheading);
+          font-weight: var(--font-weight-bold);
+          line-height: 1.2;
+        }
+
+        .reflection-card-comment {
+          flex: 1;
+          min-inline-size: 0;
+          display: -webkit-box;
+          -webkit-line-clamp: 4;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          font-size: var(--font-size-caption);
+          color: var(--color-text-secondary);
         }
 
         #capstone-section {
@@ -186,6 +268,14 @@ class HomePage extends AppElement {
       </year-header>
 
       <main>
+        <button type="button" class="reflection-card" id="reflection-card" hidden>
+          <span class="reflection-card-score" id="reflection-card-score">
+            <span class="reflection-card-score-star" aria-hidden="true">★</span>
+            <span class="reflection-card-score-num" id="reflection-card-score-num"></span>
+          </span>
+          <span class="reflection-card-comment" id="reflection-card-comment"></span>
+        </button>
+
         <p id="filter-empty" hidden>${t('home-page.filter-empty')}</p>
         <p role="status" class="sr-only" id="filter-live"></p>
 
@@ -253,6 +343,32 @@ class HomePage extends AppElement {
 
     this._onYearNavigate = e => navigate(`${BASE_PATH}${e.detail.year}`);
     this.listen(this._header, 'year-navigate', this._onYearNavigate);
+
+    // ── Reflection summary ────────────────────────────────────────────────────
+    // A plain element in the scrollable area, above Capstone — no special
+    // show/hide-on-scroll behaviour. Opening the dialog itself is owned by
+    // year-header.js (which also owns the store commits/session-undo toast
+    // for it); this is just a second, differently-placed entry point into
+    // the same `openReflection()`.
+
+    this._reflectionCard        = this.shadowRoot.querySelector('#reflection-card');
+    this._reflectionCardScore   = this.shadowRoot.querySelector('#reflection-card-score');
+    this._reflectionCardScoreNum = this.shadowRoot.querySelector('#reflection-card-score-num');
+    this._reflectionCardComment = this.shadowRoot.querySelector('#reflection-card-comment');
+
+    this._onReflections = reflections => {
+      const reflection = reflections?.[String(this._year)];
+      const score      = aggregateScore(reflection);
+      this._reflectionCard.hidden = !reflection || reflection.showCard === false;
+      if (this._reflectionCard.hidden) return;
+      this._reflectionCardScore.hidden = score == null;
+      this._reflectionCardScoreNum.textContent = score != null ? score.toFixed(1) : '';
+      this._reflectionCardComment.hidden = !reflection.comment;
+      this._reflectionCardComment.textContent = reflection.comment ?? '';
+    };
+    this.watch('reflections', this._onReflections);
+
+    this.listen(this._reflectionCard, 'click', () => this._header.openReflection());
 
     // ── Filter bar ────────────────────────────────────────────────────────────
 
@@ -542,8 +658,9 @@ class HomePage extends AppElement {
     // ── Year export ───────────────────────────────────────────────────────────
 
     this._onYearExportConfirm = async e => {
-      const { metadata, notes } = e.detail;
-      const md = exportGoalsMarkdown(this._yearGoals(), this._year, { metadata, notes });
+      const { metadata, notes, reflection: includeReflection } = e.detail;
+      const reflection = includeReflection ? getState().reflections?.[String(this._year)] : null;
+      const md = exportGoalsMarkdown(this._yearGoals(), this._year, { metadata, notes, reflection });
       try {
         const result = await shareMarkdown(md, `Telos — ${this._year}`);
         if (result === 'copied') toast(t('export.copied'), 'success');

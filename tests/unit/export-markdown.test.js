@@ -253,6 +253,49 @@ describe('exportGoalMarkdown', () => {
   });
 });
 
+// ── Year export, reflection ──────────────────────────────────────────────────
+
+describe('exportGoalsMarkdown — reflection', () => {
+  it('adds no Reflection section when reflection is absent', () => {
+    const out = exportGoalsMarkdown(GOALS, YEAR, {});
+    expect(out).not.toContain('## Reflection');
+  });
+
+  it('adds no Reflection section for an empty reflection (no scores, no comment)', () => {
+    const out = exportGoalsMarkdown(GOALS, YEAR, { reflection: { scores: {}, comment: '' } });
+    expect(out).not.toContain('## Reflection');
+  });
+
+  it('lists every rated aspect with its score out of 5', () => {
+    const reflection = { scores: { people: 4, health: 3, wealth: 5, contribution: 2, wonder: 1 }, comment: '' };
+    const out = exportGoalsMarkdown(GOALS, YEAR, { reflection });
+    expect(out).toContain('## Reflection');
+    expect(out).toContain('- People: 4/5');
+    expect(out).toContain('- Health: 3/5');
+    expect(out).toContain('- Wealth: 5/5');
+    expect(out).toContain('- Contribution: 2/5');
+    expect(out).toContain('- Wonder: 1/5');
+  });
+
+  it('omits unrated aspects from a partial reflection', () => {
+    const out = exportGoalsMarkdown(GOALS, YEAR, { reflection: { scores: { people: 4 } } });
+    expect(out).toContain('- People: 4/5');
+    expect(out).not.toContain('Health:');
+  });
+
+  it('includes the comment text after the scores', () => {
+    const out = exportGoalsMarkdown(GOALS, YEAR, { reflection: { scores: { people: 4 }, comment: 'Great year overall.' } });
+    expect(out).toContain('Great year overall.');
+    expect(out.indexOf('People: 4/5')).toBeLessThan(out.indexOf('Great year overall.'));
+  });
+
+  it('includes just the comment when nothing is scored', () => {
+    const out = exportGoalsMarkdown(GOALS, YEAR, { reflection: { scores: {}, comment: 'Just a note.' } });
+    expect(out).toContain('## Reflection');
+    expect(out).toContain('Just a note.');
+  });
+});
+
 // ── Lists, no notes, no metadata ─────────────────────────────────────────────
 
 describe('lists, no notes, no metadata', () => {
