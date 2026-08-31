@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.10.0] — 2026-08-31
+
+### Added
+- **Bulk "Clear due dates"** in a list's selection-mode "⋮" menu — clears the due date from every selected item in one step, with an Undo toast if you change your mind.
+
+### Changed
+- **Overdue goals and items are now much louder**, not just a small tinted calendar icon: a goal's progress bar swaps its usual fill for a solid red done-portion and a distinct red undone-portion, and an overdue list item's whole row turns solid red. A list containing any overdue item now shows that same red across its whole row on the Lists overview too, not just its small count badge.
+- **The year accent-colour picker no longer offers red.** A red year theme made every goal's progress bar look overdue regardless of its actual due date — a new neutral "Stone" swatch takes red's place. Years already set to red keep showing red until you pick a different colour.
+
 ## [2.9.3] — 2026-08-31
 
 ### Changed
