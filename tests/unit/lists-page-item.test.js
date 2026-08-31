@@ -400,4 +400,23 @@ describe('lists-page-item — urgency roll-up', () => {
     expect(dot(el).hidden).toBe(false);
     expect(dot(el).dataset.urgency).toBe('overdue');
   });
+
+  // The host's own data-urgency (distinct from the inner .urgency dot's,
+  // tested above) drives the full-row overdue trickle-up CSS — see
+  // lists-page-item.js's :host([data-urgency="overdue"]) rules.
+  it('sets data-urgency on the host to the list\'s most-urgent bucket', () => {
+    const el = mount({ ...LIST, items: [item({ dueDate: isoDaysFromNow(-1) })] });
+    expect(el.dataset.urgency).toBe('overdue');
+  });
+
+  it('sets the host\'s data-urgency to "none" when no item has a due date', () => {
+    const el = mount({ ...LIST, items: [item({}), item({})] });
+    expect(el.dataset.urgency).toBe('none');
+  });
+
+  it('host data-urgency ignores urgency when rollupVisible is false, matching the dot', () => {
+    const el = mount({ ...LIST, items: [item({ dueDate: isoDaysFromNow(-1) })] });
+    el.rollupVisible = false;
+    expect(el.dataset.urgency).toBe('none');
+  });
 });

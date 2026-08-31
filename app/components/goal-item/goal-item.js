@@ -176,6 +176,46 @@ class GoalItem extends Gestures(AppElement) {
           pointer-events: none;
         }
 
+        /* ── Overdue escalation — full-row red once a dueDate has lapsed ──
+           :host([data-urgency="overdue"]) is set in _update() below, from
+           the same urgencyOf() call the calendar badge already reads.
+           Filled portion goes solid --color-danger (the same token/pairing
+           the badge above already proves correct in both themes); the
+           unfilled track becomes --color-danger-track (see index.html —
+           theme-aware so text stays legible on it in both modes) instead of
+           the plain accent-tinted fill/surface pairing every other state uses. */
+        :host([data-urgency="overdue"]) .bar { background: var(--color-danger-track); }
+        :host([data-urgency="overdue"]) .fill { background: var(--color-danger); }
+        :host([data-urgency="overdue"]) .title,
+        :host([data-urgency="overdue"]) .pct-label { color: var(--color-text-inverse); }
+        :host([data-urgency="overdue"]) .desc-icon { color: var(--color-text-inverse); opacity: 0.7; }
+        :host([data-urgency="overdue"]) .drag-btn { color: var(--color-text-inverse); }
+
+        /* Frequency dot-strip and the decreasing/"Avoid" septagon strip both
+           key their history off --color-accent/--color-border normally —
+           neither reads legibly against a solid danger-red row, so overdue
+           re-themes them onto --color-text-inverse instead. Applies whenever
+           the goal itself is overdue by dueDate; Part 5's scheduled-day-miss
+           trigger for frequency goals sets the same data-urgency attribute,
+           so no separate rule is needed for that case. */
+        :host([data-urgency="overdue"]) .freq-dot {
+          background: color-mix(in srgb, var(--color-text-inverse) 35%, transparent);
+        }
+        :host([data-urgency="overdue"]) .freq-dot.met { background: var(--color-text-inverse); }
+        :host([data-urgency="overdue"]) .freq-dot.partial {
+          background: conic-gradient(var(--color-text-inverse) var(--frac, 50%), color-mix(in srgb, var(--color-text-inverse) 35%, transparent) 0);
+        }
+        :host([data-urgency="overdue"]) .septagon-fill path[data-state="clean"],
+        :host([data-urgency="overdue"]) .septagon-fill path[data-state="within"] {
+          fill: var(--color-text-inverse);
+        }
+        :host([data-urgency="overdue"]) .septagon-fill path[data-state="clean"],
+        :host([data-urgency="overdue"]) .septagon-fill path[data-state="within"],
+        :host([data-urgency="overdue"]) .septagon-fill path[data-state="over"] {
+          stroke: var(--color-text-inverse);
+        }
+        :host([data-urgency="overdue"]) .septagon-within-dot { fill: var(--color-danger-track); }
+
         .content {
           position: relative;
           z-index: 1;

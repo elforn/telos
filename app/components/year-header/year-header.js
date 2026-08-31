@@ -10,13 +10,18 @@ import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import { icons } from '../../icons.js';
 import { aggregateScore } from '../../utils/reflection.js';
 
+// No red option: --color-accent drives the goal progress fill, so a red year
+// theme would make every goal read as "overdue" (see goal-item.js's own
+// data-urgency="overdue" styling) regardless of actual due date. "Stone" (a
+// neutral, not literally white — a pure white accent wash is invisible
+// against the light theme's own white surface) fills the slot instead.
 const PALETTE = [
   { hex: '#5BADE0', key: 'year-header.color-sky-blue' },
   { hex: '#3B82F6', key: 'year-header.color-blue' },
   { hex: '#6366F1', key: 'year-header.color-indigo' },
   { hex: '#8B5CF6', key: 'year-header.color-violet' },
   { hex: '#EC4899', key: 'year-header.color-pink' },
-  { hex: '#EF4444', key: 'year-header.color-red' },
+  { hex: '#A8A29E', key: 'year-header.color-stone' },
   { hex: '#F97316', key: 'year-header.color-orange' },
   { hex: '#EAB308', key: 'year-header.color-yellow' },
   { hex: '#22C55E', key: 'year-header.color-green' },

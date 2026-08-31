@@ -185,6 +185,24 @@ class ListsPageItem extends Gestures(AppElement) {
           inline-size: var(--icon-size-sm);
           block-size: var(--icon-size-sm);
         }
+
+        /* ── Overdue trickle-up — full-row red when any item in this list is
+           overdue ────────────────────────────────────────────────────────
+           :host([data-urgency="overdue"]) is set in _update() below, from
+           the same mostUrgent() bucket the roll-up dot already reads — not a
+           separate computation. The existing dot/count badge stays as its
+           own element on top; only its own colours invert here so it still
+           reads against the now-solid-red row instead of blending into it,
+           mirroring how goal-item/list-item's calendar badge already works. */
+        :host([data-urgency="overdue"]) .row { background: var(--color-danger); }
+        :host([data-urgency="overdue"]) .list-name { color: var(--color-text-inverse); }
+        :host([data-urgency="overdue"]) .item-count { color: color-mix(in srgb, var(--color-text-inverse) 70%, transparent); }
+        :host([data-urgency="overdue"]) .chevron { color: var(--color-text-inverse); opacity: 0.7; }
+        :host([data-urgency="overdue"]) .drag-btn { color: var(--color-text-inverse); }
+        :host([data-urgency="overdue"]) .urgency[data-urgency="overdue"] {
+          background: var(--color-text-inverse);
+          color: var(--color-danger);
+        }
       </style>
 
       <div class="color-panel" id="color-panel" aria-hidden="true"></div>
@@ -303,6 +321,7 @@ class ListsPageItem extends Gestures(AppElement) {
     const bucket = mostUrgent(buckets);
     const urgent = urgentCount(buckets);
     const show = bucket !== 'none' && bucket !== 'far';
+    this.dataset.urgency = bucket;
     this._urgencyEl.hidden = !show;
     let ariaLabel = name;
     if (show) {

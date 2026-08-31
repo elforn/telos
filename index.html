@@ -50,6 +50,24 @@
         --color-accent-light:  #E2F3FB;
         --color-accent-dark:   #3A93CC;
         --color-accent-subtle: rgba(91, 173, 224, 0.12);
+        /* Overdue escalation — colour for the goal-item progress bar's
+           undone/unfilled track once a dueDate has lapsed. The done/filled
+           side keeps using plain --color-danger + --color-text-inverse
+           directly (already proven correct in both themes by the existing
+           overdue calendar badge). The undone side can't just be a light
+           wash toward --color-surface — the goal's title text can land on
+           either region depending on percentage, and a light wash measures
+           ~1.3:1 against white/inverse text (confirmed via the WCAG
+           relative-luminance formula, not just visually). Mixing toward
+           --color-text-primary instead fixes this by construction: that
+           token is itself already theme-aware (near-black in light mode,
+           near-cream in dark mode), so the same formula automatically
+           darkens the result in light mode and brightens it in dark mode —
+           the one direction --color-text-inverse actually needs in each
+           theme — without hardcoding two separate values per theme. 72% (not
+           closer to 100%) for a visibly bigger done-vs-undone gap; clears
+           6.4:1+ against --color-text-inverse in both themes (4.5:1 min). */
+        --color-danger-track: color-mix(in srgb, var(--color-danger) 72%, var(--color-text-primary));
         /* Fixed aliases — never changed by year-header accent picker */
         --color-app-accent:        #5BADE0;
         --color-app-accent-light:  #E2F3FB;

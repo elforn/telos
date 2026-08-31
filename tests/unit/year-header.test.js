@@ -195,9 +195,9 @@ describe('year-header — accent color picker', () => {
     const el = mount();
     el.shadowRoot.querySelector('#menu-btn').click();
     el.shadowRoot.querySelector('#year-color-btn').click();
-    const swatch = el.shadowRoot.querySelector('.swatch[data-color="#EF4444"]');
+    const swatch = el.shadowRoot.querySelector('.swatch[data-color="#3B82F6"]');
     swatch.click();
-    expect(Store.getState().accentColors?.['2026']).toBe('#EF4444');
+    expect(Store.getState().accentColors?.['2026']).toBe('#3B82F6');
   });
 
   it('reset button removes the accent color for the year', () => {

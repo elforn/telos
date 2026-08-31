@@ -222,6 +222,20 @@ class ListItem extends Gestures(AppElement) {
           color: var(--color-text-muted);
         }
 
+        /* ── Overdue escalation — full-row red once a dueDate has lapsed ──
+           :host([data-urgency="overdue"]) is set in _update() below, from
+           the same urgencyOf() call the calendar badge already reads. No
+           progress fill to recolour here (unlike goal-item) — the whole row
+           just flips to solid --color-danger, the same token/pairing the
+           badge above already proves correct in both themes. The badge
+           itself is left unstyled: its white glyph still reads fine even
+           once its own small chip background blends into the row. */
+        :host([data-urgency="overdue"]) .row { background: var(--color-danger); }
+        :host([data-urgency="overdue"]) .title { color: var(--color-text-inverse); }
+        :host([data-urgency="overdue"]) .note-icon,
+        :host([data-urgency="overdue"]) .url-icon { color: var(--color-text-inverse); opacity: 0.75; }
+        :host([data-urgency="overdue"]) .drag-btn { color: var(--color-text-inverse); }
+
         /* ── Selection mode ─────────────────────────────────────────────── */
 
         :host(.selected) .row {
