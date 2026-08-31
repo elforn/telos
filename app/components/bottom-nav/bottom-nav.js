@@ -5,8 +5,9 @@ import { t, setLocale, getLocale } from '../../../_lib/core/strings.js';
 import { getTheme, setTheme, onThemeChange } from '../../../_lib/core/theme/theme.js';
 import { exportData, downloadExport, readImportFile, previewImport, applyMerge, applyReplace } from '../../../_lib/modules/sync/sync.js';
 import { toast } from '../../../_lib/modules/toast/toast.js';
-import { getState } from '../../../_lib/core/store/store.js';
+import { getState, setRuntimeState } from '../../../_lib/core/store/store.js';
 import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
+import { collectUpcoming, upcomingBadgeCount } from '../../utils/upcoming.js';
 import { percentValue } from '../../utils/tracking.js';
 import { repairInstallation } from '../../../_lib/core/sw-manager/sw-repair.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
@@ -14,6 +15,8 @@ import { backupBeforeRepair, LAST_EXPORT_KEY } from '../../utils/backup-before-r
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
 import '../import-text-dialog/import-text-dialog.js';
+import '../upcoming-dialog/upcoming-dialog.js';
+import { icons } from '../../icons.js';
 
 const GOAL_SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
 
@@ -166,6 +169,59 @@ class BottomNav extends AppElement {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
         }
+
+        /* ── Upcoming bell ─────────────────────────────────────────────────
+           Hidden entirely (not just its badge, unlike .gear-btn) when there's
+           nothing overdue/today/tomorrow anywhere — see _subscribeUpcoming. */
+        .bell-btn {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--color-text-secondary);
+          border-radius: var(--radius-full);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          touch-action: manipulation;
+          position: relative;
+        }
+
+        .bell-btn svg {
+          inline-size: 22px;
+          block-size: 22px;
+          pointer-events: none;
+        }
+
+        .bell-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .bell-badge {
+          position: absolute;
+          inset-block-start: 2px;
+          inset-inline-end: 2px;
+          box-sizing: border-box;
+          min-inline-size: 16px;
+          block-size: 16px;
+          padding-block: 2px 0;
+          padding-inline: 4px;
+          border-radius: var(--radius-full);
+          background: var(--color-danger);
+          color: var(--color-text-inverse);
+          font-size: var(--font-size-micro);
+          font-weight: var(--font-weight-semibold);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+          pointer-events: none;
+        }
+
+        .bell-badge[hidden] { display: none; }
 
         .gear-btn {
           flex-shrink: 0;
@@ -421,6 +477,10 @@ class BottomNav extends AppElement {
           <button class="pill" id="pill-years">${t('bottom-nav.years')}<span class="pill-dot" id="years-dot" hidden aria-hidden="true"></span></button>
           <button class="pill" id="pill-lists">${t('bottom-nav.lists')}<span class="pill-dot" id="lists-dot" hidden aria-hidden="true"></span></button>
         </div>
+        <button class="bell-btn" id="bell-btn" hidden aria-label="${t('upcoming.open')}">
+          ${icons.bell}
+          <span class="bell-badge" id="bell-badge" aria-hidden="true"></span>
+        </button>
         <button class="gear-btn" id="gear-btn" aria-label="${t('bottom-nav.settings')}">⚙<span class="gear-badge" id="gear-badge" hidden aria-hidden="true"></span></button>
       </div>
 
@@ -508,6 +568,8 @@ class BottomNav extends AppElement {
 
       <import-text-dialog id="share-text-dialog"></import-text-dialog>
 
+      <upcoming-dialog id="upcoming-dialog"></upcoming-dialog>
+
       <input type="file" id="import-input" accept=".telos,.json,.txt,application/zip,text/plain" hidden>
     `;
   }
@@ -535,6 +597,7 @@ class BottomNav extends AppElement {
     this._subscribeHeight();
     this._subscribeRepairButton();
     this._subscribeUrgency();
+    this._subscribeUpcoming();
     this._updateGearBadge();
 
     this._onReminderGroup = e => {
@@ -995,6 +1058,62 @@ class BottomNav extends AppElement {
     this._updateUrgency();
   }
 
+  // Public: recompute after the store is known to be loaded — same reason
+  // refreshUrgency() exists (see its own comment and main.js).
+  refreshUpcoming() {
+    this._updateUpcoming?.();
+  }
+
+  // The Upcoming bell — distinct from _subscribeUrgency above: that one only
+  // ever looks at the current calendar year's goals (see its own comment);
+  // this one spans every year, since pending items can belong to any of
+  // them (see app/utils/upcoming.js). Deliberately does NOT respect
+  // listsRollupVisible — that toggle is about the per-list visual rollup
+  // dot, not about whether items exist to notify/skim.
+  _subscribeUpcoming() {
+    this._bellBtn = this.shadowRoot.querySelector('#bell-btn');
+    this._bellBadge = this.shadowRoot.querySelector('#bell-badge');
+    this._upcomingDialog = this.shadowRoot.querySelector('#upcoming-dialog');
+    this._upcoming = { overdue: [], today: [], tomorrow: [] };
+
+    this._updateUpcoming = () => {
+      this._upcoming = collectUpcoming({ goals: getState().goals, lists: getState().lists });
+      const count = upcomingBadgeCount(this._upcoming);
+      const show = count > 0;
+      this._bellBtn.hidden = !show;
+      if (show) {
+        this._bellBadge.textContent = formatCount(count);
+        this._bellBtn.setAttribute('aria-description', t('urgency.urgent-count', { n: count }));
+      } else {
+        this._bellBadge.textContent = '';
+        this._bellBtn.removeAttribute('aria-description');
+      }
+    };
+    this.watch('goals', this._updateUpcoming);
+    this.watch('lists', this._updateUpcoming);
+
+    this._onBellBtn = () => this._upcomingDialog.open(this._upcoming);
+    this._onBellBtnKey = e => { if (e.detail === 0) this._onBellBtn(); };
+    this._bellBtn.addEventListener('pointerup', this._onBellBtn);
+    this._bellBtn.addEventListener('click', this._onBellBtnKey);
+
+    // Row tap only carries an id (plus year/listId for routing) — the
+    // destination page re-finds the goal/item itself by id once it has its
+    // own rendered rows to search (see home-page.js/list-detail-page.js's
+    // _applyPending*Focus), so this signal stays minimal.
+    this._onUpcomingRowTap = e => {
+      const { kind, id, year, listId } = e.detail;
+      if (kind === 'goal') {
+        setRuntimeState('pendingFocus', { kind: 'goal', id });
+        navigate(`${BASE_PATH}${year}`);
+      } else {
+        setRuntimeState('pendingFocus', { kind: 'item', id });
+        navigate(`${BASE_PATH}lists/${listId}`);
+      }
+    };
+    this._upcomingDialog.addEventListener('upcoming-row-tap', this._onUpcomingRowTap);
+  }
+
   _updateUrgency() {
     if (!this._yearsDot) return;
     const goals = getState().goals ?? {};
@@ -1084,6 +1203,9 @@ class BottomNav extends AppElement {
     window.removeEventListener('telos-import-file', this._onImportFile);
     window.removeEventListener('telos-share-text', this._onShareText);
     this._shareTextDialog?.removeEventListener('import-text-confirm', this._onShareTextConfirm);
+    this._bellBtn?.removeEventListener('pointerup', this._onBellBtn);
+    this._bellBtn?.removeEventListener('click', this._onBellBtnKey);
+    this._upcomingDialog?.removeEventListener('upcoming-row-tap', this._onUpcomingRowTap);
     this.shadowRoot?.querySelector('#gear-btn')?.removeEventListener('pointerup', this._onGear);
     this.shadowRoot?.querySelector('#gear-btn')?.removeEventListener('click', this._onGearKey);
     this.shadowRoot?.querySelector('#theme-group')?.removeEventListener('click', this._onThemeGroup);

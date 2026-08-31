@@ -35,6 +35,9 @@ function stubModals(el) {
   // modal-dialog instead, same pattern as import-text-dialog's own tests.
   const shareTextModal = el.shadowRoot.querySelector('#share-text-dialog')?.shadowRoot.querySelector('#modal');
   if (shareTextModal) { shareTextModal.show = vi.fn(); shareTextModal.close = vi.fn(); }
+  // upcoming-dialog exposes open() too — same pattern, its inner modal-dialog id is #dialog.
+  const upcomingModal = el.shadowRoot.querySelector('#upcoming-dialog')?.shadowRoot.querySelector('#dialog');
+  if (upcomingModal) { upcomingModal.show = vi.fn(); upcomingModal.close = vi.fn(); }
 }
 
 function mount() {
@@ -568,6 +571,89 @@ describe('bottom-nav — urgency roll-up', () => {
     expect(listsDot(el).hidden).toBe(true);
     setState('listsRollupVisible', true);
     expect(listsDot(el).hidden).toBe(false);
+  });
+});
+
+// ── Upcoming bell ────────────────────────────────────────────────────────────
+
+describe('bottom-nav — Upcoming bell', () => {
+  const bellBtn   = el => el.shadowRoot.querySelector('#bell-btn');
+  const bellBadge = el => el.shadowRoot.querySelector('#bell-badge');
+
+  it('is hidden entirely when nothing is overdue/today/tomorrow anywhere', () => {
+    setState('goals', {});
+    setState('lists', []);
+    const el = mount();
+    expect(bellBtn(el).hidden).toBe(true);
+  });
+
+  it('shows the bell with an overdue+today count once something is overdue', () => {
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', []);
+    const el = mount();
+    expect(bellBtn(el).hidden).toBe(false);
+    expect(bellBadge(el).textContent).toBe('1');
+  });
+
+  // The one case that actually motivated the plan: overdue/today aggregation
+  // here spans every year, unlike the Years pill above, which only ever
+  // looks at the current calendar year.
+  it('counts a non-current-year overdue goal, unlike the Years pill', () => {
+    setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
+    setState('lists', []);
+    const el = mount();
+    expect(bellBtn(el).hidden).toBe(false);
+    expect(bellBadge(el).textContent).toBe('1');
+  });
+
+  it('excludes a due-tomorrow item from the badge count', () => {
+    setState('goals', {});
+    setState('lists', [{ id: 'l', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', tags: [], inGoals: [], dueDate: isoDaysFromNow(1) }] }]);
+    const el = mount();
+    expect(bellBtn(el).hidden).toBe(true);
+  });
+
+  it('includes an overdue item from an archived list', () => {
+    setState('goals', {});
+    setState('lists', [{ id: 'l', name: 'L', archived: true, items: [{ id: 'i', title: 'x', status: 'open', inGoals: [], dueDate: isoDaysFromNow(-1) }] }]);
+    const el = mount();
+    expect(bellBtn(el).hidden).toBe(false);
+    expect(bellBadge(el).textContent).toBe('1');
+  });
+
+  it('clicking the bell opens the upcoming-dialog with the current bucketed items', () => {
+    setState('goals', yearGoals([{ id: 'c', title: 'Ship it', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', []);
+    const el = mount();
+    const dialog = el.shadowRoot.querySelector('#upcoming-dialog');
+    const openSpy = vi.spyOn(dialog, 'open');
+    bellBtn(el).click();
+    expect(openSpy).toHaveBeenCalledOnce();
+    expect(openSpy.mock.calls[0][0].overdue).toHaveLength(1);
+  });
+
+  it('a goal row tap sets pendingFocus and navigates to its year', () => {
+    setState('goals', yearGoals([{ id: 'c', title: 'Ship it', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', []);
+    const el = mount();
+    const dialog = el.shadowRoot.querySelector('#upcoming-dialog');
+    dialog.dispatchEvent(new CustomEvent('upcoming-row-tap', {
+      bubbles: true, composed: true, detail: { kind: 'goal', id: 'c', year: String(YEAR), section: 'capstone' },
+    }));
+    expect(getState().pendingFocus).toEqual({ kind: 'goal', id: 'c' });
+    expect(navigate).toHaveBeenCalledWith(`/${YEAR}`);
+  });
+
+  it('an item row tap sets pendingFocus and navigates to its list', () => {
+    setState('goals', {});
+    setState('lists', [{ id: 'l1', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', inGoals: [], dueDate: isoDaysFromNow(-1) }] }]);
+    const el = mount();
+    const dialog = el.shadowRoot.querySelector('#upcoming-dialog');
+    dialog.dispatchEvent(new CustomEvent('upcoming-row-tap', {
+      bubbles: true, composed: true, detail: { kind: 'item', id: 'i', listId: 'l1' },
+    }));
+    expect(getState().pendingFocus).toEqual({ kind: 'item', id: 'i' });
+    expect(navigate).toHaveBeenCalledWith('/lists/l1');
   });
 });
 

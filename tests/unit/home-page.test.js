@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { boot, setState, getState, reset } from '../../_lib/core/store/store.js';
+import { boot, setState, getState, setRuntimeState, reset } from '../../_lib/core/store/store.js';
 import '../../app/strings.js';
 import '../../app/pages/home-page.js';
 import '../../app/components/goal-item/goal-item.js';
@@ -18,6 +18,7 @@ import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../../app/util
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
+HTMLElement.prototype.scrollIntoView        ??= () => {};
 
 let dbSeq = 0;
 function freshName() { return `home-page-test-${dbSeq++}`; }
@@ -1225,5 +1226,69 @@ describe('home-page — reflection summary card', () => {
     expect(el.shadowRoot.querySelector('#reflection-card').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#reflection-card-num').textContent).toBe('5.0');
     expect(el.shadowRoot.querySelector('#reflection-card-comment').textContent).toBe('Added later');
+  });
+});
+
+// ── Upcoming-dialog pendingFocus landing ────────────────────────────────────
+
+describe('home-page — pendingFocus (Upcoming dialog row tap)', () => {
+  it('scrolls to, flashes, and opens the dialog for the goal named in pendingFocus', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [], milestones: [{ id: 'm1', title: 'Ship it', tracking: { type: 'percentage', value: 10 } }], wow: [], focus: [] },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#milestone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    const goalEl = el.shadowRoot.querySelector('#milestone-list goal-item');
+    const scrollSpy = vi.spyOn(goalEl, 'scrollIntoView').mockImplementation(() => {});
+    const dialogEl = el.shadowRoot.querySelector('#dialog');
+    const openSpy = vi.spyOn(dialogEl, 'open');
+
+    setRuntimeState('pendingFocus', { kind: 'goal', id: 'm1' });
+
+    expect(scrollSpy).toHaveBeenCalledOnce();
+    expect(goalEl.classList.contains('nav-flash')).toBe(true);
+
+    await vi.waitFor(() => expect(openSpy).toHaveBeenCalledOnce(), { timeout: 2000 });
+    expect(openSpy.mock.calls[0][0].id).toBe('m1');
+    expect(openSpy.mock.calls[0][1]).toEqual({ year: '2026', section: 'milestones' });
+  });
+
+  it('clears pendingFocus after consuming it', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [{ id: 'c1', title: 'X', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [], focus: [] },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    vi.spyOn(el.shadowRoot.querySelector('#capstone-list goal-item'), 'scrollIntoView').mockImplementation(() => {});
+
+    setRuntimeState('pendingFocus', { kind: 'goal', id: 'c1' });
+
+    expect(getState().pendingFocus).toBeNull();
+  });
+
+  it('does nothing for a pendingFocus of a different kind', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    const dialogEl = el.shadowRoot.querySelector('#dialog');
+    const openSpy = vi.spyOn(dialogEl, 'open');
+
+    setRuntimeState('pendingFocus', { kind: 'item', id: 'i1' });
+
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no goal on this page matches the id (e.g. wrong year)', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    const dialogEl = el.shadowRoot.querySelector('#dialog');
+    const openSpy = vi.spyOn(dialogEl, 'open');
+
+    setRuntimeState('pendingFocus', { kind: 'goal', id: 'does-not-exist' });
+
+    expect(openSpy).not.toHaveBeenCalled();
   });
 });

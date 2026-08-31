@@ -49,6 +49,17 @@ defineStrings({
   'urgency.overdue':      'endarrerit',
   'urgency.urgent-count': '{n} per avui o endarrerits',
 
+  // Diàleg «Properament» (campana de la barra de navegació)
+  'upcoming.open':             'Properament',
+  'upcoming.heading':          'Properament',
+  'upcoming.close':            'Tanca',
+  'upcoming.empty':            'Res pendent',
+  'upcoming.section-overdue':  'Endarrerits',
+  'upcoming.section-today':    'Avui',
+  'upcoming.section-tomorrow': 'Demà',
+  'upcoming.sub-goal':         'Objectiu · {year} · {section}',
+  'upcoming.sub-item':         'Llista · {list}',
+
   // Filtres per venciment (objectius + elements)
   'filter.date-label':   'Venciment',
   'filter.date-overdue': 'Endarrerit',

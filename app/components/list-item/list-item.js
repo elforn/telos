@@ -271,6 +271,24 @@ class ListItem extends Gestures(AppElement) {
           :host(.done-celebrate) { animation: none; outline: none; }
           :host(.done-celebrate) .row { animation: none; }
         }
+
+        /* Toggled externally (list-detail-page.js) after scrollIntoView, when
+           this row is the destination of an Upcoming-dialog row tap — mirrors
+           goal-item's own .nav-flash exactly. */
+        @keyframes nav-flash-ring {
+          0%   { outline-color: transparent; }
+          25%  { outline-color: color-mix(in srgb, var(--color-app-accent) 70%, transparent); }
+          100% { outline-color: transparent; }
+        }
+        :host(.nav-flash) .row {
+          outline: 3px solid transparent;
+          outline-offset: 1px;
+          animation: nav-flash-ring 900ms ease-out;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          :host(.nav-flash) .row { animation: none; outline: none; }
+        }
       </style>
 
       <div class="color-panel" id="color-panel" aria-hidden="true"></div>

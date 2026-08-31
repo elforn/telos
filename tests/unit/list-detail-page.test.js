@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { boot, setState, getState, reset } from '../../_lib/core/store/store.js';
+import { boot, setState, getState, setRuntimeState, reset } from '../../_lib/core/store/store.js';
 import '../../app/strings.js';
 import '../../app/pages/list-detail-page.js';
 import { _resetToast } from '../../_lib/modules/toast/toast.js';
@@ -16,6 +16,7 @@ import { buildListHandoff, buildItemHandoff, buildItemsHandoff, shareHandoff } f
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
+HTMLElement.prototype.scrollIntoView        ??= () => {};
 
 let dbSeq = 0;
 function freshName() { return `list-detail-test-${dbSeq++}`; }
@@ -1982,5 +1983,56 @@ describe('list-detail-page — share', () => {
       const toastEl = document.querySelector('#toast-container .socle-toast-error');
       expect(toastEl).not.toBeNull();
     });
+  });
+});
+
+// ── Upcoming-dialog pendingFocus landing ────────────────────────────────────
+
+describe('list-detail-page — pendingFocus (Upcoming dialog row tap)', () => {
+  it('scrolls to, flashes, and opens item-dialog for the item named in pendingFocus', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    const itemEl = el.shadowRoot.querySelector('list-item');
+    const scrollSpy = vi.spyOn(itemEl, 'scrollIntoView').mockImplementation(() => {});
+
+    setRuntimeState('pendingFocus', { kind: 'item', id: 'i1' });
+
+    expect(scrollSpy).toHaveBeenCalledOnce();
+    expect(itemEl.classList.contains('nav-flash')).toBe(true);
+
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#dialog').open).toHaveBeenCalledOnce(), { timeout: 2000 });
+    expect(el.shadowRoot.querySelector('#dialog').open.mock.calls[0][0].id).toBe('i1');
+  });
+
+  it('clears pendingFocus after consuming it', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    vi.spyOn(el.shadowRoot.querySelector('list-item'), 'scrollIntoView').mockImplementation(() => {});
+
+    setRuntimeState('pendingFocus', { kind: 'item', id: 'i1' });
+
+    expect(getState().pendingFocus).toBeNull();
+  });
+
+  it('does nothing for a pendingFocus of a different kind', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    setRuntimeState('pendingFocus', { kind: 'goal', id: 'g1' });
+
+    expect(el.shadowRoot.querySelector('#dialog').open).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no item in this list matches the id', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+
+    setRuntimeState('pendingFocus', { kind: 'item', id: 'does-not-exist' });
+
+    expect(el.shadowRoot.querySelector('#dialog').open).not.toHaveBeenCalled();
   });
 });

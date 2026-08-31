@@ -1,7 +1,7 @@
 import { AppElement } from '../../_lib/core/app-element.js';
 import { navigate } from '../../_lib/core/router/router.js';
 import { BASE_PATH } from '../base-path.js';
-import { setState, getState } from '../../_lib/core/store/store.js';
+import { setState, getState, setRuntimeState } from '../../_lib/core/store/store.js';
 import { syncChildren } from '../../_lib/core/dom/sync-children.js';
 import { Reorder } from '../../_lib/modules/reorder/reorder.js';
 import { t } from '../../_lib/core/strings.js';
@@ -607,6 +607,14 @@ class HomePage extends AppElement {
     };
     this.watch('goals', this._onGoals);
 
+    // Upcoming-dialog row tap (bottom-nav.js) — set the moment before
+    // navigate() brings this page (possibly freshly mounted) to the goal's
+    // year. Registered after the 'goals' watch above so its own immediate
+    // delivery (Store.subscribe calls back synchronously on subscribe) runs
+    // once goal-item rows already exist to search across.
+    this._onPendingFocus = pending => this._applyPendingGoalFocus(pending);
+    this.watch('pendingFocus', this._onPendingFocus);
+
     // ── Add-line / fold ───────────────────────────────────────────────────────
 
     // Opens the add-goal dialog for a section and keeps that section's add row
@@ -1196,6 +1204,51 @@ class HomePage extends AppElement {
       .flatMap(list => [...(list?.querySelectorAll('goal-item') ?? [])])
       .find(g => g._goal?.id === id);
     el?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+
+  // Upcoming-dialog row tap landing here: find the goal across all four
+  // sections (mirrors _revealCreatedGoal's search — the tap only carries the
+  // goal id, not its section), scroll/flash it, then open goal-dialog after
+  // a short delay so the flash is actually visible before the dialog covers
+  // the screen.
+  //
+  // Only clears the runtime signal once a match is actually found on THIS
+  // page — not on the initial kind check. navigate() (bottom-nav.js) fires
+  // synchronously, but the *old* home-page instance (a different year) is
+  // still mounted and subscribed at the moment setRuntimeState() notifies,
+  // and it also matches kind === 'goal'. Clearing unconditionally there
+  // would consume the signal before the *new* (correct-year) instance ever
+  // mounts to read it — confirmed by an E2E test that timed out until this
+  // ordering was fixed. Leaving it set on a no-match lets whichever instance
+  // actually has the goal consume it instead.
+  _applyPendingGoalFocus(pending) {
+    if (!pending || pending.kind !== 'goal') return;
+
+    const sections = [
+      { name: 'capstone',   list: this._capstoneList },
+      { name: 'milestones', list: this._milestoneList },
+      { name: 'wow',        list: this._wowList },
+      { name: 'focus',      list: this._focusList },
+    ];
+    let el = null, section = null;
+    for (const s of sections) {
+      el = [...(s.list?.querySelectorAll('goal-item') ?? [])].find(g => g._goal?.id === pending.id);
+      if (el) { section = s.name; break; }
+    }
+    if (!el) return;
+    setRuntimeState('pendingFocus', null);
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+    el.classList.add('nav-flash');
+    setTimeout(() => el.classList.remove('nav-flash'), 900);
+
+    const goal = el._goal;
+    setTimeout(() => {
+      this._editingSection = section;
+      this._editingGoal = goal;
+      this._openGoalDialog(goal, { year: String(this._year), section });
+    }, reduced ? 0 : 450);
   }
 
   _goalFilterActive() {

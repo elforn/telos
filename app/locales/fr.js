@@ -49,6 +49,17 @@ defineStrings({
   'urgency.overdue':      'en retard',
   'urgency.urgent-count': '{n} pour aujourd’hui ou en retard',
 
+  // Boîte de dialogue « À venir » (cloche de la barre de navigation)
+  'upcoming.open':             'À venir',
+  'upcoming.heading':          'À venir',
+  'upcoming.close':            'Fermer',
+  'upcoming.empty':            'Rien à venir',
+  'upcoming.section-overdue':  'En retard',
+  'upcoming.section-today':    'Aujourd’hui',
+  'upcoming.section-tomorrow': 'Demain',
+  'upcoming.sub-goal':         'Objectif · {year} · {section}',
+  'upcoming.sub-item':         'Liste · {list}',
+
   // Filtres par échéance (objectifs + éléments)
   'filter.date-label':   'Échéance',
   'filter.date-overdue': 'En retard',

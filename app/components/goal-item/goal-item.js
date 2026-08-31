@@ -403,6 +403,25 @@ class GoalItem extends Gestures(AppElement) {
           :host(.log-tick) .bar { animation: none; outline: none; }
         }
 
+        /* Toggled externally (home-page.js) after scrollIntoView, when this
+           row is the destination of an Upcoming-dialog row tap — a longer,
+           gentler pulse than .log-tick's since this marks "you were brought
+           here", not a routine action's confirmation. */
+        @keyframes nav-flash-ring {
+          0%   { outline-color: transparent; }
+          25%  { outline-color: color-mix(in srgb, var(--color-accent) 70%, transparent); }
+          100% { outline-color: transparent; }
+        }
+        :host(.nav-flash) .bar {
+          outline: 3px solid transparent;
+          outline-offset: 1px;
+          animation: nav-flash-ring 900ms ease-out;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          :host(.nav-flash) .bar { animation: none; outline: none; }
+        }
+
         .pct-label {
           position: relative;
           z-index: 1;

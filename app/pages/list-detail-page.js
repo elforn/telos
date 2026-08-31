@@ -1335,6 +1335,14 @@ class ListDetailPage extends AppElement {
     };
     this.watch('lists', this._onLists);
 
+    // Upcoming-dialog row tap (bottom-nav.js) — set the moment before
+    // navigate() brings this page (possibly freshly mounted) to the item's
+    // list. Registered after the 'lists' watch above so its own immediate
+    // delivery (Store.subscribe calls back synchronously on subscribe) runs
+    // once list-item rows already exist to search across.
+    this._onPendingFocus = pending => this._applyPendingItemFocus(pending);
+    this.watch('pendingFocus', this._onPendingFocus);
+
     this._onListsTagsVisible = tagsVisible => {
       const visible = tagsVisible?.[this._listId] === true;
       document.documentElement.style.setProperty('--tag-strip-display', visible ? 'block' : 'none');
@@ -1581,6 +1589,38 @@ class ListDetailPage extends AppElement {
     const el = [...(this._itemList?.querySelectorAll('list-item') ?? [])]
       .find(i => i._item?.id === id);
     el?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+
+  // Upcoming-dialog row tap landing here (this page is already scoped to the
+  // right list via the route itself — see bottom-nav.js). Scroll/flash the
+  // item, then open item-dialog after a short delay so the flash is
+  // actually visible before the dialog covers the screen, mirroring
+  // home-page.js's _applyPendingGoalFocus exactly — including only clearing
+  // the runtime signal once a match is actually found on THIS page. If the
+  // user is currently viewing a *different* list, that old instance also
+  // matches kind === 'item' and would otherwise consume the signal (via
+  // navigate()'s synchronous notify) before the correct list's page ever
+  // mounts to read it — see home-page.js's longer comment on the same race.
+  _applyPendingItemFocus(pending) {
+    if (!pending || pending.kind !== 'item') return;
+
+    const el = [...(this._itemList?.querySelectorAll('list-item') ?? [])]
+      .find(i => i._item?.id === pending.id);
+    if (!el) return;
+    setRuntimeState('pendingFocus', null);
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+    el.classList.add('nav-flash');
+    setTimeout(() => el.classList.remove('nav-flash'), 900);
+
+    setTimeout(() => {
+      const cleanItem = this._prepareDialog(el._item);
+      this._editingItem = cleanItem;
+      this._createdItemId = null;
+      this._itemEditSnapshot = getState().lists;
+      this._dialog.open(cleanItem);
+    }, reduced ? 0 : 450);
   }
 
   _itemFilterActive() {

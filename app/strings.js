@@ -48,6 +48,18 @@ defineStrings({
   'urgency.overdue':      'overdue',
   'urgency.urgent-count': '{n} due today or overdue',
 
+  // Upcoming dialog (bottom-nav bell) — skims overdue/today/tomorrow goals and
+  // list items across every year and list in one place.
+  'upcoming.open':             'Upcoming',
+  'upcoming.heading':          'Upcoming',
+  'upcoming.close':            'Close',
+  'upcoming.empty':            'Nothing upcoming',
+  'upcoming.section-overdue':  'Overdue',
+  'upcoming.section-today':    'Today',
+  'upcoming.section-tomorrow': 'Tomorrow',
+  'upcoming.sub-goal':         'Goal · {year} · {section}',
+  'upcoming.sub-item':         'List · {list}',
+
   // Date filter pills (goals + list items)
   'filter.date-label':   'Due date',
   'filter.date-overdue': 'Overdue',
