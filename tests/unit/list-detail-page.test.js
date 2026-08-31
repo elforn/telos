@@ -1014,6 +1014,33 @@ describe('list-detail-page — bulk action bar', () => {
     expect(el.shadowRoot.querySelector('#menu-btn').hidden).toBe(false);
   });
 
+  it('bulk Clear due dates removes dueDate from selected items only', async () => {
+    const ITEM2 = { id: 'i2', title: 'Book', status: 'open', tags: [], inGoals: [], dueDate: '2026-09-01' };
+    const ITEM3 = { id: 'i3', title: 'Chocolates', status: 'open', tags: [], inGoals: [], dueDate: '2026-09-05' };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM2, ITEM3] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
+
+    enterSelectionMode(el, ITEM2);
+    el.shadowRoot.querySelector('#bulk-clear-dates-btn').click();
+
+    await vi.waitFor(() => {
+      const items = getState().lists[0].items;
+      expect(items.find(i => i.id === 'i2').dueDate).toBeUndefined();
+      expect(items.find(i => i.id === 'i3').dueDate).toBe('2026-09-05');
+    });
+  });
+
+  it('bulk Clear due dates exits selection mode', async () => {
+    const ITEM2 = { id: 'i2', title: 'Book', status: 'open', tags: [], inGoals: [], dueDate: '2026-09-01' };
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM2] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    enterSelectionMode(el, ITEM2);
+    el.shadowRoot.querySelector('#bulk-clear-dates-btn').click();
+    expect(el.shadowRoot.querySelector('#bulk-bar').hidden).toBe(true);
+  });
+
   it('bulk Move opens list-picker-dialog with mode=null (shows both Move and Copy)', async () => {
     const OTHER_LIST = { id: 'l2', name: 'Other', items: [] };
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }, OTHER_LIST] } });

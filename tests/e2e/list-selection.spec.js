@@ -107,6 +107,53 @@ function itemCount(page) {
   );
 }
 
+// Opens an existing item's dialog by title (rather than the first/only item —
+// addItem/openExistingItemDialog elsewhere in this file assume a single item;
+// the bulk clear-dates tests below need two).
+async function openItemByTitle(page, title) {
+  await page.evaluate(t => {
+    const items = [...document.querySelector('app-router').shadowRoot
+      .querySelector('list-detail-page').shadowRoot
+      .querySelectorAll('#item-list list-item')];
+    const el = items.find(i => i._item?.title === t);
+    const row = el.shadowRoot.querySelector('.row');
+    row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+    row.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+  }, title);
+  await page.waitForFunction(() => {
+    const d = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('list-detail-page')?.shadowRoot
+      ?.querySelector('item-dialog')?.shadowRoot
+      ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+    return d?.open;
+  });
+}
+
+async function closeItemDialog(page) {
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('list-detail-page').shadowRoot
+      .querySelector('item-dialog').shadowRoot
+      .querySelector('#close').click();
+  });
+  await page.waitForFunction(() => {
+    const d = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('list-detail-page')?.shadowRoot
+      ?.querySelector('item-dialog')?.shadowRoot
+      ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+    return !d?.open;
+  });
+}
+
+function itemDueDate(page, title) {
+  return page.evaluate(t => {
+    const items = [...document.querySelector('app-router').shadowRoot
+      .querySelector('list-detail-page').shadowRoot
+      .querySelectorAll('#item-list list-item')];
+    return items.find(i => i._item?.title === t)?._item?.dueDate;
+  }, title);
+}
+
 // ── Selection mode — entry ────────────────────────────────────────────────────
 
 test.describe('Selection mode — entry', () => {
@@ -350,5 +397,102 @@ test.describe('Selection mode — bulk delete', () => {
 
     const after = await itemCount(page);
     expect(after).toBe(1);
+  });
+});
+
+// ── Selection mode — bulk clear due dates ───────────────────────────────────
+
+test.describe('Selection mode — bulk clear due dates', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    await navToLists(page);
+    await createList(page, 'Test list');
+    await navToFirstList(page);
+    await addItem(page, 'Alpha');
+    await addItem(page, 'Beta');
+
+    // Give both items a real due date via the same chip+input flow a user
+    // would use (addItem itself has no due-date option).
+    for (const title of ['Alpha', 'Beta']) {
+      await openItemByTitle(page, title);
+      await page.evaluate(() => {
+        document.querySelector('app-router').shadowRoot
+          .querySelector('list-detail-page').shadowRoot
+          .querySelector('item-dialog').shadowRoot
+          .querySelector('#duedate-chip').click();
+      });
+      await page.evaluate(() => {
+        const input = document.querySelector('app-router').shadowRoot
+          .querySelector('list-detail-page').shadowRoot
+          .querySelector('item-dialog').shadowRoot
+          .querySelector('#duedate-input');
+        input.value = '2026-01-01';
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await closeItemDialog(page);
+    }
+  });
+
+  test('clearing dates on selected items removes them and persists after reload', async ({ page }) => {
+    expect(await itemDueDate(page, 'Alpha')).toBe('2026-01-01');
+    expect(await itemDueDate(page, 'Beta')).toBe('2026-01-01');
+
+    // Long-press Alpha to select it and enter selection mode.
+    await page.evaluate(() => {
+      const items = [...document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelectorAll('#item-list list-item')];
+      items.find(i => i._item?.title === 'Alpha').onLongPress();
+    });
+    await page.waitForFunction(() => {
+      const bar = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('#bulk-bar');
+      return !bar?.hidden;
+    });
+
+    // Also select Beta.
+    await page.evaluate(() => {
+      const items = [...document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelectorAll('#item-list list-item')];
+      const beta = items.find(i => i._item?.title === 'Beta');
+      beta.dispatchEvent(new CustomEvent('item-select-toggle', {
+        bubbles: true, composed: true, detail: { item: beta._item },
+      }));
+    });
+
+    // Open the "⋮" more sheet and clear due dates.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#bulk-more-btn').click();
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#bulk-clear-dates-btn').click();
+    });
+
+    await page.waitForFunction(() => {
+      const bar = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('#bulk-bar');
+      return bar?.hidden === true;
+    });
+
+    expect(await itemDueDate(page, 'Alpha')).toBeUndefined();
+    expect(await itemDueDate(page, 'Beta')).toBeUndefined();
+
+    await waitForIDBFlush(page);
+    await page.goto(`/${currentYear}`);
+    await waitForPage(page);
+    await navToLists(page);
+    await navToFirstList(page);
+
+    expect(await itemDueDate(page, 'Alpha')).toBeUndefined();
+    expect(await itemDueDate(page, 'Beta')).toBeUndefined();
   });
 });

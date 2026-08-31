@@ -577,6 +577,9 @@ class ListDetailPage extends AppElement {
           <span>${t('list-detail.bulk-move')}</span>
           <span class="menu-item-value" aria-hidden="true">›</span>
         </button>
+        <button class="menu-item" id="bulk-clear-dates-btn">
+          <span>${t('list-detail.bulk-clear-dates')}</span>
+        </button>
         <button class="menu-item" id="bulk-export-btn">
           <span>${t('list-detail.bulk-extract-markdown')}</span>
           <span class="menu-item-value" aria-hidden="true">›</span>
@@ -1045,6 +1048,29 @@ class ListDetailPage extends AppElement {
       }
     };
     this.listen(this.shadowRoot.querySelector('#share-list-menu-btn'), 'click', this._onShareListMenuBtn);
+
+    // Commits immediately with an Undo toast, same pattern as delete above —
+    // no confirmation dialog, matching the app's existing convention for
+    // lossy-but-undoable bulk actions.
+    this._onBulkClearDates = () => {
+      this._bulkMoreSheet.close();
+      const ids = [...this._selectedIds];
+      withUndo({
+        getSnapshot: () => getState().lists,
+        apply:       () => {
+          this._mutateItems(items => items.map(i => {
+            if (!ids.includes(i.id)) return i;
+            const { dueDate, ...rest } = i;
+            return rest;
+          }));
+          this._exitSelectionMode();
+        },
+        restore:     snapshot => setState('lists', snapshot),
+        message:     t('list-detail.bulk-clear-dates-toast', { n: ids.length }),
+        undoLabel:   t('undo.button'),
+      });
+    };
+    this.listen(this.shadowRoot.querySelector('#bulk-clear-dates-btn'), 'click', this._onBulkClearDates);
 
     this._onBulkExportBtn = () => {
       this._bulkMoreSheet.close();
