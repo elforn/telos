@@ -1167,7 +1167,7 @@ describe('home-page — reflection summary card', () => {
     expect(byAspect.health.querySelector('.reflection-card-bar-fill').style.getPropertyValue('--bar-fill')).toBe('0%');
   });
 
-  it('shows an average tick only for aspects rated in another year, never the current one', async () => {
+  it('positions the average tick from an average across all years, including the one being viewed', async () => {
     await boot({
       dbName: freshName(),
       initialState: {
@@ -1181,10 +1181,17 @@ describe('home-page — reflection summary card', () => {
     const el = mount(2026);
     const bars = el.shadowRoot.querySelectorAll('.reflection-card-bar-wrap');
     const byAspect = Object.fromEntries([...bars].map(w => [w.dataset.aspect, w]));
-    // people has a prior year (2025) to compare against
-    expect(byAspect.people.querySelector('.reflection-card-bar-tick').hidden).toBe(false);
-    // wealth has no other year rated for it at all
-    expect(byAspect.wealth.querySelector('.reflection-card-bar-tick').hidden).toBe(true);
+    // people: avg of 2025 (2) and 2026 (4) = 3 -> 3/5 = 60%
+    const peopleTick = byAspect.people.querySelector('.reflection-card-bar-tick');
+    expect(peopleTick.hidden).toBe(false);
+    expect(peopleTick.style.getPropertyValue('--bar-avg')).toBe('60%');
+    // wealth: only 2026 has ever rated it, so its average is just its own
+    // score (5) — the tick coincides with the bar itself. Expected, not a bug.
+    const wealthTick = byAspect.wealth.querySelector('.reflection-card-bar-tick');
+    expect(wealthTick.hidden).toBe(false);
+    expect(wealthTick.style.getPropertyValue('--bar-avg')).toBe('100%');
+    // health: nobody has ever rated it — no average exists, tick stays hidden.
+    expect(byAspect.health.querySelector('.reflection-card-bar-tick').hidden).toBe(true);
   });
 
   it('stays hidden when showCard is explicitly false, even with scores/comment set', async () => {

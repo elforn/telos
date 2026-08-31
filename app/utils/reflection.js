@@ -28,20 +28,23 @@ export function aggregateScore(reflection) {
   return Math.round((rated.reduce((sum, v) => sum + v, 0) / rated.length) * 10) / 10;
 }
 
-// Per-aspect average across every OTHER year with a reflection — what the
-// home-card's bar chart compares the current year against. `year` is excluded
-// so a year is never averaged against itself; a year missing a given aspect
-// simply doesn't contribute to that aspect's average (same "only average
-// what's set" rule as aggregateScore — never treated as 0). An aspect with no
-// historical data anywhere (e.g. the very first year ever reflected on) is
-// omitted from the result entirely, not reported as 0, so callers can tell
-// "nothing to compare against yet" apart from "the average is genuinely low".
-export function historicalAspectAverages(reflections, year) {
-  const yearKey = String(year);
+// Per-aspect average across every year with a reflection — one fixed number
+// per aspect, the same no matter which year's card is showing it. Takes no
+// `year` argument on purpose: an earlier version excluded whichever year was
+// being viewed, so the same aspect could show a different "average" depending
+// on which year you'd navigated to — it looked like a single stable stat but
+// silently wasn't, which read as confusing rather than more precise. A year
+// missing a given aspect simply doesn't contribute to that aspect's average
+// (same "only average what's set" rule as aggregateScore — never treated as
+// 0). An aspect with no data anywhere is omitted from the result entirely,
+// not reported as 0, so callers can tell "nothing rated yet" apart from "the
+// average is genuinely low". Note that with only one year of data, an
+// aspect's average is necessarily that year's own score — its tick will
+// coincide exactly with its bar, which is expected, not a bug.
+export function aspectAverages(reflections) {
   const sums = {};
   const counts = {};
-  for (const [y, reflection] of Object.entries(reflections ?? {})) {
-    if (y === yearKey) continue;
+  for (const reflection of Object.values(reflections ?? {})) {
     for (const aspect of REFLECTION_ASPECTS) {
       const v = reflection?.scores?.[aspect.key];
       if (typeof v !== 'number' || v <= 0) continue;

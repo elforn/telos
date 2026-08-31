@@ -24,7 +24,7 @@ import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
 import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
 import { shareMarkdown } from '../utils/share-markdown.js';
 import { nextColor } from '../utils/color-palette.js';
-import { aggregateScore, historicalAspectAverages, REFLECTION_ASPECTS } from '../utils/reflection.js';
+import { aggregateScore, aspectAverages, REFLECTION_ASPECTS } from '../utils/reflection.js';
 
 const FILTER_SHAPE = {
   query:          { kind: 'string' },
@@ -207,8 +207,9 @@ class HomePage extends AppElement {
           background: var(--color-accent);
         }
 
-        /* The historical-average marker for this aspect — omitted (not just
-           hidden at 0) when there's no other year to compare against yet.
+        /* The average marker for this aspect across every year reflected on
+           (including this one — see aspectAverages) — omitted (not just
+           hidden at 0) only when nobody has ever rated this aspect at all.
            It can sit over the accent-filled portion of the bar or the plain
            border-coloured track, in either theme — a fixed colour picked for
            one case goes invisible in another (same problem goal-item's
@@ -459,7 +460,7 @@ class HomePage extends AppElement {
       this._reflectionCardRow.hidden = score == null;
       this._reflectionCardNum.textContent = score != null ? score.toFixed(1) : '';
 
-      const averages = historicalAspectAverages(reflections, this._year);
+      const averages = aspectAverages(reflections);
       const summaryParts = [];
       for (const aspect of REFLECTION_ASPECTS) {
         const { fill, tick } = this._reflectionCardBars[aspect.key];

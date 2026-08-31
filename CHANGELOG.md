@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.9.3] — 2026-08-31
+
+### Changed
+- **Reflection card's average tick now uses one fixed average per aspect, across every year you've reflected on — including the year the card is showing.** Previously it excluded whichever year you were viewing, so the same aspect could show a different "average" depending on which year's card you'd navigated to; now it's a single stable number everywhere.
+
 ## [2.9.2] — 2026-08-31
 
 ### Changed
