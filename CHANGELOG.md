@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.11.0] — 2026-08-31
+
+### Added
+- **"Upcoming" — a new bell icon in the bottom nav skims everything overdue, due today, or due tomorrow across every year and every list in one place**, instead of hunting through each year's goals or scrolling a filtered list. It only appears when there's something to show, with a count badge (overdue + today) on the bell itself. Tap a row and it takes you straight there — switching to the goal's year and opening it, or opening its list and scrolling to it — rather than just dropping you on a filtered page.
+
 ## [2.10.0] — 2026-08-31
 
 ### Added
