@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Scheduled days for weekly goals.** In a weekly goal's editor, pick specific weekdays it should happen on, or tap the "x" chip for a flexible "N times a week, any day" mode instead — a compact `+`/`−` stepper sets the count. Neither mode is required; an untouched goal behaves exactly as before.
+- **Weekly and monthly goals now warn ahead of time when they're falling behind pace**, not just after a due date passes: a calendar icon appears on the row, escalating to a full solid-red row when a scheduled day is missed and there's still time to catch up (never once it's truly out of reach). These goals also now show up in the "Upcoming" bell dialog and its badge count, the same as goals and items with a due date.
+
+### Changed
+- **Monthly and Avoid goals get the same compact "Nx" count control as the new weekly "x" mode** — a small pill showing the count plus a stacked `+`/`−`, replacing the old wide −/number/+ stepper. Avoid's row now reads "Nx slip-ups allowed [per week]" instead of a separate heading above the stepper.
+- **The recent-history dots on weekly, monthly, and Avoid goals now show the last 3 periods instead of 6** — a quick glance at how things are going lately, ahead of a more detailed history view planned for later. The percentage score itself is unchanged, still calculated the same way as before.
+- **Avoid's "missed" wedge only shows its red outline for the current week now** — past weeks show the same knocked-out look without the extra ring, since there's no ambiguity there between "missed" and "hasn't happened yet."
+
 ## [2.11.0] — 2026-08-31
 
 ### Added
