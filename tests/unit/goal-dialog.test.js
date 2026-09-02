@@ -2011,6 +2011,51 @@ describe('goal-dialog — Fix a day (frequency goals only, icon-only footer togg
     const todayChip = chips.find(c => c.dataset.iso === iso);
     expect(todayChip.getAttribute('aria-label')).toContain('logged');
   });
+
+  it('an Avoid goal inverts pressed/highlighted: a clean (no entry) day is pressed by default, a slipped day is not', () => {
+    const el = mount();
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', target: 0, entries: [iso] } }); // today slipped
+    expandFixDay(el);
+    const chips = [...el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')];
+    const slippedChip = chips.find(c => c.dataset.iso === iso);
+    const cleanChip = chips.find(c => c.dataset.iso !== iso);
+    expect(slippedChip.getAttribute('aria-pressed')).toBe('false'); // the bad outcome reads as NOT pressed
+    expect(cleanChip.getAttribute('aria-pressed')).toBe('true'); // the default/clean state reads as pressed
+  });
+
+  it('a weekly goal is unaffected by the Avoid inversion — an unlogged day stays unpressed', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
+    expandFixDay(el);
+    const chip = el.shadowRoot.querySelector('#fixday-chips .day-chip');
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('on an Avoid goal, tapping a clean (pressed) chip logs a slip and clears the highlight', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', target: 0, entries: [] } });
+    expandFixDay(el);
+    const chip = el.shadowRoot.querySelector('#fixday-chips .day-chip');
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    chip.click();
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
+    expect(el._goal.tracking.entries).toContain(chip.dataset.iso);
+  });
+
+  it('on an Avoid goal, tapping an already-slipped (unpressed) chip clears the slip and restores the highlight', () => {
+    const el = mount();
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', target: 0, entries: [iso] } });
+    expandFixDay(el);
+    const chip = [...el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')].find(c => c.dataset.iso === iso);
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
+    chip.click();
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    expect(el._goal.tracking.entries).not.toContain(iso);
+  });
 });
 
 

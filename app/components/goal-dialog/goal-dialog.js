@@ -1418,7 +1418,11 @@ class GoalDialog extends AppElement {
       const chip = e.target.closest('.day-chip');
       if (!chip || !this._goal) return;
       const iso = chip.dataset.iso;
-      const wasLogged = chip.getAttribute('aria-pressed') === 'true';
+      // Ground truth (does an entry exist) lives in data-logged, not
+      // aria-pressed — for Avoid the two are inverted (see _renderFixDayChips),
+      // so aria-pressed alone can't tell us which way to toggle.
+      const wasLogged = chip.dataset.logged === 'true';
+      const nowLogged = !wasLogged;
       this.dispatchEvent(new CustomEvent('goal-entry-toggle', {
         bubbles: true, composed: true, detail: { goal: this._goal, iso },
       }));
@@ -1432,7 +1436,8 @@ class GoalDialog extends AppElement {
           entries: wasLogged ? entries.filter(d => d !== iso) : [...entries, iso].sort(),
         },
       };
-      chip.setAttribute('aria-pressed', String(!wasLogged));
+      chip.dataset.logged = String(nowLogged);
+      chip.setAttribute('aria-pressed', String(isDecreasing(this._goal) ? !nowLogged : nowLogged));
     };
     this._fixDayChips.addEventListener('click', this._onFixDayChipClick);
 
@@ -1820,6 +1825,7 @@ class GoalDialog extends AppElement {
   _renderFixDayChips() {
     if (!this._goal) return;
     const type = this._goal.tracking.type;
+    const decreasing = isDecreasing(this._goal);
     const entries = new Set(this._goal.tracking?.entries ?? []);
     const today = todayISO();
     const [ty, tm, td] = today.split('-').map(Number);
@@ -1843,8 +1849,16 @@ class GoalDialog extends AppElement {
       chip.type = 'button';
       chip.className = 'day-chip';
       chip.dataset.iso = iso;
-      chip.setAttribute('aria-pressed', String(logged));
-      const loggedWord = t(isDecreasing(this._goal) ? 'goal-dialog.fixday-slipped' : 'goal-dialog.fixday-logged');
+      chip.dataset.logged = String(logged);
+      // Avoid inverts the pressed/highlighted convention every other type
+      // uses: an entry there means a slip — the bad outcome — so the
+      // default (no entry, clean) state reads as positive/pressed, and
+      // logging a slip clears the highlight instead of adding one.
+      // Mirrors the septagon strip's own convention (clean = filled,
+      // slipped = knocked-out empty) rather than the generic "pressed =
+      // has an entry" idiom weekly/monthly's chips use.
+      chip.setAttribute('aria-pressed', String(decreasing ? !logged : logged));
+      const loggedWord = t(decreasing ? 'goal-dialog.fixday-slipped' : 'goal-dialog.fixday-logged');
       chip.setAttribute('aria-label', `${dows[d.getDay()]} ${d.getDate()}${logged ? `, ${loggedWord}` : ''}`);
       chip.innerHTML = `<span class="dow" aria-hidden="true">${dows[d.getDay()]}</span><span class="num" aria-hidden="true">${d.getDate()}</span>`;
       nodes.push(chip);
