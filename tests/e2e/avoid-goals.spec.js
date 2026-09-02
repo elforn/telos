@@ -280,11 +280,15 @@ test.describe('Avoid goals', () => {
         .querySelector(`#fixday-chips .day-chip[data-iso="${iso}"]`).click();
     }, chipIso);
 
+    // Avoid inverts the pressed/highlighted convention every other type
+    // uses (see goal-dialog.js's _onFixDayChipClick/_renderFixDayChips): a
+    // clean day is pressed by default, so logging a slip here flips this
+    // chip to aria-pressed="false", not "true".
     await page.waitForFunction(iso =>
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector(`#fixday-chips .day-chip[data-iso="${iso}"]`).getAttribute('aria-pressed') === 'true'
+        .querySelector(`#fixday-chips .day-chip[data-iso="${iso}"]`).getAttribute('aria-pressed') === 'false'
     , chipIso);
 
     // aria-label's "slipped"/"logged" suffix is only computed by
@@ -462,9 +466,9 @@ test.describe('Avoid goals', () => {
     });
 
     // Log today too — the block's allowance is already spent, so today's
-    // wedge should render as "over" (a hollow, stroked wedge), not "within"
-    // (a solid fill + knockout dot), even though it's the only slip in
-    // *this particular week*.
+    // wedge should render as "over" (fully transparent), not "within" (a
+    // solid fill + knockout dot), even though it's the only slip in *this
+    // particular week*.
     await tapCurrentSeptagon(page);
     await page.waitForFunction(() => {
       const item = document.querySelector('app-router').shadowRoot
@@ -495,8 +499,8 @@ test.describe('Avoid goals', () => {
       };
     });
     expect(todayWedgeState.state).toBe('over');
-    expect(todayWedgeState.todayFill).not.toBe(todayWedgeState.cleanFill); // hollow, not the solid accent fill a clean wedge gets
-    expect(todayWedgeState.todayStroke).not.toBe('none'); // outlined
-    expect(todayWedgeState.todayStroke).toBe(todayWedgeState.cleanStroke); // same accent border as every other non-future wedge, so seams stay consistent across the strip
+    expect(todayWedgeState.todayFill).not.toBe(todayWedgeState.cleanFill); // fully transparent, not the solid accent fill a clean wedge gets
+    expect(todayWedgeState.todayStroke).toBe('none'); // no border on any wedge, any state — see goal-item.js's septagon-fill rules
+    expect(todayWedgeState.todayStroke).toBe(todayWedgeState.cleanStroke); // clean has no border either — consistent across every state
   });
 });
