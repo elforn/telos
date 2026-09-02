@@ -5,16 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [2.12.0] — 2026-09-03
 
 ### Added
 - **Scheduled days for weekly goals.** In a weekly goal's editor, pick specific weekdays it should happen on, or tap the "x" chip for a flexible "N times a week, any day" mode instead — a compact `+`/`−` stepper sets the count. Neither mode is required; an untouched goal behaves exactly as before.
 - **Weekly and monthly goals now warn ahead of time when they're falling behind pace**, not just after a due date passes: a calendar icon appears on the row, escalating to a full solid-red row when a scheduled day is missed and there's still time to catch up (never once it's truly out of reach). These goals also now show up in the "Upcoming" bell dialog and its badge count, the same as goals and items with a due date.
+- **The app now notices when you've left it open overnight.** Urgency icons, full-row-red states, and the Upcoming bell badge used to only update on a reload or the next time you edited something — they now also refresh the moment you reopen the app on a new day.
 
 ### Changed
 - **Monthly and Avoid goals get the same compact "Nx" count control as the new weekly "x" mode** — a small pill showing the count plus a stacked `+`/`−`, replacing the old wide −/number/+ stepper. Avoid's row now reads "Nx slip-ups allowed [per week]" instead of a separate heading above the stepper.
 - **The recent-history dots on weekly, monthly, and Avoid goals now show the last 3 periods instead of 6** — a quick glance at how things are going lately, ahead of a more detailed history view planned for later. The percentage score itself is unchanged, still calculated the same way as before.
-- **Avoid's "missed" wedge only shows its red outline for the current week now** — past weeks show the same knocked-out look without the extra ring, since there's no ambiguity there between "missed" and "hasn't happened yet."
+- **Avoid's current-week history is quieter**: a missed day is now just an empty cutout (matching every other week) and an upcoming day gets a plain neutral fill, instead of a dotted/bordered outline. The "logged today" ring — for both Avoid and weekly/monthly goals — is now a thinner, plain accent colour instead of red/green, since it only ever meant "logged today," not "good" or "bad."
+- **Avoid's Fix-a-day picker now highlights clean days by default**, and logging a slip clears the highlight instead of adding one — the opposite of every other goal type, since a slip is the bad outcome here, not the good one.
+
+### Fixed
+- **A scheduled weekly goal's "today" warning icon now clears once you actually log it**, instead of sticking around for the rest of the day.
 
 ## [2.11.0] — 2026-08-31
 
