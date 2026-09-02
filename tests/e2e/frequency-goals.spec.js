@@ -426,14 +426,16 @@ test.describe('Frequency goals', () => {
     expect(Number(rx)).toBe(7); // the squircle radius, not a full circle
   });
 
-  test('Every-day preset creates a weekly goal with target 7', async ({ page }) => {
+  test('picking all 7 weekday chips creates a weekly goal with target 7 (the "every day" case — no dedicated preset button anymore)', async ({ page }) => {
     await openDialog(page, '#add-capstone');
     await selectType(page, 'weekly');
     await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
+      const root = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
-        .querySelector('goal-dialog').shadowRoot
-        .querySelector('#everyday-chip').click();
+        .querySelector('goal-dialog').shadowRoot;
+      ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].forEach(day => {
+        root.querySelector(`.reminder-day-chip[data-day="${day}"]`).click();
+      });
     });
     await saveDialog(page, 'Meditate');
 

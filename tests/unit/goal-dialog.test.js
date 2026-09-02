@@ -1396,45 +1396,34 @@ describe('goal-dialog — type selector (new goal)', () => {
     expect(pill(el, 'percentage').getAttribute('aria-checked')).toBe('true');
   });
 
-  it('selecting weekly reveals the target block with the default target', () => {
+  it('selecting weekly keeps the target block hidden — its count lives in the reminder-days row instead', () => {
     const el = mount();
     el.open(null);
     pill(el, 'weekly').click();
-    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('3');
-    expect(el.shadowRoot.querySelector('#everyday-chip').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('x');
   });
 
-  it('selecting monthly reveals the target block, no Every-day preset', () => {
+  it('selecting monthly reveals the target block', () => {
     const el = mount();
     el.open(null);
     pill(el, 'monthly').click();
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('4');
-    expect(el.shadowRoot.querySelector('#everyday-chip').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('4x');
   });
 
-  it('stepper increments/decrements and clamps to TARGET_LIMITS.weekly (1–7)', () => {
+  it('the x mini-stepper increments/decrements and clamps to TARGET_LIMITS.weekly (1–7)', () => {
     const el = mount();
     el.open(null);
     pill(el, 'weekly').click();
-    const down = el.shadowRoot.querySelector('#target-down');
-    const up   = el.shadowRoot.querySelector('#target-up');
-    for (let i = 0; i < 5; i++) down.click(); // 3 -> 1, then clamps
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('1');
+    el.shadowRoot.querySelector('#reminder-any-chip').click(); // first activation -> 1x
+    const down = el.shadowRoot.querySelector('#reminder-mini-down');
+    const up   = el.shadowRoot.querySelector('#reminder-mini-up');
+    expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('1x');
     expect(down.disabled).toBe(true);
     for (let i = 0; i < 10; i++) up.click(); // clamps at 7
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('7');
+    expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('7x');
     expect(up.disabled).toBe(true);
-  });
-
-  it('Every-day preset sets weekly target to 7 and shows as active', () => {
-    const el = mount();
-    el.open(null);
-    pill(el, 'weekly').click();
-    el.shadowRoot.querySelector('#everyday-chip').click();
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('7');
-    expect(el.shadowRoot.querySelector('#everyday-chip').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('switching back to percentage hides the target block again', () => {
@@ -1472,10 +1461,10 @@ describe('goal-dialog — type selector (new goal)', () => {
     const down = el.shadowRoot.querySelector('#target-down');
     const up   = el.shadowRoot.querySelector('#target-up');
     for (let i = 0; i < 5; i++) down.click(); // 4 -> 1, then clamps
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('1');
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('1x');
     expect(down.disabled).toBe(true);
     for (let i = 0; i < 40; i++) up.click(); // clamps at 31, not 7 — the weekly ceiling must not leak into monthly
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('31');
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('31x');
     expect(up.disabled).toBe(true);
   });
 
@@ -1503,13 +1492,12 @@ describe('goal-dialog — type selector (new goal)', () => {
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
   });
 
-  it('selecting Avoid reveals the target block defaulting to 0, no Every-day preset', () => {
+  it('selecting Avoid reveals the target block defaulting to 0', () => {
     const el = mount();
     el.open(null);
     pill(el, 'decreasing').click();
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('0');
-    expect(el.shadowRoot.querySelector('#everyday-chip').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('0x');
   });
 
   it('Avoid\'s stepper floors at 0 (not 1, unlike weekly/monthly) and clamps to TARGET_LIMITS.decreasing (0–6)', () => {
@@ -1519,10 +1507,10 @@ describe('goal-dialog — type selector (new goal)', () => {
     const down = el.shadowRoot.querySelector('#target-down');
     const up   = el.shadowRoot.querySelector('#target-up');
     down.click(); // already 0 — stays 0
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('0');
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('0x');
     expect(down.disabled).toBe(true);
     for (let i = 0; i < 10; i++) up.click(); // clamps at 6, not 7
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('6');
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('6x');
     expect(up.disabled).toBe(true);
   });
 
@@ -1533,7 +1521,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     allowancePeriodChip(el).click(); // week -> 4weeks
     const up = el.shadowRoot.querySelector('#target-up');
     for (let i = 0; i < 40; i++) up.click(); // would clamp at 6 in "week" mode
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('27');
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('27x');
     expect(up.disabled).toBe(true);
   });
 
@@ -1544,18 +1532,22 @@ describe('goal-dialog — type selector (new goal)', () => {
     allowancePeriodChip(el).click(); // week -> 4weeks
     const up = el.shadowRoot.querySelector('#target-up');
     for (let i = 0; i < 20; i++) up.click(); // well above 6, valid for 4weeks (up to 27)
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('20');
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('20x');
     allowancePeriodChip(el).click(); // 4weeks -> week
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('6');
+    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('6x');
   });
 
-  it('Avoid\'s target label is visible (not screen-reader-only, unlike weekly/monthly)', () => {
+  it('the target label stays screen-reader-only for every type — Avoid\'s own copy shows as trailing text instead', () => {
     const el = mount();
     el.open(null);
     pill(el, 'weekly').click();
     expect(el.shadowRoot.querySelector('#target-label').classList.contains('sr-only')).toBe(true);
     pill(el, 'decreasing').click();
-    expect(el.shadowRoot.querySelector('#target-label').classList.contains('sr-only')).toBe(false);
+    expect(el.shadowRoot.querySelector('#target-label').classList.contains('sr-only')).toBe(true);
+    expect(el.shadowRoot.querySelector('#target-trailing-text').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#target-trailing-text').textContent).toBe('Slip-ups allowed');
+    pill(el, 'monthly').click();
+    expect(el.shadowRoot.querySelector('#target-trailing-text').hidden).toBe(true);
   });
 
   it('goal-created carries the selected Avoid type/allowance, with a dormant value alongside empty entries', () => {
@@ -1570,35 +1562,33 @@ describe('goal-dialog — type selector (new goal)', () => {
     expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 1, entries: [], allowancePeriod: 'week' });
   });
 
-  it('the allowance-period toggle chip is hidden for every type except Avoid — never visible alongside the Every-day chip', () => {
+  it('the allowance-period toggle chip is hidden for every type except Avoid', () => {
     const el = mount();
     el.open(null);
     expect(allowancePeriodChip(el).hidden).toBe(true);
     pill(el, 'weekly').click();
     expect(allowancePeriodChip(el).hidden).toBe(true);
-    expect(el.shadowRoot.querySelector('#everyday-chip').hidden).toBe(false); // the two share a row, never shown together
     pill(el, 'monthly').click();
     expect(allowancePeriodChip(el).hidden).toBe(true);
     pill(el, 'decreasing').click();
     expect(allowancePeriodChip(el).hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#everyday-chip').hidden).toBe(true);
   });
 
-  it('Avoid defaults the allowance period to "week" — the chip reads "Per week"', () => {
+  it('Avoid defaults the allowance period to "week" — the chip reads "per week"', () => {
     const el = mount();
     el.open(null);
     pill(el, 'decreasing').click();
-    expect(allowancePeriodChip(el).textContent).toBe('Per week');
+    expect(allowancePeriodChip(el).textContent).toBe('per week');
   });
 
-  it('tapping the chip flips its own text between "Per week" and "Per 4 weeks"', () => {
+  it('tapping the chip flips its own text between "per week" and "per 4 weeks"', () => {
     const el = mount();
     el.open(null);
     pill(el, 'decreasing').click();
     allowancePeriodChip(el).click();
-    expect(allowancePeriodChip(el).textContent).toBe('Per 4 weeks');
+    expect(allowancePeriodChip(el).textContent).toBe('per 4 weeks');
     allowancePeriodChip(el).click();
-    expect(allowancePeriodChip(el).textContent).toBe('Per week');
+    expect(allowancePeriodChip(el).textContent).toBe('per week');
   });
 
   it('goal-created carries the selected allowance period', () => {
@@ -1620,7 +1610,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     allowancePeriodChip(el).click();
     pill(el, 'weekly').click(); // switch away
     pill(el, 'decreasing').click(); // switch back
-    expect(allowancePeriodChip(el).textContent).toBe('Per 4 weeks');
+    expect(allowancePeriodChip(el).textContent).toBe('per 4 weeks');
   });
 });
 
@@ -1663,8 +1653,8 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     expect(el.shadowRoot.querySelector('#type-readout')).toBeNull(); // nor does the plain-readout UI that replaced it
     expect(pill(el, 'percentage').hidden).toBe(false); // never withheld
     expect(pill(el, 'weekly').getAttribute('aria-checked')).toBe('true');
-    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('5');
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true); // weekly's count lives in the reminder-days row
+    expect(el.shadowRoot.querySelector('#reminder-days-block').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#action-sheet').close).toHaveBeenCalled();
   });
 
@@ -1726,19 +1716,19 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     pill(el, 'weekly').click();
     expect(events).toHaveLength(1);
     expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 3, entries: ['2026-07-01', '2026-08-01'], allowancePeriod: 'week' });
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('3');
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true); // weekly never shows the standalone stepper
   });
 
-  it('the target stepper commits immediately on an existing goal', () => {
+  it('the x mini-stepper commits immediately on an existing goal', () => {
     const el = mount();
-    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: ['2026-08-01'] } });
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: ['2026-08-01'], reminderDays: 'any' } });
     expand(el);
     const events = [];
     el.addEventListener('goal-tracking-changed', e => events.push(e));
-    el.shadowRoot.querySelector('#target-up').click();
+    el.shadowRoot.querySelector('#reminder-mini-up').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: ['2026-08-01'], allowancePeriod: 'week' });
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('4');
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: ['2026-08-01'], allowancePeriod: 'week', reminderDays: 'any' });
+    expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('4x');
   });
 
   it('stays fully editable right after an in-session blur-commit of a new goal, before .goal is ever assigned', () => {
@@ -1767,17 +1757,6 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     pill(el, 'percentage').click();
     expect(trackingEvents).toHaveLength(1);
     expect(trackingEvents[0].detail.tracking.type).toBe('percentage');
-  });
-
-  it('the Every-day preset commits immediately on an existing weekly goal', () => {
-    const el = mount();
-    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
-    expand(el);
-    const events = [];
-    el.addEventListener('goal-tracking-changed', e => events.push(e));
-    el.shadowRoot.querySelector('#everyday-chip').click();
-    expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking.target).toBe(7);
   });
 
   it('switching an existing frequency goal to percentage hides the Fix-a-day toggle live', () => {
@@ -1816,14 +1795,14 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     expect(allowancePeriodChip(el).hidden).toBe(true);
     expand(el);
     expect(allowancePeriodChip(el).hidden).toBe(false);
-    expect(allowancePeriodChip(el).textContent).toBe('Per 4 weeks');
+    expect(allowancePeriodChip(el).textContent).toBe('per 4 weeks');
   });
 
-  it('a goal saved before this setting existed (no allowancePeriod) defaults its chip to "Per week"', () => {
+  it('a goal saved before this setting existed (no allowancePeriod) defaults its chip to "per week"', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', value: 0, target: 2, entries: [] } });
     expand(el);
-    expect(allowancePeriodChip(el).textContent).toBe('Per week');
+    expect(allowancePeriodChip(el).textContent).toBe('per week');
   });
 
   it('tapping the chip on an existing goal commits immediately via goal-tracking-changed', () => {
@@ -1904,7 +1883,7 @@ describe('goal-dialog — Fix a day (frequency goals only, icon-only footer togg
     expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(42); // 7 × PERIOD_WINDOW.weekly
   });
 
-  it('renders 180 day chips for a monthly goal (30 × DOT_WINDOW.monthly — reaches the full 6-month dot-strip, not just the 4 months still scored)', () => {
+  it('renders 180 day chips for a monthly goal (FIX_DAY_SPAN.monthly — independent of both the scored window and the shorter display window)', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
     expandFixDay(el);
@@ -2034,3 +2013,286 @@ describe('goal-dialog — Fix a day (frequency goals only, icon-only footer togg
   });
 });
 
+
+describe('goal-dialog — reminder days (weekly only)', () => {
+  function pill(el, type) {
+    return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
+  }
+  function dayChip(el, day) {
+    return el.shadowRoot.querySelector(`.reminder-day-chip[data-day="${day}"]`);
+  }
+  function anyChip(el) {
+    return el.shadowRoot.querySelector('#reminder-any-chip');
+  }
+  function block(el) {
+    return el.shadowRoot.querySelector('#reminder-days-block');
+  }
+
+  it('is hidden for a new percentage-type goal, shown once weekly is selected', () => {
+    const el = mount();
+    el.open(null);
+    expect(block(el).hidden).toBe(true);
+    pill(el, 'weekly').click();
+    expect(block(el).hidden).toBe(false);
+  });
+
+  it('is hidden for monthly and decreasing — weekly only', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'monthly').click();
+    expect(block(el).hidden).toBe(true);
+    pill(el, 'decreasing').click();
+    expect(block(el).hidden).toBe(true);
+  });
+
+  it('renders all 7 day chips plus an Any chip, none pressed by default', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    const chips = [...el.shadowRoot.querySelectorAll('.reminder-day-chip')];
+    expect(chips).toHaveLength(8);
+    expect(chips.every(c => c.getAttribute('aria-pressed') === 'false')).toBe(true);
+  });
+
+  it('tapping a day chip toggles it on, tapping again toggles it off', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    dayChip(el, 'mon').click();
+    expect(dayChip(el, 'mon').getAttribute('aria-pressed')).toBe('true');
+    dayChip(el, 'mon').click();
+    expect(dayChip(el, 'mon').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('multiple days can be selected at once', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    dayChip(el, 'mon').click();
+    dayChip(el, 'wed').click();
+    dayChip(el, 'fri').click();
+    expect(dayChip(el, 'mon').getAttribute('aria-pressed')).toBe('true');
+    expect(dayChip(el, 'wed').getAttribute('aria-pressed')).toBe('true');
+    expect(dayChip(el, 'fri').getAttribute('aria-pressed')).toBe('true');
+    expect(dayChip(el, 'tue').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('tapping Any clears any selected days; tapping a day clears Any — mutually exclusive', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    dayChip(el, 'mon').click();
+    dayChip(el, 'wed').click();
+    anyChip(el).click();
+    expect(anyChip(el).getAttribute('aria-pressed')).toBe('true');
+    expect(dayChip(el, 'mon').getAttribute('aria-pressed')).toBe('false');
+    expect(dayChip(el, 'wed').getAttribute('aria-pressed')).toBe('false');
+
+    dayChip(el, 'fri').click();
+    expect(anyChip(el).getAttribute('aria-pressed')).toBe('false');
+    expect(dayChip(el, 'fri').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('tapping Any again toggles it back off', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    anyChip(el).click();
+    expect(anyChip(el).getAttribute('aria-pressed')).toBe('true');
+    anyChip(el).click();
+    expect(anyChip(el).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('a new goal created with days selected includes reminderDays in goal-created', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    dayChip(el, 'mon').click();
+    dayChip(el, 'fri').click();
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Gym';
+    el.shadowRoot.querySelector('#input').dispatchEvent(new Event('blur'));
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.tracking.reminderDays).toEqual(['mon', 'fri']);
+  });
+
+  it('a new goal created without ever touching the picker omits reminderDays entirely', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Gym';
+    el.shadowRoot.querySelector('#input').dispatchEvent(new Event('blur'));
+    expect(events[0].detail.tracking).not.toHaveProperty('reminderDays');
+  });
+
+  it('an existing weekly goal with no reminderDays yet shows nothing selected (opt-in default)', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'Gym', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
+    el.shadowRoot.querySelector('#action-change-type-btn').click();
+    expect(block(el).hidden).toBe(false);
+    expect(dayChip(el, 'mon').getAttribute('aria-pressed')).toBe('false');
+    expect(anyChip(el).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('an existing weekly goal seeds the chip row from its stored reminderDays', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'Gym', tracking: { type: 'weekly', value: 0, target: 3, entries: [], reminderDays: ['tue', 'thu'] } });
+    el.shadowRoot.querySelector('#action-change-type-btn').click();
+    expect(dayChip(el, 'tue').getAttribute('aria-pressed')).toBe('true');
+    expect(dayChip(el, 'thu').getAttribute('aria-pressed')).toBe('true');
+    expect(dayChip(el, 'mon').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('tapping a day chip on an existing goal commits immediately via goal-tracking-changed', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'Gym', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
+    el.shadowRoot.querySelector('#action-change-type-btn').click();
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e));
+    dayChip(el, 'sat').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.tracking.reminderDays).toEqual(['sat']);
+  });
+
+  it('tapping Any on an existing goal commits reminderDays: "any"', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'Gym', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
+    el.shadowRoot.querySelector('#action-change-type-btn').click();
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e));
+    anyChip(el).click();
+    expect(events[0].detail.tracking.reminderDays).toBe('any');
+  });
+
+  it('switching type away from weekly and back preserves the previously-set reminderDays', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'Gym', tracking: { type: 'weekly', value: 0, target: 3, entries: [], reminderDays: ['wed'] } });
+    el.shadowRoot.querySelector('#action-change-type-btn').click();
+    pill(el, 'percentage').click(); // switch away
+    pill(el, 'weekly').click(); // switch back
+    expect(dayChip(el, 'wed').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('each day chip has an aria-label naming its full weekday abbreviation', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    expect(dayChip(el, 'mon').getAttribute('aria-label')).toBe('Mon');
+    expect(dayChip(el, 'thu').getAttribute('aria-label')).toBe('Thu');
+  });
+
+  it('has no visible label row — the group is named for a11y only, via aria-label', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    expect(el.shadowRoot.querySelector('#reminder-days-label')).toBeNull();
+    expect(el.shadowRoot.querySelector('#reminder-day-group').getAttribute('aria-label')).toBe('Scheduled days');
+  });
+
+  it('sits directly after the type pills, ahead of the target stepper, in document order', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    const typeField = el.shadowRoot.querySelector('.type-field');
+    const order = [...typeField.children].map(c => c.id || c.className);
+    expect(order.indexOf('reminder-days-block')).toBeLessThan(order.indexOf('target-block'));
+  });
+
+  it('the standalone target stepper never shows for weekly — the x chip carries the count instead', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#reminder-mini-stepper').classList.contains('is-inactive')).toBe(true);
+  });
+
+  it('picking a specific day keeps the mini-stepper hidden — the day count stands in for it', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    dayChip(el, 'mon').click();
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#reminder-mini-stepper').classList.contains('is-inactive')).toBe(true);
+  });
+
+  it('the selected-day count drives the target directly, live as each day is toggled', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'Gym', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
+    el.shadowRoot.querySelector('#action-change-type-btn').click();
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e));
+    dayChip(el, 'mon').click();
+    expect(events[0].detail.tracking.target).toBe(1);
+    dayChip(el, 'wed').click();
+    expect(events[1].detail.tracking.target).toBe(2);
+    dayChip(el, 'mon').click(); // deselect
+    expect(events[2].detail.tracking.target).toBe(1);
+  });
+
+  it('deselecting every picked day leaves no stepper visible', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    dayChip(el, 'mon').click();
+    dayChip(el, 'mon').click(); // deselect the only picked day
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#reminder-mini-stepper').classList.contains('is-inactive')).toBe(true);
+  });
+
+  it('activating x after picking specific days keeps their day-derived count, not the 1x first-activation default', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    dayChip(el, 'mon').click();
+    dayChip(el, 'wed').click();
+    dayChip(el, 'fri').click(); // day-derived target now 3
+    anyChip(el).click(); // reminderDays was already an array (not undefined) — not a first-ever activation
+    expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('3x');
+  });
+
+  it('Flexible mode reveals the inline mini-stepper, defaulting to 1x on first-ever activation', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    anyChip(el).click();
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#reminder-mini-stepper').classList.contains('is-inactive')).toBe(false);
+    expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('1x');
+  });
+
+  it('deactivating x and reactivating it again (no day picked in between) keeps its last count, not the 1x default', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    anyChip(el).click(); // 1x, first-ever activation
+    el.shadowRoot.querySelector('#reminder-mini-up').click(); // 2x
+    el.shadowRoot.querySelector('#reminder-mini-up').click(); // 3x
+    anyChip(el).click(); // deactivate
+    expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('x');
+    anyChip(el).click(); // reactivate — not first-ever, keeps 3
+    expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('3x');
+  });
+
+  it('switching from Flexible to specific days hides the mini-stepper again', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    anyChip(el).click();
+    expect(el.shadowRoot.querySelector('#reminder-mini-stepper').classList.contains('is-inactive')).toBe(false);
+    dayChip(el, 'tue').click();
+    expect(el.shadowRoot.querySelector('#reminder-mini-stepper').classList.contains('is-inactive')).toBe(true);
+    expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('x');
+  });
+
+  it('monthly and Avoid keep the stepper regardless — the day-derived target only applies to weekly', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'monthly').click();
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
+    pill(el, 'decreasing').click();
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
+  });
+});

@@ -7,7 +7,7 @@ import '../tag-input/tag-input.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
-import { FIX_DAY_SPAN, DEFAULT_TARGET, DEFAULT_ALLOWANCE_PERIOD, targetLimitsFor, isEntryType, isDecreasing } from '../../utils/tracking.js';
+import { FIX_DAY_SPAN, DEFAULT_TARGET, DEFAULT_ALLOWANCE_PERIOD, WEEKDAYS, targetLimitsFor, isEntryType, isDecreasing } from '../../utils/tracking.js';
 import { todayISO } from '../../utils/today-iso.js';
 import { swatches } from '../../utils/color-palette.js';
 
@@ -87,6 +87,9 @@ class GoalDialog extends AppElement {
     // recovers its last-chosen period, same "never drops the inactive side"
     // spirit as value/entries above — see _commitTrackingChange.
     this._draftAllowancePeriod = goal?.tracking?.allowancePeriod ?? DEFAULT_ALLOWANCE_PERIOD;
+    // Weekly-only (see tracking.js) — stays undefined until the chip row is
+    // actually touched, matching "opt-in per goal, default not configured".
+    this._draftReminderDays = goal?.tracking?.reminderDays;
     this._typeExpanded = false;
     this._fixDayExpanded = false;
     this._renderTypeSection();
@@ -414,39 +417,47 @@ class GoalDialog extends AppElement {
         .target-row {
           display: flex;
           align-items: center;
+          justify-content: flex-end;
           flex-wrap: wrap;
           gap: var(--space-2) var(--space-3);
         }
 
-        .target-stepper {
+        /* Same "Nx" chip + stacked mini-stepper idiom as the weekly x
+           chip (see .reminder-mini-stepper/.reminder-mini-btn below) —
+           monthly and Avoid both reuse it instead of the old wide
+           −/value/+ stepper, so there's one count-adjuster look across
+           every frequency type. */
+        .count-chip-cluster {
+          display: flex;
+          align-items: stretch;
+          gap: var(--space-1);
+          flex-shrink: 0;
+        }
+
+        .count-chip {
           display: flex;
           align-items: center;
-          flex-shrink: 0;
-          gap: var(--space-3);
-          border: 0.5px solid var(--color-border);
+          padding-inline: var(--space-3);
           border-radius: var(--radius-full);
-          padding: var(--space-1);
-        }
-
-        .stepper-btn {
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
-          border-radius: var(--radius-full);
-          border: none;
-          background: var(--color-surface-raised);
-          color: var(--color-text-primary);
-          font-size: var(--font-size-subheading);
-          line-height: 1;
-          padding: 0;
-        }
-
-        .stepper-btn:disabled { opacity: 0.4; cursor: default; }
-
-        .target-value {
-          min-inline-size: 1.5ch;
-          text-align: center;
-          font-weight: var(--font-weight-bold);
+          background: var(--color-accent);
+          color: var(--color-text-inverse);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          font-family: var(--font-family);
           font-variant-numeric: tabular-nums;
+        }
+
+        .target-trailing-text {
+          display: flex;
+          align-items: center;
+          font-size: var(--font-size-body);
+          color: var(--color-text-primary);
+        }
+
+        .target-colon {
+          display: flex;
+          align-items: center;
+          color: var(--color-text-primary);
         }
 
         .preset-chip {
@@ -466,6 +477,114 @@ class GoalDialog extends AppElement {
           background: var(--color-accent-subtle);
           border-color: var(--color-accent);
           color: var(--color-accent);
+        }
+
+        /* ── Reminder days (weekly goals only) ────────────────────────────
+           A plain, unboxed row (no raised background/pill container — just
+           the chips themselves) mirroring the fix-a-day chip strip's own
+           unboxed look rather than .type-pill-group's. The row's own
+           height is fixed regardless of state — tall enough to fit the
+           x-mode mini-stepper's two stacked buttons even when they're not
+           active — so toggling x never resizes the row, it only reveals/
+           hides content within a constant-height shell. Day chips stretch
+           to fill that full height rather than sitting centered/padded
+           within it. */
+        .reminder-days-block {
+          margin-block-start: var(--space-3);
+          padding-block-start: var(--space-3);
+          border-block-start: 0.5px solid var(--color-border);
+        }
+
+        .reminder-day-group {
+          display: flex;
+          align-items: stretch;
+          gap: var(--space-1);
+          /* Two stacked 28px mini-stepper buttons + their gap — the source
+             of the constant height above. */
+          min-block-size: calc(28px * 2 + 2px);
+        }
+
+        .reminder-day-chip {
+          flex: 1;
+          min-inline-size: var(--touch-target-small);
+          /* Stretches via the group's align-items:stretch above, rather
+             than a fixed min-block-size — fills the row's full height
+             (now taller, to fit the stepper) instead of sitting padded
+             within it. */
+          overflow: hidden;
+          white-space: nowrap;
+          text-overflow: ellipsis;
+          padding-inline: 2px;
+          border: none;
+          background: transparent;
+          border-radius: var(--radius-full);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          font-family: var(--font-family);
+          color: var(--color-text-secondary);
+          cursor: pointer;
+        }
+
+        .reminder-day-chip[aria-pressed="true"] {
+          background: var(--color-accent);
+          color: var(--color-text-inverse);
+        }
+
+        .reminder-day-chip:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        /* The x chip's own label carries the count once active ("x" →
+           "1x" → "3x", see _renderReminderDayChips) — no separate number
+           element sitting next to it. */
+        #reminder-any-chip {
+          flex-shrink: 0;
+        }
+
+        .reminder-mini-stepper {
+          display: flex;
+          flex-direction: column;
+          flex-shrink: 0;
+          gap: 2px;
+        }
+
+        /* In the weekly x-chip's row (not the standalone target-block
+           usage, which is always active) this stays laid out at all times
+           — never [hidden] — so its space stays reserved; only visibility
+           toggles, so the day chips beside it never resize horizontally
+           when x is turned on or off. */
+        .reminder-mini-stepper.is-inactive {
+          visibility: hidden;
+        }
+
+        .reminder-mini-btn {
+          inline-size: 28px;
+          /* Each takes half the (stretched, now-taller) row — with a 28px
+             floor via min-block-size so a future shorter row can't squeeze
+             them past legibility. */
+          flex: 1;
+          min-block-size: 28px;
+          padding: 0;
+          border-radius: 6px;
+          border: none;
+          /* Raised, not the plain surface colour — a button that matches
+             its background is invisible against it. */
+          background: var(--color-surface-raised);
+          color: var(--color-text-primary);
+          font-size: 12px;
+          line-height: 1;
+          cursor: pointer;
+        }
+
+        .reminder-mini-btn:disabled {
+          opacity: 0.4;
+          cursor: default;
+        }
+
+        .reminder-mini-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
         }
 
         /* ── Fix-a-day chips (mirrors move-view's picker-heading spacing) ─ */
@@ -829,16 +948,40 @@ class GoalDialog extends AppElement {
                 <button type="button" class="type-pill" data-type="${ty}" role="radio" aria-checked="false">${t('goal-dialog.type-' + ty)}</button>
               `).join('')}
             </div>
+            <div class="reminder-days-block" id="reminder-days-block" hidden>
+              <div class="reminder-day-group" id="reminder-day-group" role="group" aria-label="${t('goal-dialog.reminder-days-label')}">
+                ${WEEKDAYS.map(d => `
+                  <button type="button" class="reminder-day-chip" data-day="${d}" aria-pressed="false" aria-label="${t('goal-dialog.dow-' + d)}">${t('goal-dialog.reminder-day-' + d)}</button>
+                `).join('')}
+                <button type="button" class="reminder-day-chip" id="reminder-any-chip" aria-pressed="false">
+                  <span id="reminder-x-label">${t('goal-dialog.reminder-any')}</span>
+                </button>
+                <!-- Space is preallocated always (no [hidden]) — only
+                     visibility toggles in JS — so activating/deactivating x
+                     never reflows the day chips beside it horizontally. -->
+                <div class="reminder-mini-stepper" id="reminder-mini-stepper">
+                  <button type="button" class="reminder-mini-btn" id="reminder-mini-up" aria-label="${t('goal-dialog.target-increase')}">+</button>
+                  <button type="button" class="reminder-mini-btn" id="reminder-mini-down" aria-label="${t('goal-dialog.target-decrease')}">−</button>
+                </div>
+              </div>
+            </div>
             <div class="target-block" id="target-block" hidden>
               <p class="field-label sr-only" id="target-label"></p>
+              <!-- Right-aligned, and the count chip + stepper always sit
+                   last — so the buttons land in the same place for both
+                   monthly (nothing precedes them) and Avoid (label + period
+                   chip + colon precede them). -->
               <div class="target-row">
-                <div class="target-stepper">
-                  <button type="button" class="stepper-btn" id="target-down" aria-label="${t('goal-dialog.target-decrease')}">−</button>
-                  <span class="target-value" id="target-value"></span>
-                  <button type="button" class="stepper-btn" id="target-up" aria-label="${t('goal-dialog.target-increase')}">+</button>
-                </div>
-                <button type="button" class="preset-chip" id="everyday-chip" hidden>${t('goal-dialog.everyday-preset')}</button>
+                <span class="target-trailing-text" id="target-trailing-text" hidden></span>
                 <button type="button" class="preset-chip" id="allowance-period-chip" hidden></button>
+                <span class="target-colon" id="target-colon" hidden>:</span>
+                <div class="count-chip-cluster">
+                  <span class="count-chip" id="target-value"></span>
+                  <div class="reminder-mini-stepper" id="target-mini-stepper">
+                    <button type="button" class="reminder-mini-btn" id="target-up" aria-label="${t('goal-dialog.target-increase')}">+</button>
+                    <button type="button" class="reminder-mini-btn" id="target-down" aria-label="${t('goal-dialog.target-decrease')}">−</button>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="fixday-block" id="fixday-inline" hidden>
@@ -960,8 +1103,16 @@ class GoalDialog extends AppElement {
     this._targetValueEl  = this.shadowRoot.querySelector('#target-value');
     this._targetDownBtn  = this.shadowRoot.querySelector('#target-down');
     this._targetUpBtn    = this.shadowRoot.querySelector('#target-up');
-    this._everydayChip   = this.shadowRoot.querySelector('#everyday-chip');
+    this._targetTrailingText = this.shadowRoot.querySelector('#target-trailing-text');
+    this._targetColon    = this.shadowRoot.querySelector('#target-colon');
     this._allowancePeriodChip = this.shadowRoot.querySelector('#allowance-period-chip');
+    this._reminderDaysBlock = this.shadowRoot.querySelector('#reminder-days-block');
+    this._reminderDayGroup  = this.shadowRoot.querySelector('#reminder-day-group');
+    this._reminderAnyChip   = this.shadowRoot.querySelector('#reminder-any-chip');
+    this._reminderXLabel    = this.shadowRoot.querySelector('#reminder-x-label');
+    this._reminderMiniStepper = this.shadowRoot.querySelector('#reminder-mini-stepper');
+    this._reminderMiniUp    = this.shadowRoot.querySelector('#reminder-mini-up');
+    this._reminderMiniDown  = this.shadowRoot.querySelector('#reminder-mini-down');
 
     this._fixDayToggle   = this.shadowRoot.querySelector('#fixday-chip');
     this._fixDayInline   = this.shadowRoot.querySelector('#fixday-inline');
@@ -1331,16 +1482,8 @@ class GoalDialog extends AppElement {
     };
     this._targetUpBtn.addEventListener('click', this._onTargetUp);
 
-    this._onEverydayChip = () => {
-      this._draftTarget = 7;
-      this._renderTypeSection();
-      if (!this._isNew) this._commitTrackingChange();
-    };
-    this._everydayChip.addEventListener('click', this._onEverydayChip);
-
     // Exactly two states and no separate control (like the stepper) can
-    // land on either independently, so — unlike everyday-chip, which only
-    // ever jumps target to 7 — this chip has to be a real toggle.
+    // land on either independently, so this chip has to be a real toggle.
     this._onAllowancePeriodChipClick = () => {
       this._draftAllowancePeriod = this._draftAllowancePeriod === '4weeks' ? 'week' : '4weeks';
       // week's max (6) is far below 4weeks' (27) — clamp down rather than
@@ -1352,6 +1495,48 @@ class GoalDialog extends AppElement {
       if (!this._isNew) this._commitTrackingChange();
     };
     this._allowancePeriodChip.addEventListener('click', this._onAllowancePeriodChipClick);
+
+    // Tapping a day toggles it in/out of the multi-select array, clearing
+    // 'any' if it was active; tapping Any toggles the whole thing to/from
+    // 'any', clearing whatever days were selected — the two modes are
+    // mutually exclusive, but each is independently a plain toggle, same
+    // "real toggle, not a one-way jump" idiom as allowance-period above.
+    this._onReminderDayGroupClick = e => {
+      const miniBtn = e.target.closest('.reminder-mini-btn');
+      if (miniBtn) {
+        const [min, max] = targetLimitsFor('weekly');
+        this._draftTarget = miniBtn === this._reminderMiniUp
+          ? Math.min(max, this._draftTarget + 1)
+          : Math.max(min, this._draftTarget - 1);
+        this._renderTypeSection();
+        if (!this._isNew) this._commitTrackingChange();
+        return;
+      }
+      const chip = e.target.closest('.reminder-day-chip');
+      if (!chip) return;
+      if (chip === this._reminderAnyChip) {
+        const turningOn = this._draftReminderDays !== 'any';
+        // First time this goal's reminder picker has ever been touched at
+        // all — start the count at 1, not whatever generic default the
+        // type switch seeded _draftTarget with. Re-activating x later (after
+        // a prior x-mode session, or after switching to specific days and
+        // back) keeps its last value instead of resetting.
+        if (turningOn && this._draftReminderDays === undefined) this._draftTarget = 1;
+        this._draftReminderDays = turningOn ? 'any' : [];
+      } else {
+        const day = chip.dataset.day;
+        const current = Array.isArray(this._draftReminderDays) ? this._draftReminderDays : [];
+        this._draftReminderDays = current.includes(day) ? current.filter(d => d !== day) : [...current, day];
+        // Scheduled days stand in for the target count directly — keep it
+        // in sync the moment the selection changes. Only while there's at
+        // least one day picked; an empty selection falls back to whatever
+        // target was last set, rather than forcing it to 0.
+        if (this._draftReminderDays.length > 0) this._draftTarget = this._draftReminderDays.length;
+      }
+      this._renderTypeSection();
+      if (!this._isNew) this._commitTrackingChange();
+    };
+    this._reminderDayGroup.addEventListener('click', this._onReminderDayGroupClick);
 
     // ── List picker (Create list item) ────────────────────────────────────────
 
@@ -1428,8 +1613,8 @@ class GoalDialog extends AppElement {
     this._typePills?.forEach(p => p.removeEventListener('click', this._onTypePillClick));
     this._targetDownBtn?.removeEventListener('click', this._onTargetDown);
     this._targetUpBtn?.removeEventListener('click', this._onTargetUp);
-    this._everydayChip?.removeEventListener('click', this._onEverydayChip);
     this._allowancePeriodChip?.removeEventListener('click', this._onAllowancePeriodChipClick);
+    this._reminderDayGroup?.removeEventListener('click', this._onReminderDayGroupClick);
   }
 
   // ── Draft recovery toggle ─────────────────────────────────────────────────
@@ -1467,7 +1652,12 @@ class GoalDialog extends AppElement {
   // inert everywhere else, and keeping it present means a later switch into
   // decreasing sees whatever was last chosen rather than a missing field.
   _draftTracking() {
-    return { type: this._draftType, value: 0, target: this._draftTarget, entries: [], allowancePeriod: this._draftAllowancePeriod };
+    const tracking = { type: this._draftType, value: 0, target: this._draftTarget, entries: [], allowancePeriod: this._draftAllowancePeriod };
+    // Same "omit unless actually touched" contract as _commitTrackingChange —
+    // a new goal can already have reminder days set if the chips were tapped
+    // before the title blur that creates it.
+    if (this._draftReminderDays !== undefined) tracking.reminderDays = this._draftReminderDays;
+    return tracking;
   }
 
   // Existing goal: no presence on the main view at all until "Change type"
@@ -1497,39 +1687,77 @@ class GoalDialog extends AppElement {
 
     if (!showTypeEditor) {
       this._targetBlock.hidden = true;
+      this._reminderDaysBlock.hidden = true;
       return;
     }
 
     this._typePills.forEach(p => p.setAttribute('aria-checked', String(p.dataset.type === this._draftType)));
 
+    // Weekly only — monthly's own reminder behaviour is implicit/automatic
+    // (no picker at all, see tracking.js), and decreasing isn't a frequency
+    // goal this feature covers. Rendered ahead of the target stepper below,
+    // since whether specific days are picked now decides whether the
+    // stepper even shows.
+    const showReminderDays = this._draftType === 'weekly';
+    this._reminderDaysBlock.hidden = !showReminderDays;
+    if (showReminderDays) this._renderReminderDayChips();
+
     const showTarget = isEntryType(this._draftType);
-    this._targetBlock.hidden = !showTarget;
-    if (!showTarget) return;
+    // Weekly's count now lives entirely inside the day-chip row — the "x"
+    // chip's own label in flexible mode, or the picked-day count otherwise
+    // (see _renderReminderDayChips) — so the standalone stepper below is
+    // monthly/decreasing's alone from here on.
+    const showStepper = showTarget && this._draftType !== 'weekly';
+    this._targetBlock.hidden = !showStepper;
+    if (!showStepper) return;
 
     const [min, max] = targetLimitsFor(this._draftType, this._draftAllowancePeriod);
     const isDecreasingType = this._draftType === 'decreasing';
-    this._targetValueEl.textContent = String(this._draftTarget);
+    this._targetValueEl.textContent = `${this._draftTarget}x`;
+    // Always screen-reader-only now — Avoid's own copy ("Slip-ups allowed")
+    // reads as trailing text next to the chip instead of a heading above
+    // it (see _targetTrailingText below); weekly/monthly need no visible
+    // copy at all, the "Nx" chip reads fine on its own.
     this._targetLabel.textContent = t(`goal-dialog.target-label-${this._draftType}`);
-    // Weekly/monthly leave the label screen-reader-only — the bare stepper
-    // number reads fine next to the "Every day" chip for context. Decreasing's
-    // own neighbour chip (below) names the allowance period itself, so a
-    // bare "0" next to it would still be opaque — this is the one type
-    // whose label actually needs to be seen.
-    this._targetLabel.classList.toggle('sr-only', !isDecreasingType);
+    this._targetTrailingText.hidden = !isDecreasingType;
+    this._targetColon.hidden = !isDecreasingType;
+    if (isDecreasingType) {
+      this._targetTrailingText.textContent = t('goal-dialog.target-label-decreasing');
+    }
     this._targetDownBtn.disabled = this._draftTarget <= min;
     this._targetUpBtn.disabled = this._draftTarget >= max;
-    this._everydayChip.hidden = this._draftType !== 'weekly';
-    this._everydayChip.setAttribute('aria-pressed', String(this._draftType === 'weekly' && this._draftTarget === 7));
 
-    // No aria-pressed here (unlike everyday-chip above) — this isn't an
-    // on/off toggle, it's a two-valued setting, and its own visible text
-    // ("Per week" / "Per 4 weeks") already names the current value. Neither
-    // value is more "active" than the other, so it stays a plain neutral
-    // chip regardless of which one is showing — same idiom as the
-    // "Change type" menu item's trailing value text elsewhere in this file.
+    // No aria-pressed here — this isn't an on/off toggle, it's a two-valued
+    // setting, and its own visible text ("per week" / "per 4 weeks") already
+    // names the current value. Neither value is more "active" than the
+    // other, so it stays a plain neutral chip regardless of which one is
+    // showing — same idiom as the "Change type" menu item's trailing value
+    // text elsewhere in this file.
     this._allowancePeriodChip.hidden = !isDecreasingType;
     if (isDecreasingType) {
       this._allowancePeriodChip.textContent = t(`goal-dialog.allowance-period-${this._draftAllowancePeriod}`);
+    }
+  }
+
+  _renderReminderDayChips() {
+    const days = Array.isArray(this._draftReminderDays) ? this._draftReminderDays : [];
+    this._reminderDayGroup.querySelectorAll('.reminder-day-chip[data-day]').forEach(chip => {
+      chip.setAttribute('aria-pressed', String(days.includes(chip.dataset.day)));
+    });
+    const isAny = this._draftReminderDays === 'any';
+    this._reminderAnyChip.setAttribute('aria-pressed', String(isAny));
+    // The count lives in the chip's own label — "x" unselected, "Nx" once
+    // active — rather than a separate readout, so picking it doesn't change
+    // the row's shape. A specific-days selection shows its own count as the
+    // number of highlighted chips instead, so this label stays bare "x".
+    this._reminderXLabel.textContent = isAny ? `${this._draftTarget}x` : 'x';
+    // Visibility only, never [hidden] — see the .is-inactive rule — so the
+    // stepper's own space stays reserved and the day chips never resize.
+    this._reminderMiniStepper.classList.toggle('is-inactive', !isAny);
+    if (isAny) {
+      const [min, max] = targetLimitsFor('weekly');
+      this._reminderMiniDown.disabled = this._draftTarget <= min;
+      this._reminderMiniUp.disabled = this._draftTarget >= max;
     }
   }
 
@@ -1569,6 +1797,12 @@ class GoalDialog extends AppElement {
       entries: this._goal?.tracking?.entries ?? [],
       allowancePeriod: this._draftAllowancePeriod,
     };
+    // Omitted entirely while never touched (undefined) — matches the
+    // "default not configured" contract in tracking.js; a value of 'any' or
+    // an array (however empty) is a real, deliberately-set state and is
+    // always included once it exists, the same "never drops the inactive
+    // side" spirit as value/entries above.
+    if (this._draftReminderDays !== undefined) tracking.reminderDays = this._draftReminderDays;
     if (this._goal) this._goal = { ...this._goal, tracking };
     this.dispatchEvent(new CustomEvent('goal-tracking-changed', {
       bubbles: true, composed: true, detail: { tracking },
