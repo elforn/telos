@@ -74,12 +74,17 @@ function nxBucket(goal, todayIso) {
 // rule — a goal missing every scheduled day so far can still recover right
 // up to the last remaining day of the period, scheduled or not.
 function scheduledBucket(goal, todayIso) {
-  const { type, target, reminderDays } = goal.tracking;
-  const todayKey = weekdayKeyOf(todayIso);
-  if (reminderDays.includes(todayKey)) return 'today'; // today wins over overdue, even if something earlier was also missed
+  const { type, target, entries, reminderDays } = goal.tracking;
   const count = currentPeriodCount(goal.tracking, todayIso);
   const remainingNeed = target - count;
-  if (remainingNeed <= 0) return 'none'; // already met
+  if (remainingNeed <= 0) return 'none'; // already met this period — checked first so a target hit earlier in the week also clears a later scheduled day's icon
+  const todayKey = weekdayKeyOf(todayIso);
+  // Today only wins over overdue while today's own entry is still
+  // outstanding — once logged, the day's actionable task is done, so this
+  // falls through to the same missed/recoverable check any other day gets
+  // (which may still be 'overdue' if today's entry didn't fully cover an
+  // earlier miss, or 'none' if it did).
+  if (reminderDays.includes(todayKey) && !entries.includes(todayIso)) return 'today';
   const todayIdx = WEEKDAYS.indexOf(todayKey);
   const scheduledSoFar = reminderDays.filter(d => WEEKDAYS.indexOf(d) < todayIdx).length;
   if (count >= scheduledSoFar) return 'none'; // on pace, nothing missed yet

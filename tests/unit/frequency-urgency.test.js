@@ -131,6 +131,26 @@ describe('frequency-urgency — scheduled-days mode, weekly', () => {
     expect(frequencyUrgencyOf(goal, true, FRI)).toBe('today'); // Friday is itself scheduled
   });
 
+  it('clears the today icon once today\'s own entry is logged, even though the period target is not fully met yet', () => {
+    const goal = scheduled(3, ['mon', 'wed', 'fri'], [MON]); // logged today (Monday)
+    expect(frequencyUrgencyOf(goal, true, MON)).toBe('none');
+  });
+
+  it('clears a later scheduled day\'s icon once the period target was already met earlier in the week', () => {
+    // Target hit by Wednesday (3 entries), Friday is also scheduled but
+    // there's nothing left to do this period.
+    const goal = scheduled(3, ['mon', 'wed', 'fri'], [MON, TUE, WED]);
+    expect(frequencyUrgencyOf(goal, true, FRI)).toBe('none');
+  });
+
+  it('falls through to overdue on a scheduled day whose own entry does not fully cover an earlier miss', () => {
+    // Monday and Wednesday (both scheduled) missed; only today (Friday,
+    // also scheduled) has an entry. That covers one of the two misses, but
+    // not both, and there's still slack to recover the rest.
+    const goal = scheduled(3, ['mon', 'wed', 'fri'], [FRI]);
+    expect(frequencyUrgencyOf(goal, true, FRI)).toBe('overdue');
+  });
+
   it('is quiet on an unscheduled day when nothing has been missed yet (on pace)', () => {
     const goal = scheduled(2, ['mon', 'fri'], [MON]); // Monday already done
     expect(frequencyUrgencyOf(goal, true, WED)).toBe('none');
