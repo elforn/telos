@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../app/strings.js';
-import { septagonWedgeState } from '../../app/components/goal-item/goal-item.js';
+import { septagonWedgeState, septagonTodayBoundary } from '../../app/components/goal-item/goal-item.js';
 import { _resetDeleteGuard } from '../../app/utils/delete-ghost-guard.js';
 
 HTMLElement.prototype.setPointerCapture    = () => {};
@@ -471,6 +471,14 @@ describe('goal-item — frequency: role, aria, rendering', () => {
     expect(Number(rx)).toBe(7);
   });
 
+  it('the "logged today" ring uses the plain accent colour, not a semantic success colour — it means "logged", not "good"', () => {
+    const el = mount(weeklyGoal());
+    const css = el.shadowRoot.querySelector('style').textContent;
+    const rule = css.match(/\.freq-ring \.progress\s*{[^}]*}/)[0];
+    expect(rule).toContain('var(--color-accent)');
+    expect(rule).not.toContain('--color-success');
+  });
+
   it('bar[data-freq] and data-freq-type reflect the tracking type', () => {
     const weekly = mount(weeklyGoal());
     expect(weekly.shadowRoot.querySelector('.bar').dataset.freq).toBe('true');
@@ -603,6 +611,56 @@ describe('goal-item — decreasing: rendering', () => {
     expect(septagonWedgeState({ state: 'clean', future: true })).toBe('future');
   });
 
+  it('septagonTodayBoundary starts at the septagon\'s center, the same point regardless of which wedge', () => {
+    const starts = Array.from({ length: 7 }, (_, i) => septagonTodayBoundary(i).slice(0, 2));
+    starts.forEach(([x, y]) => {
+      expect(x).toBeCloseTo(starts[0][0], 5);
+      expect(y).toBeCloseTo(starts[0][1], 5);
+    });
+  });
+
+  it('current week: exactly one clock-line marks the boundary after today, never in a history week', () => {
+    const el = mount(decreasingGoal());
+    const current = el.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
+    expect(current.querySelectorAll('.septagon-clock-line')).toHaveLength(1);
+
+    const weeks = [...el.shadowRoot.querySelectorAll('.septagon-strip .septagon-week')];
+    weeks.slice(0, -1).forEach(week => {
+      expect(week.querySelectorAll('.septagon-clock-line')).toHaveLength(0);
+    });
+  });
+
+  it('the clock-line is a plain <line> element, distinct from the wedge <path>s', () => {
+    const el = mount(decreasingGoal());
+    const current = el.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
+    const clockLine = current.querySelector('.septagon-clock-line');
+    expect(clockLine.tagName.toLowerCase()).toBe('line');
+  });
+
+  it('a slip past the allowance ("over") gets no class, attribute, or child element of its own — a bare, fully transparent wedge', () => {
+    const el = mount(decreasingGoal([isoDaysFromNow(0)], 0)); // allowance 0 -> today's slip is "over"
+    const current = el.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
+    const overWedge = current.querySelector('path[data-state="over"]');
+    expect(overWedge).not.toBeNull();
+    expect(overWedge.getAttribute('fill')).toBeNull(); // transparency comes from the CSS rule, never inline
+    expect(overWedge.getAttribute('stroke')).toBeNull();
+    expect(overWedge.classList.length).toBe(0);
+  });
+
+  it('future (upcoming) wedges get no class, attribute, or child element of their own — a bare wedge, told apart from "over" by fill alone', () => {
+    // Fixed to a Wednesday so Thu-Sun are guaranteed future, regardless of
+    // which real weekday the suite happens to run on.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 12));
+    const el = mount(decreasingGoal());
+    const current = el.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
+    const futureWedge = current.querySelector('path[data-state="future"]');
+    expect(futureWedge).not.toBeNull();
+    expect(futureWedge.getAttribute('fill')).toBeNull(); // --color-border comes from the CSS rule, never inline
+    expect(futureWedge.classList.length).toBe(0);
+    vi.useRealTimers();
+  });
+
   it('a clean goal\'s current week is 7 wedges, each data-state "clean" or "future" — no within-dot, no second hue anywhere', () => {
     const el = mount(decreasingGoal());
     const current = el.shadowRoot.querySelector('.septagon-week.current .septagon-fill');
@@ -678,6 +736,15 @@ describe('goal-item — decreasing: rendering', () => {
   it('keeps the percentage label hidden, same as frequency types — the septagon strip carries the score instead', () => {
     const el = mount(decreasingGoal());
     expect(el.shadowRoot.querySelector('.pct-label').hidden).toBe(true);
+  });
+
+  it('the "logged today" ring uses the plain accent colour, not a semantic danger/warning colour — it means "logged", not "bad"', () => {
+    const el = mount(decreasingGoal());
+    const css = el.shadowRoot.querySelector('style').textContent;
+    const rule = css.match(/\.septagon-ring \.progress\s*{[^}]*}/)[0];
+    expect(rule).toContain('var(--color-accent)');
+    expect(rule).not.toContain('--color-danger');
+    expect(rule).not.toContain('--color-warning');
   });
 });
 

@@ -44,14 +44,20 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 // opacity was too close to call at a glance, and a diagonal hatch fill
 // tried next didn't read as textured at this size either — confirmed via
 // side-by-side comparison with the product owner). `clean` and `within`
-// both get a full, solid accent-colour wedge — `within` additionally gets
-// a small knockout dot (punched through to the row's own background)
-// marking "this one used the allowance but stayed free"; `over` drops the
-// fill entirely — knocked out like the dot, with just an accent stroke
-// outline — reading as "drained/empty" the way an unchecked box reads
-// unchecked, distinct at a glance from both the solid states and the fully
-// transparent one. `future` (a day in the current week that hasn't
-// happened yet) stays fully transparent, no stroke at all.
+// both get a full, solid accent-colour wedge, no border — `within`
+// additionally gets a small knockout dot (punched through to the row's own
+// background) marking "this one used the allowance but stayed free";
+// `over` drops the fill entirely, fully transparent — reading as
+// "drained/empty" the way an unchecked box reads unchecked, the same bare
+// look in every week (no special-casing the current week). `future` (a day
+// in the current week that hasn't happened yet) gets its own solid fill —
+// --color-border, the same neutral the frequency dot-strip already uses
+// for an empty/no-progress period — distinguishing "upcoming" from
+// "missed" by fill alone, no border needed to disambiguate the two.
+// Today's own wedge additionally gets one solid line, on the radial edge
+// facing tomorrow, marking the current moment like a clock hand (see
+// septagonTodayBoundary and .septagon-clock-line below) — the only border
+// anywhere in the strip.
 const SEPTAGON_SIDES = 7;
 const SEPTAGON_STEP = 360 / SEPTAGON_SIDES;
 // Internal SVG coordinate space — deliberately decoupled from the element's
@@ -70,6 +76,14 @@ export function septagonWedgePath(i) {
   const [x0, y0] = SEPTAGON_VERTICES[i];
   const [x1, y1] = SEPTAGON_VERTICES[(i + 1) % SEPTAGON_SIDES];
   return `M${SEPTAGON_CENTER},${SEPTAGON_CENTER} L${x0.toFixed(3)},${y0.toFixed(3)} L${x1.toFixed(3)},${y1.toFixed(3)} Z`;
+}
+// The radial boundary between wedge i and wedge i+1 — center out to their
+// shared vertex. Drawn solid only when i is today's index, marking the
+// edge between today and tomorrow like a clock hand pointing at the
+// current moment.
+export function septagonTodayBoundary(i) {
+  const [x, y] = SEPTAGON_VERTICES[(i + 1) % SEPTAGON_SIDES];
+  return [SEPTAGON_CENTER, SEPTAGON_CENTER, x, y];
 }
 // Centroid of wedge i (mean of its 3 corners) — where the "within" knockout
 // dot is centered.
@@ -210,9 +224,14 @@ class GoalItem extends Gestures(AppElement) {
         :host([data-urgency="overdue"]) .septagon-fill path[data-state="within"] {
           fill: var(--color-text-inverse);
         }
-        :host([data-urgency="overdue"]) .septagon-fill path[data-state="clean"],
-        :host([data-urgency="overdue"]) .septagon-fill path[data-state="within"],
-        :host([data-urgency="overdue"]) .septagon-fill path[data-state="over"] {
+        /* "Over" is fully transparent (see the base rule above) — nothing
+           opaque to re-theme, the red shows straight through in any state.
+           "Future" still needs one, the same re-theme the frequency
+           dot-strip's own empty/missed dot gets a few lines up. */
+        :host([data-urgency="overdue"]) .septagon-fill path[data-state="future"] {
+          fill: color-mix(in srgb, var(--color-text-inverse) 35%, transparent);
+        }
+        :host([data-urgency="overdue"]) .septagon-clock-line {
           stroke: var(--color-text-inverse);
         }
         :host([data-urgency="overdue"]) .septagon-within-dot { fill: var(--color-danger-track); }
@@ -375,7 +394,13 @@ class GoalItem extends Gestures(AppElement) {
           transition: opacity 0.2s ease;
         }
         .freq-today.logged .freq-ring { opacity: 1; }
-        .freq-ring .progress { fill: none; stroke: var(--color-success); stroke-width: 2; }
+        /* Plain accent, not a semantic success colour — this ring only ever
+           means "logged today", not "good"/"bad", and the wedge/dot fill
+           beneath it already carries whatever judgment there is to make.
+           Thinner than the general run of borders in this strip, on
+           purpose — a quiet activity marker, not something competing for
+           attention with the fill itself. */
+        .freq-ring .progress { fill: none; stroke: var(--color-accent); stroke-width: 1.5; }
 
         /* Small tick — every successful log. Same recipe as list-item's own
            done-celebrate (outline pulse + background wash), just retargeted
@@ -473,50 +498,41 @@ class GoalItem extends Gestures(AppElement) {
           inset: 0;
         }
 
-        /* Every wedge except "future" gets the same hairline accent border
-           — including "clean" and "within", where it sits right on top of
-           the matching accent fill and is invisible on its own. Without it,
-           an "over" wedge's border (see below) reads as an odd one-sided
-           seam against a borderless "clean"/"within" neighbour; with it,
-           every wedge boundary in the strip looks consistent regardless of
-           the mix of states next to it. vector-effect keeps the border a
-           constant on-screen width regardless of which of the two real
-           sizes (13px history, 29px current) this particular SVG renders
-           at — without it, the same stroke-width value would render
-           visibly thinner at 13px than at 29px, since both are the same
-           100-unit viewBox scaled by CSS to very different pixel sizes. */
-        .septagon-fill path[data-state="clean"],
-        .septagon-fill path[data-state="within"],
-        .septagon-fill path[data-state="over"] {
-          stroke: var(--color-accent);
-          stroke-width: 0.5px;
-          stroke-linejoin: round;
-          vector-effect: non-scaling-stroke;
-        }
+        /* Wedge fills never carry a border, in any week, for any state —
+           each state is told apart by fill alone. The one stroke anywhere
+           in the strip is the purpose-built .septagon-clock-line below,
+           layered on top rather than baked into a wedge path itself (a
+           single <path>'s stroke would be uniform across all its edges,
+           where this only ever applies to one specific edge). */
         .septagon-fill path[data-state="clean"],
         .septagon-fill path[data-state="within"] {
           fill: var(--color-accent);
         }
-        .septagon-fill path[data-state="future"] { fill: transparent; }
 
-        /* "Over": the fill drops out entirely (knocked out like the within
-           dot below), leaving just the accent border above — reads as
-           "drained/empty" at a glance, distinct from both the solid states
-           and the fully transparent "future" one (which gets no border at
-           all — there's nothing there to outline). */
-        .septagon-fill path[data-state="over"] {
-          fill: var(--color-surface);
-        }
+        /* "Over" (missed): the fill drops out entirely — reads as
+           "drained/empty" the way an unchecked box reads unchecked. Fully
+           transparent rather than any particular colour means it needs no
+           re-theming under the full-row-red overdue state either (see
+           :host([data-urgency="overdue"]) below) — there's nothing opaque
+           to clash with whatever's behind it. */
+        .septagon-fill path[data-state="over"] { fill: transparent; }
 
-        /* The border on "over" only earns its keep in the *current* week —
-           it's what separates a knocked-out "missed" wedge from a
-           knocked-out-looking "future" one, both otherwise the same
-           transparent-ish fill. A fully elapsed past week has no "future"
-           wedges to be confused with at all, so an unbordered miss there is
-           already unambiguous; the border becomes one more ring drawn on
-           every past failure for no reason, so it's dropped there. */
-        .septagon-week:not(.current) .septagon-fill path[data-state="over"] {
-          stroke: none;
+        /* "Future" (upcoming, current week only): a solid fill using the
+           same neutral --color-border the frequency dot-strip already uses
+           for an empty/no-progress period — distinguishes "hasn't happened
+           yet" from "missed" (fully transparent, above) by fill alone. */
+        .septagon-fill path[data-state="future"] { fill: var(--color-border); }
+
+        /* Today: a solid line on the radial edge between today's wedge and
+           tomorrow's — a clock hand marking the current moment, not an
+           outline around today's own wedge. Same accent colour and hairline
+           width the wedge borders themselves used to carry. */
+        .septagon-clock-line {
+          stroke: var(--color-accent);
+          stroke-width: 0.5px;
+          stroke-linecap: round;
+          vector-effect: non-scaling-stroke;
+          pointer-events: none;
         }
 
         /* Knockout dot marking a forgiven (within-allowance) slip — punched
@@ -558,7 +574,13 @@ class GoalItem extends Gestures(AppElement) {
           transition: opacity 0.2s ease;
         }
         .septagon-week.current.logged .septagon-ring { opacity: 1; }
-        .septagon-ring .progress { fill: none; stroke: var(--color-danger); stroke-width: 2; }
+        /* Plain accent, matching .freq-ring exactly — not --color-danger.
+           A slip already reads as a "drained" transparent wedge on its own
+           (see .septagon-fill path[data-state="over"] above); this ring
+           only means "today has an entry", the same quiet activity marker
+           weekly/monthly's own ring is, not a second warning on top of the
+           wedge's own colour. */
+        .septagon-ring .progress { fill: none; stroke: var(--color-accent); stroke-width: 1.5; }
 
         .drag-btn {
           position: relative;
@@ -1197,8 +1219,16 @@ class GoalItem extends Gestures(AppElement) {
 
   // Builds the wedge-fill SVG for one septagon: 7 <path> wedges (see
   // septagonWedgePath), each carrying its resolved state as a data
-  // attribute so the CSS in template() can drive fill/stroke per state —
-  // only the "within" dot needs anything built here beyond the path itself.
+  // attribute so the CSS in template() can drive fill per state — "missed"
+  // vs. "upcoming" are told apart by fill alone (transparent vs.
+  // --color-border), no border needed. Wedge fills never carry a border at
+  // all; the one stroke in the whole strip is a purpose-built <line>
+  // element for today's boundary, added on top rather than baked into the
+  // wedge path itself (a single <path>'s stroke would be uniform across
+  // all its edges, where this only ever applies to one specific edge).
+  // Falls out naturally from day.today — only the current week's day array
+  // ever has day.today === true, so no separate "is this the current week"
+  // check is needed here.
   _buildSeptagonFill(days) {
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('class', 'septagon-fill');
@@ -1221,12 +1251,24 @@ class GoalItem extends Gestures(AppElement) {
         dot.setAttribute('r', String(SEPTAGON_WITHIN_DOT_RADIUS));
         svg.appendChild(dot);
       }
+
+      if (day.today) {
+        const [x0, y0, x1, y1] = septagonTodayBoundary(i);
+        const line = document.createElementNS(SVG_NS, 'line');
+        line.setAttribute('class', 'septagon-clock-line');
+        line.setAttribute('x1', x0.toFixed(3));
+        line.setAttribute('y1', y0.toFixed(3));
+        line.setAttribute('x2', x1.toFixed(3));
+        line.setAttribute('y2', y1.toFixed(3));
+        svg.appendChild(line);
+      }
     });
 
     return svg;
   }
 
-  // Six septagons, oldest → current (see recentWeekStates in tracking.js) —
+  // DOT_WINDOW.decreasing septagons, oldest → current (see recentWeekStates
+  // in tracking.js) —
   // replaces the frequency dot-cluster entirely for this type. Rebuilt via
   // replaceChildren each render, same convention as _renderFreqCluster's dot
   // row below, since the row only re-renders on real state changes, not
