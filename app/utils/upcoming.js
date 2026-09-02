@@ -1,9 +1,14 @@
 // Aggregates goals (every year) and list items (every list, including
 // archived ones) into the Overdue/Today/Tomorrow buckets the Upcoming dialog
 // and bottom-nav badge both read. Pure and store-agnostic — callers pass in
-// whatever slice of state they have (see bottom-nav.js).
-import { urgencyOf, daysUntil } from './urgency.js';
+// whatever slice of state they have (see bottom-nav.js). A goal's placement
+// merges two independent urgency sources — its plain dueDate countdown and
+// its own frequency pace (see frequency-urgency.js) — to whichever is
+// worse, exactly mirroring goal-item's own row icon so a goal's Upcoming
+// placement always matches what its row is showing.
+import { urgencyOf, daysUntil, mostUrgent } from './urgency.js';
 import { percentValue } from './tracking.js';
+import { frequencyUrgency } from './frequency-urgency.js';
 
 const GOAL_SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
 
@@ -28,10 +33,11 @@ export function collectUpcoming({ goals, lists } = {}) {
         if (goal.archived) continue;
         const active = percentValue(goal) < 100;
         const entry = { kind: 'goal', id: goal.id, title: goal.title, year, section };
-        const bucket = urgencyOf(goal.dueDate, active);
+        const freq = frequencyUrgency(goal, active);
+        const bucket = mostUrgent([urgencyOf(goal.dueDate, active), freq.bucket]);
         if (bucket === 'overdue') overdue.push(entry);
         else if (bucket === 'today') today.push(entry);
-        else if (active && isTomorrow(goal.dueDate)) tomorrow.push(entry);
+        else if (active && (isTomorrow(goal.dueDate) || freq.tomorrow)) tomorrow.push(entry);
       }
     }
   }

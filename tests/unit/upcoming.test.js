@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { collectUpcoming, upcomingBadgeCount } from '../../app/utils/upcoming.js';
 
 function isoDaysFromNow(days) {
@@ -93,6 +93,75 @@ describe('upcoming — collectUpcoming buckets', () => {
     const { overdue, today } = collectUpcoming({ goals, lists: [] });
     expect(overdue.map(e => e.id)).toEqual(['past-year']);
     expect(today.map(e => e.id)).toEqual(['future-year']);
+  });
+});
+
+describe('upcoming — frequency goals feed the same buckets as dueDate', () => {
+  // 2026-08-10 is a Monday, matching frequency-urgency.test.js's own fixture week.
+  const MON = new Date(2026, 7, 10);
+
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('buckets an Nx-mode weekly goal as today once slack hits 0', () => {
+    vi.setSystemTime(new Date(2026, 7, 14)); // Friday — 3 days left, target 3, slack 0
+    const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: 'any' } })], milestones: [], wow: [], focus: [] } };
+    const { today } = collectUpcoming({ goals, lists: [] });
+    expect(today.map(e => e.id)).toEqual(['g1']);
+  });
+
+  it('buckets an Nx-mode weekly goal as tomorrow at slack == 1, not counted toward the badge', () => {
+    vi.setSystemTime(new Date(2026, 7, 13)); // Thursday — 4 days left, target 3, slack 1
+    const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: 'any' } })], milestones: [], wow: [], focus: [] } };
+    const { tomorrow, today, overdue } = collectUpcoming({ goals, lists: [] });
+    expect(tomorrow.map(e => e.id)).toEqual(['g1']);
+    expect(today).toHaveLength(0);
+    expect(overdue).toHaveLength(0);
+    expect(upcomingBadgeCount({ today, overdue })).toBe(0);
+  });
+
+  it('buckets a scheduled-days goal as overdue after a recoverable miss', () => {
+    vi.setSystemTime(new Date(2026, 7, 11)); // Tuesday — Monday was scheduled and missed
+    const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: ['mon', 'wed', 'fri'] } })], milestones: [], wow: [], focus: [] } };
+    const { overdue } = collectUpcoming({ goals, lists: [] });
+    expect(overdue.map(e => e.id)).toEqual(['g1']);
+  });
+
+  it('buckets a scheduled-days goal as today when today itself is scheduled', () => {
+    vi.setSystemTime(MON);
+    const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: ['mon', 'wed', 'fri'] } })], milestones: [], wow: [], focus: [] } };
+    const { today } = collectUpcoming({ goals, lists: [] });
+    expect(today.map(e => e.id)).toEqual(['g1']);
+  });
+
+  it('buckets a scheduled-days goal as tomorrow when nothing is missed and tomorrow is scheduled', () => {
+    vi.setSystemTime(new Date(2026, 7, 13)); // Thursday, tomorrow (Friday) scheduled
+    const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'weekly', target: 1, entries: [], reminderDays: ['fri'] } })], milestones: [], wow: [], focus: [] } };
+    const { tomorrow } = collectUpcoming({ goals, lists: [] });
+    expect(tomorrow.map(e => e.id)).toEqual(['g1']);
+  });
+
+  it('excludes a scheduled-days goal once recovery is mathematically impossible — no row, no bucket', () => {
+    vi.setSystemTime(new Date(2026, 7, 15)); // Saturday — mon/wed/fri all missed, target 3, only 2 days left
+    const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: ['mon', 'wed', 'fri'] } })], milestones: [], wow: [], focus: [] } };
+    const { overdue, today, tomorrow } = collectUpcoming({ goals, lists: [] });
+    expect(overdue).toHaveLength(0);
+    expect(today).toHaveLength(0);
+    expect(tomorrow).toHaveLength(0);
+  });
+
+  it('shows the worse of dueDate and frequency pace — a lapsed deadline wins even for Nx-mode, which never self-escalates to overdue', () => {
+    vi.setSystemTime(MON); // plenty of frequency slack (quiet), but the deadline already passed
+    const goals = { '2026': { capstone: [goal({ id: 'g1', dueDate: '2026-08-01', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: 'any' } })], milestones: [], wow: [], focus: [] } };
+    const { overdue } = collectUpcoming({ goals, lists: [] });
+    expect(overdue.map(e => e.id)).toEqual(['g1']);
+  });
+
+  it('a monthly goal participates without ever setting reminderDays — unconditional, no opt-in', () => {
+    vi.setSystemTime(new Date(2026, 7, 22)); // Aug 22: 10 days left, target 10, slack 0
+    const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'monthly', target: 10, entries: [] } })], milestones: [], wow: [], focus: [] } };
+    const { today } = collectUpcoming({ goals, lists: [] });
+    expect(today.map(e => e.id)).toEqual(['g1']);
   });
 });
 

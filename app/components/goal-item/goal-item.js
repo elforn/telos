@@ -3,7 +3,8 @@ import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { tagStrip } from '../../utils/tag-color.js';
-import { urgencyOf } from '../../utils/urgency.js';
+import { urgencyOf, mostUrgent } from '../../utils/urgency.js';
+import { frequencyUrgencyOf } from '../../utils/frequency-urgency.js';
 import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 import {
@@ -1124,7 +1125,13 @@ class GoalItem extends Gestures(AppElement) {
     this._pct = Math.max(0, pct);
     const title = this._goal?.title ?? '';
     const active = this._pct < 100 && !this._goal?.archived;
-    const urgency = urgencyOf(this._goal?.dueDate, active);
+    // Two independent urgency sources merged to whichever is worse — a
+    // frequency goal's own pace (see frequency-urgency.js) alongside its
+    // plain dueDate countdown, if it has one. Before a dueDate, frequency
+    // pace alone decides; once the dueDate itself lapses, urgencyOf already
+    // returns 'overdue', which always wins the merge — no separate
+    // before/after phase switch needed.
+    const urgency = mostUrgent([urgencyOf(this._goal?.dueDate, active), frequencyUrgencyOf(this._goal, active)]);
     this._title.textContent = title;
 
     this._bar.setAttribute('aria-label', this._buildAriaLabel({ isFreq, isDecr, title, urgency }));
