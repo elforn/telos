@@ -574,13 +574,16 @@ class GoalItem extends Gestures(AppElement) {
           transition: opacity 0.2s ease;
         }
         .septagon-week.current.logged .septagon-ring { opacity: 1; }
-        /* Plain accent, matching .freq-ring exactly — not --color-danger.
-           A slip already reads as a "drained" transparent wedge on its own
-           (see .septagon-fill path[data-state="over"] above); this ring
-           only means "today has an entry", the same quiet activity marker
-           weekly/monthly's own ring is, not a second warning on top of the
-           wedge's own colour. */
-        .septagon-ring .progress { fill: none; stroke: var(--color-accent); stroke-width: 1.5; }
+        /* Same plain accent as .freq-ring, not --color-danger — a slip
+           already reads as a "drained" transparent wedge on its own (see
+           .septagon-fill path[data-state="over"] above), so this ring isn't
+           a second warning stacked on top of the wedge's own colour.
+           Dashed rather than solid, though: the ring means the *opposite*
+           thing here (a slip, not a completion) and color is deliberately
+           off the table for either — a broken/interrupted ring for "the
+           streak broke today" reads distinctly from freq-ring's solid
+           "did the thing" circle without needing a second hue. */
+        .septagon-ring .progress { fill: none; stroke: var(--color-accent); stroke-width: 1.5; stroke-dasharray: 4 3; }
 
         .drag-btn {
           position: relative;

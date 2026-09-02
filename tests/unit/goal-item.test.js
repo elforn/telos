@@ -746,6 +746,15 @@ describe('goal-item — decreasing: rendering', () => {
     expect(rule).not.toContain('--color-danger');
     expect(rule).not.toContain('--color-warning');
   });
+
+  it('the ring is dashed, not solid — same colour as freq-ring, but the ring means the opposite thing here (a slip, not a completion)', () => {
+    const el = mount(decreasingGoal());
+    const css = el.shadowRoot.querySelector('style').textContent;
+    const septagonRule = css.match(/\.septagon-ring \.progress\s*{[^}]*}/)[0];
+    const freqRule = css.match(/\.freq-ring \.progress\s*{[^}]*}/)[0];
+    expect(septagonRule).toMatch(/stroke-dasharray:\s*[^;]+;/);
+    expect(freqRule).not.toContain('stroke-dasharray');
+  });
 });
 
 describe('goal-item — decreasing: role, aria', () => {
