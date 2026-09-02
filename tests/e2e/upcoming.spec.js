@@ -71,7 +71,7 @@ test.describe('Upcoming dialog', () => {
     expect(rowCount).toBe(2);
   });
 
-  test('tapping a goal row navigates to its year and opens goal-dialog pre-filled', async ({ page }) => {
+  test('tapping a goal row navigates to its year and scrolls/flashes it, without opening goal-dialog', async ({ page }) => {
     await page.goto(`/${currentYear}`);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
@@ -99,24 +99,30 @@ test.describe('Upcoming dialog', () => {
         ?.querySelector('home-page')?.params?.year === String(y)
     , otherYear);
 
-    await page.waitForFunction(() => {
-      const d = document.querySelector('app-router')?.shadowRoot
+    // Lands on the goal itself (flashed), not a bare edit modal
+    await page.waitForFunction(() =>
+      document.querySelector('app-router')?.shadowRoot
         ?.querySelector('home-page')?.shadowRoot
-        ?.querySelector('goal-dialog')?.shadowRoot
-        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
-      return d?.open;
-    });
-
+        ?.querySelector('#capstone-list goal-item')?.classList.contains('nav-flash')
+    );
     const title = await page.evaluate(() =>
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
-        .querySelector('goal-dialog').shadowRoot
-        .querySelector('#input')?.value
+        .querySelector('#capstone-list goal-item').shadowRoot
+        .querySelector('.title').textContent
     );
     expect(title).toBe('Ship investor deck');
+
+    const dialogOpen = await page.evaluate(() =>
+      document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog')?.open ?? false
+    );
+    expect(dialogOpen).toBe(false);
   });
 
-  test('tapping an item row navigates to its list and opens item-dialog pre-filled', async ({ page }) => {
+  test('tapping an item row navigates to its list and scrolls/flashes it, without opening item-dialog', async ({ page }) => {
     await page.goto(`/${currentYear}`);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
@@ -138,20 +144,26 @@ test.describe('Upcoming dialog', () => {
     await waitForListDetailPage(page);
     await waitForIDBFlush(page);
 
-    await page.waitForFunction(() => {
-      const d = document.querySelector('app-router')?.shadowRoot
+    // Lands on the item itself (flashed), not a bare edit modal
+    await page.waitForFunction(() =>
+      document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
-        ?.querySelector('item-dialog')?.shadowRoot
-        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
-      return d?.open;
-    });
-
+        ?.querySelector('list-item')?.classList.contains('nav-flash')
+    );
     const title = await page.evaluate(() =>
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
-        .querySelector('item-dialog').shadowRoot
-        .querySelector('#title-input')?.value
+        .querySelector('list-item').shadowRoot
+        .querySelector('.title').textContent
     );
     expect(title).toBe('Renew passport');
+
+    const dialogOpen = await page.evaluate(() =>
+      document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('item-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog')?.open ?? false
+    );
+    expect(dialogOpen).toBe(false);
   });
 });

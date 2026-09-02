@@ -1989,7 +1989,7 @@ describe('list-detail-page — share', () => {
 // ── Upcoming-dialog pendingFocus landing ────────────────────────────────────
 
 describe('list-detail-page — pendingFocus (Upcoming dialog row tap)', () => {
-  it('scrolls to, flashes, and opens item-dialog for the item named in pendingFocus', async () => {
+  it('scrolls to and flashes the item named in pendingFocus, without opening its dialog', async () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
     const el = mount();
     await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
@@ -2000,9 +2000,9 @@ describe('list-detail-page — pendingFocus (Upcoming dialog row tap)', () => {
 
     expect(scrollSpy).toHaveBeenCalledOnce();
     expect(itemEl.classList.contains('nav-flash')).toBe(true);
-
-    await vi.waitFor(() => expect(el.shadowRoot.querySelector('#dialog').open).toHaveBeenCalledOnce(), { timeout: 2000 });
-    expect(el.shadowRoot.querySelector('#dialog').open.mock.calls[0][0].id).toBe('i1');
+    // The tap lands you on the item in its real list context — it does not
+    // also pop the edit modal.
+    expect(el.shadowRoot.querySelector('#dialog').open).not.toHaveBeenCalled();
   });
 
   it('clears pendingFocus after consuming it', async () => {
@@ -2023,7 +2023,7 @@ describe('list-detail-page — pendingFocus (Upcoming dialog row tap)', () => {
 
     setRuntimeState('pendingFocus', { kind: 'goal', id: 'g1' });
 
-    expect(el.shadowRoot.querySelector('#dialog').open).not.toHaveBeenCalled();
+    expect(getState().pendingFocus).toEqual({ kind: 'goal', id: 'g1' });
   });
 
   it('does nothing when no item in this list matches the id', async () => {
@@ -2033,6 +2033,8 @@ describe('list-detail-page — pendingFocus (Upcoming dialog row tap)', () => {
 
     setRuntimeState('pendingFocus', { kind: 'item', id: 'does-not-exist' });
 
-    expect(el.shadowRoot.querySelector('#dialog').open).not.toHaveBeenCalled();
+    // Left intact, not cleared — see _applyPendingItemFocus's own comment on
+    // why: a real other-list instance still needs to be able to consume it.
+    expect(getState().pendingFocus).toEqual({ kind: 'item', id: 'does-not-exist' });
   });
 });

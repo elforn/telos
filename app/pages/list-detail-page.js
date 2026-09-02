@@ -1593,14 +1593,15 @@ class ListDetailPage extends AppElement {
 
   // Upcoming-dialog row tap landing here (this page is already scoped to the
   // right list via the route itself — see bottom-nav.js). Scroll/flash the
-  // item, then open item-dialog after a short delay so the flash is
-  // actually visible before the dialog covers the screen, mirroring
-  // home-page.js's _applyPendingGoalFocus exactly — including only clearing
-  // the runtime signal once a match is actually found on THIS page. If the
-  // user is currently viewing a *different* list, that old instance also
-  // matches kind === 'item' and would otherwise consume the signal (via
-  // navigate()'s synchronous notify) before the correct list's page ever
-  // mounts to read it — see home-page.js's longer comment on the same race.
+  // item, mirroring home-page.js's _applyPendingGoalFocus exactly —
+  // including only clearing the runtime signal once a match is actually
+  // found on THIS page (see that method's longer comment on why: the *old*
+  // list-detail-page instance, if the user was viewing a different list,
+  // also matches kind === 'item' and would otherwise consume the signal via
+  // navigate()'s synchronous notify before the correct list's page ever
+  // mounts to read it). Deliberately does NOT open item-dialog — the point
+  // of the tap is to land you on the item in its real list context, not to
+  // pop a bare edit modal; you decide whether to tap it from there.
   _applyPendingItemFocus(pending) {
     if (!pending || pending.kind !== 'item') return;
 
@@ -1613,14 +1614,6 @@ class ListDetailPage extends AppElement {
     el.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
     el.classList.add('nav-flash');
     setTimeout(() => el.classList.remove('nav-flash'), 900);
-
-    setTimeout(() => {
-      const cleanItem = this._prepareDialog(el._item);
-      this._editingItem = cleanItem;
-      this._createdItemId = null;
-      this._itemEditSnapshot = getState().lists;
-      this._dialog.open(cleanItem);
-    }, reduced ? 0 : 450);
   }
 
   _itemFilterActive() {

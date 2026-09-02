@@ -1232,7 +1232,7 @@ describe('home-page — reflection summary card', () => {
 // ── Upcoming-dialog pendingFocus landing ────────────────────────────────────
 
 describe('home-page — pendingFocus (Upcoming dialog row tap)', () => {
-  it('scrolls to, flashes, and opens the dialog for the goal named in pendingFocus', async () => {
+  it('scrolls to and flashes the goal named in pendingFocus, without opening its dialog', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
       '2026': { capstone: [], milestones: [{ id: 'm1', title: 'Ship it', tracking: { type: 'percentage', value: 10 } }], wow: [], focus: [] },
     }, images: {} } });
@@ -1249,10 +1249,9 @@ describe('home-page — pendingFocus (Upcoming dialog row tap)', () => {
 
     expect(scrollSpy).toHaveBeenCalledOnce();
     expect(goalEl.classList.contains('nav-flash')).toBe(true);
-
-    await vi.waitFor(() => expect(openSpy).toHaveBeenCalledOnce(), { timeout: 2000 });
-    expect(openSpy.mock.calls[0][0].id).toBe('m1');
-    expect(openSpy.mock.calls[0][1]).toEqual({ year: '2026', section: 'milestones' });
+    // The tap lands you on the goal in its real year/section context — it
+    // does not also pop the edit modal.
+    expect(openSpy).not.toHaveBeenCalled();
   });
 
   it('clears pendingFocus after consuming it', async () => {
@@ -1273,22 +1272,20 @@ describe('home-page — pendingFocus (Upcoming dialog row tap)', () => {
   it('does nothing for a pendingFocus of a different kind', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {} } });
     const el = mount(2026);
-    const dialogEl = el.shadowRoot.querySelector('#dialog');
-    const openSpy = vi.spyOn(dialogEl, 'open');
 
     setRuntimeState('pendingFocus', { kind: 'item', id: 'i1' });
 
-    expect(openSpy).not.toHaveBeenCalled();
+    expect(getState().pendingFocus).toEqual({ kind: 'item', id: 'i1' });
   });
 
   it('does nothing when no goal on this page matches the id (e.g. wrong year)', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {} } });
     const el = mount(2026);
-    const dialogEl = el.shadowRoot.querySelector('#dialog');
-    const openSpy = vi.spyOn(dialogEl, 'open');
 
     setRuntimeState('pendingFocus', { kind: 'goal', id: 'does-not-exist' });
 
-    expect(openSpy).not.toHaveBeenCalled();
+    // Left intact, not cleared — see _applyPendingGoalFocus's own comment on
+    // why: a real other-year instance still needs to be able to consume it.
+    expect(getState().pendingFocus).toEqual({ kind: 'goal', id: 'does-not-exist' });
   });
 });

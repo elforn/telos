@@ -473,14 +473,14 @@ class BottomNav extends AppElement {
       </style>
 
       <div class="nav-row" role="navigation">
-        <div class="pills">
-          <button class="pill" id="pill-years">${t('bottom-nav.years')}<span class="pill-dot" id="years-dot" hidden aria-hidden="true"></span></button>
-          <button class="pill" id="pill-lists">${t('bottom-nav.lists')}<span class="pill-dot" id="lists-dot" hidden aria-hidden="true"></span></button>
-        </div>
         <button class="bell-btn" id="bell-btn" hidden aria-label="${t('upcoming.open')}">
           ${icons.bell}
           <span class="bell-badge" id="bell-badge" aria-hidden="true"></span>
         </button>
+        <div class="pills">
+          <button class="pill" id="pill-years">${t('bottom-nav.years')}<span class="pill-dot" id="years-dot" hidden aria-hidden="true"></span></button>
+          <button class="pill" id="pill-lists">${t('bottom-nav.lists')}<span class="pill-dot" id="lists-dot" hidden aria-hidden="true"></span></button>
+        </div>
         <button class="gear-btn" id="gear-btn" aria-label="${t('bottom-nav.settings')}">⚙<span class="gear-badge" id="gear-badge" hidden aria-hidden="true"></span></button>
       </div>
 

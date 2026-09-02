@@ -1208,9 +1208,10 @@ class HomePage extends AppElement {
 
   // Upcoming-dialog row tap landing here: find the goal across all four
   // sections (mirrors _revealCreatedGoal's search — the tap only carries the
-  // goal id, not its section), scroll/flash it, then open goal-dialog after
-  // a short delay so the flash is actually visible before the dialog covers
-  // the screen.
+  // goal id, not its section) and scroll/flash it. Deliberately does NOT
+  // open goal-dialog — the point of the tap is to land you on the goal in
+  // its real context (this year, this section), not to pop a bare edit
+  // modal; you decide whether to tap it from there.
   //
   // Only clears the runtime signal once a match is actually found on THIS
   // page — not on the initial kind check. navigate() (bottom-nav.js) fires
@@ -1224,17 +1225,9 @@ class HomePage extends AppElement {
   _applyPendingGoalFocus(pending) {
     if (!pending || pending.kind !== 'goal') return;
 
-    const sections = [
-      { name: 'capstone',   list: this._capstoneList },
-      { name: 'milestones', list: this._milestoneList },
-      { name: 'wow',        list: this._wowList },
-      { name: 'focus',      list: this._focusList },
-    ];
-    let el = null, section = null;
-    for (const s of sections) {
-      el = [...(s.list?.querySelectorAll('goal-item') ?? [])].find(g => g._goal?.id === pending.id);
-      if (el) { section = s.name; break; }
-    }
+    const lists = [this._capstoneList, this._milestoneList, this._wowList, this._focusList];
+    const el = lists.flatMap(list => [...(list?.querySelectorAll('goal-item') ?? [])])
+      .find(g => g._goal?.id === pending.id);
     if (!el) return;
     setRuntimeState('pendingFocus', null);
 
@@ -1242,13 +1235,6 @@ class HomePage extends AppElement {
     el.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
     el.classList.add('nav-flash');
     setTimeout(() => el.classList.remove('nav-flash'), 900);
-
-    const goal = el._goal;
-    setTimeout(() => {
-      this._editingSection = section;
-      this._editingGoal = goal;
-      this._openGoalDialog(goal, { year: String(this._year), section });
-    }, reduced ? 0 : 450);
   }
 
   _goalFilterActive() {
