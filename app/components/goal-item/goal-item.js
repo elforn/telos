@@ -508,6 +508,17 @@ class GoalItem extends Gestures(AppElement) {
           fill: var(--color-surface);
         }
 
+        /* The border on "over" only earns its keep in the *current* week —
+           it's what separates a knocked-out "missed" wedge from a
+           knocked-out-looking "future" one, both otherwise the same
+           transparent-ish fill. A fully elapsed past week has no "future"
+           wedges to be confused with at all, so an unbordered miss there is
+           already unambiguous; the border becomes one more ring drawn on
+           every past failure for no reason, so it's dropped there. */
+        .septagon-week:not(.current) .septagon-fill path[data-state="over"] {
+          stroke: none;
+        }
+
         /* Knockout dot marking a forgiven (within-allowance) slip — punched
            through to the row's own background rather than a second hue, so
            it reads correctly in both themes and against any accent choice. */

@@ -268,17 +268,17 @@ test.describe('Frequency goals', () => {
     );
     expect(chipCount).toBe(42); // 7 × PERIOD_WINDOW.weekly (6)
 
-    // 3 weeks (21 days) back — an old miss to back-fill, distinct from
+    // 1 week (7 days) back — an old miss to back-fill, distinct from
     // "today" (which the hold gesture already covers in the other test
-    // above; this one is specifically about arbitrary dates). Deliberately
-    // not the strip's absolute oldest chip: FIX_DAY_SPAN is sized for the
-    // worst case (today being a Sunday), so on other days the oldest few
-    // chips can fall just outside the 6-week window recentDots actually
-    // tracks — 21 days back is safely inside that window regardless of
-    // what day of the week "today" happens to be when this runs.
+    // above; this one is specifically about arbitrary dates). Fix-a-day's
+    // own strip (FIX_DAY_SPAN, 6 weeks) reaches much further back than
+    // this, but the *dot-strip* this test also checks only ever displays
+    // DOT_WINDOW.weekly (3) weeks — 7 days back safely lands within that
+    // shorter display window regardless of what day of the week "today"
+    // happens to be when this runs, unlike something closer to its edge.
     const firstChipIso = await page.evaluate(() => {
       const d = new Date();
-      d.setDate(d.getDate() - 21);
+      d.setDate(d.getDate() - 7);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     });
     const wasPressedBefore = await page.evaluate(iso =>
@@ -655,7 +655,7 @@ test.describe('Frequency goals', () => {
         scrolledToEnd: strip.scrollLeft > 0, // any distance in confirms it isn't stuck at the oldest day
       };
     });
-    expect(chipCount).toBe(180); // 30 × DOT_WINDOW.monthly (6) — the full display window, not just the 4 months still scored
+    expect(chipCount).toBe(180); // FIX_DAY_SPAN.monthly — independent of both the scored (4-month) and displayed (3-month) windows
     expect(dividerCount).toBeGreaterThanOrEqual(4);
     expect(scrolledToEnd).toBe(true);
   });

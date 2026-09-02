@@ -26,7 +26,20 @@
 //
 // percentValue() works identically for every type — nothing outside this
 // module should read `.tracking` directly.
+//
+// `reminderDays` (weekly goals only, set via goal-dialog's own reminder-day
+// chip row) is a separate, independently-optional field on the same object:
+//   undefined  — not configured yet (default; the goal doesn't participate
+//                in the Upcoming digest/skim view until explicitly set)
+//   'any'      — times-per-period mode: no specific days pinned
+//   string[]   — scheduled-days mode: a subset of WEEKDAYS (0+ days)
+// goal-dialog.js reads/writes it directly alongside type/target/entries
+// (the dialog is this shape's own editor, same as those); WEEKDAYS is
+// exported from here so it stays the single source for day-key order once
+// the Upcoming-view aggregation also needs to read this field.
 import { todayISO } from './today-iso.js';
+
+export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 // Which calendar unit a type's periods bucket into. Decreasing shares
 // weekly's Mon–Sun buckets (the allowance is a per-week budget), so it
@@ -79,33 +92,27 @@ export const ALLOWANCE_PERIOD_WEEKS = { week: 1, '4weeks': 4 };
 // own recency curve (see decreasingWeightedAverage) is what actually differs.
 export const PERIOD_WINDOW = { weekly: 6, monthly: 4, decreasing: 6 };
 
-// The row's glance strip shows more history than the score actually counts
-// for monthly goals — 6 months of context vs. the 4 PERIOD_WINDOW scores —
-// deliberately: seeing further back doesn't change what you're being judged
-// on, it just gives more of the story. Weekly's display and scored windows
-// stay equal (both were already 6). recentDots() also trims *display* only
-// (see below) — neither of these affects percentValue/weightedAverage,
-// which always read PERIOD_WINDOW. decreasing.DOT_WINDOW is present for
-// uniformity only — goal-item renders a 6-septagon history strip instead of
-// calling recentDots for this type, and that strip is always shown
-// untrimmed (no display-only trim like the frequency dot-strip).
-export const DOT_WINDOW = { weekly: PERIOD_WINDOW.weekly, monthly: 6, decreasing: PERIOD_WINDOW.decreasing };
+// The row's glance strip deliberately shows *less* history than the score
+// actually counts (3 periods, vs. PERIOD_WINDOW's 6/4/6) — a recent-glance
+// view, not a full explanation of the score, in anticipation of a future
+// analytics feature that will cover the fuller history in detail. Purely
+// display: recentDots()/recentWeekStates() read this, but
+// percentValue/weightedAverage/decreasingWeightedAverage always read
+// PERIOD_WINDOW and are completely untouched by this window shrinking.
+export const DOT_WINDOW = { weekly: 3, monthly: 3, decreasing: 3 };
 
-// Fix-a-day's scrollable window, in calendar days — sized to reach every
-// period shown in the row's own dot-strip (DOT_WINDOW), not just the ones
-// still scored (PERIOD_WINDOW). For weekly/decreasing the two windows are
-// equal, so this is moot; for monthly they differ on purpose (see
-// DOT_WINDOW above) — backfilling a month 5-6 back won't move the score,
-// but anything visible in the strip should still be tappable to fix, not
-// just the portion that happens to still count. Months are approximated at
-// 30 days; fix-a-day is a flat day-count strip, not period-boundary-exact —
+// Fix-a-day's scrollable window, in calendar days — deliberately independent
+// of both PERIOD_WINDOW (the score) and DOT_WINDOW (the display, now much
+// shorter at 3 periods) and unchanged by the DOT_WINDOW shrink above:
+// showing less by default was never meant to shrink how far back an entry
+// can still be corrected. Monthly specifically reaches further (6 months)
+// than what's actually scored (PERIOD_WINDOW.monthly, 4 months) — by
+// design, correcting an old month you're catching up on shouldn't require
+// it to still be visible or still counted. Months are approximated at 30
+// days; fix-a-day is a flat day-count strip, not period-boundary-exact —
 // the score itself (via monthKey/isoWeekKey below) is the exact calendar
 // math.
-export const FIX_DAY_SPAN = {
-  weekly: 7 * DOT_WINDOW.weekly,
-  monthly: 30 * DOT_WINDOW.monthly,
-  decreasing: 7 * DOT_WINDOW.decreasing,
-};
+export const FIX_DAY_SPAN = { weekly: 42, monthly: 180, decreasing: 42 };
 
 // Decreasing's max allowance scales with allowancePeriod — capped one day
 // below the full block (6 of 7 days for 'week', 27 of 28 for '4weeks') so
@@ -432,14 +439,16 @@ export function weekDayStates(goal, todayIso = todayISO(), weeksAgo = 0) {
   });
 }
 
-// All PERIOD_WINDOW.decreasing weeks, oldest → current — drives the
-// goal-item septagon history strip directly, always shown untrimmed (unlike
-// recentDots' display-only trim of a leading missed streak). A week before
-// the goal existed has no entries, so it naturally comes back all-'clean' (0
-// slips ⇒ fraction 1.0) — correctly consistent with "a new decreasing goal
-// starts at 100%", the mirror image of frequency types' "counts as missed
-// before the goal existed" issue noted above, not a new problem needing its
-// own placeholder state.
-export function recentWeekStates(goal, todayIso = todayISO(), count = PERIOD_WINDOW.decreasing) {
+// DOT_WINDOW.decreasing weeks, oldest → current — drives the goal-item
+// septagon history strip directly, always shown untrimmed (unlike
+// recentDots' display-only trim of a leading missed streak). Display-only,
+// same as recentDots — the score (decreasingWeightedAverage) always reads
+// the full PERIOD_WINDOW.decreasing regardless of how few weeks are shown
+// here. A week before the goal existed has no entries, so it naturally
+// comes back all-'clean' (0 slips ⇒ fraction 1.0) — correctly consistent
+// with "a new decreasing goal starts at 100%", the mirror image of
+// frequency types' "counts as missed before the goal existed" issue noted
+// above, not a new problem needing its own placeholder state.
+export function recentWeekStates(goal, todayIso = todayISO(), count = DOT_WINDOW.decreasing) {
   return Array.from({ length: count }, (_, i) => weekDayStates(goal, todayIso, count - 1 - i));
 }

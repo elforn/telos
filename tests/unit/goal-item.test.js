@@ -447,9 +447,9 @@ describe('goal-item — frequency: role, aria, rendering', () => {
     expect(notLogged.shadowRoot.querySelector('.bar').getAttribute('aria-label')).not.toContain('logged today');
   });
 
-  it('renders 5 history dots plus one today token when the oldest tracked week has an entry (nothing trimmed)', () => {
-    const el = mount(weeklyGoal([isoDaysFromWeekStart(-35)])); // the oldest of the 6 tracked weeks
-    expect(el.shadowRoot.querySelectorAll('.freq-dots .freq-dot')).toHaveLength(5);
+  it('renders 2 history dots plus one today token when the oldest displayed week has an entry (nothing trimmed)', () => {
+    const el = mount(weeklyGoal([isoDaysFromWeekStart(-14)])); // the oldest of the 3 displayed weeks (DOT_WINDOW.weekly)
+    expect(el.shadowRoot.querySelectorAll('.freq-dots .freq-dot')).toHaveLength(2);
     expect(el.shadowRoot.querySelector('.freq-today .freq-dot')).not.toBeNull();
   });
 
@@ -588,10 +588,10 @@ describe('goal-item — decreasing: rendering', () => {
     expect(mount(monthlyGoal()).shadowRoot.querySelector('.bar').dataset.type).toBe('monthly');
   });
 
-  it('renders 6 septagons, the last one carrying the "current" class', () => {
+  it('renders 3 septagons, the last one carrying the "current" class', () => {
     const el = mount(decreasingGoal());
     const weeks = el.shadowRoot.querySelectorAll('.septagon-strip .septagon-week');
-    expect(weeks).toHaveLength(6);
+    expect(weeks).toHaveLength(3);
     expect([...weeks].filter(w => w.classList.contains('current'))).toHaveLength(1);
     expect(weeks[weeks.length - 1].classList.contains('current')).toBe(true);
   });
@@ -640,11 +640,19 @@ describe('goal-item — decreasing: rendering', () => {
   it('no <pattern>/<defs> anywhere in the strip — the hollow-wedge "over" state needs no per-instance SVG defs, unlike the hatch fill it replaced', () => {
     const el = mount(decreasingGoal([isoDaysFromWeekStart(0)], 0)); // a slip early this week -> "over" in the current septagon
     const fills = [...el.shadowRoot.querySelectorAll('.septagon-strip .septagon-fill')];
-    expect(fills).toHaveLength(6);
+    expect(fills).toHaveLength(3);
     fills.forEach(f => {
       expect(f.querySelector('pattern')).toBeNull();
       expect(f.querySelector('defs')).toBeNull();
     });
+  });
+
+  it('an "over" wedge in a past week lives outside .septagon-week.current — the DOM precondition the border-removal CSS relies on', () => {
+    // A slip one full week ago, allowance 0 -> "over" in a *history* septagon.
+    const el = mount(decreasingGoal([isoDaysFromWeekStart(-7)], 0));
+    const weeks = [...el.shadowRoot.querySelectorAll('.septagon-strip .septagon-week')];
+    const pastWeekWithOver = weeks.find(w => !w.classList.contains('current') && w.querySelector('path[data-state="over"]'));
+    expect(pastWeekWithOver).not.toBeUndefined();
   });
 
   it('history weeks are a plain filled heptagon with no separate border/ring element — only the current week ever gets a ring', () => {

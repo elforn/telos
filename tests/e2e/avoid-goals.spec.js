@@ -147,11 +147,11 @@ test.describe('Avoid goals', () => {
     expect(tracking.target).toBe(1);
     expect(tracking.entries).toEqual([]);
 
-    // Six real, non-zero-sized septagons — the same "invisible container"
-    // regression class the frequency dot-strip has already been bitten by
-    // once (a CSS rule missing entirely, dots carrying the right class
-    // while rendering at zero effective size). happy-dom can't catch this;
-    // a real layout engine can.
+    // Three real, non-zero-sized septagons (DOT_WINDOW.decreasing) — the
+    // same "invisible container" regression class the frequency dot-strip
+    // has already been bitten by once (a CSS rule missing entirely, dots
+    // carrying the right class while rendering at zero effective size).
+    // happy-dom can't catch this; a real layout engine can.
     const septagonSizes = await page.evaluate(() => {
       const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
@@ -159,7 +159,7 @@ test.describe('Avoid goals', () => {
       return [...item.shadowRoot.querySelectorAll('.septagon-strip .septagon-week')]
         .map(w => w.getBoundingClientRect().toJSON());
     });
-    expect(septagonSizes).toHaveLength(6);
+    expect(septagonSizes).toHaveLength(3);
     for (const s of septagonSizes) {
       expect(s.width).toBeGreaterThan(0);
       expect(s.height).toBeGreaterThan(0);

@@ -211,16 +211,17 @@ describe('tracking — periodFractions', () => {
 
 describe('tracking — recentDots UI classification', () => {
   it('classifies met / partial / missed and flags the current period (oldest period has data, so nothing is trimmed)', () => {
-    // Weekly's DOT_WINDOW equals PERIOD_WINDOW (6) either way; an entry in
-    // the oldest tracked week keeps the leading-trim (see below) from
-    // kicking in, so this can still assert on the full 6-dot window.
-    const goal = weekly(2, ['2026-07-08', '2026-08-10', '2026-08-11']); // oldest week (Jul6-12) + this week, fully met
+    // DOT_WINDOW.weekly (3) is narrower than PERIOD_WINDOW.weekly (6) — an
+    // entry in the oldest of the 3 *displayed* weeks (2026-07-27..08-02)
+    // keeps the leading-trim (see below) from kicking in, so this can still
+    // assert on the full 3-dot window.
+    const goal = weekly(2, ['2026-07-28', '2026-08-10', '2026-08-11']); // oldest displayed week + this week, fully met
     const dots = recentDots(goal, '2026-08-10');
-    expect(dots).toHaveLength(PERIOD_WINDOW.weekly);
+    expect(dots).toHaveLength(DOT_WINDOW.weekly);
     expect(dots[dots.length - 1]).toMatchObject({ state: 'met', current: true, fraction: 1 });
     expect(dots[0].current).toBe(false);
     expect(dots[0].state).not.toBe('missed'); // the trim anchor itself
-    expect(dots[1].state).toBe('missed'); // a middle period with no entries, not part of the leading run
+    expect(dots[1].state).toBe('missed'); // the middle period, no entries, not part of the leading run
   });
 
   it('a mid-target period classifies as partial', () => {
@@ -229,50 +230,54 @@ describe('tracking — recentDots UI classification', () => {
     expect(dots[dots.length - 1].state).toBe('partial');
   });
 
-  it('a monthly goal produces DOT_WINDOW.monthly dots (6) when the oldest is non-empty — more than PERIOD_WINDOW.monthly (4) actually counts toward the score', () => {
-    const goal = monthly(4, ['2026-03-15', '2026-08-10']); // oldest of the 6 shown + current
+  it('a monthly goal produces DOT_WINDOW.monthly dots (3) when the oldest is non-empty', () => {
+    const goal = monthly(4, ['2026-06-15', '2026-08-10']); // oldest of the 3 shown (Jun) + current
     const dots = recentDots(goal, '2026-08-10');
     expect(dots).toHaveLength(DOT_WINDOW.monthly);
   });
 });
 
 describe('tracking — recentDots trims a leading missed streak (display only — see CLAUDE.md)', () => {
-  const TODAY = '2026-08-10'; // Monday — the 6-month display window is Mar..Aug, oldest first
-  const MONTHS_OLDEST_FIRST = ['2026-03-15', '2026-04-15', '2026-05-15', '2026-06-15', '2026-07-15', '2026-08-15'];
+  const TODAY = '2026-08-10'; // Monday — the 3-month display window is Jun..Aug, oldest first
+  const MONTHS_OLDEST_FIRST = ['2026-06-15', '2026-07-15', '2026-08-15'];
 
-  // pattern: 6 chars, oldest → current (left to right), 'x' = an entry
+  // pattern: 3 chars, oldest → current (left to right), 'x' = an entry
   // exists that period, 'o' = none. Case carries no meaning for the entries
-  // themselves (only position 5 is ever "current") — kept purely so the
-  // patterns read identically to how they were specified.
+  // themselves (only the last position is ever "current") — kept purely so
+  // the patterns read identically to how they were specified.
   function goalFor(pattern) {
     const entries = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 3; i++) {
       if (pattern[i].toLowerCase() === 'x') entries.push(MONTHS_OLDEST_FIRST[i]);
     }
     return monthly(1, entries);
   }
 
   it.each([
-    ['xoooxX', 6], // oldest has data — nothing trimmed, all 6 shown
-    ['oooxoX', 3], // trims the leading 3 misses, shows xoX
-    ['xooxxX', 6], // oldest has data — nothing trimmed
-    ['oooooX', 1], // nothing but the current period has data — shows just it
-    ['ooooxX', 2], // trims down to xX
-    ['ooxooO', 4], // trims down to xooO — current itself has no entry yet, still always shown
+    ['xoX', 3], // oldest has data — nothing trimmed, all 3 shown
+    ['oxX', 2], // trims the leading miss, shows xX
+    ['ooX', 1], // nothing but the current period has data — shows just it
+    ['ooO', 1], // nothing at all has data — collapses to the current period alone
+    ['xxX', 3], // oldest has data — nothing trimmed
   ])('%s → %i dots after trim', (pattern, expectedLength) => {
     const dots = recentDots(goalFor(pattern), TODAY);
     expect(dots).toHaveLength(expectedLength);
     expect(dots[dots.length - 1].current).toBe(true);
   });
 
-  it('an entry old enough to show in the wider display window but outside the scored window never changes percentValue', () => {
-    const withOldEntry    = monthly(1, ['2026-03-15', '2026-08-15']); // March: inside DOT_WINDOW.monthly (6), outside PERIOD_WINDOW.monthly (4)
-    const withoutOldEntry = monthly(1, ['2026-08-15']);
-    expect(percentValue(withOldEntry, TODAY)).toBe(percentValue(withoutOldEntry, TODAY));
-    // The asymmetry this proves the point of: the *display* does pick up
-    // the older entry (why DOT_WINDOW is wider than PERIOD_WINDOW in the
-    // first place) — same goal, two different functions, two different windows.
-    expect(recentDots(withOldEntry, TODAY)).toHaveLength(6); // March survives as the trim anchor
+  it('an entry inside the scored window but outside the (now narrower) display window still changes percentValue, even though recentDots never shows it', () => {
+    // May is the 4th-oldest of PERIOD_WINDOW.monthly's 4 scored months
+    // (May/Jun/Jul/Aug) but falls entirely outside DOT_WINDOW.monthly's 3
+    // displayed months (Jun/Jul/Aug) — the inverse of the old (pre-shrink)
+    // relationship, where display was wider than what counted.
+    const withMayEntry    = monthly(1, ['2026-05-15', '2026-08-15']);
+    const withoutMayEntry = monthly(1, ['2026-08-15']);
+    expect(percentValue(withMayEntry, TODAY)).not.toBe(percentValue(withoutMayEntry, TODAY));
+    // recentDots only ever walks Jun/Jul/Aug — May isn't part of that walk
+    // at all, so both goals produce the identical (trimmed-to-just-current)
+    // display regardless of the May entry.
+    expect(recentDots(withMayEntry, TODAY)).toHaveLength(1);
+    expect(recentDots(withoutMayEntry, TODAY)).toHaveLength(1);
   });
 });
 
@@ -576,14 +581,18 @@ describe('tracking — weekDayStates / recentWeekStates', () => {
     expect(days.every(d => d.state === 'clean')).toBe(true);
   });
 
-  it('recentWeekStates returns PERIOD_WINDOW.decreasing weeks, oldest first, last one matching weeksAgo=0', () => {
+  it('recentWeekStates returns DOT_WINDOW.decreasing weeks (display), oldest first, last one matching weeksAgo=0', () => {
     const goal = decreasing(0, ['2026-08-12']); // a slip in the current week only
     const weeks = recentWeekStates(goal, TODAY);
-    expect(weeks).toHaveLength(PERIOD_WINDOW.decreasing);
+    expect(weeks).toHaveLength(DOT_WINDOW.decreasing);
     expect(weeks[weeks.length - 1]).toEqual(weekDayStates(goal, TODAY, 0));
-    expect(weeks[0]).toEqual(weekDayStates(goal, TODAY, PERIOD_WINDOW.decreasing - 1));
+    expect(weeks[0]).toEqual(weekDayStates(goal, TODAY, DOT_WINDOW.decreasing - 1));
     // only the current week has the slip — every history week is clean
     expect(weeks.slice(0, -1).every(week => week.every(d => d.state === 'clean'))).toBe(true);
+  });
+
+  it('the score still reads the full PERIOD_WINDOW.decreasing (6 weeks) even though the display only shows DOT_WINDOW.decreasing (3)', () => {
+    expect(DOT_WINDOW.decreasing).toBeLessThan(PERIOD_WINDOW.decreasing);
   });
 
   describe('allowancePeriod "4weeks" — the pooled budget carries into later weeks of the same block', () => {
@@ -680,9 +689,9 @@ describe('tracking — decreasing constants', () => {
     expect(FIX_DAY_SPAN.decreasing).toBe(FIX_DAY_SPAN.weekly);
   });
 
-  it('FIX_DAY_SPAN.monthly reaches the full DOT_WINDOW.monthly display window (180 days), not just the scored PERIOD_WINDOW.monthly (120)', () => {
-    expect(FIX_DAY_SPAN.monthly).toBe(30 * DOT_WINDOW.monthly);
+  it('FIX_DAY_SPAN.monthly is 180 (6 months) — independent of both PERIOD_WINDOW.monthly (4, the score) and DOT_WINDOW.monthly (3, the display)', () => {
     expect(FIX_DAY_SPAN.monthly).toBe(180);
     expect(FIX_DAY_SPAN.monthly).toBeGreaterThan(30 * PERIOD_WINDOW.monthly); // reaches further than what's still scored
+    expect(FIX_DAY_SPAN.monthly).toBeGreaterThan(30 * DOT_WINDOW.monthly); // reaches further than what's currently shown
   });
 });
