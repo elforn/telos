@@ -8,6 +8,7 @@ import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import { withUndo } from '../../_lib/modules/toast/undo.js';
 import { FilterState } from '../../_lib/modules/filter-state/filter-state.js';
+import { onDayChange } from '../utils/day-change-watcher.js';
 import '../components/year-header/year-header.js';
 import '../components/goal-item/goal-item.js';
 import '../components/goal-dialog/goal-dialog.js';
@@ -606,6 +607,13 @@ class HomePage extends AppElement {
       if (!this._filterSuppressed) this._applyGoalFilter();
     };
     this.watch('goals', this._onGoals);
+
+    // Each goal-item's own urgency icon/full-row-red state is otherwise
+    // only as fresh as the last time its .goal was set — re-run the exact
+    // same render this page already does on any real data change, so
+    // resuming on a new calendar day recomputes it too (see
+    // day-change-watcher.js).
+    onDayChange(this, () => this._onGoals(getState().goals));
 
     // Upcoming-dialog row tap (bottom-nav.js) — set the moment before
     // navigate() brings this page (possibly freshly mounted) to the goal's

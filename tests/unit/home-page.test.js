@@ -1289,3 +1289,56 @@ describe('home-page — pendingFocus (Upcoming dialog row tap)', () => {
     expect(getState().pendingFocus).toEqual({ kind: 'goal', id: 'does-not-exist' });
   });
 });
+
+describe('home-page — resuming on a new calendar day refreshes goal urgency', () => {
+  function setVisibility(state) {
+    Object.defineProperty(document, 'visibilityState', { value: state, configurable: true });
+  }
+
+  // Fake timers are enabled only after boot()/mount() complete — fake-indexeddb's
+  // own async internals rely on real timers, so freezing time any earlier hangs it.
+  afterEach(() => { vi.useRealTimers(); setVisibility('visible'); });
+
+  it('recomputes a goal-item\'s urgency icon on visibilitychange once the day has actually moved on', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 10)); // Monday
+    setState('goals', {
+      '2026': {
+        capstone: [{ id: 'g1', title: 'Gym', tracking: { type: 'weekly', value: 0, target: 1, entries: [], reminderDays: ['mon'] } }],
+        milestones: [], wow: [],
+      },
+    });
+    const item = el.shadowRoot.querySelector('#capstone-list goal-item');
+    expect(item.dataset.urgency).toBe('today'); // Monday is itself scheduled — setState notifies synchronously
+
+    // Tuesday: Monday's scheduled day was missed, still recoverable -> overdue.
+    vi.setSystemTime(new Date(2026, 7, 11));
+    setVisibility('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(item.dataset.urgency).toBe('overdue');
+  });
+
+  it('does not refresh while the tab stays hidden, even once the day has moved on', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 10)); // Monday
+    setState('goals', {
+      '2026': {
+        capstone: [{ id: 'g1', title: 'Gym', tracking: { type: 'weekly', value: 0, target: 1, entries: [], reminderDays: ['mon'] } }],
+        milestones: [], wow: [],
+      },
+    });
+    expect(el.shadowRoot.querySelector('#capstone-list goal-item').dataset.urgency).toBe('today');
+
+    vi.setSystemTime(new Date(2026, 7, 11));
+    setVisibility('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    const item = el.shadowRoot.querySelector('#capstone-list goal-item');
+    expect(item.dataset.urgency).toBe('today'); // unchanged — still hidden, nothing re-ran
+  });
+});

@@ -11,6 +11,7 @@ import '../components/lists-page-item/lists-page-item.js';
 import '../components/add-row/add-row.js';
 import '../../_lib/modules/modal-dialog/modal-dialog.js';
 import { nextColor } from '../utils/color-palette.js';
+import { onDayChange } from '../utils/day-change-watcher.js';
 import '../components/date-filter-row/date-filter-row.js';
 import { icons } from '../icons.js';
 import { matchesDateBucket } from '../utils/urgency.js';
@@ -318,6 +319,12 @@ class ListsPage extends AppElement {
       this._applyFilter();
     };
     this.watch('lists', this._onLists);
+
+    // Each list's own urgency roll-up dot is otherwise only as fresh as the
+    // last time this list re-rendered — re-run the exact same render this
+    // page already does on any real data change, so resuming on a new
+    // calendar day recomputes it too (see day-change-watcher.js).
+    onDayChange(this, () => this._onLists(getState().lists));
 
     this._onPendingListUndo = value => {
       if (!value) return;

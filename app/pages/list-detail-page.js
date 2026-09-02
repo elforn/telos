@@ -8,6 +8,7 @@ import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import { withUndo } from '../../_lib/modules/toast/undo.js';
 import { FilterState } from '../../_lib/modules/filter-state/filter-state.js';
+import { onDayChange } from '../utils/day-change-watcher.js';
 import '../components/list-item/list-item.js';
 import '../components/item-dialog/item-dialog.js';
 import '../components/list-dialog/list-dialog.js';
@@ -1334,6 +1335,12 @@ class ListDetailPage extends AppElement {
       if (!this._filterSuppressed) this._applyFilter();
     };
     this.watch('lists', this._onLists);
+
+    // Each list-item's own urgency icon is otherwise only as fresh as the
+    // last time its .item was set — re-run the exact same render this page
+    // already does on any real data change, so resuming on a new calendar
+    // day recomputes it too (see day-change-watcher.js).
+    onDayChange(this, () => this._onLists(getState().lists));
 
     // Upcoming-dialog row tap (bottom-nav.js) — set the moment before
     // navigate() brings this page (possibly freshly mounted) to the item's

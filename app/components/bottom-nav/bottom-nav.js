@@ -6,6 +6,7 @@ import { getTheme, setTheme, onThemeChange } from '../../../_lib/core/theme/them
 import { exportData, downloadExport, readImportFile, previewImport, applyMerge, applyReplace } from '../../../_lib/modules/sync/sync.js';
 import { toast } from '../../../_lib/modules/toast/toast.js';
 import { getState, setRuntimeState } from '../../../_lib/core/store/store.js';
+import { onDayChange } from '../../utils/day-change-watcher.js';
 import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
 import { collectUpcoming, upcomingBadgeCount } from '../../utils/upcoming.js';
 import { percentValue } from '../../utils/tracking.js';
@@ -598,6 +599,10 @@ class BottomNav extends AppElement {
     this._subscribeRepairButton();
     this._subscribeUrgency();
     this._subscribeUpcoming();
+    // Left open across midnight, these badges are only ever as fresh as the
+    // last store write that happened to touch them — refresh on resume if
+    // the calendar day has actually moved on (see day-change-watcher.js).
+    onDayChange(this, () => { this.refreshUrgency(); this.refreshUpcoming(); });
     this._updateGearBadge();
 
     this._onReminderGroup = e => {
