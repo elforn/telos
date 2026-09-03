@@ -273,7 +273,7 @@ test.describe('Frequency goals', () => {
     // above; this one is specifically about arbitrary dates). Fix-a-day's
     // own strip (FIX_DAY_SPAN, 6 weeks) reaches much further back than
     // this, but the *dot-strip* this test also checks only ever displays
-    // DOT_WINDOW.weekly (3) weeks — 7 days back safely lands within that
+    // DOT_WINDOW.weekly (4) weeks — 7 days back safely lands within that
     // shorter display window regardless of what day of the week "today"
     // happens to be when this runs, unlike something closer to its edge.
     const firstChipIso = await page.evaluate(() => {

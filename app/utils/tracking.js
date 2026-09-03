@@ -93,17 +93,22 @@ export const ALLOWANCE_PERIOD_WEEKS = { week: 1, '4weeks': 4 };
 export const PERIOD_WINDOW = { weekly: 6, monthly: 4, decreasing: 6 };
 
 // The row's glance strip deliberately shows *less* history than the score
-// actually counts (3 periods, vs. PERIOD_WINDOW's 6/4/6) — a recent-glance
-// view, not a full explanation of the score, in anticipation of a future
-// analytics feature that will cover the fuller history in detail. Purely
-// display: recentDots()/recentWeekStates() read this, but
-// percentValue/weightedAverage/decreasingWeightedAverage always read
-// PERIOD_WINDOW and are completely untouched by this window shrinking.
-export const DOT_WINDOW = { weekly: 3, monthly: 3, decreasing: 3 };
+// actually counts, where the two windows differ (4 periods — the current
+// one plus 3 past — vs. PERIOD_WINDOW's 6/4/6) — a recent-glance view, not a
+// full explanation of the score, in anticipation of a future analytics
+// feature that will cover the fuller history in detail. Monthly's display
+// window (4) happens to equal its score window (PERIOD_WINDOW.monthly, also
+// 4) at this size, so recentDots shows monthly's full scored history rather
+// than a subset — not true for weekly/decreasing, whose 6-period score
+// window is still wider than what's displayed. Purely display: recentDots()/
+// recentWeekStates() read this, but percentValue/weightedAverage/
+// decreasingWeightedAverage always read PERIOD_WINDOW and are completely
+// untouched by this window's size.
+export const DOT_WINDOW = { weekly: 4, monthly: 4, decreasing: 4 };
 
 // Fix-a-day's scrollable window, in calendar days — deliberately independent
-// of both PERIOD_WINDOW (the score) and DOT_WINDOW (the display, now much
-// shorter at 3 periods) and unchanged by the DOT_WINDOW shrink above:
+// of both PERIOD_WINDOW (the score) and DOT_WINDOW (the display) and
+// unchanged by the DOT_WINDOW size above:
 // showing less by default was never meant to shrink how far back an entry
 // can still be corrected. Monthly specifically reaches further (6 months)
 // than what's actually scored (PERIOD_WINDOW.monthly, 4 months) — by
