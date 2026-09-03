@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.13.0] — 2026-09-03
+
+### Added
+- **Notifications for overdue, due-today, and due-tomorrow items.** Turn them on from Settings (opt-in, off by default) to get a single daily summary notification — e.g. "3 items need attention" — grouping everything overdue, due today, and due tomorrow across every year and list. Checked whenever you open or return to the app, so it works the same everywhere; on Chrome, an additional best-effort background check can also fire the same summary even while the app is fully closed (no guaranteed timing — the browser decides when, if ever). Tapping the notification opens the app straight to the Upcoming list. Each app install has its own independent on/off setting, so switching browsers or devices doesn't carry the preference along.
+
+### Changed
+- **Avoid's "logged today" ring is now dashed**, distinct from weekly/monthly's solid ring — both share the same plain accent colour, but the ring means the opposite thing for Avoid (a slip, not a completion), so it now reads as "the streak broke today" rather than looking like a completed check-in.
+
 ## [2.12.0] — 2026-09-03
 
 ### Added
