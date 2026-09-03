@@ -8,6 +8,10 @@ vi.mock('../../app/utils/backup-before-repair.js', () => ({
   backupBeforeRepair: vi.fn(),
   LAST_EXPORT_KEY: 'telos:lastExportedAt',
 }));
+vi.mock('../../app/utils/periodic-sync.js', () => ({
+  registerPeriodicSync: vi.fn().mockResolvedValue(undefined),
+  unregisterPeriodicSync: vi.fn().mockResolvedValue(undefined),
+}));
 
 import '../../app/components/bottom-nav/bottom-nav.js';
 import { boot, setState, getState } from '../../_lib/core/store/store.js';
@@ -16,6 +20,7 @@ import { repairInstallation } from '../../_lib/core/sw-manager/sw-repair.js';
 import { backupBeforeRepair } from '../../app/utils/backup-before-repair.js';
 import * as syncModule from '../../_lib/modules/sync/sync.js';
 import { _resetToast } from '../../_lib/modules/toast/toast.js';
+import { registerPeriodicSync, unregisterPeriodicSync } from '../../app/utils/periodic-sync.js';
 
 // happy-dom does not implement ResizeObserver
 globalThis.ResizeObserver = class {
@@ -309,6 +314,7 @@ describe('bottom-nav — scroll position helpers', () => {
 
 const LAST_EXPORT_KEY     = 'telos:lastExportedAt';
 const EXPORT_REMINDER_KEY = 'telos:exportReminderEnabled';
+const NOTIFICATIONS_KEY = 'telos:notificationsEnabled';
 
 describe('bottom-nav — export reminder: _shouldShowExportReminder', () => {
   beforeEach(() => localStorage.clear());
@@ -444,6 +450,88 @@ describe('bottom-nav — export reminder: pill group', () => {
     const offPill = el.shadowRoot.querySelector('[data-reminder="off"]');
     expect(onPill.classList.contains('active')).toBe(false);
     expect(offPill.classList.contains('active')).toBe(true);
+  });
+});
+
+describe('bottom-nav — notifications: pill group', () => {
+  beforeEach(() => { localStorage.clear(); _resetToast(); });
+  afterEach(() => { localStorage.clear(); vi.unstubAllGlobals(); });
+
+  it('Off pill is active by default — opt-in, unlike the export reminder', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const onPill  = el.shadowRoot.querySelector('[data-notifications="on"]');
+    const offPill = el.shadowRoot.querySelector('[data-notifications="off"]');
+    expect(onPill.classList.contains('active')).toBe(false);
+    expect(offPill.classList.contains('active')).toBe(true);
+  });
+
+  it('clicking On when the browser has no Notification API toasts instead of enabling', async () => {
+    const el = mount();
+    el.shadowRoot.querySelector('[data-notifications="on"]').click();
+    await vi.waitFor(() => expect(document.querySelector('#toast-container .socle-toast-info')).not.toBeNull());
+    expect(localStorage.getItem(NOTIFICATIONS_KEY)).not.toBe('true');
+    expect(registerPeriodicSync).not.toHaveBeenCalled();
+  });
+
+  it('clicking On when permission is already denied toasts without re-prompting', async () => {
+    vi.stubGlobal('Notification', { permission: 'denied', requestPermission: vi.fn() });
+    const el = mount();
+    el.shadowRoot.querySelector('[data-notifications="on"]').click();
+    await vi.waitFor(() => expect(document.querySelector('#toast-container .socle-toast-info')).not.toBeNull());
+    expect(Notification.requestPermission).not.toHaveBeenCalled();
+    expect(localStorage.getItem(NOTIFICATIONS_KEY)).not.toBe('true');
+  });
+
+  it('clicking On prompts for permission and, once granted, enables notifications and registers periodicSync', async () => {
+    const requestPermission = vi.fn().mockResolvedValue('granted');
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission });
+    const el = mount();
+    el.shadowRoot.querySelector('[data-notifications="on"]').click();
+    await vi.waitFor(() => expect(localStorage.getItem(NOTIFICATIONS_KEY)).toBe('true'));
+    expect(requestPermission).toHaveBeenCalled();
+    expect(registerPeriodicSync).toHaveBeenCalled();
+  });
+
+  it('clicking On when the user dismisses/denies the prompt toasts and leaves notifications off', async () => {
+    const requestPermission = vi.fn().mockResolvedValue('default');
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission });
+    const el = mount();
+    el.shadowRoot.querySelector('[data-notifications="on"]').click();
+    await vi.waitFor(() => expect(document.querySelector('#toast-container .socle-toast-info')).not.toBeNull());
+    expect(localStorage.getItem(NOTIFICATIONS_KEY)).not.toBe('true');
+    expect(registerPeriodicSync).not.toHaveBeenCalled();
+  });
+
+  it('clicking Off disables notifications and unregisters periodicSync', () => {
+    localStorage.setItem(NOTIFICATIONS_KEY, 'true');
+    vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() });
+    const el = mount();
+    el.shadowRoot.querySelector('[data-notifications="off"]').click();
+    expect(localStorage.getItem(NOTIFICATIONS_KEY)).toBe('false');
+    expect(unregisterPeriodicSync).toHaveBeenCalled();
+  });
+
+  it('_updateSettingsPills reflects actual granted permission, not just the stored preference', () => {
+    localStorage.setItem(NOTIFICATIONS_KEY, 'true');
+    vi.stubGlobal('Notification', { permission: 'denied', requestPermission: vi.fn() });
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const onPill  = el.shadowRoot.querySelector('[data-notifications="on"]');
+    const offPill = el.shadowRoot.querySelector('[data-notifications="off"]');
+    expect(onPill.classList.contains('active')).toBe(false);
+    expect(offPill.classList.contains('active')).toBe(true);
+  });
+
+  it('On pill is active when enabled and permission is actually granted', () => {
+    localStorage.setItem(NOTIFICATIONS_KEY, 'true');
+    vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() });
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const onPill  = el.shadowRoot.querySelector('[data-notifications="on"]');
+    const offPill = el.shadowRoot.querySelector('[data-notifications="off"]');
+    expect(onPill.classList.contains('active')).toBe(true);
+    expect(offPill.classList.contains('active')).toBe(false);
   });
 });
 

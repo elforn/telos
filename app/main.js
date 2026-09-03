@@ -18,6 +18,7 @@ import './pages/not-found-page.js';
 import './pages/lists-page.js';
 import './pages/list-detail-page.js';
 import './components/bottom-nav/bottom-nav.js';
+import './components/due-date-notifier/due-date-notifier.js';
 
 initTheme();
 
@@ -28,6 +29,26 @@ await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColor
 // bell once state is in.
 document.querySelector('bottom-nav')?.refreshUrgency?.();
 document.querySelector('bottom-nav')?.refreshUpcoming?.();
+
+// Cold-launch handling for a tapped due-date notification (see
+// app/sw-extensions.js's notificationclick handler): a brand-new window
+// opens with this query param when no existing tab could just be focused
+// instead. Stripped from the URL immediately so a later reload/share of
+// this same URL doesn't re-open the dialog unprompted.
+if (new URLSearchParams(location.search).get('upcoming')) {
+  document.querySelector('bottom-nav')?.openUpcoming?.();
+  const url = new URL(location.href);
+  url.searchParams.delete('upcoming');
+  history.replaceState(null, '', url);
+}
+
+// Same signal, for the case notificationclick found an already-open tab to
+// focus instead of opening a new one — see app/sw-extensions.js.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data?.type === 'telos-open-upcoming') document.querySelector('bottom-nav')?.openUpcoming?.();
+  });
+}
 
 console.log('Telos', __APP_VERSION__);
 
@@ -68,6 +89,8 @@ swm.setAttribute('base-path', BASE_PATH);
 swm.setAttribute('app-version', __APP_VERSION__);
 swm.onBackup = backupBeforeRepair;
 document.body.prepend(swm);
+
+document.body.prepend(document.createElement('due-date-notifier'));
 
 const router = document.querySelector('app-router');
 router.routes = [

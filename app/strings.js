@@ -409,6 +409,15 @@ defineStrings({
   'settings.deadlines':         'Deadline markers',
   'settings.tags-shown':        'Shown',
   'settings.tags-hidden':       'Hidden',
+  'settings.notifications':          'Notifications',
+  'settings.notifications-on':       'On',
+  'settings.notifications-off':      'Off',
+  'settings.notifications-denied':   'Notifications are blocked for this site — enable them in your browser settings to turn this on.',
+
+  'notifications.digest-title':      '{count} items need attention',
+  'notifications.digest-overdue':    'Overdue ({count})',
+  'notifications.digest-today':      'Due today ({count})',
+  'notifications.digest-tomorrow':   'Due tomorrow ({count})',
   'sync.backup-downloaded':     'Your data has been backed up before the update.',
   'sync.backup-before-import':  'Your data has been backed up.',
 

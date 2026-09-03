@@ -406,6 +406,15 @@ defineStrings({
   'settings.deadlines':        'Marcadors de venciment',
   'settings.tags-shown':       'Mostrades',
   'settings.tags-hidden':      'Ocultes',
+  'settings.notifications':        'Notificacions',
+  'settings.notifications-on':     'Activades',
+  'settings.notifications-off':    'Desactivades',
+  'settings.notifications-denied': 'Les notificacions estan bloquejades per a aquest lloc — activa-les als ajustos del navegador per activar-ho aquí.',
+
+  'notifications.digest-title':    '{count} elements necessiten atenció',
+  'notifications.digest-overdue':  'Vençuts ({count})',
+  'notifications.digest-today':    'Venciment avui ({count})',
+  'notifications.digest-tomorrow': 'Venciment demà ({count})',
   'sync.backup-downloaded':    'Les teves dades s\'han guardat abans de l\'actualització.',
   'sync.backup-before-import': 'Les teves dades s\'han guardat.',
 

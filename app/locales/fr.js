@@ -406,6 +406,15 @@ defineStrings({
   'settings.deadlines':        'Marqueurs d’échéance',
   'settings.tags-shown':       'Affichées',
   'settings.tags-hidden':      'Masquées',
+  'settings.notifications':        'Notifications',
+  'settings.notifications-on':     'Activées',
+  'settings.notifications-off':    'Désactivées',
+  'settings.notifications-denied': 'Les notifications sont bloquées pour ce site — activez-les dans les réglages de votre navigateur pour les activer ici.',
+
+  'notifications.digest-title':    '{count} éléments nécessitent votre attention',
+  'notifications.digest-overdue':  'En retard ({count})',
+  'notifications.digest-today':    'Aujourd\'hui ({count})',
+  'notifications.digest-tomorrow': 'Demain ({count})',
   'sync.backup-downloaded':    'Vos données ont été sauvegardées avant la mise à jour.',
   'sync.backup-before-import': 'Vos données ont été sauvegardées.',
 
