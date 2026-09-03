@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.14.0] — 2026-09-03
+
+### Changed
+- **Weekly, monthly, and Avoid goals now show one extra period in their recent-history dots** — the current period plus the last 3, instead of 2. No change to how the percentage score itself is calculated, just a bit more history visible at a glance.
+
 ## [2.13.0] — 2026-09-03
 
 ### Added
