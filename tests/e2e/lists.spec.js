@@ -1058,7 +1058,7 @@ test.describe('Lists — swipe gestures', () => {
       const row = document.querySelector('app-router')?.shadowRoot
         ?.querySelector('list-detail-page')?.shadowRoot
         ?.querySelector('list-item')?.shadowRoot?.querySelector('.row');
-      return row?.style.getPropertyValue('--item-color') === '#E5534B';
+      return row?.style.getPropertyValue('--row-accent-color') === '#E5534B';
     });
   });
 

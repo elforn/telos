@@ -4,6 +4,7 @@ import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
 import { COLOR_PALETTE } from '../../utils/color-palette.js';
+import { rowChromeStyles } from '../../utils/row-chrome.js';
 
 const COLOR_WIDTH     = 48;
 const COMMIT_RATIO    = 2.0;
@@ -29,11 +30,6 @@ class ListsPageItem extends Gestures(AppElement) {
         :host {
           display: block;
           position: relative;
-          overflow: hidden;
-          border-radius: var(--radius-md);
-          box-shadow: var(--shadow-card);
-          --accent-border: 3px;
-          --base-border: 0.5px;
           --row-gap: 6px; /* between --space-1 (4px) and --space-2 (8px) */
         }
 
@@ -49,32 +45,12 @@ class ListsPageItem extends Gestures(AppElement) {
 
         /* ── Row ──────────────────────────────────────────────────────────── */
 
+        ${rowChromeStyles('.row')}
+
         .row {
-          position: relative;
-          z-index: 1;
-          min-block-size: var(--goal-item-height, 44px);
-          background: var(--color-surface);
-          border: var(--base-border) solid var(--color-border);
-          border-inline-start: var(--accent-border) solid var(--list-item-color, transparent);
-          display: flex;
-          align-items: center;
-          padding-inline-start: calc(var(--space-3) - var(--accent-border) + var(--base-border));
-          padding-inline-end: var(--space-3);
+          block-size: var(--row-height);
+          padding-block: 10px;
           gap: var(--row-gap);
-          cursor: pointer;
-          user-select: none;
-          touch-action: pan-y;
-          transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
-          will-change: transform;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .row { transition: none; }
-        }
-
-        .row:focus-visible {
-          outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
         }
 
         .list-name {
@@ -94,12 +70,15 @@ class ListsPageItem extends Gestures(AppElement) {
           position: absolute;
           inset-block-start: 50%;
           transform: translateY(-50%);
-          inset-inline-start: calc(var(--space-1) * 1.3);
+          /* 7px measured from the row's outer edge, landing it just past
+             the accent stripe and on top of the drag-icon (z-index above) —
+             see the fix history below for how this number was derived. */
+          inset-inline-start: calc(7px - var(--row-accent-width));
           inline-size: var(--space-1);
           block-size: var(--space-1);
           border-radius: var(--radius-full);
           background: var(--color-accent);
-          z-index: 0;
+          z-index: 2;
           opacity: 0.2;
           pointer-events: none;
           user-select: none;
@@ -311,7 +290,7 @@ class ListsPageItem extends Gestures(AppElement) {
     const color = this._list?.color ?? null;
     this._nameEl.textContent  = name;
     this._countEl.textContent = String(count);
-    this._row.style.setProperty('--list-item-color', color ?? 'transparent');
+    this._row.style.setProperty('--row-accent-color', color ?? 'transparent');
     this.dataset.archived = String(!!this._list?.archived);
 
     // Roll-up urgency across open/paused items; quiet for far-future/empty.

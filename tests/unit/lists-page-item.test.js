@@ -318,13 +318,13 @@ describe('lists-page-item — drag', () => {
 describe('lists-page-item — color', () => {
   it('applies color to row via CSS custom property', () => {
     const el = mount({ ...LIST, color: '#ff0000' });
-    const val = el.shadowRoot.querySelector('.row').style.getPropertyValue('--list-item-color');
+    const val = el.shadowRoot.querySelector('.row').style.getPropertyValue('--row-accent-color');
     expect(val).toBe('#ff0000');
   });
 
   it('applies transparent when no color set', () => {
     const el = mount();
-    const val = el.shadowRoot.querySelector('.row').style.getPropertyValue('--list-item-color');
+    const val = el.shadowRoot.querySelector('.row').style.getPropertyValue('--row-accent-color');
     expect(val).toBe('transparent');
   });
 

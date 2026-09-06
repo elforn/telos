@@ -87,7 +87,9 @@
         --icon-size-sm:        14px; /* small inline indicator icons (note, link, chevron, pencil) */
         --touch-target-small:  28px; /* accepted small targets: copy btn, colour swatches */
       /* accepted below --touch-target-small: tag-chip-remove (20×20), list-item badge (~20px) */
-        --goal-item-height:    44px;
+        --row-height:          56px;  /* goal-item/list-item/lists-page-item's shared flush-row height */
+        --row-accent-width:    5px;   /* their shared left colour-stripe width */
+        --goal-item-height:    var(--row-height);
         --shadow-drag: 0 8px 24px rgba(0,0,0,0.18);
         --sheet-handle-width:  36px;
         --sheet-handle-height: 4px;

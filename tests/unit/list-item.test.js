@@ -300,13 +300,13 @@ describe('list-item — item-color-cycle event', () => {
 describe('list-item — colour', () => {
   it('applies colour to row via CSS custom property', () => {
     const el = mount({ ...ITEM, color: '#ff0000' });
-    const val = el.shadowRoot.querySelector('.row').style.getPropertyValue('--item-color');
+    const val = el.shadowRoot.querySelector('.row').style.getPropertyValue('--row-accent-color');
     expect(val).toBe('#ff0000');
   });
 
   it('applies transparent when no colour set', () => {
     const el = mount();
-    const val = el.shadowRoot.querySelector('.row').style.getPropertyValue('--item-color');
+    const val = el.shadowRoot.querySelector('.row').style.getPropertyValue('--row-accent-color');
     expect(val).toBe('transparent');
   });
 
@@ -320,6 +320,45 @@ describe('list-item — colour', () => {
     const el = mount();
     const val = el.shadowRoot.querySelector('#color-panel').style.getPropertyValue('--color-panel-bg');
     expect(val).toBe('');
+  });
+});
+
+describe('list-item — tag pills', () => {
+  it('renders one .tag-pill per tag', () => {
+    const el = mount({ ...ITEM, tags: ['work', 'urgent'] });
+    expect(el.shadowRoot.querySelectorAll('.tag-pill').length).toBe(2);
+  });
+
+  it('gives each tag pill a background colour', () => {
+    const el = mount({ ...ITEM, tags: ['work'] });
+    const pill = el.shadowRoot.querySelector('.tag-pill');
+    expect(pill.style.background).not.toBe('');
+  });
+
+  it('hides the tag-pills container when the item has no tags', () => {
+    const el = mount({ ...ITEM, tags: [] });
+    expect(el.shadowRoot.querySelector('.tag-pills').hidden).toBe(true);
+  });
+
+  it('shows the tag-pills container when the item has tags', () => {
+    const el = mount({ ...ITEM, tags: ['work'] });
+    expect(el.shadowRoot.querySelector('.tag-pills').hidden).toBe(false);
+  });
+
+  it('adds has-tags to .main-col when the item has tags (clamps title to 1 line)', () => {
+    const el = mount({ ...ITEM, tags: ['work'] });
+    expect(el.shadowRoot.querySelector('.main-col').classList.contains('has-tags')).toBe(true);
+  });
+
+  it('omits has-tags from .main-col when the item has no tags (title stays 2-line)', () => {
+    const el = mount({ ...ITEM, tags: [] });
+    expect(el.shadowRoot.querySelector('.main-col').classList.contains('has-tags')).toBe(false);
+  });
+
+  it('re-renders pills when tags change on an existing item', () => {
+    const el = mount({ ...ITEM, tags: ['work'] });
+    el.item = { ...ITEM, tags: ['work', 'urgent', 'home'] };
+    expect(el.shadowRoot.querySelectorAll('.tag-pill').length).toBe(3);
   });
 });
 

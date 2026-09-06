@@ -6,6 +6,7 @@ import { tagStrip } from '../../utils/tag-color.js';
 import { urgencyOf, mostUrgent } from '../../utils/urgency.js';
 import { frequencyRowUrgencyOf } from '../../utils/frequency-urgency.js';
 import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
+import { rowChromeStyles } from '../../utils/row-chrome.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 import {
   percentValue, isFrequency, isEntryBased, isDecreasing, recentDots, recentWeekStates,
@@ -136,8 +137,6 @@ class GoalItem extends Gestures(AppElement) {
           display: block;
           position: relative;
           overflow: hidden;
-          border-radius: var(--radius-md);
-          box-shadow: var(--shadow-card);
         }
 
         .action-btn {
@@ -174,23 +173,20 @@ class GoalItem extends Gestures(AppElement) {
           background: var(--color-panel-bg, var(--color-surface-raised));
         }
 
+        ${rowChromeStyles('.bar')}
+
         .bar {
-          position: relative;
-          z-index: 1;
-          block-size: var(--goal-item-height, 44px);
-          background: var(--color-surface);
-          border: 0.5px solid var(--color-border);
-          border-inline-start: 3px solid var(--goal-item-color, transparent);
+          block-size: var(--goal-item-height, var(--row-height));
           overflow: hidden;
-          display: flex;
-          align-items: center;
-          padding-inline-start: calc(var(--space-3) - 3px + 0.5px);
-          padding-inline-end: var(--space-3);
-          cursor: pointer;
-          user-select: none;
-          touch-action: pan-y;
-          transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
-          will-change: transform;
+          /* Stronger than the shared divider colour — goal-item is the only
+             one of the three rows with a translucent accent-tinted overlay
+             (.fill, below) sitting right up against this edge, and plain
+             --color-border reads fine against a plain surface but nearly
+             disappears against that tint (confirmed: two adjacent
+             significantly-filled rows made the line between them almost
+             invisible). list-item/lists-page-item have no equivalent tint,
+             so they keep the shared colour unchanged. */
+          border-block-end-color: color-mix(in srgb, var(--color-border), var(--color-text-secondary));
         }
 
         .fill {
@@ -264,9 +260,14 @@ class GoalItem extends Gestures(AppElement) {
           text-overflow: ellipsis;
         }
 
+        /* inset-block-end nudged up 2px (was flush at 0) so it no longer
+           touches the row's new border-block-end divider directly below it —
+           left as a bottom-edge strip rather than porting list-item's pill
+           treatment for now; goal rows already carry more competing content
+           (progress %, frequency dots, urgency icon) than list-item's did. */
         .tag-strip {
           position: absolute;
-          inset-block-end: 0;
+          inset-block-end: 2px;
           inset-inline-start: var(--space-10);
           inset-inline-end: var(--space-4);
           block-size: 3px;
@@ -623,17 +624,23 @@ class GoalItem extends Gestures(AppElement) {
           box-shadow: 0 0 0 2px var(--color-accent);
         }
 
+        /* Position/z-index pre-derived from the identical bug found and
+           fixed on lists-page-item's own archive-dot (same drag-btn/stripe
+           geometry — --row-accent-width stripe, drag-btn's icon starting
+           ~7px in): sitting on top of the drag icon (z-index above it)
+           rather than squeezed into the now-too-narrow gap between the
+           stripe and the icon. */
         .archive-dot {
           display: none;
           position: absolute;
           inset-block-start: 50%;
           transform: translateY(-50%);
-          inset-inline-start: calc(var(--space-1) * 1.3);
+          inset-inline-start: calc(7px - var(--row-accent-width));
           inline-size: var(--space-1);
           block-size: var(--space-1);
           border-radius: var(--radius-full);
           background: var(--color-accent);
-          z-index: 0;
+          z-index: 2;
           opacity: 0.2;
           pointer-events: none;
           user-select: none;
@@ -1209,7 +1216,7 @@ class GoalItem extends Gestures(AppElement) {
     }
 
     const color = this._goal?.color ?? null;
-    this._bar.style.setProperty('--goal-item-color', color ?? 'transparent');
+    this._bar.style.setProperty('--row-accent-color', color ?? 'transparent');
     if (color) this._colorPanel.style.setProperty('--color-panel-bg', color);
     else this._colorPanel.style.removeProperty('--color-panel-bg');
 

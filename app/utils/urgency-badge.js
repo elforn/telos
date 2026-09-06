@@ -25,6 +25,8 @@ export function urgencyBadgeStyles() {
       color: var(--color-text-muted);
       display: none;
       line-height: 1;
+      border-radius: var(--radius-sm);
+      padding: 2px;
     }
 
     .urgency-icon svg {
@@ -33,19 +35,26 @@ export function urgencyBadgeStyles() {
       block-size: var(--icon-size-sm);
     }
 
-    /* Calendar badge, tinted by how soon the date is. Only 'overdue' gets a
-       non-colour ring. */
-    :host([data-urgency="far"])      .urgency-icon { display: block; color: var(--color-text-muted); }
-    :host([data-urgency="month"])    .urgency-icon { display: block; color: var(--color-success); }
-    :host([data-urgency="week"])     .urgency-icon { display: block; color: var(--color-warning); }
-    :host([data-urgency="tomorrow"]) .urgency-icon { display: block; color: var(--color-tomorrow); }
-    :host([data-urgency="today"])    .urgency-icon { display: block; color: var(--color-danger); }
+    /* Calendar badge, tinted by how soon the date is. Every bucket gets the
+       same padded box (border-radius/padding on the shared .urgency-icon
+       rule above) so the icon occupies a consistent footprint regardless of
+       urgency — previously only 'overdue' had this padding, which misaligned
+       it against the plain bare icons every other bucket used. Only the
+       *icon colour* changes bucket to bucket; the background stays plain
+       transparent for all of them (done/closed items never reach this at
+       all — they're never "active" for due-date purposes, so the icon
+       doesn't render regardless of bucket). 'overdue' is the one deliberate
+       exception — a solid/inverse fill so it still reads as the loudest
+       state. */
+    :host([data-urgency="far"])      .urgency-icon { display: block; color: var(--color-text-muted); background: transparent; }
+    :host([data-urgency="month"])    .urgency-icon { display: block; color: var(--color-success); background: transparent; }
+    :host([data-urgency="week"])     .urgency-icon { display: block; color: var(--color-warning); background: transparent; }
+    :host([data-urgency="tomorrow"]) .urgency-icon { display: block; color: var(--color-tomorrow); background: transparent; }
+    :host([data-urgency="today"])    .urgency-icon { display: block; color: var(--color-danger); background: transparent; }
     :host([data-urgency="overdue"]) .urgency-icon {
       display: block;
       color: var(--color-text-inverse);
       background: var(--color-danger);
-      border-radius: var(--radius-sm);
-      padding: 2px;
     }
   `;
 }

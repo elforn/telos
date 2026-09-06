@@ -414,13 +414,13 @@ describe('goal-item — colour', () => {
 
   it('applies colour to bar via CSS custom property', () => {
     const el = mount({ id: 'g1', title: 'Move my body', color: '#ff0000', tracking: { type: 'percentage', value: 0 } });
-    const val = el.shadowRoot.querySelector('.bar').style.getPropertyValue('--goal-item-color');
+    const val = el.shadowRoot.querySelector('.bar').style.getPropertyValue('--row-accent-color');
     expect(val).toBe('#ff0000');
   });
 
   it('applies transparent when no colour set', () => {
     const el = mount();
-    const val = el.shadowRoot.querySelector('.bar').style.getPropertyValue('--goal-item-color');
+    const val = el.shadowRoot.querySelector('.bar').style.getPropertyValue('--row-accent-color');
     expect(val).toBe('transparent');
   });
 

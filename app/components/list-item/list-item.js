@@ -2,10 +2,11 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
-import { tagStrip } from '../../utils/tag-color.js';
+import { tagColor } from '../../utils/tag-color.js';
 import { urgencyOf } from '../../utils/urgency.js';
 import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
+import { rowChromeStyles } from '../../utils/row-chrome.js';
 
 const COLOR_WIDTH = 48;   // left-side colour panel, revealed by swiping right — mirrors lists-page-item
 const DELETE_WIDTH = 60;   // icon-only delete button
@@ -49,10 +50,14 @@ class ListItem extends Gestures(AppElement) {
         :host {
           display: block;
           position: relative;
-          overflow: hidden;
-          border-radius: var(--radius-md);
-          box-shadow: var(--shadow-card);
         }
+
+        /* Flush, edge-to-edge rows — the containing #item-list now owns the
+           rounded corners/shadow (see list-detail-page.js), so this row no
+           longer clips or rounds itself. Only the last row in the container
+           drops its own bottom divider, via :host(:last-child) below, since
+           :last-child reflects this custom element's own position in the
+           light-DOM list regardless of what lives in its shadow root. */
 
         .action-btn {
           position: absolute;
@@ -93,23 +98,13 @@ class ListItem extends Gestures(AppElement) {
           pointer-events: none;
         }
 
+        ${rowChromeStyles('.row')}
+
         .row {
-          position: relative;
-          z-index: 1;
-          min-block-size: var(--goal-item-height, 44px);
-          background: var(--color-surface);
-          border: 0.5px solid var(--color-border);
-          border-inline-start: 3px solid var(--item-color, transparent);
-          display: flex;
-          align-items: center;
-          padding-inline-start: calc(var(--space-3) - 3px + 0.5px);
-          padding-inline-end: var(--space-3);
+          block-size: var(--row-height);
+          padding-block: 10px;
+          overflow: hidden;
           gap: 6px;
-          cursor: pointer;
-          user-select: none;
-          touch-action: pan-y;
-          transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
-          will-change: transform;
         }
 
         .drag-btn {
@@ -133,23 +128,63 @@ class ListItem extends Gestures(AppElement) {
           touch-action: none;
         }
 
-        .title {
+        /* Groups title + tag-pills into one vertical stack sharing the same
+           start edge, so the pills always sit below the text (never overlap
+           it) and align to the title's own start rather than a hardcoded
+           offset — both are just children of this flex column now. */
+        .main-col {
           flex: 1;
           min-inline-size: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          overflow: hidden;
+        }
+
+        /* Fixed row height means the text budget is always exactly two lines
+           total: either a 2-line title alone, or a 1-line title + one line of
+           tag-pills below it. .main-col.has-tags (toggled in _update() from
+           tags.length > 0) switches which of those two shapes is in effect —
+           never both at once, so the row itself never needs to grow. */
+        .title {
           font-size: var(--font-size-body);
           font-weight: var(--font-weight-medium);
           color: var(--color-text-primary);
           word-break: break-word;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
         }
 
-        .tag-strip {
-          position: absolute;
-          inset-block-end: 0;
-          inset-inline-start: var(--space-8);
-          inset-inline-end: var(--space-3);
-          block-size: 2px;
+        .main-col.has-tags .title {
+          -webkit-line-clamp: 1;
+        }
+
+        /* Tag colour — a row of short pill/oval dots (one per tag, no text),
+           replacing the old full-width bottom-edge strip: once rows sit flush
+           against each other, a strip spanning the whole row width would read
+           as a second divider line touching the next row's own border. Each
+           dot's colour is tagColor(tag)'s same hash-derived hue as before.
+           Never wraps — a row that runs out of horizontal space just clips
+           the overflow tags rather than wrapping to a second line, which
+           would break the row's fixed height. */
+        .tag-pills {
+          display: var(--list-item-tags-display, flex);
+          align-items: center;
+          flex-wrap: nowrap;
+          gap: 3px;
+          overflow: hidden;
           pointer-events: none;
-          display: var(--tag-strip-display, block);
+        }
+
+        .tag-pills[hidden] { display: none; }
+
+        .tag-pill {
+          flex-shrink: 0;
+          inline-size: 20px;
+          block-size: 9px;
+          border-radius: var(--radius-full);
         }
 
         .row[data-status="done"] {
@@ -160,10 +195,9 @@ class ListItem extends Gestures(AppElement) {
           color: var(--color-text-muted);
         }
 
-        .row[data-status="done"] .badge {
-          background: var(--color-success);
-          color: var(--color-text-inverse);
-        }
+        /* No badge-specific override needed here any more — with no chip
+           background at all (see .badge[data-status] below), the done row's
+           own tint doesn't need a bolder solid variant to sit on top of. */
 
         .note-icon,
         .url-icon {
@@ -194,7 +228,9 @@ class ListItem extends Gestures(AppElement) {
           min-block-size: 20px;
           font-size: var(--font-size-micro);
           font-weight: var(--font-weight-semibold);
-          border-radius: var(--radius-full);
+          text-transform: uppercase;
+          letter-spacing: var(--letter-spacing-caps);
+          border-radius: var(--radius-sm);
           padding: 2px var(--space-2);
           cursor: pointer;
           border: none;
@@ -207,25 +243,28 @@ class ListItem extends Gestures(AppElement) {
           outline-offset: 2px;
         }
 
+        /* Experimental, round 2 — no chip/box at all for any status now.
+           Open stays regular-weight/neutral (the default, nothing-to-report
+           state); Paused/Done/Closed are bold and coloured with each
+           status's own normal theme-reactive token — safe to use those
+           tokens directly again now that there's no forced-white background
+           to fight against (that was the previous, now-reverted, attempt). */
         .badge[data-status="open"] {
-          background: var(--color-app-accent-light);
-          color: var(--color-app-accent);
+          background: none;
+          color: var(--color-text-primary);
+          font-weight: var(--font-weight-regular);
         }
 
-        .badge[data-status="paused"] {
-          background: var(--color-warning-light);
-          color: var(--color-warning);
-        }
-
-        .badge[data-status="done"] {
-          background: var(--color-success-light);
-          color: var(--color-success);
-        }
-
+        .badge[data-status="paused"],
+        .badge[data-status="done"],
         .badge[data-status="closed"] {
-          background: var(--color-danger-light);
-          color: var(--color-danger);
+          background: none;
+          font-weight: var(--font-weight-bold);
         }
+
+        .badge[data-status="paused"] { color: var(--color-warning); }
+        .badge[data-status="done"]   { color: var(--color-success); }
+        .badge[data-status="closed"] { color: var(--color-danger); }
 
         .row[data-status="closed"] .title {
           color: var(--color-text-muted);
@@ -304,12 +343,14 @@ class ListItem extends Gestures(AppElement) {
       <button class="action-btn delete-btn" id="delete-btn" aria-label="${t('list-item.delete')}">${icons.trash}</button>
       <div class="row" tabindex="0" role="button" aria-label="">
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
-        <span class="title"></span>
+        <div class="main-col">
+          <span class="title"></span>
+          <div class="tag-pills" id="tag-pills" aria-hidden="true"></div>
+        </div>
         <span class="note-icon" aria-hidden="true">${icons.info}</span>
         <span class="url-icon"  aria-hidden="true">${icons.link}</span>
         ${urgencyBadgeMarkup}
         <button type="button" class="badge" id="badge-btn" data-status="open"></button>
-        <span class="tag-strip" aria-hidden="true"></span>
       </div>
     `;
   }
@@ -318,7 +359,8 @@ class ListItem extends Gestures(AppElement) {
     this.setAttribute('role', 'listitem');
     this._row = this.shadowRoot.querySelector('.row');
     this._title = this.shadowRoot.querySelector('.title');
-    this._stripEl = this.shadowRoot.querySelector('.tag-strip');
+    this._tagPillsEl = this.shadowRoot.querySelector('.tag-pills');
+    this._mainCol = this.shadowRoot.querySelector('.main-col');
     this._noteIcon = this.shadowRoot.querySelector('.note-icon');
     this._urlIcon = this.shadowRoot.querySelector('.url-icon');
     this._badge = this.shadowRoot.querySelector('.badge');
@@ -508,13 +550,16 @@ class ListItem extends Gestures(AppElement) {
     this.dataset.urgency = urgency;
     this._badge.textContent = t(`item-dialog.status-${status}`);
     this._badge.dataset.status = status;
-    if (this._stripEl) {
-      const bg = tagStrip(this._item?.tags ?? []);
-      this._stripEl.style.background = bg;
-      this._stripEl.hidden = !bg;
+    if (this._tagPillsEl) {
+      const tags = this._item?.tags ?? [];
+      this._tagPillsEl.innerHTML = tags
+        .map(tag => `<span class="tag-pill" style="background:${tagColor(tag)}"></span>`)
+        .join('');
+      this._tagPillsEl.hidden = tags.length === 0;
+      this._mainCol?.classList.toggle('has-tags', tags.length > 0);
     }
     const color = this._item?.color ?? null;
-    this._row.style.setProperty('--item-color', color ?? 'transparent');
+    this._row.style.setProperty('--row-accent-color', color ?? 'transparent');
     if (color) this._colorPanel.style.setProperty('--color-panel-bg', color);
     else this._colorPanel.style.removeProperty('--color-panel-bg');
   }
