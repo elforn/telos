@@ -237,7 +237,6 @@ class BottomNav extends AppElement {
           background: none;
           border: none;
           cursor: pointer;
-          font-size: var(--font-size-subheading);
           color: var(--color-text-secondary);
           border-radius: var(--radius-full);
           display: flex;
@@ -245,6 +244,12 @@ class BottomNav extends AppElement {
           justify-content: center;
           touch-action: manipulation;
           position: relative;
+        }
+
+        .gear-btn svg {
+          inline-size: 22px;
+          block-size: 22px;
+          pointer-events: none;
         }
 
         .gear-badge {
@@ -488,7 +493,10 @@ class BottomNav extends AppElement {
           <button class="pill" id="pill-years">${t('bottom-nav.years')}<span class="pill-dot" id="years-dot" hidden aria-hidden="true"></span></button>
           <button class="pill" id="pill-lists">${t('bottom-nav.lists')}<span class="pill-dot" id="lists-dot" hidden aria-hidden="true"></span></button>
         </div>
-        <button class="gear-btn" id="gear-btn" aria-label="${t('bottom-nav.settings')}">⚙<span class="gear-badge" id="gear-badge" hidden aria-hidden="true"></span></button>
+        <button class="gear-btn" id="gear-btn" aria-label="${t('bottom-nav.settings')}">
+          ${icons.gear}
+          <span class="gear-badge" id="gear-badge" hidden aria-hidden="true"></span>
+        </button>
       </div>
 
       <modal-dialog id="settings-modal" aria-label="${t('bottom-nav.settings')}">
