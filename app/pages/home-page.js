@@ -39,12 +39,19 @@ const FILTER_SHAPE = {
 
 // Reflection-card equalizer bars: --radius-sm (6px, the smallest token in
 // the scale) reads as a near-full semicircle on a bar this narrow, so the
-// track uses a deliberate one-off below the token scale instead. Named
-// (mirrors goal-item.js's TODAY_BOX/TODAY_RING_INSET pattern) because the
-// fill's own corner radius is derived from it — one inside the other by
-// exactly the track's border width, so the two stay in sync if this ever
-// changes rather than silently drifting apart as two separately-typed numbers.
+// track uses a deliberate one-off below the token scale instead. Only the
+// track's own top corners are rounded — the fill inside stays square (see
+// .reflection-card-bar-fill) since its own height can be smaller than this
+// radius at a low value, which looked like a blob rather than a subtle
+// curve.
 const BAR_RADIUS = 2; // px
+
+// How long the reflection-card bars take to grow in from 0 the first time
+// the card becomes visible for a given page instance (year navigation
+// mounts a fresh home-page, so this fires once per year visited) — not on
+// every live edit while the dialog is open, which still snaps instantly as
+// before. See _onReflections' firstRender branch.
+const BAR_GROW_MS = 450;
 
 class HomePage extends AppElement {
   template() {
@@ -166,12 +173,18 @@ class HomePage extends AppElement {
           border-inline-end: 1px solid var(--color-border);
         }
 
+        /* space-evenly (not space-between) so the gap before the first bar
+           and after the last one is the *same* size as the gaps between
+           bars, rather than zero — that's what made the chart read as 5
+           independently-placed items instead of one coherent element.
+           Still fills the row's full width, unlike a centred fixed-gap
+           layout, which left too much unused space on the sides. */
         .reflection-card-bars {
           display: flex;
           align-items: flex-end;
+          justify-content: space-evenly;
           flex: 1;
           min-inline-size: 0;
-          justify-content: space-between;
         }
 
         .reflection-card-bar-wrap {
@@ -187,25 +200,31 @@ class HomePage extends AppElement {
           color: var(--color-text-muted);
         }
 
-        /* BAR_RADIUS explained above, at its definition. Border in
-           --color-text-muted rather than --color-border: the two neutrals
-           are close enough in tone that the border is otherwise very hard to
-           make out against the card's own --color-surface-raised background. */
+        /* BAR_RADIUS explained above, at its definition. Widened to sit at
+           least as wide as its own two-letter label below (e.g. "Pe", "Co")
+           so the bar visually owns that label rather than reading narrower
+           than the text under it. No border — the track's own
+           --color-border fill against the card's --color-surface-raised
+           background is enough differentiation on its own. */
         .reflection-card-bar-track {
           position: relative;
-          inline-size: 10px;
+          inline-size: 18px;
           block-size: 26px;
           border-radius: ${BAR_RADIUS}px ${BAR_RADIUS}px 0 0;
-          border: 1px solid var(--color-text-muted);
           background: var(--color-border);
           display: flex;
           align-items: flex-end;
         }
 
+        /* Square, not rounded to match the track — at a low value the fill's
+           own block-size can be smaller than BAR_RADIUS itself, which turned
+           the rounded top into a dome/blob instead of a subtle curve. The
+           track's own rounded top corners still define the bar's overall
+           silhouette. */
         .reflection-card-bar-fill {
           inline-size: 100%;
           block-size: var(--bar-fill, 0%);
-          border-radius: ${BAR_RADIUS - 1}px ${BAR_RADIUS - 1}px 0 0;
+          border-radius: 0;
           background: var(--color-accent);
         }
 
@@ -230,10 +249,11 @@ class HomePage extends AppElement {
 
         .reflection-card-comment {
           display: -webkit-box;
-          -webkit-line-clamp: 4;
+          -webkit-line-clamp: 3;
           -webkit-box-orient: vertical;
           overflow: hidden;
-          font-size: var(--font-size-caption);
+          margin-block-end: var(--space-1);
+          font-size: var(--font-size-body);
           color: var(--color-text-secondary);
         }
 
@@ -344,6 +364,7 @@ class HomePage extends AppElement {
 
       <main>
         <button type="button" class="reflection-card" id="reflection-card" hidden>
+          <span class="reflection-card-comment" id="reflection-card-comment"></span>
           <div class="reflection-card-row" id="reflection-card-row">
             <span class="reflection-card-num" id="reflection-card-num"></span>
             <div class="reflection-card-bars" id="reflection-card-bars">
@@ -359,7 +380,6 @@ class HomePage extends AppElement {
             </div>
             <span class="sr-only" id="reflection-card-bars-sr"></span>
           </div>
-          <span class="reflection-card-comment" id="reflection-card-comment"></span>
         </button>
 
         <p id="filter-empty" hidden>${t('home-page.filter-empty')}</p>
@@ -453,6 +473,8 @@ class HomePage extends AppElement {
       };
     });
 
+    this._reflectionBarsAnimated = false;
+
     this._onReflections = reflections => {
       const reflection = reflections?.[String(this._year)];
       const score      = aggregateScore(reflection);
@@ -462,12 +484,34 @@ class HomePage extends AppElement {
       this._reflectionCardRow.hidden = score == null;
       this._reflectionCardNum.textContent = score != null ? score.toFixed(1) : '';
 
+      // Only the very first time this page instance shows the card do the
+      // bars grow in from 0 — a live edit afterwards (tapping a star while
+      // the dialog is open) still snaps directly to the new height, same as
+      // before this existed.
+      const firstRender = !this._reflectionBarsAnimated;
+      this._reflectionBarsAnimated = true;
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
       const averages = aspectAverages(reflections);
       const summaryParts = [];
       for (const aspect of REFLECTION_ASPECTS) {
         const { fill, tick } = this._reflectionCardBars[aspect.key];
         const value = reflection.scores?.[aspect.key];
-        fill.style.setProperty('--bar-fill', value ? `${(value / 5) * 100}%` : '0%');
+        const fillPct = value ? `${(value / 5) * 100}%` : '0%';
+        if (firstRender && !reduced) {
+          fill.style.transition = `block-size ${BAR_GROW_MS}ms ease`;
+          // Double rAF: the property is unset on first render (so it's
+          // already sitting at its var(--bar-fill, 0%) default) — this just
+          // guarantees a real paint happens at that 0% state before the
+          // target value is applied, so the transition has something to
+          // animate from rather than jumping straight to the end value.
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            fill.style.setProperty('--bar-fill', fillPct);
+          }));
+          setTimeout(() => { fill.style.transition = ''; }, BAR_GROW_MS + 40);
+        } else {
+          fill.style.setProperty('--bar-fill', fillPct);
+        }
         const avg = averages[aspect.key];
         tick.hidden = avg == null;
         if (avg != null) tick.style.setProperty('--bar-avg', `${(avg / 5) * 100}%`);

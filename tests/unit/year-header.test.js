@@ -576,6 +576,18 @@ describe('year-header — reflection edits commit immediately', () => {
     expect(Store.getState().reflections?.['2026']?.scores).toEqual({ people: 5, wealth: 2 });
   });
 
+  it('re-tapping the current star deletes that aspect key from the store rather than storing undefined', () => {
+    Store.setState('reflections', { '2026': { scores: { people: 5, wealth: 2 } } });
+    const el = mount();
+    el.shadowRoot.querySelector('#year-reflection-btn').click();
+    const dialog = el.shadowRoot.querySelector('#reflection-dialog');
+    const btn = dialog.shadowRoot.querySelector('.star-group[data-aspect="wealth"] .star-btn[data-value="2"]');
+    btn.click(); // clear
+    const scores = Store.getState().reflections?.['2026']?.scores;
+    expect(scores).toEqual({ people: 5 });
+    expect(Object.prototype.hasOwnProperty.call(scores, 'wealth')).toBe(false);
+  });
+
   it('a comment blur commits the comment to the store', () => {
     const el = mount();
     el.shadowRoot.querySelector('#year-reflection-btn').click();

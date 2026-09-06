@@ -8,8 +8,8 @@ const STAR_VALUES = [1, 2, 3, 4, 5];
 const POP_DURATION_MS = 350;
 
 // UI-tier: property-in (open()) / event-out (reflection-score-changed,
-// reflection-comment-changed, reflection-visibility-changed, modal-close from
-// the wrapped modal-dialog), zero store knowledge — the host (year-header.js)
+// reflection-comment-changed, reflection-visibility-changed, modal-close
+// from the wrapped modal-dialog), zero store knowledge — the host (year-header.js)
 // owns reading/writing `reflections` and the session-undo toast. aggregateScore
 // is used here only for the live in-dialog score badge (a pure function over
 // this component's own in-memory scores, not a store read).
@@ -69,11 +69,6 @@ class ReflectionDialog extends AppElement {
         .reflection-row {
           padding-block: var(--space-3);
           border-block-start: 0.5px solid var(--color-border);
-        }
-
-        .reflection-row:first-of-type {
-          padding-block-start: 0;
-          border-block-start: none;
         }
 
         .reflection-label {
@@ -144,7 +139,7 @@ class ReflectionDialog extends AppElement {
 
         .comment-label {
           display: block;
-          margin-block: var(--space-2) var(--space-2);
+          margin-block: 0 var(--space-2);
           font-size: var(--font-size-caption);
           font-weight: var(--font-weight-semibold);
           color: var(--color-text-muted);
@@ -244,6 +239,8 @@ class ReflectionDialog extends AppElement {
             <h2 class="reflection-title">${t('reflection.dialog-heading')}</h2>
           </div>
           <div class="reflection-scroll">
+            <label class="comment-label" for="reflection-comment">${t('reflection.highlights-label')}</label>
+            <textarea id="reflection-comment" class="comment-input" rows="3" placeholder="${t('reflection.highlights-placeholder')}"></textarea>
             ${REFLECTION_ASPECTS.map(a => `
               <div class="reflection-row">
                 <p class="reflection-label">${t(a.labelKey)}</p>
@@ -255,8 +252,6 @@ class ReflectionDialog extends AppElement {
                 </div>
               </div>
             `).join('')}
-            <label class="comment-label" for="reflection-comment">${t('reflection.highlights-label')}</label>
-            <textarea id="reflection-comment" class="comment-input" rows="3" placeholder="${t('reflection.highlights-placeholder')}"></textarea>
           </div>
         </div>
 
@@ -276,14 +271,22 @@ class ReflectionDialog extends AppElement {
     this._commentInput  = this.shadowRoot.querySelector('#reflection-comment');
     this._liveScoreEl   = this.shadowRoot.querySelector('#reflection-live-score');
     this._visibilityBtn = this.shadowRoot.querySelector('#reflection-visibility-btn');
-    this._scores         = {};
-    this._initialComment = '';
-    this._visible         = true;
-    this._popTimers       = {};
+    this._scores          = {};
+    this._initialComment  = '';
+    this._visible          = true;
+    this._popTimers        = {};
 
     this.listen(this.shadowRoot, 'click', e => {
       const btn = e.target.closest('.star-btn');
-      if (btn) this._selectStar(btn.closest('.star-group').dataset.aspect, Number(btn.dataset.value));
+      if (!btn) return;
+      const aspect = btn.closest('.star-group').dataset.aspect;
+      const value  = Number(btn.dataset.value);
+      // Tapping the star that's already the current rating clears it back to
+      // unrated, rather than re-committing the same value — the only way to
+      // remove a rating once set (arrow keys never clear, only set, so this
+      // is click-only).
+      if (this._scores[aspect] === value) this._clearStar(aspect);
+      else this._selectStar(aspect, value);
     });
 
     // Roving-tabindex arrow-key navigation, mirroring the WAI-ARIA radiogroup
@@ -333,6 +336,20 @@ class ReflectionDialog extends AppElement {
     this._renderLiveScore();
     this.dispatchEvent(new CustomEvent('reflection-score-changed', {
       bubbles: true, composed: true, detail: { key: aspect, value },
+    }));
+  }
+
+  // value:undefined tells the host (year-header.js) to delete the key
+  // entirely rather than store it — an aspect can be genuinely unrated,
+  // same as a goal migrated without one (see tracking.js's own "every field
+  // is optional" convention).
+  _clearStar(aspect) {
+    const { [aspect]: _dropped, ...rest } = this._scores;
+    this._scores = rest;
+    this._renderGroup(aspect);
+    this._renderLiveScore();
+    this.dispatchEvent(new CustomEvent('reflection-score-changed', {
+      bubbles: true, composed: true, detail: { key: aspect, value: undefined },
     }));
   }
 

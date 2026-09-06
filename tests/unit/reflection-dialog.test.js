@@ -45,6 +45,16 @@ describe('reflection-dialog — structure', () => {
     expect(el.shadowRoot.querySelector('#reflection-comment')).not.toBeNull();
   });
 
+  it('places the comment textarea before the aspect rows', () => {
+    const el = mount();
+    const scroll = el.shadowRoot.querySelector('.reflection-scroll');
+    const children = Array.from(scroll.children);
+    const commentIdx = children.findIndex(c => c.id === 'reflection-comment');
+    const firstRowIdx = children.findIndex(c => c.classList.contains('reflection-row'));
+    expect(commentIdx).toBeGreaterThanOrEqual(0);
+    expect(firstRowIdx).toBeGreaterThan(commentIdx);
+  });
+
   it('renders a real heading for the dialog title', () => {
     const el = mount();
     const title = el.shadowRoot.querySelector('.reflection-title');
@@ -275,6 +285,60 @@ describe('reflection-dialog — star tap', () => {
     star(el, 'people', 5).click();
     star(el, 'wonder', 2).click();
     expect(star(el, 'people', 5).classList.contains('filled')).toBe(true);
+  });
+});
+
+// ── clearing a rating (re-tap the current star) ─────────────────────────────
+
+describe('reflection-dialog — clear rating by re-tapping the current star', () => {
+  it('re-tapping the currently-selected star unfills every star for that aspect', () => {
+    const el = mount();
+    el.open(null);
+    star(el, 'people', 3).click();
+    star(el, 'people', 3).click();
+    [1, 2, 3, 4, 5].forEach(n => expect(star(el, 'people', n).classList.contains('filled')).toBe(false));
+  });
+
+  it('dispatches reflection-score-changed with value:undefined on clear', () => {
+    const el = mount();
+    el.open(null);
+    star(el, 'people', 3).click();
+    let detail;
+    el.addEventListener('reflection-score-changed', e => { detail = e.detail; });
+    star(el, 'people', 3).click();
+    expect(detail).toEqual({ key: 'people', value: undefined });
+  });
+
+  it('updates the live aggregate after clearing', () => {
+    const el = mount();
+    el.open({ scores: { people: 4, health: 4 } });
+    star(el, 'people', 4).click();
+    expect(el.shadowRoot.querySelector('#reflection-live-score').textContent).toBe('★ 4.0');
+  });
+
+  it('hides the live aggregate once the last rated aspect is cleared', () => {
+    const el = mount();
+    el.open({ scores: { people: 4 } });
+    star(el, 'people', 4).click();
+    expect(el.shadowRoot.querySelector('#reflection-live-score').hidden).toBe(true);
+  });
+
+  it('tapping a lower star after a clear re-rates rather than clearing again', () => {
+    const el = mount();
+    el.open(null);
+    star(el, 'people', 3).click();
+    star(el, 'people', 3).click(); // clear
+    star(el, 'people', 2).click(); // re-rate at 2
+    [1, 2].forEach(n => expect(star(el, 'people', n).classList.contains('filled')).toBe(true));
+    expect(star(el, 'people', 3).classList.contains('filled')).toBe(false);
+  });
+
+  it('does not clear on an ArrowLeft/ArrowRight round trip back to the same value', () => {
+    const el = mount();
+    el.open({ scores: { people: 3 } });
+    star(el, 'people', 3).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, composed: true }));
+    star(el, 'people', 4).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, composed: true }));
+    expect(star(el, 'people', 3).classList.contains('filled')).toBe(true);
   });
 });
 

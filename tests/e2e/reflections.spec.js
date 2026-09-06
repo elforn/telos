@@ -190,6 +190,35 @@ test.describe('Reflections', () => {
     expect(await starFilled(page, 'wealth', 4)).toBe(false);
   });
 
+  test('re-tapping a rated star clears it, and the clear persists across reload', async ({ page }) => {
+    await openReflectionDialog(page);
+    await rateStar(page, 'people', 4);
+    await rateStar(page, 'health', 5);
+    await closeReflectionDialog(page);
+
+    await waitForIDBFlush(page);
+    await page.reload();
+    await waitForPage(page);
+    expect(await cardScoreText(page)).toBe('4.5');
+
+    // Re-tap health's current rating (5) to clear it back to unrated.
+    await openReflectionDialogFromCard(page);
+    await rateStar(page, 'health', 5);
+    expect(await starFilled(page, 'health', 5)).toBe(false);
+    await closeReflectionDialog(page);
+
+    await waitForIDBFlush(page);
+    await page.reload();
+    await waitForPage(page);
+    // Only people (4) remains rated, so the aggregate is 4.0, not an
+    // average that still counts health as a 0.
+    expect(await cardScoreText(page)).toBe('4.0');
+
+    await openReflectionDialogFromCard(page);
+    expect(await starFilled(page, 'health', 1)).toBe(false);
+    expect(await starFilled(page, 'people', 4)).toBe(true);
+  });
+
   test('editing a score after reload updates the aggregate and persists', async ({ page }) => {
     await openReflectionDialog(page);
     await rateAllFive(page);

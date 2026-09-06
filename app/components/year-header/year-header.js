@@ -1150,7 +1150,12 @@ class YearHeader extends Gestures(AppElement) {
 
     this._onReflectionScoreChanged = e => {
       const { key, value } = e.detail;
-      this._commitReflection(r => ({ ...r, scores: { ...r?.scores, [key]: value } }));
+      this._commitReflection(r => {
+        const scores = { ...r?.scores };
+        if (value == null) delete scores[key];
+        else scores[key] = value;
+        return { ...r, scores };
+      });
     };
     this._reflectionDialog.addEventListener('reflection-score-changed', this._onReflectionScoreChanged);
 

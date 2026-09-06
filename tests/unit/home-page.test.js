@@ -1163,7 +1163,11 @@ describe('home-page — reflection summary card', () => {
     const el = mount(2026);
     const bars = el.shadowRoot.querySelectorAll('.reflection-card-bar-wrap');
     const byAspect = Object.fromEntries([...bars].map(w => [w.dataset.aspect, w]));
-    expect(byAspect.people.querySelector('.reflection-card-bar-fill').style.getPropertyValue('--bar-fill')).toBe('80%');
+    // The first render of the card grows the bars in from 0 via a double
+    // rAF (see home-page.js's _onReflections) — wait for it to flush rather
+    // than asserting the fill height synchronously.
+    await vi.waitFor(() =>
+      expect(byAspect.people.querySelector('.reflection-card-bar-fill').style.getPropertyValue('--bar-fill')).toBe('80%'));
     expect(byAspect.wealth.querySelector('.reflection-card-bar-fill').style.getPropertyValue('--bar-fill')).toBe('100%');
     expect(byAspect.health.querySelector('.reflection-card-bar-fill').style.getPropertyValue('--bar-fill')).toBe('0%');
   });
