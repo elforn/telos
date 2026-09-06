@@ -470,7 +470,8 @@ class YearHeader extends Gestures(AppElement) {
           position: relative;
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: var(--space-2);
+          row-gap: var(--space-5);
+          column-gap: var(--space-2);
           max-block-size: 50vh;
           overflow-y: auto;
           padding-block: var(--space-4);
