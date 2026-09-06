@@ -62,6 +62,11 @@ class HomePage extends AppElement {
           max-inline-size: var(--page-max-width);
           margin-inline: auto;
           --page-padding: var(--space-5);
+          /* No token between --font-size-caption (13px) and --font-size-body
+             (16px) — body read too big for the reflection card's comment
+             text, caption too small. A deliberate one-off, same idiom as
+             BAR_RADIUS below for the bar chart's corner radius. */
+          --reflection-comment-font-size: 0.94rem;
         }
 
         main {
@@ -253,8 +258,11 @@ class HomePage extends AppElement {
           -webkit-box-orient: vertical;
           overflow: hidden;
           margin-block-end: var(--space-1);
-          font-size: var(--font-size-body);
-          color: var(--color-text-secondary);
+          font-size: var(--reflection-comment-font-size);
+          /* --color-text-secondary is documented (tokens.css) as large-text
+             (18px+) only — this is body-sized text, so --color-text-primary
+             is the correct token here, not a stylistic choice. */
+          color: var(--color-text-primary);
         }
 
         #capstone-section {
