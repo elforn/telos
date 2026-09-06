@@ -1016,6 +1016,29 @@ describe('goal-dialog — move view', () => {
     expect(el.shadowRoot.querySelector('#move-btn').disabled).toBe(false);
   });
 
+  it('shows a "Current" tag on the goal\'s home section while the year is unchanged', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    const current = el.shadowRoot.querySelector('.section-option[data-section="milestones"] .current-tag');
+    const other   = el.shadowRoot.querySelector('.section-option[data-section="wow"] .current-tag');
+    expect(current.hidden).toBe(false);
+    expect(other.hidden).toBe(true);
+  });
+
+  it('hides the "Current" tag once a different year is selected', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(goal, { year: '2026', section: 'milestones' });
+    el.shadowRoot.querySelector('#action-move-btn').click();
+    const sel = el.shadowRoot.querySelector('#move-year-select');
+    sel.value = '2027';
+    sel.dispatchEvent(new Event('change'));
+    const current = el.shadowRoot.querySelector('.section-option[data-section="milestones"] .current-tag');
+    expect(current.hidden).toBe(true);
+  });
+
   it('dispatches goal-move with copy:false when Move is clicked', () => {
     const el = mount();
     el.currentYear = 2026;

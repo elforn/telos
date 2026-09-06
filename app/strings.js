@@ -104,6 +104,7 @@ defineStrings({
   'goal-dialog.move-section-milestones': 'Milestones',
   'goal-dialog.move-section-wow':        'Wow Moments',
   'goal-dialog.move-section-focus':      'Focus',
+  'goal-dialog.move-section-current':    'Current',
   'goal-dialog.move-cta':               'Move',
   'goal-dialog.copy-cta':               'Copy',
   'goal-dialog.picker-back':            'Back',

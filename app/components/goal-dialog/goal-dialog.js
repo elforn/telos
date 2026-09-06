@@ -857,6 +857,17 @@ class GoalDialog extends AppElement {
           pointer-events: none;
         }
 
+        /* Purely informational — the pill's own checked styling already
+           carries the selection state, this just clarifies *why* Move is
+           disabled for this particular section (it's where the goal already
+           lives). Only ever shown for the year the goal is actually filed
+           under — see _updateCurrentSectionTag. */
+        .current-tag {
+          color: var(--color-text-muted);
+          font-size: var(--font-size-micro);
+          font-weight: var(--font-weight-medium);
+        }
+
         .section-option:has(input:focus-visible) {
           outline: 2px solid var(--color-accent);
           outline-offset: 2px;
@@ -1010,9 +1021,10 @@ class GoalDialog extends AppElement {
           <select id="move-year-select"></select>
           <div id="move-section-group" role="group" aria-label="${t('goal-dialog.move-section-label')}">
             ${SECTIONS.map((s, i) => `
-              <label class="section-option">
+              <label class="section-option" data-section="${s}">
                 <input type="radio" name="goal-move-section" value="${s}" ${i === 0 ? 'checked' : ''}>
                 ${t('goal-dialog.move-section-' + s)}
+                <span class="current-tag" hidden>${t('goal-dialog.move-section-current')}</span>
               </label>
             `).join('')}
           </div>
@@ -2035,6 +2047,17 @@ class GoalDialog extends AppElement {
     const same = toYear === this._fromYear && toSection === this._fromSection;
     if (this._moveMoveBtn) this._moveMoveBtn.disabled = same;
     if (this._moveCopyBtn) this._moveCopyBtn.disabled = false;
+    this._updateCurrentSectionTag(toYear);
+  }
+
+  // The "Current" tag only ever makes sense on the goal's actual home
+  // section, and only while the year picker is still on that same year —
+  // it says nothing meaningful about a different year, so it's hidden there.
+  _updateCurrentSectionTag(toYear) {
+    this._moveSectionGrp?.querySelectorAll('.section-option').forEach(opt => {
+      const tag = opt.querySelector('.current-tag');
+      if (tag) tag.hidden = !(opt.dataset.section === this._fromSection && toYear === this._fromYear);
+    });
   }
 
   _commitMove(copy) {

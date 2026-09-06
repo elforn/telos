@@ -94,6 +94,7 @@ defineStrings({
   'goal-dialog.move-section-milestones':  'Fites',
   'goal-dialog.move-section-wow':         'Moments wow',
   'goal-dialog.move-section-focus':       'Focus',
+  'goal-dialog.move-section-current':     'Actual',
   'goal-dialog.move-cta':                 'Mou',
   'goal-dialog.copy-cta':                 'Copia',
   'goal-dialog.picker-back':              'Enrere',
