@@ -1233,6 +1233,61 @@ describe('home-page — reflection summary card', () => {
   });
 });
 
+// ── Reflection card height -> year-header wiring ────────────────────────────
+//
+// year-header uses this to delay its own compact/photo-hide scroll
+// transition until the card has scrolled out of view — see the matching
+// threshold tests in year-header.test.js. happy-dom has no real layout
+// engine (offsetHeight is always 0), so this only checks the wiring itself
+// fires correctly, not real pixel values.
+
+describe('home-page — reflection card height -> year-header wiring', () => {
+  it('observes the reflection card and pushes its offsetHeight into year-header on resize', async () => {
+    let capturedCallback;
+    const observeSpy = vi.fn();
+    const OriginalRO = global.ResizeObserver;
+    global.ResizeObserver = class {
+      constructor(cb) { capturedCallback = cb; }
+      observe(el) { observeSpy(el); }
+      disconnect() {}
+    };
+    try {
+      await boot({ dbName: freshName(), initialState: { goals: {} } });
+      const el = mount(2026);
+      const header = el.shadowRoot.querySelector('year-header');
+      const card = el.shadowRoot.querySelector('#reflection-card');
+      expect(observeSpy).toHaveBeenCalledWith(card);
+
+      Object.defineProperty(card, 'offsetHeight', { value: 123, configurable: true });
+      capturedCallback();
+      expect(header._reflectionCardHeight).toBe(123);
+    } finally {
+      global.ResizeObserver = OriginalRO;
+    }
+  });
+
+  it('disconnects the observer on unsubscribe', async () => {
+    // year-header.js has its own unrelated ResizeObserver (for its own
+    // height tracking) that shares this same global stub while mounted
+    // inside home-page, so this only checks disconnect fires at all, not
+    // an exact call count.
+    const disconnectSpy = vi.fn();
+    const OriginalRO = global.ResizeObserver;
+    global.ResizeObserver = class {
+      observe() {}
+      disconnect() { disconnectSpy(); }
+    };
+    try {
+      await boot({ dbName: freshName(), initialState: { goals: {} } });
+      const el = mount(2026);
+      el.remove();
+      expect(disconnectSpy).toHaveBeenCalled();
+    } finally {
+      global.ResizeObserver = OriginalRO;
+    }
+  });
+});
+
 // ── Upcoming-dialog pendingFocus landing ────────────────────────────────────
 
 describe('home-page — pendingFocus (Upcoming dialog row tap)', () => {

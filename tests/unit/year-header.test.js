@@ -687,3 +687,73 @@ describe('year-header — reflection visibility toggle', () => {
   });
 });
 
+// ── reflection card scroll threshold ────────────────────────────────────────
+//
+// home-page.js pushes its reflection card's rendered height in here (via a
+// ResizeObserver, 0 when the card is hidden/absent) so the compact/photo-hide
+// transition doesn't start until the card has scrolled out of view first —
+// see _onScroll's goThreshold. This only exercises the threshold math itself;
+// the actual on-screen sequencing (card scrolls away, *then* the photo
+// starts hiding) still needs real on-device confirmation, same as every
+// other scroll-timing behaviour in this file.
+
+function setScrollY(y) {
+  Object.defineProperty(window, 'scrollY', { value: y, configurable: true });
+  window.dispatchEvent(new Event('scroll'));
+}
+
+describe('year-header — reflection card scroll threshold', () => {
+  afterEach(() => {
+    setScrollY(0);
+  });
+
+  it('defaults to 0 extra scroll distance when never set', () => {
+    const el = mount();
+    el.setAttribute('data-has-image', '');
+    setScrollY(50);
+    expect(el.classList.contains('compact')).toBe(true); // 50 > the plain 40px threshold
+  });
+
+  it('extends the compact threshold by the reflection card height', () => {
+    const el = mount();
+    el.setAttribute('data-has-image', '');
+    el.reflectionCardHeight = 100;
+
+    setScrollY(60);
+    expect(el.classList.contains('compact')).toBe(false); // 60 < 40 + 100
+
+    setScrollY(150);
+    expect(el.classList.contains('compact')).toBe(true); // 150 > 40 + 100
+  });
+
+  it('extends backThreshold too, so scrolling back up reveals the photo before the card reappears', () => {
+    const el = mount();
+    el.setAttribute('data-has-image', '');
+    el.reflectionCardHeight = 100;
+
+    setScrollY(200);
+    expect(el.classList.contains('compact')).toBe(true);
+    el._compactTime = 0; // bypass the 300ms anti-flicker guard for this test
+
+    // Still above the extended backThreshold (10 + 100 = 110) — the card
+    // would already be visible at this y (< its own 100px height is false
+    // here, still hidden), and the photo correctly stays hidden too.
+    setScrollY(120);
+    expect(el.classList.contains('compact')).toBe(true);
+
+    // Below backThreshold — photo reveals. This happens while y (90) is
+    // still above the card's own height (100), so the card is still fully
+    // scrolled away: photo first, card later, not the other way around.
+    setScrollY(90);
+    expect(el.classList.contains('compact')).toBe(false);
+  });
+
+  it('treats a negative/falsy height as 0 rather than shrinking the threshold', () => {
+    const el = mount();
+    el.setAttribute('data-has-image', '');
+    el.reflectionCardHeight = 0;
+    setScrollY(50);
+    expect(el.classList.contains('compact')).toBe(true); // still just the plain 40px threshold
+  });
+});
+

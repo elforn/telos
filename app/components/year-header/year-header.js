@@ -807,6 +807,7 @@ class YearHeader extends Gestures(AppElement) {
     this._touch = false;
     this._touchStartY = 0;
     this._lastScrollY = 0;
+    this._reflectionCardHeight = 0;
 
     this._onTouchStart = (e) => {
       this._touch = true;
@@ -845,8 +846,19 @@ class YearHeader extends Gestures(AppElement) {
       this._lastScrollY = y;
 
       const hasImage = this.hasAttribute('data-has-image');
-      const goThreshold   = hasImage ? 40 : 80;
-      const backThreshold = hasImage ? 10 : 60;
+      // Both extended by the reflection card's own height (see home-page.js's
+      // reflectionCardHeight setter below) — 0 when there's no reflection
+      // card for this year, leaving both thresholds unchanged. goThreshold
+      // extended so the card finishes scrolling out of view before compact
+      // mode starts hiding the photo. backThreshold needs the same
+      // extension for the reverse direction: the card becomes visible again
+      // as soon as y drops below its own height, which is *larger* than the
+      // old fixed backThreshold (10/60) — left alone, that meant the card
+      // reappeared before the photo did, the opposite of "photo first, card
+      // last". Extending both by the same amount preserves the original
+      // hysteresis gap between them (still 30px), just shifted up.
+      const goThreshold   = (hasImage ? 40 : 80) + this._reflectionCardHeight;
+      const backThreshold = (hasImage ? 10 : 60) + this._reflectionCardHeight;
 
       if (!this._compact && y > goThreshold) {
         this._compact = true;
@@ -1257,6 +1269,12 @@ class YearHeader extends Gestures(AppElement) {
     } else if (!this._compact) {
       this.classList.remove('compact');
     }
+  }
+
+  // Pushed by home-page.js (a ResizeObserver on its own reflection card) —
+  // see _onScroll's goThreshold for why this component needs to know it.
+  set reflectionCardHeight(px) {
+    this._reflectionCardHeight = px || 0;
   }
 
   _updateYear() {

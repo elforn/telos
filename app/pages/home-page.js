@@ -466,6 +466,19 @@ class HomePage extends AppElement {
     // the same `openReflection()`.
 
     this._reflectionCard        = this.shadowRoot.querySelector('#reflection-card');
+    // Tells year-header how much extra scroll distance to require before its
+    // own compact/photo-hide transition kicks in, so the card (normal-flow
+    // content, no scroll-reactive behaviour of its own — see the reflection
+    // card's own history of scroll-coupling bugs) finishes scrolling out of
+    // view first. One-directional (card size -> header threshold) — this
+    // never feeds back into the card's own size or visibility, so it can't
+    // reproduce that earlier feedback-loop class of bug. offsetHeight is 0
+    // whenever the card is hidden, so an absent reflection needs no special
+    // case here.
+    this._reflectionCardResizeObserver = new ResizeObserver(() => {
+      this._header.reflectionCardHeight = this._reflectionCard.offsetHeight;
+    });
+    this._reflectionCardResizeObserver.observe(this._reflectionCard);
     this._reflectionCardRow     = this.shadowRoot.querySelector('#reflection-card-row');
     this._reflectionCardNum     = this.shadowRoot.querySelector('#reflection-card-num');
     this._reflectionCardBarsSr  = this.shadowRoot.querySelector('#reflection-card-bars-sr');
@@ -1107,6 +1120,7 @@ class HomePage extends AppElement {
     // Static listeners and store subscriptions are auto-removed by listen()/watch().
     clearTimeout(this._filterSuppressTimer);
     this._detachReorder?.();
+    this._reflectionCardResizeObserver?.disconnect();
   }
 
   // ── Accent colour ─────────────────────────────────────────────────────────
