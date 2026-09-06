@@ -72,13 +72,13 @@ async function openListMenu(page) {
   });
 }
 
-// Clicking either pill also closes the menu (app behaviour), so no separate close step.
-async function clickArchivePill(page, selector) {
-  await page.evaluate(sel => {
+// Clicking the toggle also closes the menu (app behaviour), so no separate close step.
+async function clickArchiveToggleInMenu(page) {
+  await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
-      .querySelector(sel).click();
-  }, selector);
+      .querySelector('#archive-toggle-btn').click();
+  });
   await page.waitForFunction(() => {
     const d = document.querySelector('app-router')?.shadowRoot
       ?.querySelector('list-detail-page')?.shadowRoot
@@ -87,14 +87,11 @@ async function clickArchivePill(page, selector) {
   });
 }
 
-const clickArchivedPillInMenu = page => clickArchivePill(page, '#archive-archived-btn');
-const clickActivePillInMenu   = page => clickArchivePill(page, '#archive-active-btn');
-
-function archivedPillActive(page) {
+function archiveToggleLabel(page) {
   return page.evaluate(() =>
     document.querySelector('app-router').shadowRoot
       .querySelector('list-detail-page').shadowRoot
-      .querySelector('#archive-archived-btn').classList.contains('active')
+      .querySelector('#archive-toggle-btn').textContent
   );
 }
 
@@ -171,7 +168,7 @@ test.describe('List archive', () => {
   test('archiving a list from the ⋮ menu hides it from the overview by default', async ({ page }) => {
     await openFirstList(page);
     await openListMenu(page);
-    await clickArchivedPillInMenu(page);
+    await clickArchiveToggleInMenu(page);
     await goBackToLists(page);
 
     expect(await listVisibility(page, 'Archive me')).toBe(false);
@@ -180,7 +177,7 @@ test.describe('List archive', () => {
   test('the Archived filter pill on the overview reveals an archived list', async ({ page }) => {
     await openFirstList(page);
     await openListMenu(page);
-    await clickArchivedPillInMenu(page);
+    await clickArchiveToggleInMenu(page);
     await goBackToLists(page);
 
     await openFilterBarAndPanel(page);
@@ -191,28 +188,28 @@ test.describe('List archive', () => {
   test('unarchiving restores default visibility', async ({ page }) => {
     await openFirstList(page);
     await openListMenu(page);
-    await clickArchivedPillInMenu(page); // archive
+    await clickArchiveToggleInMenu(page); // archive
     await openListMenu(page);
-    await clickActivePillInMenu(page);   // unarchive
+    await clickArchiveToggleInMenu(page); // unarchive
     await goBackToLists(page);
 
     expect(await listVisibility(page, 'Archive me')).toBe(true);
   });
 
-  test('the segmented switch reflects archived state', async ({ page }) => {
+  test('the toggle button label reflects archived state', async ({ page }) => {
     await openFirstList(page);
     await openListMenu(page);
-    expect(await archivedPillActive(page)).toBe(false);
-    await clickArchivedPillInMenu(page);
+    expect(await archiveToggleLabel(page)).toBe('Archive');
+    await clickArchiveToggleInMenu(page);
 
     await openListMenu(page);
-    expect(await archivedPillActive(page)).toBe(true);
+    expect(await archiveToggleLabel(page)).toBe('Unarchive');
   });
 
   test('the Empty pill does not reveal an archived (empty) list — only Archived does', async ({ page }) => {
     await openFirstList(page);
     await openListMenu(page);
-    await clickArchivedPillInMenu(page); // "Archive me" has 0 items and is now archived
+    await clickArchiveToggleInMenu(page); // "Archive me" has 0 items and is now archived
     await goBackToLists(page);
 
     await openFilterBarAndPanel(page);

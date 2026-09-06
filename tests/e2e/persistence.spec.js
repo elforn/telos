@@ -365,7 +365,7 @@ test.describe('Data persistence', () => {
     await page.evaluate(() => {
       document.querySelector('app-router').shadowRoot
         .querySelector('list-detail-page').shadowRoot
-        .querySelector('#archive-archived-btn').click();
+        .querySelector('#archive-toggle-btn').click();
     });
     // Navigate back to the Lists overview so the reload below lands on that
     // route (page.reload() reloads whatever URL we're currently on).
