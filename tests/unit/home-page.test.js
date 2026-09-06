@@ -94,17 +94,6 @@ describe('home-page — store integration', () => {
     );
   });
 
-  it('capstone section loses empty class when goals exist', async () => {
-    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
-    const el = mount(2026);
-    setState('goals', {
-      '2026': { capstone: [{ id: 'c1', title: 'Goal', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] },
-    });
-    await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#capstone-section').classList.contains('empty')).toBe(false)
-    );
-  });
-
   it('renders milestone goal-items when milestones set', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
     const el = mount(2026);
@@ -134,19 +123,47 @@ describe('home-page — store integration', () => {
       '2025': { capstone: [], milestones: [{ id: 'm1', title: 'Past milestone', tracking: { type: 'percentage', value: 0 } }], wow: [] },
     });
     await vi.waitFor(() =>
-      expect(el.shadowRoot.querySelector('#milestone-section').classList.contains('empty')).toBe(true)
+      expect(el.shadowRoot.querySelector('#milestone-list').querySelectorAll('goal-item').length).toBe(0)
     );
   });
 
-  it('keeps the milestone add-row open after tapping add (quick-add from the first entry)', async () => {
+  it('adds a milestone goal when goal-created fires after clicking the section-add button', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
-    const el = mount();
-    // stub the goal-dialog's native <dialog> so open() doesn't need real showModal
-    const dlg = el.shadowRoot.querySelector('#dialog').shadowRoot
-      .querySelector('#modal').shadowRoot.querySelector('dialog');
-    if (dlg) { dlg.showModal = () => {}; dlg.close = () => {}; }
+    const el = mount(2026);
     el.shadowRoot.querySelector('#add-milestone').click();
-    expect(el.shadowRoot.querySelector('#milestone-section').classList.contains('add-open')).toBe(true);
+    el.shadowRoot.dispatchEvent(new CustomEvent('goal-created', {
+      bubbles: true, composed: true, detail: { title: 'New Milestone' },
+    }));
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#milestone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    expect(el.shadowRoot.querySelector('#milestone-list goal-item')._goal.title).toBe('New Milestone');
+  });
+
+  it('adds a wow goal when goal-created fires after clicking the section-add button', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#add-wow').click();
+    el.shadowRoot.dispatchEvent(new CustomEvent('goal-created', {
+      bubbles: true, composed: true, detail: { title: 'New Wow' },
+    }));
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#wow-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    expect(el.shadowRoot.querySelector('#wow-list goal-item')._goal.title).toBe('New Wow');
+  });
+
+  it('adds a focus goal when goal-created fires after clicking the section-add button', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(2026);
+    el.shadowRoot.querySelector('#add-focus').click();
+    el.shadowRoot.dispatchEvent(new CustomEvent('goal-created', {
+      bubbles: true, composed: true, detail: { title: 'New Focus' },
+    }));
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#focus-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    expect(el.shadowRoot.querySelector('#focus-list goal-item')._goal.title).toBe('New Focus');
   });
 
   it('removes goal-item when milestone deleted via setState', async () => {

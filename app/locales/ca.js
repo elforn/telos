@@ -26,8 +26,6 @@ defineStrings({
   'goal-dialog.draft-undo':      'Desfés',
   'goal-dialog.draft-restore':   'Restaura l\'esborrany',
 
-  'home-page.done':              'Fet',
-
   'goal-item.delete':            'Elimina',
   'goal-item.add-capstone':      'Afegeix objectiu principal',
   'goal-item.add-milestone':     'Afegeix una fita',

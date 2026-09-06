@@ -12,7 +12,6 @@ defineStrings({
   'home-page.prev-year':         'Previous year',
   'home-page.next-year':         'Next year',
   'home-page.year-progress':     'Year progress',
-  'home-page.done':              'Done',
 
   'goal-dialog.placeholder': 'What will you achieve this year?',
   'goal-dialog.notes-placeholder': 'Notes',

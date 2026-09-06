@@ -26,8 +26,6 @@ defineStrings({
   'goal-dialog.draft-undo':      'Annuler',
   'goal-dialog.draft-restore':   'Restaurer le brouillon',
 
-  'home-page.done':              'Terminé',
-
   'goal-item.delete':            'Supprimer',
   'goal-item.add-capstone':      'Ajouter un objectif phare',
   'goal-item.add-milestone':     'Ajouter un jalon',

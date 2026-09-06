@@ -12,13 +12,11 @@ import { onDayChange } from '../utils/day-change-watcher.js';
 import '../components/year-header/year-header.js';
 import '../components/goal-item/goal-item.js';
 import '../components/goal-dialog/goal-dialog.js';
-import '../components/add-row/add-row.js';
 import '../components/export-sheet/export-sheet.js';
 import '../components/date-filter-row/date-filter-row.js';
 import { exportGoalsMarkdown, exportGoalMarkdown } from '../utils/export-markdown.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
-import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
 import { matchesDateBucket } from '../utils/urgency.js';
 import { yearDeadlinesVisible } from '../utils/deadline-visibility.js';
 import { percentValue, setPercent, logEntry, unlogEntry, isLoggedOn } from '../utils/tracking.js';
@@ -93,15 +91,58 @@ class HomePage extends AppElement {
           margin-block-end: var(--space-1);
         }
 
+        /* Add lives here now, not in the row flow — a goal section used to
+           show a dashed add-row (empty) or a hairline "+" (non-empty, see
+           the removed .add-line/.list-section.empty rules) sitting *among*
+           the rows themselves. Anchoring it to the heading instead means the
+           goal list is always an uninterrupted flow: nothing before, between,
+           or after the rows ever changes shape. Same control regardless of
+           whether the section is empty or full — no separate empty-state
+           treatment any more. */
+        .section-add-btn {
+          flex-shrink: 0;
+          min-block-size: var(--touch-target);
+          min-inline-size: var(--touch-target);
+          background: none;
+          border: none;
+          cursor: pointer;
+          /* Muted rather than accent — a known contrast exception, same call
+             as the "+ New Item"/"+ New List" row text, see
+             feedback_paused_closed_status_contrast_accepted.md. */
+          color: var(--color-text-secondary);
+          font-size: var(--font-size-heading);
+          font-weight: var(--font-weight-regular);
+          line-height: 1;
+          border-radius: var(--radius-full);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          touch-action: manipulation;
+        }
+
+        .section-add-btn:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
         .list-section {
           display: flex;
           flex-direction: column;
         }
 
+        /* Flush, full-bleed rows — see list-detail-page.js's #item-list for
+           the same technique (negative margin-inline cancels main's own
+           padding, no explicit inline-size). Deliberately NOT overflow:hidden
+           here, unlike the other two ports: goal-item's own :host already
+           self-clips its swipe gesture (unchanged), and critically, its
+           celebration particle-burst needs to escape up to 185px beyond the
+           row — a parent's overflow:hidden would clip that regardless of
+           :host's own overflow:visible during the burst, since a parent
+           always bounds an absolutely-positioned descendant's paint. */
         .item-list {
           display: flex;
           flex-direction: column;
-          gap: var(--space-2);
+          margin-inline: calc(-1 * var(--page-padding));
         }
 
         /* A normal, plain scrollable-area element — no special show/hide
@@ -270,69 +311,9 @@ class HomePage extends AppElement {
         }
 
         #capstone-list goal-item {
-          --goal-item-height: 60px;
+          --goal-item-height: 68px;
         }
 
-        add-row {
-          display: block;
-          font-style: italic;
-        }
-
-        .add-line {
-          display: none;
-          align-items: center;
-          gap: var(--space-2);
-          inline-size: 100%;
-          min-block-size: calc(var(--touch-target) / 2);
-          border: none;
-          background: none;
-          cursor: pointer;
-          touch-action: manipulation;
-          padding: 0;
-          padding-block-start: 6px;
-          padding-block-end: 0;
-          color: var(--color-accent);
-          font-size: var(--font-size-caption);
-          font-family: var(--font-family);
-          font-weight: var(--font-weight-semibold);
-        }
-
-        .add-line::before,
-        .add-line::after {
-          content: '';
-          flex: 1;
-          block-size: 1.5px;
-          background: var(--color-border);
-        }
-
-        .fold-btn {
-          display: none;
-          align-self: flex-end;
-          align-items: center;
-          min-block-size: var(--touch-target);
-          padding-inline: var(--space-2);
-          border: none;
-          background: none;
-          cursor: pointer;
-          touch-action: manipulation;
-          color: var(--color-text-muted);
-          font-size: var(--font-size-caption);
-          font-family: var(--font-family);
-        }
-
-        .fold-btn:focus-visible {
-          outline: 2px solid var(--color-accent);
-          border-radius: var(--radius-sm);
-          outline-offset: 2px;
-        }
-
-        /* non-empty, closed: hairline only */
-        .list-section:not(.empty):not(.add-open) add-row  { display: none; }
-        .list-section:not(.empty):not(.add-open) .add-line { display: flex; }
-
-        /* non-empty, open: full row + fold */
-        .list-section:not(.empty).add-open add-row   { display: block; }
-        .list-section:not(.empty).add-open .fold-btn { display: flex; }
 
         /* ── Filter bar (slotted into year-header) — shell shared via
            app/utils/filter-bar.js; panel-row vocabulary below stays local. */
@@ -393,36 +374,36 @@ class HomePage extends AppElement {
         <p id="filter-empty" hidden>${t('home-page.filter-empty')}</p>
         <p role="status" class="sr-only" id="filter-live"></p>
 
-        <section id="capstone-section" class="list-section empty" aria-label="${t('home-page.capstone-section')}">
-          <h2 class="section-heading">${t('home-page.capstone-section')}</h2>
+        <section id="capstone-section" class="list-section" aria-label="${t('home-page.capstone-section')}">
+          <div class="section-header">
+            <h2 class="section-heading">${t('home-page.capstone-section')}</h2>
+            <button class="section-add-btn" id="add-capstone" aria-label="${t('goal-item.add-capstone')}">+</button>
+          </div>
           <div id="capstone-list" class="item-list" role="list"></div>
-          <button class="add-line" id="add-line-capstone" aria-label="${t('goal-item.add-capstone')}">+</button>
-          <add-row id="add-capstone">+ ${t('goal-item.add-capstone')}</add-row>
-          <button class="fold-btn" id="fold-capstone" aria-label="${t('home-page.done')}">${t('home-page.done')}</button>
         </section>
 
-        <section id="milestone-section" class="list-section empty" aria-label="${t('home-page.milestone-section')}">
-          <h2 class="section-heading">${t('home-page.milestone-section')}</h2>
+        <section id="milestone-section" class="list-section" aria-label="${t('home-page.milestone-section')}">
+          <div class="section-header">
+            <h2 class="section-heading">${t('home-page.milestone-section')}</h2>
+            <button class="section-add-btn" id="add-milestone" aria-label="${t('goal-item.add-milestone')}">+</button>
+          </div>
           <div id="milestone-list" class="item-list" role="list"></div>
-          <button class="add-line" id="add-line-milestone" aria-label="${t('goal-item.add-milestone')}">+</button>
-          <add-row id="add-milestone">+ ${t('goal-item.add-milestone')}</add-row>
-          <button class="fold-btn" id="fold-milestone" aria-label="${t('home-page.done')}">${t('home-page.done')}</button>
         </section>
 
-        <section id="wow-section" class="list-section empty" aria-label="${t('home-page.wow-section')}">
-          <h2 class="section-heading">${t('home-page.wow-section')}</h2>
+        <section id="wow-section" class="list-section" aria-label="${t('home-page.wow-section')}">
+          <div class="section-header">
+            <h2 class="section-heading">${t('home-page.wow-section')}</h2>
+            <button class="section-add-btn" id="add-wow" aria-label="${t('goal-item.add-wow')}">+</button>
+          </div>
           <div id="wow-list" class="item-list" role="list"></div>
-          <button class="add-line" id="add-line-wow" aria-label="${t('goal-item.add-wow')}">+</button>
-          <add-row id="add-wow">+ ${t('goal-item.add-wow')}</add-row>
-          <button class="fold-btn" id="fold-wow" aria-label="${t('home-page.done')}">${t('home-page.done')}</button>
         </section>
 
-        <section id="focus-section" class="list-section empty" aria-label="${t('home-page.focus-section')}">
-          <h2 class="section-heading">${t('home-page.focus-section')}</h2>
+        <section id="focus-section" class="list-section" aria-label="${t('home-page.focus-section')}">
+          <div class="section-header">
+            <h2 class="section-heading">${t('home-page.focus-section')}</h2>
+            <button class="section-add-btn" id="add-focus" aria-label="${t('goal-item.add-focus')}">+</button>
+          </div>
           <div id="focus-list" class="item-list" role="list"></div>
-          <button class="add-line" id="add-line-focus" aria-label="${t('goal-item.add-focus')}">+</button>
-          <add-row id="add-focus">+ ${t('goal-item.add-focus')}</add-row>
-          <button class="fold-btn" id="fold-focus" aria-label="${t('home-page.done')}">${t('home-page.done')}</button>
         </section>
       </main>
 
@@ -649,20 +630,9 @@ class HomePage extends AppElement {
       const yg   = goals?.[year] ?? { capstone: [], milestones: [], wow: [], focus: [] };
 
       this._renderList(this._capstoneList,  yg.capstone  ?? []);
-      this._capstoneSection.classList.toggle('empty',  (yg.capstone  ?? []).length === 0);
-      if ((yg.capstone  ?? []).length === 0) this._capstoneSection.classList.remove('add-open');
-
       this._renderList(this._milestoneList, yg.milestones ?? []);
-      this._milestoneSection.classList.toggle('empty', (yg.milestones ?? []).length === 0);
-      if ((yg.milestones ?? []).length === 0) this._milestoneSection.classList.remove('add-open');
-
       this._renderList(this._wowList,       yg.wow       ?? []);
-      this._wowSection.classList.toggle('empty',       (yg.wow       ?? []).length === 0);
-      if ((yg.wow       ?? []).length === 0) this._wowSection.classList.remove('add-open');
-
       this._renderList(this._focusList,     yg.focus     ?? []);
-      this._focusSection.classList.toggle('empty',     (yg.focus     ?? []).length === 0);
-      if ((yg.focus     ?? []).length === 0) this._focusSection.classList.remove('add-open');
 
       const allGoals = [
         ...(yg.capstone ?? []), ...(yg.milestones ?? []),
@@ -703,40 +673,6 @@ class HomePage extends AppElement {
     this._onPendingFocus = pending => this._applyPendingGoalFocus(pending);
     this.watch('pendingFocus', this._onPendingFocus);
 
-    // ── Add-line / fold ───────────────────────────────────────────────────────
-
-    // Opens the add-goal dialog for a section and keeps that section's add row
-    // expanded (`add-open`) so several goals can be added in a row. Shared by
-    // both entry points: the full add row and the collapsed add-line hairline.
-    const makeSectionAdder = (section, sectionEl) => () => {
-      // Ignore the synthesized click that follows deleting the last goal — the
-      // add row shifts up under the finger and would otherwise open this dialog.
-      if (isGhostClickAfterDelete()) return;
-      sectionEl.classList.add('add-open');
-      this._editingSection = section;
-      this._editingGoal    = null;
-      this._openGoalDialog(null);
-    };
-    const makeFold = sectionEl => () => sectionEl.classList.remove('add-open');
-
-    this._onAddLineCapstone  = makeSectionAdder('capstone',   this._capstoneSection);
-    this._onAddLineMilestone = makeSectionAdder('milestones', this._milestoneSection);
-    this._onAddLineWow       = makeSectionAdder('wow',        this._wowSection);
-    this._onAddLineFocus     = makeSectionAdder('focus',      this._focusSection);
-    this._onFoldCapstone     = makeFold(this._capstoneSection);
-    this._onFoldMilestone    = makeFold(this._milestoneSection);
-    this._onFoldWow          = makeFold(this._wowSection);
-    this._onFoldFocus        = makeFold(this._focusSection);
-
-    this.listen(this.shadowRoot.querySelector('#add-line-capstone'), 'click',  this._onAddLineCapstone);
-    this.listen(this.shadowRoot.querySelector('#add-line-milestone'), 'click', this._onAddLineMilestone);
-    this.listen(this.shadowRoot.querySelector('#add-line-wow'), 'click',       this._onAddLineWow);
-    this.listen(this.shadowRoot.querySelector('#add-line-focus'), 'click',     this._onAddLineFocus);
-    this.listen(this.shadowRoot.querySelector('#fold-capstone'), 'click',      this._onFoldCapstone);
-    this.listen(this.shadowRoot.querySelector('#fold-milestone'), 'click',     this._onFoldMilestone);
-    this.listen(this.shadowRoot.querySelector('#fold-wow'), 'click',           this._onFoldWow);
-    this.listen(this.shadowRoot.querySelector('#fold-focus'), 'click',         this._onFoldFocus);
-
     // ── Drag-to-reorder ───────────────────────────────────────────────────────
 
     this._detachReorder = Reorder.attach(this.shadowRoot, {
@@ -776,11 +712,17 @@ class HomePage extends AppElement {
     this._onCapstoneColorCycle = e => this._cycleGoalColor('capstone', e.detail.goal.id);
     this.listen(this._capstoneList, 'goal-color-cycle', this._onCapstoneColorCycle);
 
-    this._onAddCapstone = () => {
-      this._editingSection = 'capstone';
+    // Shared by all four "+"-in-heading add buttons — each just opens the
+    // same goal dialog scoped to its own section (no add-open/ghost-click
+    // logic needed any more now that the trigger lives in the heading, not
+    // in the row flow — see removed .add-line/.list-section.empty above).
+    const makeSectionAdder = section => () => {
+      this._editingSection = section;
       this._editingGoal    = null;
       this._openGoalDialog(null);
     };
+
+    this._onAddCapstone = makeSectionAdder('capstone');
     this.listen(this.shadowRoot.querySelector('#add-capstone'), 'click', this._onAddCapstone);
 
     // ── Milestone events ──────────────────────────────────────────────────────
@@ -806,7 +748,7 @@ class HomePage extends AppElement {
     this._onMilestoneColorCycle = e => this._cycleGoalColor('milestones', e.detail.goal.id);
     this.listen(this._milestoneList, 'goal-color-cycle', this._onMilestoneColorCycle);
 
-    this._onAddMilestone = makeSectionAdder('milestones', this._milestoneSection);
+    this._onAddMilestone = makeSectionAdder('milestones');
     this.listen(this.shadowRoot.querySelector('#add-milestone'), 'click', this._onAddMilestone);
 
     // ── Wow events ────────────────────────────────────────────────────────────
@@ -832,7 +774,7 @@ class HomePage extends AppElement {
     this._onWowColorCycle = e => this._cycleGoalColor('wow', e.detail.goal.id);
     this.listen(this._wowList, 'goal-color-cycle', this._onWowColorCycle);
 
-    this._onAddWow = makeSectionAdder('wow', this._wowSection);
+    this._onAddWow = makeSectionAdder('wow');
     this.listen(this.shadowRoot.querySelector('#add-wow'), 'click', this._onAddWow);
 
     // ── Forward Focus events ──────────────────────────────────────────────────
@@ -858,7 +800,7 @@ class HomePage extends AppElement {
     this._onFocusColorCycle = e => this._cycleGoalColor('focus', e.detail.goal.id);
     this.listen(this._focusList, 'goal-color-cycle', this._onFocusColorCycle);
 
-    this._onAddFocus = makeSectionAdder('focus', this._focusSection);
+    this._onAddFocus = makeSectionAdder('focus');
     this.listen(this.shadowRoot.querySelector('#add-focus'), 'click', this._onAddFocus);
 
     // ── Year export ───────────────────────────────────────────────────────────
@@ -1387,10 +1329,10 @@ class HomePage extends AppElement {
         if (show) { anyVisible = true; sectionVisible = true; visibleCount++; }
       });
       const hide = active && !sectionVisible;
-      const heading = section?.querySelector('.section-heading');
-      if (heading) heading.hidden = hide;
-      const addLine = section?.querySelector('.add-line');
-      if (addLine) addLine.hidden = hide;
+      // Hides the whole heading+add-button row together now that add lives
+      // there instead of in its own .add-line element inside the row flow.
+      const header = section?.querySelector('.section-header');
+      if (header) header.hidden = hide;
     }
 
     if (this._filterEmpty) this._filterEmpty.hidden = !active || anyVisible;
