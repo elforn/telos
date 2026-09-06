@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForPage, waitForIDBFlush } from './helpers.js';
+import { waitForPage, waitForIDBFlush, waitForListsPage, waitForListDetailPage } from './helpers.js';
 
 /*
  * Full E2E SW update testing (two deployed builds swapping) cannot be automated
@@ -154,5 +154,107 @@ test.describe('Update flow — banner behaviour', () => {
 
     // After reload with real version.json the store resets — banner must be hidden
     await expect(page.locator('update-banner')).toHaveAttribute('hidden');
+  });
+});
+
+// Regression coverage for a real bug: list-detail-page's #main didn't
+// reserve space for --update-banner-height the way home-page/lists-page
+// already did, so the sticky header followed the banner down but the first
+// list-item row stayed put underneath it — permanently covered, with no way
+// to scroll it into view. Fixed by adding the same padding-block-start calc
+// the other two pages already had.
+test.describe('Update flow — content clearance on other pages', () => {
+  test('the first row in a list stays fully below the header when the update banner is showing', async ({ page }) => {
+    await routeFutureVersion(page);
+    await page.goto('/');
+    await waitForSWStable(page);
+    await expect(page.locator('update-banner')).not.toHaveAttribute('hidden');
+
+    // Create a list and an item in it while the banner is up.
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#pill-lists').click()
+    );
+    await waitForListsPage(page);
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#add-row').click();
+    });
+    await page.waitForFunction(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('list-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open;
+    });
+    await page.evaluate(() => {
+      const inp = document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('list-dialog').shadowRoot
+        .querySelector('#input');
+      inp.value = 'Banner test list';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('list-dialog').shadowRoot
+        .querySelector('#close').click();
+    });
+    await page.evaluate(() => {
+      const row = document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelector('#list-container')
+        .querySelector('lists-page-item').shadowRoot
+        .querySelector('.row');
+      row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+      row.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, composed: true, pointerId: 1, button: 0 }));
+    });
+    await waitForListDetailPage(page);
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#add-row').click();
+    });
+    await page.waitForFunction(() => {
+      const d = document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('#dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
+      return d?.open;
+    });
+    await page.evaluate(() => {
+      const inp = document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#dialog').shadowRoot
+        .querySelector('#title-input');
+      inp.value = 'First item — must stay reachable';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('list-detail-page').shadowRoot
+        .querySelector('#dialog').shadowRoot
+        .querySelector('#close').click();
+    });
+    await page.waitForFunction(() =>
+      !!document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('list-item')
+    );
+
+    // Banner must still be up (nothing above should have dismissed it).
+    await expect(page.locator('update-banner')).not.toHaveAttribute('hidden');
+
+    const rects = await page.evaluate(() => {
+      const page_ = document.querySelector('app-router').shadowRoot.querySelector('list-detail-page').shadowRoot;
+      const header = page_.querySelector('.page-header');
+      const row = page_.querySelector('list-item').shadowRoot.querySelector('.row');
+      const h = header.getBoundingClientRect();
+      const r = row.getBoundingClientRect();
+      return { headerBottom: h.bottom, itemTop: r.top };
+    });
+
+    expect(rects.itemTop).toBeGreaterThanOrEqual(rects.headerBottom);
   });
 });
