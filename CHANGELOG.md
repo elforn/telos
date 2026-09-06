@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.16.0] — 2026-09-07
+
+### Changed
+- **Goal, list item, and list rows now sit flush against each other**, separated by a thin divider, instead of each being its own separate rounded card with a gap below it.
+- **Tags on list items now show as a few short coloured pills** under the title, instead of a coloured line along the row's bottom edge.
+- **A list item's status (Open/Paused/Done/Closed) is now shown as plain bold coloured text** instead of a filled pill badge.
+- **Adding a new goal now happens from a small "+" next to each section's heading** (Capstone, Milestones, Wow Moments, Forward Focus), instead of a box that used to appear inline among the goals themselves — the goal list is never interrupted by an "add" row any more.
+- **"+ New item" and "+ New list" now appear as the last row of the list itself**, rather than as a separate button below it.
+
+### Fixed
+- **An "update available" banner no longer permanently covers the first item in a list.** The list page now reserves space for the banner the same way the Home and Lists pages already did, so the row underneath stays fully visible and scrollable instead of being stuck behind the header.
+
 ## [2.15.0] — 2026-09-06
 
 ### Fixed
