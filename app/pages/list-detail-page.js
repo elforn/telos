@@ -12,7 +12,6 @@ import { onDayChange } from '../utils/day-change-watcher.js';
 import '../components/list-item/list-item.js';
 import '../components/item-dialog/item-dialog.js';
 import '../components/list-dialog/list-dialog.js';
-import '../components/add-row/add-row.js';
 import '../components/list-picker-dialog/list-picker-dialog.js';
 import '../components/bulk-tag-editor/bulk-tag-editor.js';
 import '../../_lib/modules/modal-dialog/modal-dialog.js';
@@ -232,13 +231,68 @@ class ListDetailPage extends AppElement {
           display: flex;
           flex-direction: column;
           padding: var(--space-3) var(--page-padding);
+          padding-block-start: calc(var(--update-banner-height, 0px) + var(--space-3));
           padding-block-end: calc(var(--bottom-nav-height) + var(--space-2));
         }
 
+        /* Flush, full-bleed rows — cancels <main>'s own inline padding (same
+           technique as home-page.js's #reflection-card: negative margin-inline
+           equal to --page-padding, no explicit inline-size, so the flex item
+           stretches edge-to-edge) so the list touches the viewport's sides
+           with no side margin. overflow:hidden is load-bearing here, not just
+           cosmetic — with no side margin left to bleed into, a swiped row's
+           translateX would otherwise push its own box past the viewport edge
+           during the gesture. */
         #item-list {
           display: flex;
           flex-direction: column;
-          gap: var(--space-2);
+          margin-inline: calc(-1 * var(--page-padding));
+          margin-block-start: calc(-1 * var(--space-3));
+          overflow: hidden;
+        }
+
+        /* "+ Add" reads as the list's own trailing row now, not a separate
+           floating dashed button — same flush width/height as list-item's
+           own .row, but deliberately transparent (showing whatever's
+           genuinely behind it — the page background — rather than a
+           specific surface token) instead of --color-surface (what every
+           data row above it uses), with muted rather than accent text — an
+           experiment in having it read as "the list ends here, page resumes"
+           instead of another continuing row. --color-text-secondary here is
+           a known contrast exception (3.44:1/4.22:1, below the 4.5:1
+           normal-text minimum, and the token itself is documented "never
+           body-sized labels") — owner reviewed and accepted it, see
+           feedback_paused_closed_status_contrast_accepted.md. Kept last via
+           an explicit appendChild in _renderItems() below: syncChildren()
+           only ever re-appends 'list-item' elements, so without that it
+           would end up pushed before the real rows on every render instead
+           of staying after them. */
+        .add-item-row {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          inline-size: 100%;
+          min-block-size: 56px;
+          padding-block: 10px;
+          padding-inline: var(--space-3);
+          background: transparent;
+          border: none;
+          color: var(--color-text-secondary);
+          font-size: var(--font-size-body);
+          font-weight: var(--font-weight-medium);
+          font-family: var(--font-family);
+          text-align: center;
+          cursor: pointer;
+          touch-action: manipulation;
+        }
+
+        .add-item-row:active {
+          background: var(--color-surface-raised);
+        }
+
+        .add-item-row:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: -2px;
         }
 
         /* ── Menu dialog — matches year-header sheet exactly ─────────────── */
@@ -512,10 +566,11 @@ class ListDetailPage extends AppElement {
       </div>
 
       <main>
-        <div id="item-list" role="list"></div>
+        <div id="item-list" role="list">
+          <button type="button" class="add-item-row" id="add-row">+ ${t('list-detail.add')}</button>
+        </div>
         <p id="filter-empty" hidden>${t('list-detail.filter-empty')}</p>
         <p role="status" class="sr-only" id="filter-live"></p>
-        <add-row id="add-row">+ ${t('list-detail.add')}</add-row>
       </main>
 
       <modal-dialog id="menu" aria-label="${t('list-detail.menu')}">
@@ -623,6 +678,7 @@ class ListDetailPage extends AppElement {
     if (!this._listId) { navigate(`${BASE_PATH}lists`); return; }
 
     this._itemList    = this.shadowRoot.querySelector('#item-list');
+    this._addItemRow  = this.shadowRoot.querySelector('#add-row');
     this._nameEl      = this.shadowRoot.querySelector('#list-name');
     this._pageHeader  = this.shadowRoot.querySelector('.page-header');
     this._dialog      = this.shadowRoot.querySelector('#dialog');
@@ -1369,7 +1425,7 @@ class ListDetailPage extends AppElement {
 
     this._onListsTagsVisible = tagsVisible => {
       const visible = tagsVisible?.[this._listId] === true;
-      document.documentElement.style.setProperty('--tag-strip-display', visible ? 'block' : 'none');
+      document.documentElement.style.setProperty('--list-item-tags-display', visible ? 'flex' : 'none');
       this.shadowRoot?.querySelector('#tags-show-btn')?.classList.toggle('active', visible);
       this.shadowRoot?.querySelector('#tags-hide-btn')?.classList.toggle('active', !visible);
     };
@@ -1780,6 +1836,11 @@ class ListDetailPage extends AppElement {
       el.selected         = this._selectionMode && this._selectedIds.has(item.id);
       el.deadlinesVisible = this._deadlinesVisible;
     }, { getElId: el => el._item?.id });
+    // syncChildren only ever re-appends 'list-item' elements, so the add-row
+    // button (not a list-item) needs to be explicitly re-pinned to the end
+    // on every render, or it ends up pushed above the real rows instead of
+    // trailing them.
+    this._itemList.appendChild(this._addItemRow);
   }
 }
 

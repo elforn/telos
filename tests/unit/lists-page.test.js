@@ -103,6 +103,33 @@ describe('lists-page — rendering', () => {
     setState('lists', []);
     await vi.waitFor(() => expect(getItems(el).length).toBe(0));
   });
+
+  // syncChildren() only ever re-appends 'lists-page-item' elements (see
+  // _renderLists' own comment) — #add-row must be explicitly re-pinned to
+  // the end on every render, or it ends up pushed above the real rows
+  // instead of trailing them.
+  it('keeps #add-row as the last child of #list-container after lists render', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    const el = mount();
+    setState('lists', [{ id: 'l1', name: 'Gift ideas', items: [] }]);
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
+    const container = el.shadowRoot.querySelector('#list-container');
+    expect(container.lastElementChild.id).toBe('add-row');
+  });
+
+  it('keeps #add-row last after a second list is added', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    const el = mount();
+    setState('lists', [{ id: 'l1', name: 'Gift ideas', items: [] }]);
+    await vi.waitFor(() => expect(getItems(el).length).toBe(1));
+    setState('lists', [
+      { id: 'l1', name: 'Gift ideas', items: [] },
+      { id: 'l2', name: 'Books', items: [] },
+    ]);
+    await vi.waitFor(() => expect(getItems(el).length).toBe(2));
+    const container = el.shadowRoot.querySelector('#list-container');
+    expect(container.lastElementChild.id).toBe('add-row');
+  });
 });
 
 describe('lists-page — create list', () => {

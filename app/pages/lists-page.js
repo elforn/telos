@@ -8,7 +8,6 @@ import { t } from '../../_lib/core/strings.js';
 import { toast } from '../../_lib/modules/toast/toast.js';
 import '../components/list-dialog/list-dialog.js';
 import '../components/lists-page-item/lists-page-item.js';
-import '../components/add-row/add-row.js';
 import '../../_lib/modules/modal-dialog/modal-dialog.js';
 import { nextColor } from '../utils/color-palette.js';
 import { onDayChange } from '../utils/day-change-watcher.js';
@@ -68,10 +67,58 @@ class ListsPage extends AppElement {
           padding-block-end: calc(var(--bottom-nav-height) + var(--space-2));
         }
 
+        /* Flush, full-bleed rows — see list-detail-page.js's #item-list for
+           the same technique (negative margin-inline/margin-block-start to
+           cancel main's own padding, no explicit inline-size). overflow:hidden
+           is load-bearing here too: with no side margin to bleed into, a
+           swiped row's translateX would otherwise push its own box past the
+           viewport edge during the gesture. */
         #list-container {
           display: flex;
           flex-direction: column;
-          gap: var(--space-2);
+          margin-inline: calc(-1 * var(--page-padding));
+          margin-block-start: calc(-1 * var(--space-3));
+          overflow: hidden;
+        }
+
+        /* "+ New list" reads as the list-of-lists' own trailing row now, not
+           a separate floating dashed button — see list-detail-page.js's own
+           .add-item-row for the same treatment (transparent background, so
+           the page shows through rather than matching the data rows above
+           it; muted rather than accent text). --color-text-secondary here is
+           a known contrast exception (3.44:1/4.22:1, below the 4.5:1
+           normal-text minimum) — owner reviewed and accepted it, see
+           feedback_paused_closed_status_contrast_accepted.md. Kept last via
+           an explicit appendChild in _renderLists() below: syncChildren()
+           only ever re-appends 'lists-page-item' elements, so without that
+           it would end up pushed before the real rows on every render
+           instead of staying after them. */
+        .add-item-row {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          inline-size: 100%;
+          min-block-size: 56px;
+          padding-block: 10px;
+          padding-inline: var(--space-3);
+          background: transparent;
+          border: none;
+          color: var(--color-text-secondary);
+          font-size: var(--font-size-body);
+          font-weight: var(--font-weight-medium);
+          font-family: var(--font-family);
+          text-align: center;
+          cursor: pointer;
+          touch-action: manipulation;
+        }
+
+        .add-item-row:active {
+          background: var(--color-surface-raised);
+        }
+
+        .add-item-row:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: -2px;
         }
 
         /* Menu dialog — Date indicators toggle */
@@ -166,10 +213,11 @@ class ListsPage extends AppElement {
         })}
       </div>
       <main>
-        <div id="list-container" role="list"></div>
+        <div id="list-container" role="list">
+          <button type="button" class="add-item-row" id="add-row">+ ${t('lists-page.add')}</button>
+        </div>
         <p id="filter-empty" hidden>${t('lists-page.filter-empty')}</p>
         <p role="status" class="sr-only" id="filter-live"></p>
-        <add-row id="add-row">+ ${t('lists-page.add')}</add-row>
       </main>
       <list-dialog id="dialog"></list-dialog>
 
@@ -186,9 +234,10 @@ class ListsPage extends AppElement {
   subscribe() {
     this._container = this.shadowRoot.querySelector('#list-container');
     this._dialog    = this.shadowRoot.querySelector('#dialog');
+    this._addRow    = this.shadowRoot.querySelector('#add-row');
 
     this._onAddRow = () => this._dialog.open(null);
-    this.listen(this.shadowRoot.querySelector('#add-row'), 'click', this._onAddRow);
+    this.listen(this._addRow, 'click', this._onAddRow);
 
     this._onListTap = e => {
       const q = this._filter?.query?.trim();
@@ -536,6 +585,11 @@ class ListsPage extends AppElement {
       el.list = list;
       el.rollupVisible = this._rollupVisible;
     });
+    // syncChildren only ever re-appends 'lists-page-item' elements, so the
+    // add-row button (not a lists-page-item) needs to be explicitly re-pinned
+    // to the end on every render, or it ends up pushed above the real rows
+    // instead of trailing them (mirrors list-detail-page.js's _renderItems).
+    this._container.appendChild(this._addRow);
   }
 }
 

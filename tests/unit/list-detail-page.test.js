@@ -154,6 +154,30 @@ describe('list-detail-page — item rendering', () => {
       expect(el.shadowRoot.querySelector('list-item')).toBeNull()
     );
   });
+
+  // syncChildren() only ever re-appends 'list-item' elements (see
+  // _renderItems' own comment) — #add-row must be explicitly re-pinned to
+  // the end on every render, or it ends up pushed above the real rows
+  // instead of trailing them.
+  it('keeps #add-row as the last child of #item-list after items render', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    const itemList = el.shadowRoot.querySelector('#item-list');
+    expect(itemList.lastElementChild.id).toBe('add-row');
+  });
+
+  it('keeps #add-row last after a second item is added', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    setState('lists', [{ ...LIST, items: [ITEM, { ...ITEM, id: 'i2', title: 'Second' }] }]);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#item-list').querySelectorAll('list-item').length).toBe(2)
+    );
+    const itemList = el.shadowRoot.querySelector('#item-list');
+    expect(itemList.lastElementChild.id).toBe('add-row');
+  });
 });
 
 // ── Status toggle preference ──────────────────────────────────────────────────
