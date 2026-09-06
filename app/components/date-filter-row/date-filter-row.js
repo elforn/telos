@@ -16,6 +16,11 @@ import { DATE_FILTER_KEYS } from '../../utils/urgency.js';
 //   date-toggle  { key }  — a pill was tapped. The page owns the Set mutation
 //                            (dates.add/delete) and re-feeds `selected`, same
 //                            division of responsibility as bulk-tag-editor.
+//
+// Note: the "deadline markers hidden" indicator does NOT live here — it needs
+// to be visible without the filter panel being open at all, so it lives next
+// to each page's always-visible filter-toggle button instead (see
+// deadline-hidden-badge.js, wired from year-header.js/page-header.js).
 
 class DateFilterRow extends AppElement {
   set selected(value) {

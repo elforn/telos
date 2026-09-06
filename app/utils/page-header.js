@@ -1,4 +1,5 @@
 import { icons } from '../icons.js';
+import { deadlinesHiddenBadgeMarkup, deadlinesHiddenBadgeStyles } from './deadline-hidden-badge.js';
 
 // Shared sticky page-header chrome (.page-header/.top-row) and filter-btn/
 // menu-btn for lists-page and list-detail-page — confirmed byte-for-byte
@@ -93,11 +94,14 @@ export function pageHeaderStyles() {
       outline: 2px solid var(--color-accent);
       outline-offset: 2px;
     }
+
+    ${deadlinesHiddenBadgeStyles()}
   `;
 }
 
 export function pageHeaderButtonsMarkup({ filterLabel, menuLabel }) {
   return `
+    ${deadlinesHiddenBadgeMarkup()}
     <button class="filter-btn" id="filter-btn" aria-label="${filterLabel}" aria-expanded="false">${icons.funnel}<span class="filter-btn-dot" hidden aria-hidden="true"></span></button>
     <button class="menu-btn" id="menu-btn" aria-label="${menuLabel}" aria-expanded="false">${icons.dotsVertical}</button>
   `;

@@ -49,6 +49,7 @@ describe('onDayChange', () => {
   function fakeElement() {
     const listeners = [];
     return {
+      isConnected: true,
       listen(target, type, handler) {
         listeners.push({ target, type, handler });
         target.addEventListener(type, handler);
@@ -106,5 +107,42 @@ describe('onDayChange', () => {
     // Firing again on the same (now current) day doesn't call back again.
     el._fire('visibilitychange');
     expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls back at the next local midnight even with no visibilitychange event at all', () => {
+    vi.setSystemTime(new Date(2026, 7, 10, 23, 0)); // 11pm on the 10th
+    const el = fakeElement();
+    const onChange = vi.fn();
+    onDayChange(el, onChange);
+
+    vi.advanceTimersByTime(59 * 60 * 1000); // 11:59pm — still the 10th
+    expect(onChange).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(2 * 60 * 1000); // past midnight into the 11th
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-arms the midnight timer for the following night', () => {
+    vi.setSystemTime(new Date(2026, 7, 10, 23, 59));
+    const el = fakeElement();
+    const onChange = vi.fn();
+    onDayChange(el, onChange);
+
+    vi.advanceTimersByTime(2 * 60 * 1000); // into the 11th
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000); // one full day later, into the 12th
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops rescheduling once the element has left the DOM, without calling back', () => {
+    vi.setSystemTime(new Date(2026, 7, 10, 23, 59));
+    const el = fakeElement();
+    const onChange = vi.fn();
+    onDayChange(el, onChange);
+    el.isConnected = false;
+
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

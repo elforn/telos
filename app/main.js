@@ -22,7 +22,7 @@ import './components/due-date-notifier/due-date-notifier.js';
 
 initTheme();
 
-await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, reflections: {}, lists: [], goalsTagsVisible: {}, goalsDeadlinesVisible: {}, listsTagsVisible: {}, listsRollupVisible: true }, migrate: migrateGoals });
+await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, reflections: {}, lists: [], goalsTagsVisible: {}, goalsDeadlinesVisible: {}, listsTagsVisible: {}, listsRollupVisible: true, listsDeadlinesVisible: {} }, migrate: migrateGoals });
 
 // bottom-nav mounts (and subscribes) before boot loads state, and boot doesn't
 // re-notify existing subscribers — refresh its urgency roll-up and Upcoming

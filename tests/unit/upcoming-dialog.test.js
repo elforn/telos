@@ -70,6 +70,143 @@ describe('upcoming-dialog — structure', () => {
     el.open({ overdue: [GOAL_ENTRY], today: [], tomorrow: [] });
     expect(el._dialog.show).toHaveBeenCalledOnce();
   });
+
+  it('renders a plain "days overdue" detail for a dueDate-driven entry', () => {
+    const el = mount();
+    el.open({ overdue: [{ ...GOAL_ENTRY, detail: { kind: 'overdue', days: 5 } }], today: [], tomorrow: [] });
+    const row = el.shadowRoot.querySelector('.upcoming-row');
+    expect(row.querySelector('.upcoming-detail-text').textContent).toBe('5 days overdue');
+    expect(row.querySelector('.day-strip')).toBeNull();
+  });
+
+  it('renders a plain "missed" count for an Any/monthly frequency shortfall', () => {
+    const el = mount();
+    el.open({ overdue: [{ ...GOAL_ENTRY, detail: { kind: 'count', count: 2 } }], today: [], tomorrow: [] });
+    const row = el.shadowRoot.querySelector('.upcoming-row');
+    expect(row.querySelector('.upcoming-detail-text').textContent).toBe('2 missing');
+  });
+
+  const ALL_DAY_STATES = [
+    { wd: 'mon', state: 'missed' },
+    { wd: 'tue', state: 'success' },
+    { wd: 'wed', state: 'unscheduled' },
+    { wd: 'thu', state: 'pending' },
+    { wd: 'fri', state: 'blank' },
+    { wd: 'sat', state: 'blank' },
+    { wd: 'sun', state: 'blank' },
+  ];
+
+  it('renders a 7-slot Mon-Sun day strip for a scheduled-days frequency shortfall, one class per day\'s own state', () => {
+    const el = mount();
+    el.open({ overdue: [{ ...GOAL_ENTRY, detail: { kind: 'days', days: ALL_DAY_STATES } }], today: [], tomorrow: [] });
+    const row = el.shadowRoot.querySelector('.upcoming-row');
+    const slots = [...row.querySelectorAll('.day-slot')];
+    expect(slots).toHaveLength(7); // Mon..Sun, fixed position disambiguates Tue/Thu and Sat/Sun
+    expect(slots.map(s => s.className)).toEqual([
+      'day-slot missed',
+      'day-slot success',
+      'day-slot unscheduled',
+      'day-slot pending',
+      'day-slot blank',
+      'day-slot blank',
+      'day-slot blank',
+    ]);
+    expect(row.querySelector('.upcoming-detail-text')).toBeNull();
+  });
+
+  it('the day strip\'s accessible text names only the missed days, not the full success/unscheduled/pending picture', () => {
+    const el = mount();
+    el.open({ overdue: [{ ...GOAL_ENTRY, detail: { kind: 'days', days: ALL_DAY_STATES } }], today: [], tomorrow: [] });
+    const row = el.shadowRoot.querySelector('.upcoming-row');
+    expect(row.getAttribute('aria-label')).toBe('Ship investor deck, Goal · 2026 · Capstone, Missing Mon');
+  });
+
+  it('folds the detail into the row\'s own aria-label instead of a separately-focusable element', () => {
+    const el = mount();
+    el.open({ overdue: [{ ...GOAL_ENTRY, detail: { kind: 'overdue', days: 3 } }], today: [], tomorrow: [] });
+    const row = el.shadowRoot.querySelector('.upcoming-row');
+    expect(row.getAttribute('aria-label')).toBe('Ship investor deck, Goal · 2026 · Capstone, 3 days overdue');
+    expect(row.querySelector('.upcoming-detail-text').getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('renders no detail element at all when entry.detail is absent', () => {
+    const el = mount();
+    el.open({ overdue: [GOAL_ENTRY], today: [], tomorrow: [] });
+    const row = el.shadowRoot.querySelector('.upcoming-row');
+    expect(row.querySelector('.upcoming-detail-text')).toBeNull();
+    expect(row.querySelector('.day-strip')).toBeNull();
+  });
+
+  it('tags each section head with data-key, driving the icon-colour CSS selectors', () => {
+    const el = mount();
+    el.open({ overdue: [GOAL_ENTRY], today: [{ ...GOAL_ENTRY, id: 'g2' }], tomorrow: [ITEM_ENTRY] });
+    const keys = [...el.shadowRoot.querySelectorAll('.upcoming-section-head')].map(h => h.dataset.key);
+    expect(keys).toEqual(['overdue', 'today', 'tomorrow']);
+  });
+
+  it('renders the calendar icon markup in every section head — CSS gives each its own colour/fill per data-key', () => {
+    // happy-dom doesn't compute CSS, so this only confirms the icon markup
+    // exists in every section head — see upcoming-dialog.js's own
+    // [data-key="..."] .upcoming-section-icon rules for the actual per-key
+    // colour/fill, which isn't testable in this environment.
+    const el = mount();
+    el.open({ overdue: [GOAL_ENTRY], today: [{ ...GOAL_ENTRY, id: 'g2' }], tomorrow: [ITEM_ENTRY] });
+    const heads = [...el.shadowRoot.querySelectorAll('.upcoming-section-head')];
+    expect(heads.every(h => !!h.querySelector('.upcoming-section-icon svg'))).toBe(true);
+  });
+});
+
+describe('upcoming-dialog — fold/unfold', () => {
+  function heads(el) {
+    return Object.fromEntries(
+      [...el.shadowRoot.querySelectorAll('.upcoming-section-head')].map(h => [h.dataset.key, h]),
+    );
+  }
+  function bodies(el) {
+    return Object.fromEntries(
+      [...el.shadowRoot.querySelectorAll('.upcoming-section-body')].map(b => [b.dataset.key, b]),
+    );
+  }
+
+  it('defaults to overdue and today expanded, tomorrow folded', () => {
+    const el = mount();
+    el.open({ overdue: [GOAL_ENTRY], today: [{ ...GOAL_ENTRY, id: 'g2' }], tomorrow: [ITEM_ENTRY] });
+    const h = heads(el);
+    expect(h.overdue.getAttribute('aria-expanded')).toBe('true');
+    expect(h.today.getAttribute('aria-expanded')).toBe('true');
+    expect(h.tomorrow.getAttribute('aria-expanded')).toBe('false');
+    const b = bodies(el);
+    expect(b.overdue.hidden).toBe(false);
+    expect(b.today.hidden).toBe(false);
+    expect(b.tomorrow.hidden).toBe(true);
+  });
+
+  it('clicking a folded section head expands it and reveals its rows', () => {
+    const el = mount();
+    el.open({ overdue: [], today: [], tomorrow: [ITEM_ENTRY] });
+    heads(el).tomorrow.click();
+    expect(heads(el).tomorrow.getAttribute('aria-expanded')).toBe('true');
+    expect(bodies(el).tomorrow.hidden).toBe(false);
+  });
+
+  it('clicking an expanded section head folds it and hides its rows, without closing the dialog', () => {
+    const el = mount();
+    el.open({ overdue: [GOAL_ENTRY], today: [], tomorrow: [] });
+    heads(el).overdue.click();
+    expect(heads(el).overdue.getAttribute('aria-expanded')).toBe('false');
+    expect(bodies(el).overdue.hidden).toBe(true);
+    expect(el._dialog.close).not.toHaveBeenCalled();
+  });
+
+  it('resets to the default fold state on every open(), not remembering a prior session', () => {
+    const el = mount();
+    el.open({ overdue: [], today: [], tomorrow: [ITEM_ENTRY] });
+    heads(el).tomorrow.click(); // expand it
+    expect(heads(el).tomorrow.getAttribute('aria-expanded')).toBe('true');
+
+    el.open({ overdue: [], today: [], tomorrow: [ITEM_ENTRY] }); // re-open
+    expect(heads(el).tomorrow.getAttribute('aria-expanded')).toBe('false'); // back to folded
+  });
 });
 
 describe('upcoming-dialog — row tap', () => {
@@ -103,5 +240,55 @@ describe('upcoming-dialog — row tap', () => {
     el.open({ overdue: [], today: [], tomorrow: [] });
     el.shadowRoot.querySelector('#upcoming-close-btn').click();
     expect(el._dialog.close).toHaveBeenCalledOnce();
+  });
+});
+
+describe('upcoming-dialog — hidden-items link (second-class, see hidden-items-dialog.js)', () => {
+  const link = el => el.shadowRoot.querySelector('#upcoming-hidden-link');
+
+  it('is hidden when hiddenCount is never set', () => {
+    const el = mount();
+    el.open({ overdue: [], today: [], tomorrow: [] });
+    expect(link(el).hidden).toBe(true);
+  });
+
+  it('is hidden when hiddenCount is set to 0', () => {
+    const el = mount();
+    el.hiddenCount = 0;
+    expect(link(el).hidden).toBe(true);
+  });
+
+  it('shows the count when hiddenCount is set positive', () => {
+    const el = mount();
+    el.hiddenCount = 3;
+    expect(link(el).hidden).toBe(false);
+    expect(link(el).textContent).toBe('3 hidden — tap to review');
+  });
+
+  it('is not one of the real overdue/today/tomorrow rows — never dispatches upcoming-row-tap', () => {
+    const el = mount();
+    el.open({ overdue: [GOAL_ENTRY], today: [], tomorrow: [] });
+    el.hiddenCount = 2;
+    const rowTapSpy = vi.fn();
+    el.addEventListener('upcoming-row-tap', rowTapSpy);
+    link(el).click();
+    expect(rowTapSpy).not.toHaveBeenCalled();
+  });
+
+  it('clicking it dispatches upcoming-hidden-tap and closes the dialog', () => {
+    const el = mount();
+    el.hiddenCount = 2;
+    const spy = vi.fn();
+    el.addEventListener('upcoming-hidden-tap', spy);
+    link(el).click();
+    expect(spy).toHaveBeenCalledOnce();
+    expect(el._dialog.close).toHaveBeenCalledOnce();
+  });
+
+  it('lives outside the scroll region — present regardless of section fold state', () => {
+    const el = mount();
+    el.open({ overdue: [GOAL_ENTRY], today: [], tomorrow: [] });
+    el.hiddenCount = 1;
+    expect(el.shadowRoot.querySelector('.upcoming-scroll').contains(link(el))).toBe(false);
   });
 });

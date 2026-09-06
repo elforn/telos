@@ -7,7 +7,9 @@ import '../tag-input/tag-input.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
-import { FIX_DAY_SPAN, DEFAULT_TARGET, DEFAULT_ALLOWANCE_PERIOD, WEEKDAYS, targetLimitsFor, isEntryType, isDecreasing } from '../../utils/tracking.js';
+import { FIX_DAY_SPAN, DEFAULT_TARGET, DEFAULT_ALLOWANCE_PERIOD, WEEKDAYS, targetLimitsFor, isEntryType, isDecreasing, percentValue, currentPeriodCount, currentAllowanceSpent } from '../../utils/tracking.js';
+import { scheduledDayStates } from '../../utils/frequency-urgency.js';
+import { buildDayStrip, dayStripStyles } from '../../utils/day-strip.js';
 import { todayISO } from '../../utils/today-iso.js';
 import { swatches } from '../../utils/color-palette.js';
 
@@ -646,6 +648,16 @@ class GoalDialog extends AppElement {
           white-space: nowrap;
         }
 
+        /* ── Tracking summary (existing goals only) ─────────────────────── */
+
+        .tracking-summary {
+          margin: 0 0 var(--space-3);
+          font-size: var(--font-size-caption);
+          color: var(--color-text-muted);
+        }
+
+        ${dayStripStyles()}
+
         /* ── Description textarea + highlight overlay ───────────────────── */
 
         .textarea-wrap {
@@ -928,6 +940,7 @@ class GoalDialog extends AppElement {
                  autocomplete="off"
                  enterkeyhint="go"
                  maxlength="80" />
+          <p class="tracking-summary" id="tracking-summary" hidden></p>
           <div class="textarea-wrap">
             <div class="md-highlight" aria-hidden="true"></div>
             <textarea id="desc-input"
@@ -1062,6 +1075,7 @@ class GoalDialog extends AppElement {
     };
     this.shadowRoot.addEventListener('pointerdown', this._onButtonPointerDown);
     this._input         = this.shadowRoot.querySelector('#input');
+    this._trackingSummary = this.shadowRoot.querySelector('#tracking-summary');
     this._descInput     = this.shadowRoot.querySelector('#desc-input');
     this._textareaWrap  = this.shadowRoot.querySelector('.textarea-wrap');
     this._descHighlight = attachMarkdownHighlight(
@@ -1438,6 +1452,7 @@ class GoalDialog extends AppElement {
       };
       chip.dataset.logged = String(nowLogged);
       chip.setAttribute('aria-pressed', String(isDecreasing(this._goal) ? !nowLogged : nowLogged));
+      this._renderTrackingSummary();
     };
     this._fixDayChips.addEventListener('click', this._onFixDayChipClick);
 
@@ -1521,12 +1536,19 @@ class GoalDialog extends AppElement {
       if (!chip) return;
       if (chip === this._reminderAnyChip) {
         const turningOn = this._draftReminderDays !== 'any';
-        // First time this goal's reminder picker has ever been touched at
-        // all — start the count at 1, not whatever generic default the
-        // type switch seeded _draftTarget with. Re-activating x later (after
-        // a prior x-mode session, or after switching to specific days and
-        // back) keeps its last value instead of resetting.
-        if (turningOn && this._draftReminderDays === undefined) this._draftTarget = 1;
+        // Only a brand-new goal's target is a genuinely unconfirmed generic
+        // default here (DEFAULT_TARGET.weekly, seeded by the type pill and
+        // never exposed via any visible stepper until reminders are turned
+        // on) — start that case at 1 rather than the arbitrary default. An
+        // *existing* goal's target is already the real, previously-set
+        // count (read from goal.tracking.target on open, see _draftTarget's
+        // init above) even if reminderDays itself was never touched — e.g.
+        // any goal saved before this reminder feature existed — so it must
+        // carry over untouched, same "switching never destroys data" rule
+        // as everywhere else in this file. Re-activating x later (after a
+        // prior x-mode session, or after switching to specific days and
+        // back) also keeps its last value instead of resetting.
+        if (turningOn && this._isNew && this._draftReminderDays === undefined) this._draftTarget = 1;
         this._draftReminderDays = turningOn ? 'any' : [];
       } else {
         const day = chip.dataset.day;
@@ -1676,7 +1698,65 @@ class GoalDialog extends AppElement {
   // Independent of Fix-a-day (see _renderFixDayToggle) — the two used to
   // share one expansion slot; they no longer do, since type is menu-gated
   // now and doesn't need to coordinate with anything.
+  // Small muted summary near the title — the goal's current tracking state
+  // at a glance, without needing to open "Change type"/Fix-a-day. Existing
+  // goals only (matching Fix-a-day's own "nothing yet to show for a still-
+  // blank draft" convention) — reads this._goal directly rather than the
+  // draft fields, since it's describing the goal's real, already-committed
+  // state, not whatever's mid-edit in the type/target picker.
+  _renderTrackingSummary() {
+    const goal = this._goal;
+    const tr = goal?.tracking;
+    if (this._isNew || !tr?.type) {
+      this._trackingSummary.hidden = true;
+      return;
+    }
+    const percent = percentValue(goal);
+    this._trackingSummary.hidden = false;
+    this._trackingSummary.replaceChildren();
+
+    if (tr.type === 'percentage') {
+      this._trackingSummary.textContent = t('goal-dialog.tracking-summary-prefix-percentage')
+        + t('goal-dialog.tracking-summary-percentage', { percent });
+      return;
+    }
+    if (tr.type === 'monthly') {
+      this._trackingSummary.textContent = t('goal-dialog.tracking-summary-prefix-weekly')
+        + t('goal-dialog.tracking-summary-monthly', {
+          count: currentPeriodCount(tr), target: tr.target, percent,
+        });
+      return;
+    }
+    if (tr.type === 'decreasing') {
+      const period = tr.allowancePeriod ?? DEFAULT_ALLOWANCE_PERIOD;
+      this._trackingSummary.textContent = t('goal-dialog.tracking-summary-prefix-decreasing')
+        + t(`goal-dialog.tracking-summary-decreasing-${period}`, {
+          count: currentAllowanceSpent(goal), target: tr.target, percent,
+        });
+      return;
+    }
+    // weekly: a specific-days schedule gets the visual day strip (the same
+    // one the Upcoming dialog uses, see day-strip.js) instead of a plain
+    // count — Any/unconfigured weekly has no per-day granularity to show,
+    // so it stays a plain "N of target/week" count like monthly's.
+    if (Array.isArray(tr.reminderDays) && tr.reminderDays.length > 0) {
+      const prefix = document.createElement('span');
+      prefix.textContent = t('goal-dialog.tracking-summary-prefix-days');
+      this._trackingSummary.appendChild(prefix);
+      this._trackingSummary.appendChild(buildDayStrip(scheduledDayStates(goal, todayISO(), tr.reminderDays)));
+      const suffix = document.createElement('span');
+      suffix.textContent = ` ${t('goal-dialog.tracking-summary-days-suffix', { percent })}`;
+      this._trackingSummary.appendChild(suffix);
+      return;
+    }
+    this._trackingSummary.textContent = t('goal-dialog.tracking-summary-prefix-weekly')
+      + t('goal-dialog.tracking-summary-weekly', {
+        count: currentPeriodCount(tr), target: tr.target, percent,
+      });
+  }
+
   _renderTypeSection() {
+    this._renderTrackingSummary();
     const showTypeEditor = this._isNew || this._typeExpanded;
     this._typePillGroup.hidden = !showTypeEditor;
     this._renderFixDayToggle();
@@ -1746,16 +1826,27 @@ class GoalDialog extends AppElement {
 
   _renderReminderDayChips() {
     const days = Array.isArray(this._draftReminderDays) ? this._draftReminderDays : [];
-    this._reminderDayGroup.querySelectorAll('.reminder-day-chip[data-day]').forEach(chip => {
-      chip.setAttribute('aria-pressed', String(days.includes(chip.dataset.day)));
-    });
     const isAny = this._draftReminderDays === 'any';
-    this._reminderAnyChip.setAttribute('aria-pressed', String(isAny));
+    // "Every day" is the one point where flexible/any and specific-days
+    // mean the same thing — 7x/week can only mean every day, and picking
+    // every day can only mean 7x/week — so light up both pickers together
+    // there, purely as a rendering echo. this._draftReminderDays itself
+    // stays exactly 'any' or the real day array either way; nothing here
+    // mutates which mode is actually stored, and re-deriving `everyDay`
+    // fresh on every render (rather than latching it) is what makes moving
+    // off of it — the target stepper dropping below 7, or deselecting any
+    // one day — instantly clear the echoed highlight on the other picker.
+    const everyDay = isAny ? this._draftTarget === WEEKDAYS.length : days.length === WEEKDAYS.length;
+    this._reminderDayGroup.querySelectorAll('.reminder-day-chip[data-day]').forEach(chip => {
+      chip.setAttribute('aria-pressed', String(everyDay || days.includes(chip.dataset.day)));
+    });
+    this._reminderAnyChip.setAttribute('aria-pressed', String(isAny || everyDay));
     // The count lives in the chip's own label — "x" unselected, "Nx" once
     // active — rather than a separate readout, so picking it doesn't change
     // the row's shape. A specific-days selection shows its own count as the
-    // number of highlighted chips instead, so this label stays bare "x".
-    this._reminderXLabel.textContent = isAny ? `${this._draftTarget}x` : 'x';
+    // number of highlighted chips instead, except at the every-day overlap
+    // above, where it echoes "7x" same as Any mode would.
+    this._reminderXLabel.textContent = isAny ? `${this._draftTarget}x` : (everyDay ? `${days.length}x` : 'x');
     // Visibility only, never [hidden] — see the .is-inactive rule — so the
     // stepper's own space stays reserved and the day chips never resize.
     this._reminderMiniStepper.classList.toggle('is-inactive', !isAny);

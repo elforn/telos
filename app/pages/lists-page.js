@@ -349,7 +349,9 @@ class ListsPage extends AppElement {
 
   // Global (not per-list) show/hide for the roll-up urgency dot on list cards
   // and the bottom-nav Lists tab badge — per-item due-date markers inside a
-  // list are unaffected and always show.
+  // specific list have their own separate, per-list toggle instead (see
+  // list-detail-page.js's own menu / deadline-visibility.js), unaffected by
+  // this one.
   _setupRollupToggle() {
     this._rollupShowBtn = this.shadowRoot.querySelector('#rollup-show-btn');
     this._rollupHideBtn = this.shadowRoot.querySelector('#rollup-hide-btn');
@@ -370,6 +372,14 @@ class ListsPage extends AppElement {
       this._rollupVisible = visible ?? true;
       this._rollupShowBtn?.classList.toggle('active', this._rollupVisible);
       this._rollupHideBtn?.classList.toggle('active', !this._rollupVisible);
+      // Same muted "hidden" badge next to the always-visible filter-toggle
+      // button that goal/list pages show — see deadline-hidden-badge.js.
+      // Deliberately not inside the collapsible filter panel, so the
+      // warning is visible before the user thinks to open it. Purely visual
+      // consistency here: this toggle has no notification concept to also
+      // suppress (see deadline-visibility.js).
+      const badge = this.shadowRoot?.querySelector('#deadlines-hidden-badge');
+      if (badge) badge.hidden = this._rollupVisible;
       // Re-push the flag to existing cards (syncChildren reuses elements, no full re-render).
       this._renderLists(getState().lists ?? []);
     });

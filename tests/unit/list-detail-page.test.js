@@ -1843,6 +1843,51 @@ describe('list-detail-page — listsTagsVisible toggle', () => {
   });
 });
 
+// ── list-detail-page — listsDeadlinesVisible toggle ───────────────────────────
+
+describe('list-detail-page — listsDeadlinesVisible toggle', () => {
+  it('defaults visible (including for a list with no stored value at all)', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [{ ...ITEM, dueDate: '2020-01-01' }] }] } });
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#deadlines-show-btn').classList.contains('active')).toBe(true);
+    expect(el.shadowRoot.querySelector('#deadlines-hide-btn').classList.contains('active')).toBe(false);
+    const item = el.shadowRoot.querySelector('list-item');
+    expect(item.dataset.urgency).toBe('overdue');
+    expect(el.shadowRoot.querySelector('#deadlines-hidden-badge').hidden).toBe(true);
+  });
+
+  it('defaults visible even for an archived list — deliberately, so stale dates in it aren\'t silently forgotten', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, archived: true, items: [{ ...ITEM, dueDate: '2020-01-01' }] }] } });
+    const el = mount();
+    const item = el.shadowRoot.querySelector('list-item');
+    expect(item.dataset.urgency).toBe('overdue');
+  });
+
+  it('clicking deadlines-show-btn sets listsDeadlinesVisible[listId] to true', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    el.shadowRoot.querySelector('#deadlines-show-btn').click();
+    expect(getState().listsDeadlinesVisible?.['l1']).toBe(true);
+  });
+
+  it('clicking deadlines-hide-btn sets listsDeadlinesVisible[listId] to false, suppressing every item\'s urgency and showing the hidden badge', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [{ ...ITEM, dueDate: '2020-01-01' }] }] } });
+    const el = mount();
+    el.shadowRoot.querySelector('#deadlines-hide-btn').click();
+    expect(getState().listsDeadlinesVisible?.['l1']).toBe(false);
+    const item = el.shadowRoot.querySelector('list-item');
+    expect(item.dataset.urgency).toBe('none');
+    expect(el.shadowRoot.querySelector('#deadlines-hidden-badge').hidden).toBe(false);
+  });
+
+  it('does not affect other list IDs', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [LIST] } });
+    const el = mount();
+    el.shadowRoot.querySelector('#deadlines-hide-btn').click();
+    expect(getState().listsDeadlinesVisible?.['l2']).toBeUndefined();
+  });
+});
+
 // ── E2E deferred ─────────────────────────────────────────────────────────────
 // The following behaviours require a real browser and are covered by tests/e2e/lists.spec.js:
 // - Back button navigates to /lists

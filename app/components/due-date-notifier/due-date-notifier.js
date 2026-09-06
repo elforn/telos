@@ -25,7 +25,7 @@ import { getState } from '../../../_lib/core/store/store.js';
 import { todayISO } from '../../utils/today-iso.js';
 import { notificationsEnabled } from '../../utils/notification-prefs.js';
 import { lastNotifiedDate, markNotifiedToday } from '../../utils/notification-dedup.js';
-import { collectUpcoming } from '../../utils/upcoming.js';
+import { collectUpcoming, collectHiddenUrgent } from '../../utils/upcoming.js';
 import { buildDigest } from '../../utils/notification-digest.js';
 
 class DueDateNotifier extends AppElement {
@@ -60,7 +60,17 @@ class DueDateNotifier extends AppElement {
       const last = await lastNotifiedDate();
       if (last === today) return; // already notified today — foreground or background, doesn't matter which
 
-      const digest = buildDigest(collectUpcoming(getState()));
+      // hiddenCount normally just rides along as an extra clause on this
+      // digest — buildDigest has one exception (fires a minimal digest from
+      // hiddenCount alone when the visible total is 0, so the Hidden-items
+      // dialog stays discoverable even then; see its own doc for why).
+      // Foreground-only either way, deliberately: the background/
+      // periodic-sync path (app/sw-extensions.js) is a classic script with
+      // its own separate, simpler bucket logic and doesn't get this — not
+      // worth a third duplication for a second-class feature.
+      const state = getState();
+      const hiddenCount = collectHiddenUrgent(state).length;
+      const digest = buildDigest(collectUpcoming(state), hiddenCount);
       if (!digest) return;
 
       const registration = await navigator.serviceWorker.ready;

@@ -444,6 +444,28 @@ export function weekDayStates(goal, todayIso = todayISO(), weeksAgo = 0) {
   });
 }
 
+// How many slips have been spent so far this period (or, for a 4-week
+// allowancePeriod, this pooled block) — for display purposes (e.g.
+// goal-dialog's own tracking summary: "3 of 2 allowed/week"). Reuses
+// blockCarrySpent (a no-op for 'week' mode) so both allowancePeriod modes
+// are judged correctly through the exact same chronological accounting
+// weekDayStates itself uses, rather than a separate, possibly-inconsistent
+// check — the evaluation always happens per current week, whichever mode is
+// configured; '4weeks' pools the *allowance*, not the check itself.
+export function currentAllowanceSpent(goal, todayIso = todayISO()) {
+  const tracking = goal?.tracking ?? {};
+  return blockCarrySpent(tracking, todayIso, 0) + currentPeriodCount(tracking, todayIso);
+}
+
+// Whether the current period's spend has already exceeded the allowance —
+// the single boolean weekDayStates' per-day 'over' ranking implies but never
+// exposes directly. Stays true for the rest of the week once tripped, even
+// on a day with no new entry, since spent-so-far never decreases.
+export function isOverAllowance(goal, todayIso = todayISO()) {
+  const target = goal?.tracking?.target ?? 0;
+  return currentAllowanceSpent(goal, todayIso) > target;
+}
+
 // DOT_WINDOW.decreasing weeks, oldest → current — drives the goal-item
 // septagon history strip directly, always shown untrimmed (unlike
 // recentDots' display-only trim of a leading missed streak). Display-only,

@@ -78,10 +78,14 @@ test.describe('Upcoming dialog', () => {
 
     // Goal lives in a year other than the one currently displayed — the case
     // the bell's badge (spanning every year) exists for in the first place.
+    // Non-current years default to deadlines-hidden (see
+    // deadline-visibility.js), so this needs an explicit opt-in — this test
+    // is about cross-year navigation, not about the default.
     const otherYear = currentYear - 1;
     await seedState(page, {
       goals: { [otherYear]: { capstone: [{ id: 'g1', title: 'Ship investor deck', tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-2) }], milestones: [], wow: [], focus: [] } },
       lists: [],
+      goalsDeadlinesVisible: { [otherYear]: true },
     });
     await page.reload();
     await waitForPage(page);

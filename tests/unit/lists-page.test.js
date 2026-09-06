@@ -522,4 +522,17 @@ describe('lists-page — date-indicator roll-up toggle', () => {
     setState('listsRollupVisible', true);
     expect(dot().hidden).toBe(false);
   });
+
+  it('shows the hidden badge next to the filter-toggle button in lockstep with listsRollupVisible', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [] } });
+    const el = mount();
+    const badge = () => el.shadowRoot.querySelector('#deadlines-hidden-badge');
+    expect(badge().hidden).toBe(true);
+
+    setState('listsRollupVisible', false);
+    expect(badge().hidden).toBe(false);
+
+    setState('listsRollupVisible', true);
+    expect(badge().hidden).toBe(true);
+  });
 });

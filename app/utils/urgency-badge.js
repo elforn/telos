@@ -9,14 +9,14 @@ import { icons } from '../icons.js';
 
 export const urgencyBadgeMarkup = `<span class="urgency-icon" aria-hidden="true">${icons.calendar}</span>`;
 
-// `displayWhenShown` lets goal-item gate visibility behind the year-scoped
-// --goal-deadline-display var while list-item stays unconditionally visible
-// ('block') — goal deadlines are year-aware, item due-dates are not (see
-// CLAUDE.md data model section). Keeping this as a parameter rather than a
-// shared CSS var avoids list-item accidentally inheriting goal-item's
-// year-gating through --goal-deadline-display, which is set on :root and
-// would otherwise cascade into every shadow root in the app.
-export function urgencyBadgeStyles(displayWhenShown = 'block') {
+// Year/list-level visibility (goal-item.js/list-item.js's `deadlinesVisible`
+// property, see deadline-visibility.js) is gated in JS, not CSS — a hidden
+// year/list collapses the whole merged bucket to 'none' before it ever
+// reaches `data-urgency`, so no rule below matches and the icon simply never
+// shows. That used to be a CSS-var parameter here instead (goal-item's
+// `--goal-deadline-display`); moved to JS so it correctly suppresses the
+// full-row-red overdue treatment too, not just this icon.
+export function urgencyBadgeStyles() {
   return `
     .urgency-icon {
       position: relative;
@@ -35,12 +35,13 @@ export function urgencyBadgeStyles(displayWhenShown = 'block') {
 
     /* Calendar badge, tinted by how soon the date is. Only 'overdue' gets a
        non-colour ring. */
-    :host([data-urgency="far"])     .urgency-icon { display: ${displayWhenShown}; color: var(--color-text-muted); }
-    :host([data-urgency="month"])   .urgency-icon { display: ${displayWhenShown}; color: var(--color-success); }
-    :host([data-urgency="week"])    .urgency-icon { display: ${displayWhenShown}; color: var(--color-warning); }
-    :host([data-urgency="today"])   .urgency-icon { display: ${displayWhenShown}; color: var(--color-danger); }
+    :host([data-urgency="far"])      .urgency-icon { display: block; color: var(--color-text-muted); }
+    :host([data-urgency="month"])    .urgency-icon { display: block; color: var(--color-success); }
+    :host([data-urgency="week"])     .urgency-icon { display: block; color: var(--color-warning); }
+    :host([data-urgency="tomorrow"]) .urgency-icon { display: block; color: var(--color-tomorrow); }
+    :host([data-urgency="today"])    .urgency-icon { display: block; color: var(--color-danger); }
     :host([data-urgency="overdue"]) .urgency-icon {
-      display: ${displayWhenShown};
+      display: block;
       color: var(--color-text-inverse);
       background: var(--color-danger);
       border-radius: var(--radius-sm);

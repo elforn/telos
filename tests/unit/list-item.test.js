@@ -148,6 +148,36 @@ describe('list-item — due-date urgency', () => {
   });
 });
 
+describe('list-item — deadlinesVisible gates urgency entirely', () => {
+  const urgency = el => el.dataset.urgency;
+
+  it('defaults to visible (unaffected) when the property is never set', () => {
+    expect(urgency(mount({ ...ITEM, dueDate: isoDaysFromNow(-1) }))).toBe('overdue');
+  });
+
+  it('suppresses the overdue bucket entirely when false', () => {
+    const el = mount({ ...ITEM, dueDate: isoDaysFromNow(-1) });
+    el.deadlinesVisible = false;
+    expect(urgency(el)).toBe('none');
+  });
+
+  it('re-suppresses on every item update while the property stays false', () => {
+    const el = mount({ ...ITEM, dueDate: isoDaysFromNow(-1) });
+    el.deadlinesVisible = false;
+    expect(urgency(el)).toBe('none');
+    el.item = { ...ITEM, dueDate: isoDaysFromNow(0) };
+    expect(urgency(el)).toBe('none');
+  });
+
+  it('setting it back to true restores the real urgency', () => {
+    const el = mount({ ...ITEM, dueDate: isoDaysFromNow(-1) });
+    el.deadlinesVisible = false;
+    expect(urgency(el)).toBe('none');
+    el.deadlinesVisible = true;
+    expect(urgency(el)).toBe('overdue');
+  });
+});
+
 describe('list-item — item-tap event', () => {
   it('dispatches item-tap on tap', () => {
     const el = mount();

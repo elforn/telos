@@ -9,6 +9,8 @@ import '../reflection-dialog/reflection-dialog.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import { icons } from '../../icons.js';
 import { aggregateScore } from '../../utils/reflection.js';
+import { yearDeadlinesVisible } from '../../utils/deadline-visibility.js';
+import { deadlinesHiddenBadgeMarkup, deadlinesHiddenBadgeStyles } from '../../utils/deadline-hidden-badge.js';
 
 // No red option: --color-accent drives the goal progress fill, so a red year
 // theme would make every goal read as "overdue" (see goal-item.js's own
@@ -114,6 +116,20 @@ class YearHeader extends Gestures(AppElement) {
           background: var(--color-accent);
         }
 
+        ${deadlinesHiddenBadgeStyles()}
+
+        /* Local override, year-header only: this header can carry a photo
+           background (see image-mode below), where the shared default
+           (--color-text-muted) reads as effectively invisible against a
+           busy photo — list-detail-page/lists-page have no such background
+           and keep the shared muted default as-is. Matching .filter-btn's
+           own colour exactly, in both normal and image mode, is what
+           actually fixes it, rather than raising the shared default
+           everywhere. */
+        .deadlines-hidden-badge {
+          color: var(--color-text-secondary);
+        }
+
         /* ── Image mode ────────────────────────────────────────────────── */
 
         :host([data-has-image]:not(.compact)) {
@@ -165,7 +181,8 @@ class YearHeader extends Gestures(AppElement) {
         }
 
         :host([data-has-image]:not(.compact)) .menu-btn,
-        :host([data-has-image]:not(.compact)) .filter-btn {
+        :host([data-has-image]:not(.compact)) .filter-btn,
+        :host([data-has-image]:not(.compact)) .deadlines-hidden-badge {
           color: rgba(255,255,255,0.55);
         }
 
@@ -525,6 +542,7 @@ class YearHeader extends Gestures(AppElement) {
           <button id="next" class="nav-btn" aria-label="${t('home-page.next-year')}">${icons.chevronRight}</button>
         </nav>
         <div class="header-actions">
+          ${deadlinesHiddenBadgeMarkup()}
           <button id="filter-btn" class="filter-btn" aria-label="${t('home-page.filter-toggle')}" aria-expanded="false">
             ${icons.funnel}
             <span class="filter-btn-dot" hidden aria-hidden="true"></span>
@@ -553,8 +571,8 @@ class YearHeader extends Gestures(AppElement) {
         <div class="menu-section">
           <p class="menu-section-label">${t('settings.deadlines')}</p>
           <div class="status-pill-group" role="group" aria-label="${t('settings.deadlines')}">
-            <button class="status-pill" id="deadlines-show-btn">${t('settings.reminder-on')}</button>
-            <button class="status-pill" id="deadlines-hide-btn">${t('settings.reminder-off')}</button>
+            <button class="status-pill" id="deadlines-show-btn">${t('settings.toggle-on')}</button>
+            <button class="status-pill" id="deadlines-hide-btn">${t('settings.toggle-off')}</button>
           </div>
         </div>
         <button class="menu-item" id="year-photo-btn">
@@ -657,11 +675,12 @@ class YearHeader extends Gestures(AppElement) {
     Store.subscribe('goalsTagsVisible', this._onGoalsTagsVisible);
 
     // Deadline markers default ON for the current year, OFF for other years;
-    // an explicit per-year choice overrides the default.
+    // an explicit per-year choice overrides the default. Visibility itself
+    // is applied by home-page.js (via each goal-item's `deadlinesVisible`
+    // property, see deadline-visibility.js) — this menu only needs the same
+    // resolved value to keep its own Show/Hide pills in sync.
     this._onGoalsDeadlinesVisible = deadlinesVisible => {
-      const stored = deadlinesVisible?.[String(this._year)];
-      const visible = stored ?? (Number(this._year) === new Date().getFullYear());
-      document.documentElement.style.setProperty('--goal-deadline-display', visible ? 'block' : 'none');
+      const visible = yearDeadlinesVisible(deadlinesVisible, this._year);
       this.shadowRoot?.querySelector('#deadlines-show-btn')?.classList.toggle('active', visible);
       this.shadowRoot?.querySelector('#deadlines-hide-btn')?.classList.toggle('active', !visible);
     };
@@ -1210,6 +1229,14 @@ class YearHeader extends Gestures(AppElement) {
   set filterDot(v) {
     const dot = this.shadowRoot?.querySelector('.filter-btn-dot');
     if (dot) dot.hidden = !v;
+  }
+
+  // Whether the current year's deadline markers are hidden (see
+  // deadline-visibility.js) — home-page.js resolves this and pushes it in,
+  // same division of responsibility as filterDot/filterExpanded above.
+  set deadlinesHidden(v) {
+    const badge = this.shadowRoot?.querySelector('#deadlines-hidden-badge');
+    if (badge) badge.hidden = !v;
   }
 
   set filterExpanded(v) {

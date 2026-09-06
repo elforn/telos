@@ -396,4 +396,69 @@ test.describe('Data persistence', () => {
     );
     expect(hidden).toBe(true);
   });
+
+  test('turning off deadline markers for the current year persists across a cold reload from IDB', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForHomePage(page);
+
+    // Real UI toggle, not a synthetic IDB seed — proves the actual click
+    // handler's setState() round-trips through IDB, not just that the
+    // derived urgency effect happens to look right afterward.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('year-header').shadowRoot
+        .querySelector('#menu-btn').click();
+    });
+    await page.waitForFunction(() =>
+      document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('year-header')?.shadowRoot
+        ?.querySelector('#menu')?.shadowRoot?.querySelector('dialog')?.open
+    );
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('year-header').shadowRoot
+        .querySelector('#deadlines-hide-btn').click();
+    });
+
+    await waitForIDBFlush(page);
+    await page.reload();
+    await waitForHomePage(page);
+
+    const stored = await page.evaluate(() => new Promise(res => {
+      const r = indexedDB.open('telos', 1);
+      r.onsuccess = () => {
+        const db = r.result;
+        const tx = db.transaction('state', 'readonly');
+        const req = tx.objectStore('state').get('root');
+        req.onsuccess = () => { db.close(); res(req.result?.data?.goalsDeadlinesVisible); };
+      };
+    }));
+    expect(stored).toEqual({ [currentYear]: false });
+
+    // The menu's own pill state reflects the persisted value after the
+    // cold reload too, not just the raw IDB record.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('year-header').shadowRoot
+        .querySelector('#menu-btn').click();
+    });
+    await page.waitForFunction(() =>
+      document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('year-header')?.shadowRoot
+        ?.querySelector('#menu')?.shadowRoot?.querySelector('dialog')?.open
+    );
+    const hideActive = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('year-header').shadowRoot
+        .querySelector('#deadlines-hide-btn').classList.contains('active')
+    );
+    expect(hideActive).toBe(true);
+  });
 });

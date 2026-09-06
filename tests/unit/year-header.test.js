@@ -472,22 +472,26 @@ describe('year-header — year picker', () => {
 describe('year-header — deadline markers toggle', () => {
   const CURRENT = new Date().getFullYear();
   const PAST = CURRENT - 1;
-  const displayVar = () => document.documentElement.style.getPropertyValue('--goal-deadline-display');
 
   beforeEach(() => {
     Store.setState('goalsDeadlinesVisible', {});
   });
 
+  // The actual visibility (icon/full-row-red/notifications) is applied by
+  // home-page.js via each goal-item's own `deadlinesVisible` property, not
+  // by year-header.js at all any more (see deadline-visibility.js) — this
+  // menu only needs its own Show/Hide pills to reflect the same resolved
+  // value, which is what these assert.
   it('defaults ON for the current year when nothing is stored', () => {
     const el = mount(CURRENT);
     expect(el.shadowRoot.querySelector('#deadlines-show-btn').classList.contains('active')).toBe(true);
-    expect(displayVar()).toBe('block');
+    expect(el.shadowRoot.querySelector('#deadlines-hide-btn').classList.contains('active')).toBe(false);
   });
 
   it('defaults OFF for a non-current year when nothing is stored', () => {
     const el = mount(PAST);
     expect(el.shadowRoot.querySelector('#deadlines-hide-btn').classList.contains('active')).toBe(true);
-    expect(displayVar()).toBe('none');
+    expect(el.shadowRoot.querySelector('#deadlines-show-btn').classList.contains('active')).toBe(false);
   });
 
   it('clicking deadlines-show-btn sets goalsDeadlinesVisible[year] to true', () => {
@@ -507,13 +511,11 @@ describe('year-header — deadline markers toggle', () => {
     Store.setState('goalsDeadlinesVisible', { [String(CURRENT)]: false });
     const hidden = mount(CURRENT);
     expect(hidden.shadowRoot.querySelector('#deadlines-hide-btn').classList.contains('active')).toBe(true);
-    expect(displayVar()).toBe('none');
     hidden.remove();
     // Past year, but explicitly shown.
     Store.setState('goalsDeadlinesVisible', { [String(PAST)]: true });
     const shown = mount(PAST);
     expect(shown.shadowRoot.querySelector('#deadlines-show-btn').classList.contains('active')).toBe(true);
-    expect(displayVar()).toBe('block');
   });
 });
 

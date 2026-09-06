@@ -43,6 +43,9 @@ function stubModals(el) {
   // upcoming-dialog exposes open() too — same pattern, its inner modal-dialog id is #dialog.
   const upcomingModal = el.shadowRoot.querySelector('#upcoming-dialog')?.shadowRoot.querySelector('#dialog');
   if (upcomingModal) { upcomingModal.show = vi.fn(); upcomingModal.close = vi.fn(); }
+  // hidden-items-dialog — same shape as upcoming-dialog, same stub pattern.
+  const hiddenModal = el.shadowRoot.querySelector('#hidden-items-dialog')?.shadowRoot.querySelector('#dialog');
+  if (hiddenModal) { hiddenModal.show = vi.fn(); hiddenModal.close = vi.fn(); }
 }
 
 function mount() {
@@ -613,6 +616,55 @@ describe('bottom-nav — urgency roll-up', () => {
     expect(yearsDot(el).hidden).toBe(true);
   });
 
+  it('a goal overdue purely from pace, with no dueDate at all, still counts on the Years pill', () => {
+    // Regression: _updateUrgency used to compute goal urgency from
+    // urgencyOf(dueDate) alone, ignoring frequency/pace urgency entirely —
+    // a goal that's only overdue because it's behind its weekly schedule
+    // (no dueDate at all) never showed up here. Dialog-facing
+    // (frequencyUrgencyOf), matching the bell badge's own "what can I
+    // still act on today" semantics — see the next test for why that
+    // matters once today gets logged.
+    //
+    // Pinned to a real Saturday (2026-08-15) with mon/wed/fri all missed —
+    // frequency urgency is day-of-week dependent, unlike the dueDate-only
+    // tests around it, so this needs a fixed date rather than isoDaysFromNow.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 15));
+    setState('goals', { 2026: { capstone: [{
+      id: 'c', title: 'x', tags: [],
+      tracking: { type: 'weekly', target: 3, entries: [], reminderDays: ['mon', 'wed', 'fri'] },
+    }], milestones: [], wow: [], focus: [] } });
+    setState('lists', []);
+    const el = mount();
+    el.refreshUrgency();
+    expect(yearsDot(el).hidden).toBe(false);
+    expect(yearsDot(el).dataset.urgency).toBe('overdue');
+    vi.useRealTimers();
+  });
+
+  it('downgrades to the uncounted tomorrow state once today is logged, even for an unrecoverable miss — the pill tracks what\'s actionable, not the row\'s sticky shame state', () => {
+    // Same Mon/Wed/Fri goal and date as above, but Saturday's own entry is
+    // now logged too — still short of target (1 of 3), and unrecoverable
+    // (only Sunday left). The row (frequencyRowUrgencyOf) would stay
+    // latched to 'overdue' for the rest of the week regardless — but this
+    // pill downgrades to 'tomorrow' instead, since there's nothing left to
+    // act on *today*, and 'tomorrow' never counts toward the badge number
+    // (only today/overdue do).
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 15));
+    setState('goals', { 2026: { capstone: [{
+      id: 'c', title: 'x', tags: [],
+      tracking: { type: 'weekly', target: 3, entries: ['2026-08-15'], reminderDays: ['mon', 'wed', 'fri'] },
+    }], milestones: [], wow: [], focus: [] } });
+    setState('lists', []);
+    const el = mount();
+    el.refreshUrgency();
+    expect(yearsDot(el).hidden).toBe(false);
+    expect(yearsDot(el).dataset.urgency).toBe('tomorrow');
+    expect(yearsDot(el).dataset.count).toBeUndefined();
+    vi.useRealTimers();
+  });
+
   it('shows the Lists pill colour without a count for a green/yellow item', () => {
     setState('goals', {});
     setState('lists', [{ id: 'l', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', tags: [], inGoals: [], dueDate: isoDaysFromNow(5) }] }]);
@@ -629,6 +681,26 @@ describe('bottom-nav — urgency roll-up', () => {
     const el = mount();
     el.refreshUrgency();
     expect(yearsDot(el).hidden).toBe(true);
+  });
+
+  it('suppresses the Years pill entirely when the current year\'s own deadlines are hidden', () => {
+    setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', []);
+    setState('goalsDeadlinesVisible', { [YEAR]: false });
+    const el = mount();
+    el.refreshUrgency();
+    expect(yearsDot(el).hidden).toBe(true);
+    setState('goalsDeadlinesVisible', {}); // clean slate — avoid leaking into sibling tests
+  });
+
+  it('suppresses one list\'s items from the Lists pill via its own listsDeadlinesVisible entry, independent of listsRollupVisible', () => {
+    setState('goals', {});
+    setState('lists', [{ id: 'l1', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', tags: [], inGoals: [], dueDate: isoDaysFromNow(-1) }] }]);
+    setState('listsDeadlinesVisible', { l1: false });
+    const el = mount();
+    el.refreshUrgency();
+    expect(listsDot(el).hidden).toBe(true);
+    setState('listsDeadlinesVisible', {}); // clean slate — avoid leaking into sibling tests
   });
 
   it('hides both pills when nothing is due soon', () => {
@@ -685,13 +757,67 @@ describe('bottom-nav — Upcoming bell', () => {
 
   // The one case that actually motivated the plan: overdue/today aggregation
   // here spans every year, unlike the Years pill above, which only ever
-  // looks at the current calendar year.
+  // looks at the current calendar year. Non-current years default to
+  // deadlines-hidden (see deadline-visibility.js), so this needs an explicit
+  // opt-in to isolate "does it span years" from "what's the default".
   it('counts a non-current-year overdue goal, unlike the Years pill', () => {
     setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
     setState('lists', []);
+    setState('goalsDeadlinesVisible', { [YEAR - 1]: true });
     const el = mount();
     expect(bellBtn(el).hidden).toBe(false);
     expect(bellBadge(el).textContent).toBe('1');
+  });
+
+  it('does not count a non-current-year overdue goal by default, but keeps the bell reachable (no numeric badge) since it\'s the only path to the Hidden-items dialog', () => {
+    setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
+    setState('lists', []);
+    setState('goalsDeadlinesVisible', {}); // explicit clean slate — no leftover from a sibling test's own opt-in
+    const el = mount();
+    expect(bellBtn(el).hidden).toBe(false);
+    expect(bellBadge(el).textContent).toBe('');
+  });
+
+  it('hides the bell entirely when there is truly nothing at all, visible or hidden', () => {
+    setState('goals', {});
+    setState('lists', []);
+    setState('goalsDeadlinesVisible', {});
+    const el = mount();
+    expect(bellBtn(el).hidden).toBe(true);
+  });
+
+  it('describes why the bell is showing via aria-description, even with no numeric badge', () => {
+    setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
+    setState('lists', []);
+    setState('goalsDeadlinesVisible', {});
+    const el = mount();
+    expect(bellBtn(el).getAttribute('aria-description')).toBe('1 hidden — tap to review');
+  });
+
+  it('hides the red badge itself, not just its text, when only hidden items exist — an empty badge would still render its red circular background', () => {
+    setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
+    setState('lists', []);
+    setState('goalsDeadlinesVisible', {});
+    const el = mount();
+    expect(bellBadge(el).hidden).toBe(true);
+  });
+
+  it('shows the real urgent-count aria-description and red badge when count > 0, even with hidden items also present', () => {
+    setState('goals', yearGoals([{ id: 'c1', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
+    setState('lists', []);
+    setState('goalsDeadlinesVisible', { [YEAR - 1]: false }); // irrelevant here — no goals in that year
+    const el = mount();
+    expect(bellBadge(el).hidden).toBe(false);
+    expect(bellBadge(el).textContent).toBe('1');
+    expect(bellBtn(el).getAttribute('aria-description')).toBe('1 due today or overdue');
+  });
+
+  it('has no aria-description at all when there is truly nothing, visible or hidden', () => {
+    setState('goals', {});
+    setState('lists', []);
+    setState('goalsDeadlinesVisible', {});
+    const el = mount();
+    expect(bellBtn(el).hasAttribute('aria-description')).toBe(false);
   });
 
   it('excludes a due-tomorrow item from the badge count', () => {
@@ -737,6 +863,58 @@ describe('bottom-nav — Upcoming bell', () => {
     setState('lists', [{ id: 'l1', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', inGoals: [], dueDate: isoDaysFromNow(-1) }] }]);
     const el = mount();
     const dialog = el.shadowRoot.querySelector('#upcoming-dialog');
+    dialog.dispatchEvent(new CustomEvent('upcoming-row-tap', {
+      bubbles: true, composed: true, detail: { kind: 'item', id: 'i', listId: 'l1' },
+    }));
+    expect(getState().pendingFocus).toEqual({ kind: 'item', id: 'i' });
+    expect(navigate).toHaveBeenCalledWith('/lists/l1');
+  });
+});
+
+describe('bottom-nav — hidden-items dialog (second-class, see hidden-items-dialog.js)', () => {
+  const bellBtn = el => el.shadowRoot.querySelector('#bell-btn');
+
+  it('clicking the bell sets the upcoming-dialog\'s hiddenCount from a year whose deadlines are hidden', () => {
+    setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
+    setState('lists', []);
+    setState('goalsDeadlinesVisible', {}); // year-1 defaults hidden
+    const el = mount();
+    const dialog = el.shadowRoot.querySelector('#upcoming-dialog');
+    bellBtn(el).click();
+    expect(dialog.hiddenCount).toBe(1);
+  });
+
+  it('openUpcoming() (cold-launch from a notification tap) also sets hiddenCount', () => {
+    setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
+    setState('lists', []);
+    setState('goalsDeadlinesVisible', {});
+    const el = mount();
+    const dialog = el.shadowRoot.querySelector('#upcoming-dialog');
+    el.openUpcoming();
+    expect(dialog.hiddenCount).toBe(1);
+  });
+
+  it('upcoming-hidden-tap opens the hidden-items-dialog with the hidden entries', () => {
+    setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'Old goal', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
+    setState('lists', []);
+    setState('goalsDeadlinesVisible', {});
+    const el = mount(); // _hidden is already computed at mount, from state set above
+    const upcomingDialog = el.shadowRoot.querySelector('#upcoming-dialog');
+    const hiddenDialog = el.shadowRoot.querySelector('#hidden-items-dialog');
+    const openSpy = vi.spyOn(hiddenDialog, 'open');
+    upcomingDialog.dispatchEvent(new CustomEvent('upcoming-hidden-tap', { bubbles: true, composed: true }));
+    expect(openSpy).toHaveBeenCalledOnce();
+    const passed = openSpy.mock.calls[0][0];
+    expect(passed).toHaveLength(1);
+    expect(passed[0]).toMatchObject({ kind: 'goal', id: 'c', title: 'Old goal' });
+  });
+
+  it('a row tap inside hidden-items-dialog navigates the same way an upcoming-dialog row tap does', () => {
+    setState('goals', {});
+    setState('lists', [{ id: 'l1', name: 'L', items: [{ id: 'i', title: 'x', status: 'open', inGoals: [], dueDate: isoDaysFromNow(-1) }] }]);
+    setState('listsDeadlinesVisible', { l1: false });
+    const el = mount();
+    const dialog = el.shadowRoot.querySelector('#hidden-items-dialog');
     dialog.dispatchEvent(new CustomEvent('upcoming-row-tap', {
       bubbles: true, composed: true, detail: { kind: 'item', id: 'i', listId: 'l1' },
     }));

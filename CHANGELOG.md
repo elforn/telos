@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.15.0] — 2026-09-06
+
+### Fixed
+- **Turning off deadline markers for a year now actually stops it from nagging you.** It used to only hide the small calendar icon, while an overdue goal's full red row and its daily notification kept showing up regardless. Both now go quiet together, the same as the icon always did.
+
+### Added
+- **Lists can now have their own deadline markers turned off too**, from a new toggle in a list's "⋮" menu — the same on/off control years already had, just per-list instead of per-year, and it silences that list's notifications the same way.
+- **A small icon appears next to the filter button whenever a year's or list's deadline markers are off**, so it's never a silent surprise that some items aren't showing.
+- **"Hidden items"** — a quieter, second view for anything overdue or due today that's currently tucked away behind a hidden year or list. Reach it from a link at the bottom of the "Upcoming" bell dialog; tapping an item takes you straight to it, without turning its visibility back on. The daily notification also mentions how many items are hidden, and still lets you know even on a day when nothing else needs attention — so a year or list you've silenced never becomes a total dead end.
+
+### Changed
+- **The deadline-markers toggle now reads "On"/"Off" instead of "Show"/"Hide"**, in both the year and list menus — since turning it off silences notifications too, not just the on-screen markers.
+
 ## [2.14.0] — 2026-09-03
 
 ### Changed

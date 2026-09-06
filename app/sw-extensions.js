@@ -21,6 +21,17 @@
 // maintaining, twice) that whole system here isn't worth it for a layer
 // that's already just "best-effort." A plain dueDate check covers the
 // common case without that ongoing cost.
+//
+// It DOES duplicate goalsDeadlinesVisible/listsDeadlinesVisible gating
+// (app/utils/deadline-visibility.js), unlike the frequency-pace skip above —
+// that one's just an optional richer signal this layer can live without,
+// but deadline-visibility gates whether an item is allowed to notify at
+// all. Skipping it here would mean a year/list the user explicitly hid
+// could still page them via this background layer, which breaks the
+// feature's whole promise regardless of how "best-effort" this path is.
+// This file does NOT get the foreground digest's "N hidden" clause,
+// though (see notification-digest.js's buildDigest) — that's a second-class
+// extra a best-effort background layer isn't worth building out for.
 
 const TELOS_DB = 'telos';
 const NOTIF_DB = 'telos-notifications';
@@ -59,13 +70,28 @@ function isActive(goal) {
   return goal?.tracking?.type === 'percentage' ? (goal.tracking.value ?? 0) < 100 : true;
 }
 
+// Duplicated from app/utils/deadline-visibility.js's yearDeadlinesVisible —
+// same default (on for the current real year, off otherwise) — this file
+// can't import that module (see the header doc above).
+function isYearVisible(goalsDeadlinesVisible, year) {
+  const stored = goalsDeadlinesVisible?.[String(year)];
+  return stored ?? (Number(year) === new Date().getFullYear());
+}
+
+// Duplicated from listDeadlinesVisible — lists default visible always,
+// archived included.
+function isListVisible(listsDeadlinesVisible, listId) {
+  return listsDeadlinesVisible?.[listId] ?? true;
+}
+
 function collectDueDateUpcoming(state, todayIso) {
   const overdue = [];
   const today = [];
   const tomorrow = [];
   const sections = ['capstone', 'milestones', 'wow', 'focus'];
 
-  for (const yearGoals of Object.values(state?.goals ?? {})) {
+  for (const [year, yearGoals] of Object.entries(state?.goals ?? {})) {
+    if (!isYearVisible(state?.goalsDeadlinesVisible, year)) continue;
     for (const section of sections) {
       for (const goal of yearGoals?.[section] ?? []) {
         if (goal.archived) continue;
@@ -78,6 +104,7 @@ function collectDueDateUpcoming(state, todayIso) {
   }
 
   for (const list of state?.lists ?? []) {
+    if (!isListVisible(state?.listsDeadlinesVisible, list.id)) continue;
     for (const item of list.items ?? []) {
       const active = item.status !== 'done' && item.status !== 'closed';
       const bucket = bucketOf(item.dueDate, active, todayIso);

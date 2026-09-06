@@ -147,4 +147,62 @@ describe('due-date-notifier', () => {
 
     await vi.waitFor(() => expect(showNotification).toHaveBeenCalledTimes(1));
   });
+
+  it('appends a hidden-count clause when a suppressed year also has an overdue goal', async () => {
+    const yesterday = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+    await boot({
+      dbName: freshName(),
+      initialState: {
+        goals: {
+          '2026': { capstone: [{ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 }, dueDate: yesterday }], milestones: [], wow: [] },
+          '2020': { capstone: [{ id: 'g2', title: 'Old', tracking: { type: 'percentage', value: 0 }, dueDate: '2020-01-01' }], milestones: [], wow: [] },
+        },
+        lists: [],
+        // 2020 defaults hidden (not the real current year) — no explicit entry needed.
+      },
+    });
+    setNotificationsEnabled(true);
+    const showNotification = stubServiceWorker();
+    stubNotification('granted');
+    mount();
+    await vi.waitFor(() => expect(showNotification).toHaveBeenCalledTimes(1));
+    expect(showNotification.mock.calls[0][1].body).toBe('Overdue (1) · 1 hidden');
+  });
+
+  it('does not append a hidden-count clause when nothing is hidden', async () => {
+    const yesterday = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+    await boot({
+      dbName: freshName(),
+      initialState: {
+        goals: { '2026': { capstone: [{ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 }, dueDate: yesterday }], milestones: [], wow: [] } },
+        lists: [],
+      },
+    });
+    setNotificationsEnabled(true);
+    const showNotification = stubServiceWorker();
+    stubNotification('granted');
+    mount();
+    await vi.waitFor(() => expect(showNotification).toHaveBeenCalledTimes(1));
+    expect(showNotification.mock.calls[0][1].body).toBe('Overdue (1)');
+  });
+
+  it('still fires a minimal digest when everything visible is quiet but a hidden year has an overdue goal — otherwise there would be no way back to it at all', async () => {
+    await boot({
+      dbName: freshName(),
+      initialState: {
+        goals: {
+          '2020': { capstone: [{ id: 'g2', title: 'Old', tracking: { type: 'percentage', value: 0 }, dueDate: '2020-01-01' }], milestones: [], wow: [] },
+        },
+        lists: [],
+        // 2020 defaults hidden (not the real current year); 2026 (current) has nothing at all.
+      },
+    });
+    setNotificationsEnabled(true);
+    const showNotification = stubServiceWorker();
+    stubNotification('granted');
+    mount();
+    await vi.waitFor(() => expect(showNotification).toHaveBeenCalledTimes(1));
+    expect(showNotification.mock.calls[0][0]).toBe('1 hidden');
+    expect(showNotification.mock.calls[0][1].body).toBe('Tap to review');
+  });
 });

@@ -166,4 +166,40 @@ describe('sw-extensions — collectDueDateUpcoming', () => {
     const result = collectDueDateUpcoming(state, today);
     expect(result.overdue.map(i => i.id)).toEqual(['i1']);
   });
+
+  it('excludes a year whose goalsDeadlinesVisible is explicitly false, even with a genuinely overdue goal — the background notification must not page the user about a year they hid', () => {
+    const state = {
+      goals: { 2026: { capstone: [{ id: 'g1', dueDate: '2026-08-30', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] } },
+      lists: [],
+      goalsDeadlinesVisible: { 2026: false },
+    };
+    expect(collectDueDateUpcoming(state, today)).toEqual({ overdue: [], today: [], tomorrow: [] });
+  });
+
+  it('defaults a non-current year to hidden, same default as deadline-visibility.js\'s yearDeadlinesVisible', () => {
+    const state = {
+      goals: { 2020: { capstone: [{ id: 'g1', dueDate: '2026-08-30', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] } },
+      lists: [],
+      // no explicit goalsDeadlinesVisible entry for 2020 — real "current year" (2026) is unaffected either way here.
+    };
+    expect(collectDueDateUpcoming(state, today)).toEqual({ overdue: [], today: [], tomorrow: [] });
+  });
+
+  it('excludes a list whose listsDeadlinesVisible is explicitly false', () => {
+    const state = {
+      goals: {},
+      lists: [{ id: 'l1', items: [{ id: 'i1', dueDate: '2026-08-30', status: 'open' }] }],
+      listsDeadlinesVisible: { l1: false },
+    };
+    expect(collectDueDateUpcoming(state, today)).toEqual({ overdue: [], today: [], tomorrow: [] });
+  });
+
+  it('a list with no listsDeadlinesVisible entry defaults visible, including archived — same default as listDeadlinesVisible', () => {
+    const state = {
+      goals: {},
+      lists: [{ id: 'l1', archived: true, items: [{ id: 'i1', dueDate: '2026-08-30', status: 'open' }] }],
+    };
+    const result = collectDueDateUpcoming(state, today);
+    expect(result.overdue.map(i => i.id)).toEqual(['i1']);
+  });
 });

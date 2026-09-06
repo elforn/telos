@@ -4,7 +4,7 @@ import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { tagStrip } from '../../utils/tag-color.js';
 import { urgencyOf, mostUrgent } from '../../utils/urgency.js';
-import { frequencyUrgencyOf } from '../../utils/frequency-urgency.js';
+import { frequencyRowUrgencyOf } from '../../utils/frequency-urgency.js';
 import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 import {
@@ -115,6 +115,17 @@ const SEPTAGON_RING_POINTS = Array.from({ length: SEPTAGON_SIDES }, (_, i) => {
 class GoalItem extends Gestures(AppElement) {
   set goal(value) {
     this._goal = value;
+    if (this.shadowRoot) this._update();
+  }
+
+  // Whether this goal's year currently has deadline markers visible at all
+  // (see deadline-visibility.js) — home-page.js resolves and pushes this in,
+  // rather than this element reading the store itself, matching how
+  // lists-page-item.js receives `rollupVisible` as a plain property. Absent
+  // (undefined) defaults to visible, matching every test/caller that never
+  // sets it.
+  set deadlinesVisible(value) {
+    this._deadlinesVisible = value;
     if (this.shadowRoot) this._update();
   }
 
@@ -283,12 +294,14 @@ class GoalItem extends Gestures(AppElement) {
         .bar[data-has-desc="true"] .desc-icon { display: block; }
 
         /* Deadline calendar — shared with list-item's due-date badge, see
-           app/utils/urgency-badge.js. Gated by --goal-deadline-display so the
-           year menu can hide it for non-current years (default on for the
-           current year — set by year-header); list-item's due-date badge is
-           never gated this way. */
+           app/utils/urgency-badge.js. Year-level visibility (default on for
+           the current year, off otherwise — see deadline-visibility.js) is
+           gated in JS via the deadlinesVisible property below, not CSS —
+           the whole merged bucket collapses to 'none' when hidden, which
+           already means no rule here matches, so the icon needs no separate
+           display toggle of its own. */
         .urgency-icon { margin-inline-start: var(--space-1); }
-        ${urgencyBadgeStyles('var(--goal-deadline-display, block)')}
+        ${urgencyBadgeStyles()}
 
         /* ── Frequency goals: dot-strip + today token ────────────────────
            Replaces the pct-label's slot — hold-drag scrub has no meaning
@@ -1166,8 +1179,19 @@ class GoalItem extends Gestures(AppElement) {
     // plain dueDate countdown, if it has one. Before a dueDate, frequency
     // pace alone decides; once the dueDate itself lapses, urgencyOf already
     // returns 'overdue', which always wins the merge — no separate
-    // before/after phase switch needed.
-    const urgency = mostUrgent([urgencyOf(this._goal?.dueDate, active), frequencyUrgencyOf(this._goal, active)]);
+    // before/after phase switch needed. Uses frequencyRowUrgencyOf, not
+    // frequencyUrgencyOf — the row deliberately latches to 'overdue' once a
+    // miss is unrecoverable and stays there for the rest of the period,
+    // unlike the Upcoming dialog/badge (see frequency-urgency.js's module doc).
+    //
+    // deadlinesVisible === false suppresses the *entire* merged bucket, not
+    // just the dueDate half — a year with deadline markers hidden goes fully
+    // quiet (no icon, no full-row-red) regardless of which source would
+    // have triggered it, matching collectUpcoming's own gating (see
+    // deadline-visibility.js for why this is one toggle, not two).
+    const urgency = this._deadlinesVisible === false
+      ? 'none'
+      : mostUrgent([urgencyOf(this._goal?.dueDate, active), frequencyRowUrgencyOf(this._goal, active)]);
     this._title.textContent = title;
 
     this._bar.setAttribute('aria-label', this._buildAriaLabel({ isFreq, isDecr, title, urgency }));

@@ -6,16 +6,39 @@
 // a notification for every single overdue goal would be spam.
 import { t } from '../../_lib/core/strings.js';
 
-// Returns null when there's nothing to show — callers should skip firing a
-// notification entirely in that case, not show an empty one.
-export function buildDigest({ overdue, today, tomorrow }) {
+// Returns null when there's nothing to show at all — callers should skip
+// firing a notification entirely in that case, not show an empty one.
+//
+// `hiddenCount` (from collectHiddenUrgent — overdue/today items in a
+// currently-suppressed year/list, see deadline-visibility.js) normally rides
+// along as an extra clause on an already-firing digest, never a trigger on
+// its own — a year/list with deadlines turned off is a deliberate "don't nag
+// me about this" choice, and surfacing a notification purely because
+// something's hidden would undermine that. The one exception: when the
+// visible total is 0, this is the only *proactive* nudge that still exists —
+// bottom-nav.js's bell stays reachable in that state too (no numeric badge,
+// but not hidden either — see its own comment), but a badge-less bell icon
+// is easy to never notice or think to tap. Without this fallback, a
+// year/list going fully hidden would mean the Hidden-items modal is only
+// ever found by chance, not proactively surfaced at all — so this one case
+// still fires, with a minimal body naming only the hidden count, not the
+// normal per-bucket breakdown.
+export function buildDigest({ overdue, today, tomorrow }, hiddenCount = 0) {
   const total = (overdue?.length ?? 0) + (today?.length ?? 0) + (tomorrow?.length ?? 0);
-  if (total === 0) return null;
+  if (total === 0 && hiddenCount === 0) return null;
+
+  if (total === 0) {
+    return {
+      title: t('notifications.digest-hidden-only-title', { count: hiddenCount }),
+      body: t('notifications.digest-hidden-only-body'),
+    };
+  }
 
   const parts = [];
   if (overdue?.length)  parts.push(t('notifications.digest-overdue',  { count: overdue.length }));
   if (today?.length)    parts.push(t('notifications.digest-today',    { count: today.length }));
   if (tomorrow?.length) parts.push(t('notifications.digest-tomorrow', { count: tomorrow.length }));
+  if (hiddenCount > 0)  parts.push(t('notifications.digest-hidden',   { count: hiddenCount }));
 
   return {
     title: t('notifications.digest-title', { count: total }),

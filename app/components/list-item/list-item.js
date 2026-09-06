@@ -19,6 +19,15 @@ class ListItem extends Gestures(AppElement) {
     if (this.shadowRoot) this._update();
   }
 
+  // Whether this item's list currently has deadline markers visible (see
+  // deadline-visibility.js) — list-detail-page.js resolves and pushes this
+  // in, matching how goal-item.js receives the equivalent per-year property.
+  // Absent (undefined) defaults to visible.
+  set deadlinesVisible(value) {
+    this._deadlinesVisible = value;
+    if (this.shadowRoot) this._update();
+  }
+
   set selectionMode(val) {
     this._selectionMode = !!val;
     if (!val && this._revealedDir === null) {
@@ -486,7 +495,10 @@ class ListItem extends Gestures(AppElement) {
     const title = this._item?.title ?? '';
     const status = this._item?.status ?? 'open';
     const active = status !== 'done' && status !== 'closed';
-    const urgency = urgencyOf(this._item?.dueDate, active);
+    // deadlinesVisible === false suppresses this item's due-date urgency
+    // entirely (no icon, no full-row-red) — mirrors goal-item.js's own gate
+    // and collectUpcoming's notification-level gating (deadline-visibility.js).
+    const urgency = this._deadlinesVisible === false ? 'none' : urgencyOf(this._item?.dueDate, active);
     this._title.textContent = title;
     this._row.setAttribute('aria-label',
       urgency === 'none' ? title : t('list-item.duedate-aria', { title, when: t(`urgency.${urgency}`) }));

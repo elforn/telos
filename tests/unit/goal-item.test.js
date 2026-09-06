@@ -103,6 +103,46 @@ describe('goal-item — deadline urgency', () => {
   });
 });
 
+describe('goal-item — deadlinesVisible gates the whole merged bucket', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('defaults to visible (unaffected) when the property is never set', () => {
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1) });
+    expect(el.dataset.urgency).toBe('overdue');
+  });
+
+  it('suppresses a dueDate-driven overdue bucket entirely when false', () => {
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1) });
+    el.deadlinesVisible = false;
+    expect(el.dataset.urgency).toBe('none');
+  });
+
+  it('also suppresses a frequency-pace-driven overdue bucket, not just dueDate', () => {
+    vi.setSystemTime(new Date(2026, 7, 14)); // Friday — 3 days left, target 3, slack 0 (see the frequency describe block below)
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 3, value: 0, entries: [], reminderDays: 'any' } });
+    expect(el.dataset.urgency).toBe('overdue'); // sanity check: real pace-driven overdue with no dueDate at all
+    el.deadlinesVisible = false;
+    expect(el.dataset.urgency).toBe('none');
+  });
+
+  it('re-suppresses on every goal update while the property stays false', () => {
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1) });
+    el.deadlinesVisible = false;
+    expect(el.dataset.urgency).toBe('none');
+    el.goal = { id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(0) };
+    expect(el.dataset.urgency).toBe('none');
+  });
+
+  it('setting it back to true restores the real urgency', () => {
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1) });
+    el.deadlinesVisible = false;
+    expect(el.dataset.urgency).toBe('none');
+    el.deadlinesVisible = true;
+    expect(el.dataset.urgency).toBe('overdue');
+  });
+});
+
 describe('goal-item — frequency pace urgency, merged with dueDate to whichever is worse', () => {
   // 2026-08-10 is a Monday.
   const MON = new Date(2026, 7, 10);
@@ -110,22 +150,26 @@ describe('goal-item — frequency pace urgency, merged with dueDate to whichever
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  it('shows the red today state from an Nx-mode weekly goal\'s own pace, with no dueDate at all', () => {
+  it('shows the full-row overdue state from an Nx-mode weekly goal\'s own pace, with no dueDate at all', () => {
     vi.setSystemTime(new Date(2026, 7, 14)); // Friday — 3 days left, target 3, slack 0
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 3, value: 0, entries: [], reminderDays: 'any' } });
-    expect(el.dataset.urgency).toBe('today');
+    expect(el.dataset.urgency).toBe('overdue');
   });
 
-  it('shows the yellow week state at slack == 1', () => {
+  it('shows the orange tomorrow state at slack == 1', () => {
     vi.setSystemTime(new Date(2026, 7, 13)); // Thursday — slack 1
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 3, value: 0, entries: [], reminderDays: 'any' } });
-    expect(el.dataset.urgency).toBe('week');
+    expect(el.dataset.urgency).toBe('tomorrow');
   });
 
-  it('never earns the full-row overdue state from Nx-mode pace alone', () => {
-    vi.setSystemTime(new Date(2026, 7, 16)); // Sunday, way behind pace, week almost over
-    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 7, value: 0, entries: [], reminderDays: 'any' } });
-    expect(el.dataset.urgency).not.toBe('overdue');
+  it('an Nx-mode goal logged today still shows sticky overdue on the row once the miss is unrecoverable', () => {
+    // 6x/week, nothing logged all week, checked Wednesday (slack -1). Even
+    // after logging today, only 4 opportunity days remain (Thu-Sun) for the
+    // still-needed 5 -> unrecoverable, so the row's own urgency (unlike the
+    // Upcoming dialog) latches to 'overdue' rather than downgrading.
+    vi.setSystemTime(new Date(2026, 7, 12)); // Wednesday
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 6, value: 0, entries: ['2026-08-12'], reminderDays: 'any' } });
+    expect(el.dataset.urgency).toBe('overdue');
   });
 
   it('goes full-row overdue for a scheduled-days goal the day after a recoverable miss', () => {
@@ -137,7 +181,7 @@ describe('goal-item — frequency pace urgency, merged with dueDate to whichever
   it('a monthly goal gets pace urgency unconditionally, with no reminderDays ever set', () => {
     vi.setSystemTime(new Date(2026, 7, 22)); // Aug 22 — 10 days left, target 10, slack 0
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'monthly', target: 10, value: 0, entries: [] } });
-    expect(el.dataset.urgency).toBe('today');
+    expect(el.dataset.urgency).toBe('overdue');
   });
 
   it('takes the worse of dueDate and frequency pace, even before the deadline — a tight deadline wins over quiet pace', () => {
@@ -150,7 +194,7 @@ describe('goal-item — frequency pace urgency, merged with dueDate to whichever
     expect(el.dataset.urgency).toBe('week');
   });
 
-  it('a lapsed deadline always wins the merge, overriding Nx-mode\'s own never-overdue rule', () => {
+  it('a lapsed deadline always wins the merge, even when frequency pace itself is quiet', () => {
     vi.setSystemTime(MON);
     const el = mount({
       id: 'g1', title: 'Goal',

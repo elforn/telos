@@ -6,11 +6,12 @@
 // aggregate a set of items to their single most-urgent state.
 import { todayISO } from './today-iso.js';
 
-export const WEEK_DAYS = 7;   // 1–7 days out → "this week" (yellow)
+export const WEEK_DAYS = 7;   // 2–7 days out → "this week" (yellow); 1 day out is its own "tomorrow" bucket, see below
 export const MONTH_DAYS = 30; // 8–30 days out → "this month" (green)
 
-// Least → most urgent. Index === rank.
-export const URGENCY_ORDER = ['none', 'far', 'month', 'week', 'today', 'overdue'];
+// Least → most urgent. Index === rank. 'tomorrow' is its own status (orange),
+// not a subset of 'week' — see urgencyOf below.
+export const URGENCY_ORDER = ['none', 'far', 'month', 'week', 'tomorrow', 'today', 'overdue'];
 
 // Whole days from local today until `iso` (negative if in the past). Parses the
 // date parts manually — `new Date('2026-07-28')` is UTC midnight and can land on
@@ -31,6 +32,7 @@ export function urgencyOf(dueDate, active) {
   if (dueDate < today) return 'overdue'; // lexical compare == chronological for YYYY-MM-DD
   if (dueDate === today) return 'today';
   const days = daysUntil(dueDate);
+  if (days === 1) return 'tomorrow';
   if (days <= WEEK_DAYS) return 'week';
   if (days <= MONTH_DAYS) return 'month';
   return 'far';
@@ -70,7 +72,7 @@ export function matchesDateBucket(key, dueDate, active) {
   if (key === 'none') return !dueDate;
   const bucket = urgencyOf(dueDate, active);
   if (key === 'overdue') return bucket === 'overdue';
-  if (key === 'week') return bucket === 'today' || bucket === 'week';
+  if (key === 'week') return bucket === 'today' || bucket === 'tomorrow' || bucket === 'week';
   if (key === 'month') return bucket === 'month';
   if (key === 'later') return bucket === 'far';
   return false;

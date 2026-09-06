@@ -2148,6 +2148,57 @@ describe('goal-dialog — reminder days (weekly only)', () => {
     expect(anyChip(el).getAttribute('aria-pressed')).toBe('false');
   });
 
+  function xLabel(el) {
+    return el.shadowRoot.querySelector('#reminder-x-label');
+  }
+  const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+  it('selecting all 7 specific days echoes Any as pressed, showing 7x', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    ALL_DAYS.forEach(d => dayChip(el, d).click());
+    expect(anyChip(el).getAttribute('aria-pressed')).toBe('true');
+    expect(xLabel(el).textContent).toBe('7x');
+  });
+
+  it('deselecting one of 7 selected days drops the Any echo back to bare x', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    ALL_DAYS.forEach(d => dayChip(el, d).click());
+    dayChip(el, 'wed').click(); // back down to 6
+    expect(anyChip(el).getAttribute('aria-pressed')).toBe('false');
+    expect(xLabel(el).textContent).toBe('x');
+    // The other 6 days stay individually selected — only the echo clears.
+    expect(dayChip(el, 'mon').getAttribute('aria-pressed')).toBe('true');
+    expect(dayChip(el, 'wed').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('bumping Any up to 7x echoes every day chip as pressed', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    anyChip(el).click(); // 1x
+    const up = el.shadowRoot.querySelector('#reminder-mini-up');
+    for (let i = 0; i < 6; i++) up.click(); // 1x -> 7x
+    expect(xLabel(el).textContent).toBe('7x');
+    ALL_DAYS.forEach(d => expect(dayChip(el, d).getAttribute('aria-pressed')).toBe('true'));
+  });
+
+  it('stepping Any back down from 7x clears the echoed day highlights', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'weekly').click();
+    anyChip(el).click();
+    const up = el.shadowRoot.querySelector('#reminder-mini-up');
+    const down = el.shadowRoot.querySelector('#reminder-mini-down');
+    for (let i = 0; i < 6; i++) up.click(); // 7x
+    down.click(); // 6x
+    expect(xLabel(el).textContent).toBe('6x');
+    ALL_DAYS.forEach(d => expect(dayChip(el, d).getAttribute('aria-pressed')).toBe('false'));
+  });
+
   it('a new goal created with days selected includes reminderDays in goal-created', () => {
     const el = mount();
     el.open(null);
@@ -2339,5 +2390,106 @@ describe('goal-dialog — reminder days (weekly only)', () => {
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
     pill(el, 'decreasing').click();
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
+  });
+});
+
+describe('goal-dialog — tracking summary (existing goals only)', () => {
+  // 2026-08-12 is a Wednesday — matches the fixture week used throughout
+  // frequency-urgency.test.js/upcoming.test.js. percentValue is a
+  // recency-weighted average over multiple periods, not a naive fraction,
+  // so these expected numbers come from actually running the real
+  // computation (see the node verification in the session that added
+  // this), not hand math.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 12));
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  function summary(el) {
+    return el.shadowRoot.querySelector('#tracking-summary');
+  }
+
+  it('is hidden for a brand-new goal — nothing yet to summarise', () => {
+    const el = mount();
+    el.open(null);
+    expect(summary(el).hidden).toBe(true);
+  });
+
+  it('percentage: "P: N% complete"', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Read a book', tracking: { type: 'percentage', value: 60 } });
+    expect(summary(el).hidden).toBe(false);
+    expect(summary(el).textContent).toBe('P: 60% complete');
+  });
+
+  it('weekly (Any/unconfigured): "W: N of target/week at P%"', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Gym', tracking: { type: 'weekly', target: 7, value: 0, entries: ['2026-08-10', '2026-08-11', '2026-08-12'] } });
+    expect(summary(el).textContent).toBe('W: 3 of 7/week at 12%');
+  });
+
+  it('monthly: "W: N of target/month at P%"', () => {
+    const el = mount();
+    const entries = ['2026-08-01', '2026-08-05'];
+    el.open({ id: '1', title: 'Date night', tracking: { type: 'monthly', target: 14, value: 0, entries } });
+    expect(summary(el).textContent).toBe('W: 2 of 14/month at 6%');
+  });
+
+  it('decreasing, "week" allowance: "A: N of target allowed/week at P%"', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'No soda', tracking: { type: 'decreasing', target: 2, value: 100, entries: [], allowancePeriod: 'week' } });
+    expect(summary(el).textContent).toBe('A: 0 of 2 allowed/week at 100%');
+  });
+
+  it('decreasing, "4weeks" allowance: "A: N of target allowed/4 weeks at P%"', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'No soda', tracking: { type: 'decreasing', target: 4, value: 100, entries: [], allowancePeriod: '4weeks' } });
+    expect(summary(el).textContent).toBe('A: 0 of 4 allowed/4 weeks at 100%');
+  });
+
+  it('weekly with specific reminderDays: renders "D: " plus the day strip plus "at P%", not a plain count', () => {
+    const el = mount();
+    el.open({
+      id: '1', title: 'Gym', tracking: {
+        type: 'weekly', target: 3, value: 0, entries: ['2026-08-11'], reminderDays: ['mon', 'wed', 'fri'],
+      },
+    });
+    const el2 = summary(el);
+    expect(el2.textContent).toMatch(/^D: /);
+    expect(el2.querySelector('.day-strip')).not.toBeNull();
+    expect(el2.querySelectorAll('.day-slot')).toHaveLength(7);
+    expect(el2.textContent).toContain('%'); // the "at P%" suffix is present alongside the strip
+  });
+
+  it('the day strip exposes per-day state to non-sighted users via role="img" + aria-label, not just colour', () => {
+    const el = mount();
+    el.open({
+      id: '1', title: 'Gym', tracking: {
+        type: 'weekly', target: 3, value: 0, entries: ['2026-08-11'], reminderDays: ['mon', 'wed', 'fri'],
+      },
+    });
+    const strip = summary(el).querySelector('.day-strip');
+    expect(strip.getAttribute('role')).toBe('img');
+    // 2026-08-12 is a Wednesday: Mon missed, Tue an unscheduled log, Wed/Fri
+    // pending, Thu/Sat/Sun blank (see scheduledDayStates in
+    // frequency-urgency.js for the exact rules).
+    const label = strip.getAttribute('aria-label');
+    expect(label).toContain('Mon: missed');
+    expect(label).toContain('Tue: logged, not scheduled');
+    expect(label).toContain('Wed: scheduled');
+    expect(label).toContain('Thu: not scheduled');
+  });
+
+  it('refreshes live when Fix-a-day toggles today\'s own entry', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Gym', tracking: { type: 'weekly', target: 7, value: 0, entries: [] } });
+    expect(summary(el).textContent).toBe('W: 0 of 7/week at 0%');
+
+    el.shadowRoot.querySelector('#action-change-type-btn').click();
+    el.shadowRoot.querySelector('#fixday-chip').click();
+    const todayChip = el.shadowRoot.querySelector('.day-chip[data-iso="2026-08-12"]');
+    todayChip.click(); // logs today
+    expect(summary(el).textContent).toBe('W: 1 of 7/week at 4%');
   });
 });

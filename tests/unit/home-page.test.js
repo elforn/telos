@@ -1342,3 +1342,52 @@ describe('home-page — resuming on a new calendar day refreshes goal urgency', 
     expect(item.dataset.urgency).toBe('today'); // unchanged — still hidden, nothing re-ran
   });
 });
+
+describe('home-page — goalsDeadlinesVisible gates every goal-item and year-header\'s own hidden badge', () => {
+  // The badge lives next to year-header's always-visible filter-toggle
+  // button, not inside the collapsible date-filter-row — it needs to warn
+  // the user before they'd think to open the filter panel at all.
+  function badgeHidden(el) {
+    return el.shadowRoot.querySelector('year-header').shadowRoot.querySelector('#deadlines-hidden-badge').hidden;
+  }
+
+  it('defaults visible for the current year (2026, the year mount() uses) with nothing stored', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    setState('goals', {
+      '2026': { capstone: [{ id: 'g1', title: 'Gym', tracking: { type: 'percentage', value: 40 }, dueDate: '2020-01-01' }], milestones: [], wow: [], focus: [] },
+    });
+    const item = el.shadowRoot.querySelector('#capstone-list goal-item');
+    expect(item.dataset.urgency).toBe('overdue');
+    expect(badgeHidden(el)).toBe(true);
+  });
+
+  it('setting goalsDeadlinesVisible[year] to false suppresses every goal-item\'s urgency and shows the hidden badge', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2026);
+    setState('goals', {
+      '2026': { capstone: [{ id: 'g1', title: 'Gym', tracking: { type: 'percentage', value: 40 }, dueDate: '2020-01-01' }], milestones: [], wow: [], focus: [] },
+    });
+    setState('goalsDeadlinesVisible', { 2026: false });
+    const item = el.shadowRoot.querySelector('#capstone-list goal-item');
+    expect(item.dataset.urgency).toBe('none');
+    expect(badgeHidden(el)).toBe(false);
+  });
+
+  it('explicitly showing a non-current year restores real urgency', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2020);
+    setState('goals', {
+      '2020': { capstone: [{ id: 'g1', title: 'Gym', tracking: { type: 'percentage', value: 40 }, dueDate: '2020-01-01' }], milestones: [], wow: [], focus: [] },
+    });
+    // 2020 isn't the real current year, so it defaults hidden.
+    let item = el.shadowRoot.querySelector('#capstone-list goal-item');
+    expect(item.dataset.urgency).toBe('none');
+    expect(badgeHidden(el)).toBe(false);
+
+    setState('goalsDeadlinesVisible', { 2020: true });
+    item = el.shadowRoot.querySelector('#capstone-list goal-item');
+    expect(item.dataset.urgency).toBe('overdue');
+    expect(badgeHidden(el)).toBe(true);
+  });
+});

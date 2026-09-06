@@ -25,8 +25,12 @@ describe('urgency — urgencyOf buckets', () => {
     expect(urgencyOf(isoDaysFromNow(0), true)).toBe('today');
   });
 
-  it('classifies week boundary (1–7 days)', () => {
-    expect(urgencyOf(isoDaysFromNow(1), true)).toBe('week');
+  it('classifies exactly 1 day out as its own tomorrow bucket, not week', () => {
+    expect(urgencyOf(isoDaysFromNow(1), true)).toBe('tomorrow');
+  });
+
+  it('classifies week boundary (2–7 days)', () => {
+    expect(urgencyOf(isoDaysFromNow(2), true)).toBe('week');
     expect(urgencyOf(isoDaysFromNow(7), true)).toBe('week');
   });
 
@@ -57,6 +61,8 @@ describe('urgency — mostUrgent aggregation', () => {
     expect(mostUrgent(['far', 'month', 'week'])).toBe('week');
     expect(mostUrgent(['month', 'overdue', 'today'])).toBe('overdue');
     expect(mostUrgent(['today', 'week'])).toBe('today');
+    expect(mostUrgent(['week', 'tomorrow'])).toBe('tomorrow'); // tomorrow outranks the broader week bucket
+    expect(mostUrgent(['tomorrow', 'today'])).toBe('today');
   });
 
   it('returns none for an empty set or all-none', () => {
@@ -64,8 +70,8 @@ describe('urgency — mostUrgent aggregation', () => {
     expect(mostUrgent(['none', 'none'])).toBe('none');
   });
 
-  it('orders overdue > today > week > month > far > none', () => {
-    expect(URGENCY_ORDER).toEqual(['none', 'far', 'month', 'week', 'today', 'overdue']);
+  it('orders overdue > today > tomorrow > week > month > far > none', () => {
+    expect(URGENCY_ORDER).toEqual(['none', 'far', 'month', 'week', 'tomorrow', 'today', 'overdue']);
   });
 });
 
@@ -93,8 +99,9 @@ describe('urgency — matchesDateBucket', () => {
     expect(matchesDateBucket('overdue', isoDaysFromNow(-1), false)).toBe(false); // inactive → not matched
   });
 
-  it('week matches today through 7 days', () => {
+  it('week matches today through 7 days, including the standalone tomorrow bucket', () => {
     expect(matchesDateBucket('week', isoDaysFromNow(0), true)).toBe(true);
+    expect(matchesDateBucket('week', isoDaysFromNow(1), true)).toBe(true); // tomorrow — its own bucket, still folds into the Week filter pill
     expect(matchesDateBucket('week', isoDaysFromNow(7), true)).toBe(true);
     expect(matchesDateBucket('week', isoDaysFromNow(8), true)).toBe(false);
   });

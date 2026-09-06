@@ -20,6 +20,7 @@ import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
 import { isGhostClickAfterDelete } from '../utils/delete-ghost-guard.js';
 import { matchesDateBucket } from '../utils/urgency.js';
+import { yearDeadlinesVisible } from '../utils/deadline-visibility.js';
 import { percentValue, setPercent, logEntry, unlogEntry, isLoggedOn } from '../utils/tracking.js';
 import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
 import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
@@ -607,6 +608,20 @@ class HomePage extends AppElement {
       if (!this._filterSuppressed) this._applyGoalFilter();
     };
     this.watch('goals', this._onGoals);
+
+    // Deadline-visibility toggle (year-header's own menu writes this, see
+    // deadline-visibility.js) — resolved once here rather than read inline
+    // by each goal-item, then re-pushed via the same render _onGoals already
+    // does. Also drives year-header's own muted "hidden" badge, next to its
+    // always-visible filter-toggle button — deliberately not inside the
+    // collapsible filter panel, so the warning is visible before the user
+    // thinks to open it at all.
+    this._onGoalsDeadlinesVisible = deadlinesVisible => {
+      this._deadlinesVisible = yearDeadlinesVisible(deadlinesVisible, this._year);
+      this._header.deadlinesHidden = !this._deadlinesVisible;
+      this._onGoals(getState().goals);
+    };
+    this.watch('goalsDeadlinesVisible', this._onGoalsDeadlinesVisible);
 
     // Each goal-item's own urgency icon/full-row-red state is otherwise
     // only as fresh as the last time its .goal was set — re-run the exact
@@ -1321,8 +1336,10 @@ class HomePage extends AppElement {
   // ── Render ────────────────────────────────────────────────────────────────
 
   _renderList(container, items) {
-    syncChildren(container, items, 'goal-item', (el, goal) => { el.goal = goal; },
-      { getElId: el => el._goal?.id });
+    syncChildren(container, items, 'goal-item', (el, goal) => {
+      el.goal = goal;
+      el.deadlinesVisible = this._deadlinesVisible;
+    }, { getElId: el => el._goal?.id });
   }
 
   _openGoalDialog(goal, opts) {

@@ -128,8 +128,9 @@ class ListsPageItem extends Gestures(AppElement) {
           border-radius: var(--radius-full);
         }
         .urgency[hidden] { display: none; }
-        .urgency[data-urgency="month"] { background: var(--color-success); }
-        .urgency[data-urgency="week"]  { background: var(--color-warning); }
+        .urgency[data-urgency="month"]    { background: var(--color-success); }
+        .urgency[data-urgency="week"]     { background: var(--color-warning); }
+        .urgency[data-urgency="tomorrow"] { background: var(--color-tomorrow); }
         .urgency[data-urgency="today"],
         .urgency[data-urgency="overdue"] { background: var(--color-danger); }
         .urgency[data-count] {

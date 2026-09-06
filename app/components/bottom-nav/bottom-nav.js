@@ -8,7 +8,9 @@ import { toast } from '../../../_lib/modules/toast/toast.js';
 import { getState, setRuntimeState } from '../../../_lib/core/store/store.js';
 import { onDayChange } from '../../utils/day-change-watcher.js';
 import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
-import { collectUpcoming, upcomingBadgeCount } from '../../utils/upcoming.js';
+import { frequencyUrgencyOf } from '../../utils/frequency-urgency.js';
+import { collectUpcoming, collectHiddenUrgent, upcomingBadgeCount } from '../../utils/upcoming.js';
+import { yearDeadlinesVisible, listDeadlinesVisible } from '../../utils/deadline-visibility.js';
 import { percentValue } from '../../utils/tracking.js';
 import { repairInstallation } from '../../../_lib/core/sw-manager/sw-repair.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
@@ -19,6 +21,7 @@ import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
 import '../import-text-dialog/import-text-dialog.js';
 import '../upcoming-dialog/upcoming-dialog.js';
+import '../hidden-items-dialog/hidden-items-dialog.js';
 import { icons } from '../../icons.js';
 
 const GOAL_SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
@@ -138,8 +141,9 @@ class BottomNav extends AppElement {
           pointer-events: none;
         }
         .pill-dot[hidden] { display: none; }
-        .pill-dot[data-urgency="month"] { background: var(--color-success); }
-        .pill-dot[data-urgency="week"]  { background: var(--color-warning); }
+        .pill-dot[data-urgency="month"]    { background: var(--color-success); }
+        .pill-dot[data-urgency="week"]     { background: var(--color-warning); }
+        .pill-dot[data-urgency="tomorrow"] { background: var(--color-tomorrow); }
         .pill-dot[data-urgency="today"],
         .pill-dot[data-urgency="overdue"] { background: var(--color-danger); }
         .pill-dot[data-count] {
@@ -580,6 +584,7 @@ class BottomNav extends AppElement {
       <import-text-dialog id="share-text-dialog"></import-text-dialog>
 
       <upcoming-dialog id="upcoming-dialog"></upcoming-dialog>
+      <hidden-items-dialog id="hidden-items-dialog"></hidden-items-dialog>
 
       <input type="file" id="import-input" accept=".telos,.json,.txt,application/zip,text/plain" hidden>
     `;
@@ -1099,6 +1104,11 @@ class BottomNav extends AppElement {
     // loads persisted state, so a cached value here could go stale; see
     // refreshUrgency() below, which re-derives everything from getState().
     this.watch('listsRollupVisible', () => this._updateUrgency());
+    // goalsDeadlinesVisible/listsDeadlinesVisible also gate this pill, same
+    // "hides visuals and notifications together" rule collectUpcoming below
+    // applies — see deadline-visibility.js.
+    this.watch('goalsDeadlinesVisible', () => this._updateUrgency());
+    this.watch('listsDeadlinesVisible', () => this._updateUrgency());
   }
 
   // Public: recompute after the store is known to be loaded.
@@ -1117,6 +1127,7 @@ class BottomNav extends AppElement {
   // tab is focused) from a due-date notification tap. See
   // app/sw-extensions.js's notificationclick handler.
   openUpcoming() {
+    if (this._upcomingDialog) this._upcomingDialog.hiddenCount = this._hidden?.length ?? 0;
     this._upcomingDialog?.open(this._upcoming);
   }
 
@@ -1125,30 +1136,66 @@ class BottomNav extends AppElement {
   // this one spans every year, since pending items can belong to any of
   // them (see app/utils/upcoming.js). Deliberately does NOT respect
   // listsRollupVisible — that toggle is about the per-list visual rollup
-  // dot, not about whether items exist to notify/skim.
+  // dot, not about whether items exist to notify/skim. It DOES respect
+  // goalsDeadlinesVisible/listsDeadlinesVisible (a different pair of
+  // toggles) — see collectUpcoming's own comment for why those gate
+  // notifications too.
   _subscribeUpcoming() {
     this._bellBtn = this.shadowRoot.querySelector('#bell-btn');
     this._bellBadge = this.shadowRoot.querySelector('#bell-badge');
     this._upcomingDialog = this.shadowRoot.querySelector('#upcoming-dialog');
+    this._hiddenItemsDialog = this.shadowRoot.querySelector('#hidden-items-dialog');
     this._upcoming = { overdue: [], today: [], tomorrow: [] };
+    this._hidden = [];
 
     this._updateUpcoming = () => {
-      this._upcoming = collectUpcoming({ goals: getState().goals, lists: getState().lists });
+      const state = { goals: getState().goals, lists: getState().lists };
+      const goalsDeadlinesVisible = getState().goalsDeadlinesVisible;
+      const listsDeadlinesVisible = getState().listsDeadlinesVisible;
+      this._upcoming = collectUpcoming({ ...state, goalsDeadlinesVisible, listsDeadlinesVisible });
+      // Second-class — computed alongside the real digest but never counted
+      // in the badge or shown as its own section (see hidden-items-dialog.js).
+      this._hidden = collectHiddenUrgent({ ...state, goalsDeadlinesVisible, listsDeadlinesVisible });
       const count = upcomingBadgeCount(this._upcoming);
-      const show = count > 0;
-      this._bellBtn.hidden = !show;
-      if (show) {
+      // The bell is the *only* path to the Hidden-items dialog (via a link
+      // inside Upcoming, see hidden-items-dialog.js) — it has to stay
+      // reachable even when count is 0, or a year/list going fully hidden
+      // would strand the user with no way back in at all (same reasoning
+      // as buildDigest's own hidden-only notification fallback).
+      this._bellBtn.hidden = !(count > 0 || this._hidden.length > 0);
+      if (count > 0) {
+        this._bellBadge.hidden = false;
         this._bellBadge.textContent = formatCount(count);
         this._bellBtn.setAttribute('aria-description', t('urgency.urgent-count', { n: count }));
+      } else if (this._hidden.length > 0) {
+        // Nothing actionable right now, so no red badge at all — it's
+        // reserved for an overdue/today count, and an empty badge would
+        // still render its own red circular background with nothing in it,
+        // reading as a broken/stray notification rather than "nothing to
+        // act on." The bell still needs an aria-description explaining why
+        // it's showing at all, for screen-reader users.
+        this._bellBadge.hidden = true;
+        this._bellBadge.textContent = '';
+        this._bellBtn.setAttribute('aria-description', t('upcoming.hidden-link', { count: this._hidden.length }));
       } else {
+        this._bellBadge.hidden = true;
         this._bellBadge.textContent = '';
         this._bellBtn.removeAttribute('aria-description');
       }
     };
     this.watch('goals', this._updateUpcoming);
     this.watch('lists', this._updateUpcoming);
+    // goalsDeadlinesVisible/listsDeadlinesVisible gate whole years/lists out
+    // of the digest, same rule as their in-app row markers (see
+    // deadline-visibility.js) — unlike listsRollupVisible above, which stays
+    // visuals-only (no per-list notification concept exists there).
+    this.watch('goalsDeadlinesVisible', this._updateUpcoming);
+    this.watch('listsDeadlinesVisible', this._updateUpcoming);
 
-    this._onBellBtn = () => this._upcomingDialog.open(this._upcoming);
+    this._onBellBtn = () => {
+      this._upcomingDialog.hiddenCount = this._hidden.length;
+      this._upcomingDialog.open(this._upcoming);
+    };
     this._onBellBtnKey = e => { if (e.detail === 0) this._onBellBtn(); };
     this._bellBtn.addEventListener('pointerup', this._onBellBtn);
     this._bellBtn.addEventListener('click', this._onBellBtnKey);
@@ -1156,7 +1203,10 @@ class BottomNav extends AppElement {
     // Row tap only carries an id (plus year/listId for routing) — the
     // destination page re-finds the goal/item itself by id once it has its
     // own rendered rows to search (see home-page.js/list-detail-page.js's
-    // _applyPending*Focus), so this signal stays minimal.
+    // _applyPending*Focus), so this signal stays minimal. Shared verbatim
+    // between <upcoming-dialog> and <hidden-items-dialog> — same event name,
+    // same detail shape, same "navigate and flash" destination either way;
+    // only which items got shown to reach that tap differs.
     this._onUpcomingRowTap = e => {
       const { kind, id, year, listId } = e.detail;
       if (kind === 'goal') {
@@ -1168,6 +1218,12 @@ class BottomNav extends AppElement {
       }
     };
     this._upcomingDialog.addEventListener('upcoming-row-tap', this._onUpcomingRowTap);
+    this._hiddenItemsDialog.addEventListener('upcoming-row-tap', this._onUpcomingRowTap);
+
+    // The only entry point into <hidden-items-dialog> — see its own module
+    // doc for why it deliberately has no bell/badge of its own.
+    this._onUpcomingHiddenTap = () => this._hiddenItemsDialog.open(this._hidden);
+    this._upcomingDialog.addEventListener('upcoming-hidden-tap', this._onUpcomingHiddenTap);
   }
 
   _updateUrgency() {
@@ -1175,13 +1231,29 @@ class BottomNav extends AppElement {
     const goals = getState().goals ?? {};
     // Always the actual calendar year — not the viewed year (_currentYear
     // tracks navigation and would make the pill follow year-swipes).
-    const year = goals[new Date().getFullYear()] ?? {};
+    const currentYear = new Date().getFullYear();
+    const year = yearDeadlinesVisible(getState().goalsDeadlinesVisible, currentYear) ? (goals[currentYear] ?? {}) : {};
+    // Merges dueDate urgency with the goal's own frequency/pace urgency —
+    // dialog-facing (frequencyUrgencyOf), matching the Upcoming dialog/bell
+    // badge's own actionable semantics, not the row's separate sticky
+    // "week is lost" bookkeeping. This pill answers "is there something to
+    // act on today," so it must clear once today's own entry is logged,
+    // the same as the bell badge does — a goal the row is still showing
+    // red for (as a static consequence, not a prompt) shouldn't keep this
+    // pill lit once there's genuinely nothing left to do today. Without
+    // this fix at all, a goal that's only overdue from pace (no dueDate)
+    // never showed up here.
     const goalBuckets = ['capstone', 'milestones', 'wow', 'focus']
       .flatMap(s => year[s] ?? [])
-      .map(g => urgencyOf(g.dueDate, percentValue(g) < 100 && !g.archived));
+      .map(g => {
+        const active = percentValue(g) < 100 && !g.archived;
+        return mostUrgent([urgencyOf(g.dueDate, active), frequencyUrgencyOf(g, active)]);
+      });
 
     const rollupVisible = getState().listsRollupVisible ?? true;
+    const listsDeadlinesVisible = getState().listsDeadlinesVisible;
     const itemBuckets = !rollupVisible ? [] : (getState().lists ?? [])
+      .filter(l => listDeadlinesVisible(listsDeadlinesVisible, l.id))
       .flatMap(l => l.items ?? [])
       .map(i => urgencyOf(i.dueDate, i.status !== 'done' && i.status !== 'closed'));
 

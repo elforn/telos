@@ -20,6 +20,7 @@ import '../components/import-text-dialog/import-text-dialog.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
 import { matchesDateBucket } from '../utils/urgency.js';
+import { listDeadlinesVisible } from '../utils/deadline-visibility.js';
 import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
 import { pageHeaderStyles, pageHeaderButtonsMarkup } from '../utils/page-header.js';
 import '../components/export-sheet/export-sheet.js';
@@ -506,6 +507,13 @@ class ListDetailPage extends AppElement {
           <div class="status-pill-group" role="group" aria-label="${t('settings.tag-strip')}">
             <button class="status-pill" id="tags-show-btn">${t('settings.reminder-on')}</button>
             <button class="status-pill" id="tags-hide-btn">${t('settings.reminder-off')}</button>
+          </div>
+        </div>
+        <div class="menu-section">
+          <p class="menu-section-label">${t('settings.deadlines')}</p>
+          <div class="status-pill-group" role="group" aria-label="${t('settings.deadlines')}">
+            <button class="status-pill" id="deadlines-show-btn">${t('settings.toggle-on')}</button>
+            <button class="status-pill" id="deadlines-hide-btn">${t('settings.toggle-off')}</button>
           </div>
         </div>
         <div class="menu-section">
@@ -1368,6 +1376,35 @@ class ListDetailPage extends AppElement {
     };
     this.listen(this.shadowRoot.querySelector('#tags-show-btn'), 'click', this._onTagsShowBtn);
     this.listen(this.shadowRoot.querySelector('#tags-hide-btn'), 'click', this._onTagsHideBtn);
+
+    // Per-list deadline-visibility (see deadline-visibility.js) — unlike
+    // goalsDeadlinesVisible's per-year default, a list has no "current" to
+    // default against, so this is visible unless explicitly turned off,
+    // archived lists included (deliberately — see the store key's own doc).
+    this._onListsDeadlinesVisible = deadlinesVisible => {
+      this._deadlinesVisible = listDeadlinesVisible(deadlinesVisible, this._listId);
+      this.shadowRoot?.querySelector('#deadlines-show-btn')?.classList.toggle('active', this._deadlinesVisible);
+      this.shadowRoot?.querySelector('#deadlines-hide-btn')?.classList.toggle('active', !this._deadlinesVisible);
+      // The muted "hidden" badge next to the always-visible filter-toggle
+      // button (see deadline-hidden-badge.js) — deliberately not inside the
+      // collapsible filter panel, so the warning is visible before the user
+      // thinks to open it at all.
+      const badge = this.shadowRoot?.querySelector('#deadlines-hidden-badge');
+      if (badge) badge.hidden = this._deadlinesVisible;
+      this._onLists(getState().lists);
+    };
+    this.watch('listsDeadlinesVisible', this._onListsDeadlinesVisible);
+
+    this._onDeadlinesShowBtn = () => {
+      setState('listsDeadlinesVisible', { ...getState().listsDeadlinesVisible, [this._listId]: true });
+      this._menuDialog.close();
+    };
+    this._onDeadlinesHideBtn = () => {
+      setState('listsDeadlinesVisible', { ...getState().listsDeadlinesVisible, [this._listId]: false });
+      this._menuDialog.close();
+    };
+    this.listen(this.shadowRoot.querySelector('#deadlines-show-btn'), 'click', this._onDeadlinesShowBtn);
+    this.listen(this.shadowRoot.querySelector('#deadlines-hide-btn'), 'click', this._onDeadlinesHideBtn);
   }
 
   unsubscribe() {
@@ -1731,9 +1768,10 @@ class ListDetailPage extends AppElement {
 
   _renderItems(items) {
     syncChildren(this._itemList, items, 'list-item', (el, item) => {
-      el.item          = item;
-      el.selectionMode = this._selectionMode;
-      el.selected      = this._selectionMode && this._selectedIds.has(item.id);
+      el.item             = item;
+      el.selectionMode    = this._selectionMode;
+      el.selected         = this._selectionMode && this._selectedIds.has(item.id);
+      el.deadlinesVisible = this._deadlinesVisible;
     }, { getElId: el => el._item?.id });
   }
 }
