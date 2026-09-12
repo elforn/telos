@@ -46,6 +46,20 @@ describe('hidden-items-dialog — structure', () => {
     expect(row.querySelector('.hidden-row-sub').textContent).toBe('Goal · 2025 · Capstone');
   });
 
+  it('appends an Archived suffix to the sublabel when the entry is archived — the only cue distinguishing it from a deadline-off year', () => {
+    const el = mount();
+    el.open([{ ...GOAL_ENTRY, archived: true }]);
+    const row = el.shadowRoot.querySelector('.hidden-row');
+    expect(row.querySelector('.hidden-row-sub').textContent).toBe('Goal · 2025 · Capstone · Archived');
+  });
+
+  it('does not append the Archived suffix when the entry is not archived', () => {
+    const el = mount();
+    el.open([GOAL_ENTRY]);
+    const row = el.shadowRoot.querySelector('.hidden-row');
+    expect(row.querySelector('.hidden-row-sub').textContent).not.toContain('Archived');
+  });
+
   it('renders an item row with a title and a List/name sublabel', () => {
     const el = mount();
     el.open([ITEM_ENTRY]);

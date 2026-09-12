@@ -76,15 +76,13 @@
            same technique as --color-danger-track above. 50/50 lands on a
            clean orange roughly between amber and red. */
         --color-tomorrow: color-mix(in srgb, var(--color-warning) 50%, var(--color-danger));
-        /* Icon-level "overdue" pill background (urgency-badge.js) —
-           deliberately theme-invariant, unlike every other token on this
-           page: it does NOT derive from --color-text-primary/-inverse the
-           way --color-danger-track above does, because that would flip it
-           to a near-white surface in dark mode. This pill's black identity
-           is the point (distinguishing it from the red-filled 'today'/
-           Failed pills), so it stays the same fixed near-black in both
-           themes; only the glyph inside (--color-danger, already
-           theme-aware) changes. */
+        /* Icon-level "overdue" pill background (urgency-badge.js) — a
+           near-black pill in light mode, distinguishing it from the
+           red-filled 'today'/Failed pills. That same near-black value sits
+           too close to the dark-theme page/row background (and, at low
+           completion %, to the unfilled progress track) to read as its own
+           pill at all, so the [data-theme="dark"] block below overrides it
+           — see that block for the dark-mode value and why. */
         --color-overdue-bg: #1C1C1E;
         /* Fixed aliases — never changed by year-header accent picker */
         --color-app-accent:        #5BADE0;
@@ -107,6 +105,18 @@
         --edge-btn-bleed:      -10px; /* right-edge icon buttons: bleed into page padding so icon aligns with content edge */
         --toast-max-width:     min(90vw, 420px); /* keeps a long toast message on screen */
         --page-max-width:      600px; /* caps + centers page content on desktop — mobile is the primary surface (95% of use), so this only matters as a secondary-platform comfort width; row-based UI (goal/list rows) reads poorly stretched edge-to-edge on a wide viewport */
+      }
+      [data-theme="dark"] {
+        /* See the --color-overdue-bg comment above — dark mode needs a
+           visibly lighter pill than the light-mode near-black.
+           --color-surface-raised (one step up from the page background)
+           was tried first, but at low goal completion % the pill sits
+           against the unfilled progress track, which is nearly the same
+           dark grey — the two blended together. --color-text-primary (the
+           dark theme's near-white/cream) instead pops against every
+           background it can land on (page, track, or the solid-red Failed
+           row) while still clearing 3:1 against the red glyph on top. */
+        --color-overdue-bg: var(--color-text-primary);
       }
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       body {

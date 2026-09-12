@@ -88,9 +88,18 @@ describe('goal-item — deadline urgency', () => {
     expect(mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(60) }).dataset.urgency).toBe('far');
   });
 
-  it('is none when complete or archived, even with a past deadline', () => {
+  it('is none when complete, even with a past deadline', () => {
     expect(mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 100 }, dueDate: isoDaysFromNow(-1) }).dataset.urgency).toBe('none');
-    expect(mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1), archived: true }).dataset.urgency).toBe('none');
+  });
+
+  it('computes urgency normally when archived — matches an archived list\'s own items keeping full deadline visibility', () => {
+    // Archiving hides the row from the default view (see home-page.js's own
+    // filter) but doesn't erase what's actually true about the goal — an
+    // archived-but-overdue goal still shows overdue/Failed wherever its row
+    // is actually rendered (the Archived filter, or the Hidden-items dialog).
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1), archived: true });
+    expect(el.dataset.urgency).toBe('overdue');
+    expect(el.hasAttribute('data-failed')).toBe(true);
   });
 
   it('describes the urgency in the bar aria-label', () => {

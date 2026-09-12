@@ -283,6 +283,31 @@ describe('upcoming — collectHiddenUrgent (the exact inverse gating of collectU
     expect(hidden).toHaveLength(0);
   });
 
+  it('includes an archived goal even from a \'full\' year, tagged archived: true — archiving is its own reason to be hidden', () => {
+    const goals = { '2026': { capstone: [goal({ dueDate: isoDaysFromNow(-1), archived: true })], milestones: [], wow: [], focus: [] } };
+    const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2026: 'full' } });
+    expect(hidden).toHaveLength(1);
+    expect(hidden[0]).toMatchObject({ kind: 'goal', id: 'g1', archived: true });
+  });
+
+  it('includes an archived goal from a \'warn\' year too, not just \'full\'', () => {
+    const goals = { '2026': { capstone: [goal({ dueDate: isoDaysFromNow(0), archived: true })], milestones: [], wow: [], focus: [] } };
+    const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2026: 'warn' } });
+    expect(hidden).toHaveLength(1);
+    expect(hidden[0].archived).toBe(true);
+  });
+
+  it('does not tag a non-archived goal from an \'off\' year with archived at all', () => {
+    const goals = { '2025': { capstone: [goal({ dueDate: isoDaysFromNow(-1) })], milestones: [], wow: [], focus: [] } };
+    const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2025: 'off' } });
+    expect(hidden[0].archived).toBeUndefined();
+  });
+
+  it('excludes an archived goal that is not actually overdue/today — archived alone is not enough', () => {
+    const goals = { '2026': { capstone: [goal({ dueDate: isoDaysFromNow(5), archived: true })], milestones: [], wow: [], focus: [] } };
+    expect(collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2026: 'full' } })).toEqual([]);
+  });
+
   it('never attaches entry.detail — deliberately simpler than collectUpcoming\'s entries', () => {
     const goals = { '2025': { capstone: [goal({ dueDate: isoDaysFromNow(-4) })], milestones: [], wow: [], focus: [] } };
     const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2025: 'off' } });

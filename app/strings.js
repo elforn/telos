@@ -65,9 +65,10 @@ defineStrings({
   'upcoming.detail-missed-days-aria': 'Missing {days}',
   'upcoming.hidden-link':      '{count} hidden — tap to review',
   'hidden-items.heading':      'Hidden items',
-  'hidden-items.subtitle':     'Overdue or due today, in a year or list with deadline markers turned off.',
+  'hidden-items.subtitle':     'Overdue or due today, either archived or in a year/list with deadline markers turned off.',
   'hidden-items.empty':        'Nothing hidden',
   'hidden-items.close':        'Close',
+  'hidden-items.archived-suffix': ' · Archived',
 
   // Date filter pills (goals + list items)
   'filter.date-label':   'Due date',

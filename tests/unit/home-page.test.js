@@ -1330,6 +1330,45 @@ describe('home-page — pendingFocus (Upcoming dialog row tap)', () => {
     expect(openSpy).not.toHaveBeenCalled();
   });
 
+  it('forces the Archived filter pill on when landing on an archived goal, so the row is actually visible to scroll to', async () => {
+    // Every goal-item is always rendered (filtering only toggles [hidden]),
+    // so an archived goal reached from the Hidden-items dialog is always
+    // findable — but its row starts out hidden by the default filter, which
+    // would make scrollIntoView/flash a no-op on an invisible element.
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [{ id: 'a1', title: 'Old goal', tracking: { type: 'percentage', value: 40 }, archived: true }], milestones: [], wow: [], focus: [] },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    const goalEl = el.shadowRoot.querySelector('#capstone-list goal-item');
+    expect(goalEl.hidden).toBe(true); // archived, and the Archived pill isn't active yet
+    const scrollSpy = vi.spyOn(goalEl, 'scrollIntoView').mockImplementation(() => {});
+
+    setRuntimeState('pendingFocus', { kind: 'goal', id: 'a1' });
+
+    expect(goalEl.hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fstate-archived').classList.contains('active')).toBe(true);
+    expect(scrollSpy).toHaveBeenCalledOnce();
+    expect(goalEl.classList.contains('nav-flash')).toBe(true);
+  });
+
+  it('does not touch the Archived filter when landing on a non-archived goal', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {
+      '2026': { capstone: [{ id: 'c1', title: 'X', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [], focus: [] },
+    }, images: {} } });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1)
+    );
+    vi.spyOn(el.shadowRoot.querySelector('#capstone-list goal-item'), 'scrollIntoView').mockImplementation(() => {});
+
+    setRuntimeState('pendingFocus', { kind: 'goal', id: 'c1' });
+
+    expect(el.shadowRoot.querySelector('#fstate-archived').classList.contains('active')).toBe(false);
+  });
+
   it('clears pendingFocus after consuming it', async () => {
     await boot({ dbName: freshName(), initialState: { goals: {
       '2026': { capstone: [{ id: 'c1', title: 'X', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [], focus: [] },

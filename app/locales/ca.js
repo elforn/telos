@@ -64,9 +64,10 @@ defineStrings({
   'upcoming.detail-missed-days-aria': 'Pendent {days}',
   'upcoming.hidden-link':      '{count} amagats — toca per revisar',
   'hidden-items.heading':      'Elements amagats',
-  'hidden-items.subtitle':     'Endarrerits o amb venciment avui, en un any o llista amb els marcadors de venciment desactivats.',
+  'hidden-items.subtitle':     'Endarrerits o amb venciment avui, arxivats o en un any o llista amb els marcadors de venciment desactivats.',
   'hidden-items.empty':        'Res amagat',
   'hidden-items.close':        'Tanca',
+  'hidden-items.archived-suffix': ' · Arxivat',
 
   // Filtres per venciment (objectius + elements)
   'filter.date-label':   'Venciment',

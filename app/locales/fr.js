@@ -64,9 +64,10 @@ defineStrings({
   'upcoming.detail-missed-days-aria': 'Manquant : {days}',
   'upcoming.hidden-link':      '{count} masqué(s) — voir',
   'hidden-items.heading':      'Éléments masqués',
-  'hidden-items.subtitle':     'En retard ou dus aujourd’hui, dans une année ou une liste dont les repères d’échéance sont désactivés.',
+  'hidden-items.subtitle':     'En retard ou dus aujourd’hui, archivés ou dans une année ou une liste dont les repères d’échéance sont désactivés.',
   'hidden-items.empty':        'Rien de masqué',
   'hidden-items.close':        'Fermer',
+  'hidden-items.archived-suffix': ' · Archivé',
 
   // Filtres par échéance (objectifs + éléments)
   'filter.date-label':   'Échéance',

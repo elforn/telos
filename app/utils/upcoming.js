@@ -106,27 +106,35 @@ export function upcomingBadgeCount({ overdue, today }) {
   return (overdue?.length ?? 0) + (today?.length ?? 0);
 }
 
-// The exact inverse of collectUpcoming's own gating — only years/lists whose
+// The exact inverse of collectUpcoming's own gating — years/lists whose
 // deadlines are currently *hidden* ('off' — 'warn' is not hidden, it already
-// gets full normal placement in collectUpcoming above), and only their
-// overdue/today items (no 'tomorrow' tier, and no entry.detail commentary):
-// these are deliberately second-class, a quiet "here's what you're not
-// seeing" list, not a parallel Upcoming view. Reachable only from a link
-// inside <upcoming-dialog> — see hidden-items-dialog.js — never a
-// notification trigger on its own (see buildDigest's own doc in
-// notification-digest.js).
+// gets full normal placement in collectUpcoming above), PLUS any archived
+// goal, regardless of its year's own level: archiving is its own separate
+// reason to be second-class, independent of the year-level setting — an
+// archived goal in an otherwise-'full' year still belongs here, not in the
+// main Upcoming dialog (collectUpcoming excludes archived goals outright,
+// unchanged). Only overdue/today items surface (no 'tomorrow' tier, no
+// entry.detail commentary): this is deliberately second-class, a quiet
+// "here's what you're not seeing" list, not a parallel Upcoming view.
+// Entries carry `archived: true` when that's the reason they're here, so
+// the Hidden-items dialog can label them distinctly from a merely
+// deadline-off year/list. Reachable only from a link inside
+// <upcoming-dialog> — see hidden-items-dialog.js — never a notification
+// trigger on its own (see buildDigest's own doc in notification-digest.js).
 export function collectHiddenUrgent({ goals, lists, goalsDeadlinesVisible, listsDeadlinesVisible } = {}) {
   const hidden = [];
 
   for (const [year, yg] of Object.entries(goals ?? {})) {
-    if (yearDeadlinesLevel(goalsDeadlinesVisible, year) !== 'off') continue;
+    const yearHidden = yearDeadlinesLevel(goalsDeadlinesVisible, year) === 'off';
     for (const section of GOAL_SECTIONS) {
       for (const goal of yg?.[section] ?? []) {
-        if (goal.archived) continue;
+        if (!yearHidden && !goal.archived) continue;
         const active = percentValue(goal) < 100;
         const bucket = mostUrgent([urgencyOf(goal.dueDate, active), frequencyUrgencyOf(goal, active)]);
         if (bucket === 'overdue' || bucket === 'today') {
-          hidden.push({ kind: 'goal', id: goal.id, title: goal.title, year, section });
+          const entry = { kind: 'goal', id: goal.id, title: goal.title, year, section };
+          if (goal.archived) entry.archived = true;
+          hidden.push(entry);
         }
       }
     }

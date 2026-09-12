@@ -186,9 +186,14 @@ class HiddenItemsDialog extends AppElement {
     } else {
       row.dataset.listId = entry.listId;
     }
-    const sub = entry.kind === 'goal'
+    let sub = entry.kind === 'goal'
       ? t('upcoming.sub-goal', { year: entry.year, section: t(`goal-dialog.move-section-${entry.section}`) })
       : t('upcoming.sub-item', { list: entry.listName });
+    // Distinguishes "hidden because archived" from "hidden because the
+    // year/list's deadline markers are off" — both land in this same flat
+    // list (see collectHiddenUrgent), so this is the only visible cue
+    // telling them apart.
+    if (entry.archived) sub += t('hidden-items.archived-suffix');
     row.innerHTML = `
       <span class="hidden-row-title"></span>
       <span class="hidden-row-sub"></span>

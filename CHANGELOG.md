@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.17.1] — 2026-09-12
+
+### Added
+- **Archived goals now keep their real overdue/failed status instead of going silent.** An overdue goal you've archived still shows in the Hidden-items list (bell → "N hidden"), labelled "Archived" so you can tell it apart from a goal that's hidden because its year's deadline markers are off. Tapping it jumps to the goal and turns on the Archived filter for you, so the row is actually visible once you land there — its calendar icon and red row still reflect the truth, but only when you've chosen to look (via the Archived filter), matching how archived lists already work.
+
+### Fixed
+- **The overdue calendar icon is easier to see in dark mode.** Its pill background is now a near-white shade instead of a near-black one that could blend into a dark row — the same change also removed a thin red outline added earlier this same day that's no longer needed now that the pill itself has enough contrast.
+
 ## [2.17.0] — 2026-09-12
 
 ### Added
@@ -17,9 +25,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The calendar icon and the red row indicator are now independent signals.** A goal can show its calendar icon without its row ever turning red, and the row can turn red even when the icon looks calm — whichever is the more accurate warning for that goal.
 - **Goal and list item calendar icons have a new look**: a dark icon for overdue, a solid red icon for due today, and a plain red icon for due tomorrow. The ambiguous orange previously used for "due tomorrow" is gone.
 - **Notifications (both in-app and background) no longer mention items due tomorrow.** Only overdue and due-today items are announced; a day with nothing but a "due tomorrow" heads-up produces no notification at all.
-
-### Fixed
-- **The overdue calendar icon now has a thin red outline**, so it stays visible against a dark background in dark mode.
 
 ## [2.16.0] — 2026-09-07
 

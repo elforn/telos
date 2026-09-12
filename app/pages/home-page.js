@@ -1263,6 +1263,22 @@ class HomePage extends AppElement {
     if (!el) return;
     setRuntimeState('pendingFocus', null);
 
+    // Every goal-item is always rendered (see _applyGoalFilter — filtering
+    // only toggles [hidden] on existing elements, never withholds them), so
+    // an archived goal reached from the Hidden-items dialog is always
+    // findable here. But its row is invisible unless the Archived state
+    // pill is active — force it on before scrolling/flashing, or the user
+    // lands on a page with nothing visibly different to look at. Deliberately
+    // NOT persisted via _saveFilter() — this is a one-off consequence of
+    // *this* navigation, not a preference change the user asked for; saving
+    // it would silently leave the Archived pill on for every future visit
+    // to this year until they noticed and turned it off themselves.
+    if (el._goal?.archived && !this._filter.states.has('archived')) {
+      this._filter.states.add('archived');
+      this._applyGoalFilter();
+      this._syncFilterUI();
+    }
+
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     el.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
     el.classList.add('nav-flash');
@@ -1301,7 +1317,10 @@ class HomePage extends AppElement {
       if (![...tags].some(tag => gtags.includes(tag))) return false;
     }
     if (dates.size) {
-      const active = !goal.archived && percentValue(goal) < 100;
+      // Not gated on archived, matching goal-item.js's own urgency compute —
+      // an archived goal viewed via the Archived pill still matches the
+      // date-filter pills consistently with what its row actually shows.
+      const active = percentValue(goal) < 100;
       if (![...dates].some(key => matchesDateBucket(key, goal.dueDate, active))) return false;
     }
     return true;

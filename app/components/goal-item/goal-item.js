@@ -1196,7 +1196,15 @@ class GoalItem extends Gestures(AppElement) {
     const prevPct = this._pct;
     this._pct = Math.max(0, pct);
     const title = this._goal?.title ?? '';
-    const active = this._pct < 100 && !this._goal?.archived;
+    // Deliberately NOT gated on archived: an archived goal's urgency still
+    // computes normally, matching how an archived list's items keep full
+    // deadline visibility (see CLAUDE.md's Urgency section) — archiving
+    // hides the row from the default view (see home-page.js's own filter),
+    // it doesn't erase what's actually true about the goal. The row itself
+    // is only ever seen at all, archived or not, when something renders it —
+    // the main list gated behind the Archived filter pill, or the
+    // Hidden-items dialog for a still-overdue one (see upcoming.js).
+    const active = this._pct < 100;
     // TWO genuinely independent mechanisms, each with its own merge, its own
     // DOM attribute, and its own CSS — not one computed value read by both.
     // (An earlier version of this file computed a single merged bucket and

@@ -51,14 +51,14 @@ export function urgencyBadgeStyles() {
        part of this redesign. tomorrow/today/overdue are the three tiers
        aligned 1:1 with the internal notification digest's own Overdue/
        Today/Tomorrow sections (see notification-digest.js) — escalating
-       plain-red -> filled-red-pill -> filled-dark-pill-with-red-glyph,
+       plain-red -> filled-red-pill -> filled-pill-with-red-glyph,
        deliberately with no orange anywhere in that escalation (the old
        amber --color-tomorrow mix read as confusable with 'week's own
-       amber). 'overdue's pill background (--color-overdue-bg) is
-       deliberately theme-invariant, unlike --color-danger driving its own
-       glyph — see index.html for why. This trio is entirely independent of
-       the full-row-red Failed state (data-failed) — no rule here keys off
-       it, and none should. */
+       amber). 'overdue's pill background (--color-overdue-bg) is a
+       per-theme token, unlike --color-danger driving its own glyph — see
+       index.html for why. This trio is entirely independent of the
+       full-row-red Failed state (data-failed) — no rule here keys off it,
+       and none should. */
     :host([data-urgency="far"])      .urgency-icon { display: block; color: var(--color-text-muted); background: transparent; }
     :host([data-urgency="month"])    .urgency-icon { display: block; color: var(--color-success); background: transparent; }
     :host([data-urgency="week"])     .urgency-icon { display: block; color: var(--color-warning); background: transparent; }
@@ -72,13 +72,6 @@ export function urgencyBadgeStyles() {
       display: block;
       color: var(--color-danger);
       background: var(--color-overdue-bg);
-      /* Thin red ring around the pill's own edge — --color-overdue-bg is
-         theme-invariant (deliberately, see index.html), so in dark mode it
-         can sit close enough in value to a dark row/surface background to
-         lose its own edge entirely. An inset box-shadow (not a real border)
-         keeps the icon's outer footprint identical to every other bucket's
-         padded box above, rather than growing it by the border width. */
-      box-shadow: inset 0 0 0 1px var(--color-danger);
     }
   `;
 }

@@ -130,6 +130,85 @@ test.describe('Hidden items — second-class list reachable only from the Upcomi
     expect(stillHidden).not.toHaveProperty(String(otherYear), true);
   });
 
+  test('an archived-but-overdue goal in the current (visible) year shows in Hidden, labelled Archived, and tapping it reveals the Archived filter so the row is actually visible', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    // Current year, deadlines fully on ('full' by default) — archiving is
+    // its own independent reason to be hidden, not tied to the year setting.
+    await seedState(page, {
+      goals: {
+        [currentYear]: { capstone: [{ id: 'g1', title: 'Retired but overdue', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: '2020-01-01', archived: true }], milestones: [], wow: [], focus: [] },
+      },
+    });
+    await page.reload();
+    await waitForPage(page);
+    await page.waitForFunction(() =>
+      document.querySelector('bottom-nav')?.shadowRoot?.querySelector('#bell-btn')?.hidden === false
+    );
+
+    await openUpcomingDialog(page);
+
+    // Archived means it never appears as a normal Upcoming row...
+    const rowCount = await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot
+        .querySelector('#upcoming-dialog').shadowRoot
+        .querySelectorAll('.upcoming-row').length
+    );
+    expect(rowCount).toBe(0);
+
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot
+        .querySelector('#upcoming-dialog').shadowRoot
+        .querySelector('#upcoming-hidden-link').click()
+    );
+    await page.waitForFunction(() =>
+      document.querySelector('bottom-nav')?.shadowRoot
+        ?.querySelector('#hidden-items-dialog')?.shadowRoot
+        ?.querySelector('#dialog')?.shadowRoot?.querySelector('dialog')?.open
+    );
+
+    // ...but does appear in Hidden, labelled distinctly from a deadline-off year.
+    const hiddenRowSub = await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot
+        .querySelector('#hidden-items-dialog').shadowRoot
+        .querySelector('.hidden-row-sub').textContent
+    );
+    expect(hiddenRowSub).toContain('Archived');
+
+    await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot
+        .querySelector('#hidden-items-dialog').shadowRoot
+        .querySelector('.hidden-row').click()
+    );
+
+    await page.waitForFunction(() =>
+      document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('#capstone-list goal-item')?.classList.contains('nav-flash')
+    );
+
+    // The row is genuinely visible now (not just present-but-hidden), and
+    // shows its real overdue/Failed state, not a suppressed 'none'.
+    const state = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item');
+      return { hidden: item.hidden, urgency: item.dataset.urgency, failed: item.hasAttribute('data-failed') };
+    });
+    expect(state.hidden).toBe(false);
+    expect(state.urgency).toBe('overdue');
+    expect(state.failed).toBe(true);
+
+    const archivedPillActive = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#fstate-archived').classList.contains('active')
+    );
+    expect(archivedPillActive).toBe(true);
+  });
+
   test('when everything visible is quiet, the bell still stays reachable (no numeric badge) so the hidden link isn\'t stranded', async ({ page }) => {
     await page.goto(`/${currentYear}`);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
