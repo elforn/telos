@@ -288,6 +288,28 @@ describe('list-item — triple-tap to complete', () => {
     expect(events[0].composed).toBe(true);
   });
 
+  it('completing via triple tap spawns done-particles, then cleans them all up', () => {
+    vi.useFakeTimers();
+    try {
+      const el = mount();
+      tap(el); tap(el); tap(el); // next === 'done' triggers _celebrate()
+      expect(el.classList.contains('done-celebrate')).toBe(true);
+
+      // Particles spawn staggered over a short window — advance past it.
+      vi.advanceTimersByTime(500);
+      const field = el.shadowRoot.querySelector('.particle-field');
+      expect(field.children.length).toBeGreaterThan(0);
+
+      // Advance well past the longest possible flight duration — each
+      // particle removes itself via its own setTimeout, same reasoning as
+      // goal-item.js's _spawnParticles.
+      vi.advanceTimersByTime(3000);
+      expect(field.children.length).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('a 4th tap right after a completed triple is treated as a fresh single tap', async () => {
     const el = mount();
     const taps = [];

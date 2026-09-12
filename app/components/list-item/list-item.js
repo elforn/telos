@@ -16,6 +16,30 @@ const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
 const SWIPE_DEAD_ZONE = 15;   // px of drag before row starts moving
 const MULTI_TAP_WINDOW = 200; // ms between taps counted toward triple-tap-to-complete
 
+// Done-celebration particles — a handful of big, quiet dots drifting up
+// from the row's left edge when an item is marked done. Same filter-based
+// hue-rotate+brightness technique as goal-item's completion burst (see
+// that file for the full rationale — cheap re-tint of an already-painted
+// dot instead of animating background-color), but every constant here is
+// independently tuned to be far calmer: this is a quiet tick, not a
+// milestone celebration. Fewer, bigger dots reads calmer than a dense
+// spray; origin is a fixed point near the row's start edge rather than
+// spread across (or centred on) the whole row, and the fan is narrow and
+// steeply upward — both deliberately conservative about horizontal travel,
+// having learned from goal-item's own bug that a particle's flight can
+// push the page into horizontal overflow near a viewport edge.
+const DONE_PARTICLE_COUNT_MIN = 3;
+const DONE_PARTICLE_COUNT_MAX = 5;
+const DONE_PARTICLE_BASE_SIZE = 26; // px — bigger than goal-item's 18px
+const DONE_PARTICLE_ORIGIN_INSET = 36; // px from the row's start edge — a fixed left-side origin, not badge-relative
+const DONE_PARTICLE_FLIGHT_SPREAD = 64; // px outward travel — a drift, not a burst
+const DONE_PARTICLE_FAN_DEG = 90; // ± fan around straight-up — wide enough to read as opening outward, not a tight upward jet
+const DONE_PARTICLE_FLY_DUR = 1100; // ms
+const DONE_PARTICLE_HUE_DEG = 70; // deg of hue travel — a gentle shift, not a full-spectrum spin
+const DONE_PARTICLE_SHIFT_DUR = 1400; // ms per hue/brightness cycle — slower than goal-item's, reads as a soft glow rather than a blink
+const DONE_PARTICLE_START_HUE_JITTER = 18; // deg
+const DONE_PARTICLE_SPAWN_STAGGER_MS = 30; // ms between each dot's spawn
+
 class ListItem extends Gestures(AppElement) {
   set item(value) {
     this._item = value;
@@ -310,19 +334,88 @@ class ListItem extends Gestures(AppElement) {
           100% { background: color-mix(in srgb, var(--color-app-accent) 15%, var(--color-surface)); }
         }
 
+        /* Expanding ring pulse, mirroring goal-item's own goal-ring —
+           box-shadow, not outline, so it can grow outward past the row's
+           edge. Lives on .row itself, not :host: .row already sets its own
+           background (done-wash, above) and is the visual "card" the user's
+           eye is on, and — same as goal-item's note on this — an element's
+           own box-shadow is never clipped by that same element's
+           overflow: hidden, so .row's overflow: hidden (for the title/tag
+           text) doesn't cut this off. Sized down from goal-item's 60px
+           final spread to suit list-item's smaller row. */
+        @keyframes done-ring-pulse {
+          0%   { box-shadow: 0 0 0 0   color-mix(in srgb, var(--color-app-accent) 70%, transparent); }
+          20%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-app-accent) 40%, transparent); }
+          100% { box-shadow: 0 0 0 34px transparent; }
+        }
+
         :host(.done-celebrate) {
           outline: 3px solid transparent;
           outline-offset: 1px;
           animation: done-ring 500ms ease-out forwards;
+          /* Every row's .row is already z-index: 1 *and* will-change:
+             transform (row-chrome.js's rowChromeStyles(), shared by every
+             list-item/goal-item whether celebrating or not) — will-change:
+             transform alone creates a stacking context, so every row is
+             already an opaque z-index:1 layer. Matching that value here
+             just ties against every sibling's .row, and ties break by DOM
+             order (later wins): the row below, being later still, always
+             won that tie regardless of this rule. Needs to clear 1, not
+             match it. */
+          z-index: 5;
         }
 
         :host(.done-celebrate) .row {
-          animation: done-wash 500ms ease-out forwards;
+          animation: done-wash 500ms ease-out forwards, done-ring-pulse 700ms ease-out forwards;
+        }
+
+        /* A dedicated container, sibling of .row rather than nested inside
+           it — .row sets its own overflow: hidden, so drifting dots need
+           to live outside that clipping box (:host itself has no overflow
+           set, i.e. the default visible, so no overflow toggle is needed
+           here the way goal-item's :host(.celebrating) needs one). */
+        .particle-field {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 10;
+        }
+
+        .done-particle {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          inline-size: var(--size);
+          block-size: var(--size);
+          border-radius: 50%;
+          background: var(--color-app-accent);
+          animation:
+            done-particle-fly var(--fly-dur) cubic-bezier(.2, .8, .4, 1) forwards,
+            done-particle-shift var(--shift-dur) var(--phase, 0ms) ease-in-out infinite;
+        }
+
+        @keyframes done-particle-fly {
+          0%   { transform: translate(-50%, -50%) translate(0, 0) scale(1); opacity: 0.9; }
+          70%  { opacity: 0.8; }
+          100% { transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) scale(0.5); opacity: 0; }
+        }
+
+        /* Same filter-only technique as goal-item's particle-shift (see
+           that file), but with a far gentler brightness range (0.85–1.25
+           vs. goal-item's 0.1–1.9) and a slower cycle — a soft glow, not a
+           blink. */
+        @keyframes done-particle-shift {
+          0%   { filter: hue-rotate(var(--start-hue)) brightness(1); }
+          25%  { filter: hue-rotate(calc(var(--start-hue) + var(--hue-deg) * 0.35)) brightness(1.25); }
+          50%  { filter: hue-rotate(calc(var(--start-hue) + var(--hue-deg) * 0.6))  brightness(0.85); }
+          75%  { filter: hue-rotate(calc(var(--start-hue) + var(--hue-deg) * 0.85)) brightness(1.25); }
+          100% { filter: hue-rotate(calc(var(--start-hue) + var(--hue-deg))) brightness(1); }
         }
 
         @media (prefers-reduced-motion: reduce) {
           :host(.done-celebrate) { animation: none; outline: none; }
           :host(.done-celebrate) .row { animation: none; }
+          .done-particle { animation: none; opacity: 0; }
         }
 
         /* Toggled externally (list-detail-page.js) after scrollIntoView, when
@@ -357,6 +450,7 @@ class ListItem extends Gestures(AppElement) {
         ${urgencyBadgeMarkup}
         <button type="button" class="badge" id="badge-btn" data-status="open"></button>
       </div>
+      <span class="particle-field" aria-hidden="true"></span>
     `;
   }
 
@@ -371,6 +465,7 @@ class ListItem extends Gestures(AppElement) {
     this._badge = this.shadowRoot.querySelector('.badge');
     this._deleteEl = this.shadowRoot.querySelector('#delete-btn');
     this._colorPanel = this.shadowRoot.querySelector('#color-panel');
+    this._particleField = this.shadowRoot.querySelector('.particle-field');
     this._revealedDir = null;
 
     // Triple-tap toggles done, independent of the status badge's cycle —
@@ -560,6 +655,59 @@ class ListItem extends Gestures(AppElement) {
     void this.offsetWidth;
     this.classList.add('done-celebrate');
     this.addEventListener('animationend', () => this.classList.remove('done-celebrate'), { once: true });
+    this._spawnDoneParticles();
+  }
+
+  // A few big, quiet dots drifting up from a fixed point near the row's
+  // left edge — see the DONE_PARTICLE_* constants up top for why every
+  // value here is tuned much calmer than goal-item's own completion burst.
+  // Cleanup is a setTimeout matched to each particle's own flight duration,
+  // not 'animationend' — see goal-item.js's identical comment on why that
+  // matters under prefers-reduced-motion (this rule sets animation: none,
+  // so 'animationend' would never fire and every burst would leak nodes).
+  _spawnDoneParticles() {
+    if (!this._particleField) return;
+    const r = (a, b) => a + Math.random() * (b - a);
+    const rect = this._row.getBoundingClientRect();
+    const count = Math.floor(r(DONE_PARTICLE_COUNT_MIN, DONE_PARTICLE_COUNT_MAX + 1));
+    // Same horizontal-viewport clamp as goal-item's particles (see that
+    // file's own comment) — a fixed left-side origin on a row that may
+    // itself sit close to the screen edge is at least as exposed to the
+    // "particle pushes the page into horizontal overflow" bug.
+    const halfMaxSize = (DONE_PARTICLE_BASE_SIZE * 1.2) / 2;
+    const minX = halfMaxSize;
+    const maxX = window.innerWidth - halfMaxSize;
+
+    const spawnOne = () => {
+      if (!this._particleField) return; // disconnected mid-burst
+      const el = document.createElement('span');
+      el.className = 'done-particle';
+      const angle = (-90 + r(-DONE_PARTICLE_FAN_DEG, DONE_PARTICLE_FAN_DEG)) * Math.PI / 180;
+      const dist = r(DONE_PARTICLE_FLIGHT_SPREAD * 0.5, DONE_PARTICLE_FLIGHT_SPREAD);
+      const flyDur = DONE_PARTICLE_FLY_DUR * r(0.85, 1.15);
+      const shiftDur = DONE_PARTICLE_SHIFT_DUR * r(0.7, 1.3);
+      const originX = DONE_PARTICLE_ORIGIN_INSET + r(-4, 4);
+      let dx = Math.cos(angle) * dist;
+      const absoluteX = rect.left + originX + dx;
+      if (absoluteX < minX) dx += minX - absoluteX;
+      else if (absoluteX > maxX) dx -= absoluteX - maxX;
+      el.style.setProperty('--dx', `${dx.toFixed(1)}px`);
+      el.style.setProperty('--dy', `${(Math.sin(angle) * dist).toFixed(1)}px`);
+      el.style.setProperty('--size', `${(DONE_PARTICLE_BASE_SIZE * r(0.85, 1.2)).toFixed(1)}px`);
+      el.style.setProperty('--hue-deg', `${(DONE_PARTICLE_HUE_DEG * r(0.7, 1.3)).toFixed(0)}deg`);
+      el.style.setProperty('--start-hue', `${r(-DONE_PARTICLE_START_HUE_JITTER, DONE_PARTICLE_START_HUE_JITTER).toFixed(0)}deg`);
+      el.style.setProperty('--fly-dur', `${flyDur.toFixed(0)}ms`);
+      el.style.setProperty('--shift-dur', `${shiftDur.toFixed(0)}ms`);
+      el.style.setProperty('--phase', `${(-r(0, shiftDur)).toFixed(0)}ms`);
+      el.style.left = `${originX.toFixed(1)}px`;
+      el.style.top = `calc(50% + ${r(-4, 4).toFixed(1)}px)`;
+      this._particleField.appendChild(el);
+      setTimeout(() => el.remove(), flyDur + 50);
+    };
+
+    for (let i = 0; i < count; i++) {
+      setTimeout(spawnOne, i * DONE_PARTICLE_SPAWN_STAGGER_MS);
+    }
   }
 
   _update() {
