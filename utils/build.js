@@ -47,14 +47,15 @@ const swSrc         = readFileSync(join(root, '_lib', 'core', 'sw.js'), 'utf8');
 const tokensContent = readFileSync(join(root, '_lib', 'core', 'styles', 'tokens.css'), 'utf8');
 const manifestSrc   = readFileSync(join(root, 'manifest.json'), 'utf8');
 const indexSrc      = readFileSync(join(root, 'index.html'), 'utf8');
-// app/sw-extensions.js is the app-level extension point for the service
-// worker itself (mirrors utils/extra-assets.js for the asset list) —
-// optional, so a scaffolded app with no need for it builds unchanged.
-// Appended as a plain classic script (see that file's own note on why),
-// after templating, never as part of swSrc's own %%TOKEN%% substitutions.
+
+// app/sw-extensions.js is the app-level SW extension point (mirrors
+// extra-assets.js for the asset list) — optional, no-op when absent.
+// Appended as a plain classic script since dist/sw.js has no `type: module`,
+// so it must be dependency-free plain JS, no import/export.
 const swExtensionsPath = join(root, 'app', 'sw-extensions.js');
 const swExtensions     = existsSync(swExtensionsPath) ? readFileSync(swExtensionsPath, 'utf8') : '';
-const cacheHash        = contentHash(jsContent + tokensContent + manifestSrc + indexSrc + swExtensions);
+
+const cacheHash = contentHash(jsContent + tokensContent + manifestSrc + indexSrc + swExtensions);
 
 // Asset list — bundle + manifest + icons (no _lib/ or app/ module files)
 const iconDir = join(root, 'app', 'icons');
