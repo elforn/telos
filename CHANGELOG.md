@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.20.0] — 2026-09-13
+
+### Added
+- **You can now set a "notify after" hour for the due-date digest notification.** In Settings → Notifications, once notifications are on, pick a time (or "Any time," the previous behaviour) and the daily overdue/today/tomorrow summary won't show before that hour. The app still only checks when it's open or resumed, so this delays the first check of the day rather than promising an exact delivery time.
+
 ## [2.19.0] — 2026-09-13
 
 ### Changed
