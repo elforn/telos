@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.19.0] — 2026-09-13
+
+### Changed
+- **Completing a goal now shows a livelier, more colourful celebration.** The row bursts with a spray of dots that drift outward and gently shift colour as they fade, replacing the previous fixed three-colour confetti.
+- **Marking a list item done has a bit more visual flourish.** A few big, soft dots now drift upward near the left of the row alongside the existing colour flash — calmer and slower than a goal's own celebration.
+- **Dragging a goal's progress bar to 100% is a little more forgiving.** You no longer need to drag all the way to the bar's very edge to register completion, and a fast flick reaches it sooner than a slow, careful drag.
+
 ## [2.18.0] — 2026-09-12
 
 ### Added
