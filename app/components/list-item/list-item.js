@@ -7,6 +7,7 @@ import { urgencyOf } from '../../utils/urgency.js';
 import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 import { rowChromeStyles } from '../../utils/row-chrome.js';
+import { createTapCounter } from '../../../_lib/core/multi-tap.js';
 
 const COLOR_WIDTH = 48;   // left-side colour panel, revealed by swiping right — mirrors lists-page-item
 const DELETE_WIDTH = 60;   // icon-only delete button
@@ -372,6 +373,32 @@ class ListItem extends Gestures(AppElement) {
     this._colorPanel = this.shadowRoot.querySelector('#color-panel');
     this._revealedDir = null;
 
+    // Triple-tap toggles done, independent of the status badge's cycle —
+    // three taps in quick succession is deliberate (vs. two, easy to trigger
+    // by accident) and mirrors the badge's own done-celebration. A plain
+    // single tap still opens the item; exactly two taps is a deliberate
+    // no-op (an accidental double-tap aiming for triple shouldn't misfire
+    // open). See _lib/core/multi-tap.js for the counting/debounce mechanism.
+    this._tapCounter = createTapCounter({
+      windowMs: MULTI_TAP_WINDOW,
+      max: 3,
+      onResolve: count => {
+        if (count === 3) {
+          const status = this._item?.status ?? 'open';
+          const next = status === 'done' ? 'open' : 'done';
+          this.dispatchEvent(new CustomEvent('item-status-cycle', {
+            bubbles: true, composed: true, detail: { item: this._item, next },
+          }));
+          if (next === 'done') this._celebrate();
+        } else if (count === 1) {
+          this.dispatchEvent(new CustomEvent('item-tap', {
+            bubbles: true, composed: true, detail: { item: this._item },
+          }));
+        }
+        // count === 2: deliberate no-op
+      },
+    });
+
     this._update();
 
     this._stopPointerDown = e => e.stopPropagation();
@@ -443,7 +470,7 @@ class ListItem extends Gestures(AppElement) {
   }
 
   unsubscribe() {
-    clearTimeout(this._tapTimer);
+    this._tapCounter?.cancel();
     this._deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
     this._deleteEl?.removeEventListener('pointerup', this._onDeletePointerUp);
     this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
@@ -464,33 +491,7 @@ class ListItem extends Gestures(AppElement) {
       }));
       return;
     }
-    // Triple-tap toggles done, independent of the status badge's cycle —
-    // three taps in quick succession is deliberate (vs. two, easy to trigger
-    // by accident) and mirrors the badge's own done-celebration. A plain
-    // single tap still opens the item, but has to wait out the window first
-    // in case more taps follow (see MULTI_TAP_WINDOW); exactly two taps is a
-    // deliberate no-op, not a fallback to opening — an accidental double-tap
-    // (aiming for triple but missing) should do nothing, not misfire open.
-    this._tapCount = (this._tapCount ?? 0) + 1;
-    clearTimeout(this._tapTimer);
-    if (this._tapCount >= 3) {
-      this._tapCount = 0;
-      const status = this._item?.status ?? 'open';
-      const next = status === 'done' ? 'open' : 'done';
-      this.dispatchEvent(new CustomEvent('item-status-cycle', {
-        bubbles: true, composed: true, detail: { item: this._item, next },
-      }));
-      if (next === 'done') this._celebrate();
-      return;
-    }
-    const count = this._tapCount;
-    this._tapTimer = setTimeout(() => {
-      this._tapCount = 0;
-      if (count !== 1) return;
-      this.dispatchEvent(new CustomEvent('item-tap', {
-        bubbles: true, composed: true, detail: { item: this._item },
-      }));
-    }, MULTI_TAP_WINDOW);
+    this._tapCounter.register();
   }
 
   onLongPress() {
