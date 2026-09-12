@@ -23,7 +23,7 @@
 import { AppElement } from '../../../_lib/core/app-element.js';
 import { getState } from '../../../_lib/core/store/store.js';
 import { todayISO } from '../../utils/today-iso.js';
-import { notificationsEnabled } from '../../utils/notification-prefs.js';
+import { notificationsEnabled, notifyAfterHour } from '../../utils/notification-prefs.js';
 import { lastNotifiedDate, markNotifiedToday } from '../../utils/notification-dedup.js';
 import { collectUpcoming, collectHiddenUrgent } from '../../utils/upcoming.js';
 import { buildDigest } from '../../utils/notification-digest.js';
@@ -56,6 +56,15 @@ class DueDateNotifier extends AppElement {
     if (this._checking) return;
     this._checking = true;
     try {
+      // Settings-configurable "don't notify before this hour" gate (see
+      // notification-prefs.js) — checked fresh on every call, same reasoning
+      // as the enabled/permission check above: it needs to take effect on
+      // the very next resume, not just at mount. A day that's gated out
+      // isn't marked notified, so the next resume after the hour still
+      // fires normally.
+      const hour = notifyAfterHour();
+      if (hour !== null && new Date().getHours() < hour) return;
+
       const today = todayISO();
       const last = await lastNotifiedDate();
       if (last === today) return; // already notified today — foreground or background, doesn't matter which

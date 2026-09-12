@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { boot, setState, reset } from '../../_lib/core/store/store.js';
 import '../../app/strings.js';
 import '../../app/components/due-date-notifier/due-date-notifier.js';
-import { setNotificationsEnabled } from '../../app/utils/notification-prefs.js';
+import { setNotificationsEnabled, setNotifyAfterHour } from '../../app/utils/notification-prefs.js';
 import { lastNotifiedDate } from '../../app/utils/notification-dedup.js';
 
 let dbSeq = 0;
@@ -39,6 +39,7 @@ afterEach(() => {
   localStorage.clear();
   reset();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
   delete navigator.serviceWorker;
 });
 
@@ -145,6 +146,48 @@ describe('due-date-notifier', () => {
     Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
 
+    await vi.waitFor(() => expect(showNotification).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not fire before the configured "notify after" hour, but fires on the next resume once past it', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 0, 15, 8, 0, 0)); // 08:00 local
+    await boot({
+      dbName: freshName(),
+      initialState: {
+        goals: { '2026': { capstone: [{ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 }, dueDate: '2026-01-14' }], milestones: [], wow: [] } },
+        lists: [],
+      },
+    });
+    setNotificationsEnabled(true);
+    setNotifyAfterHour(9);
+    const showNotification = stubServiceWorker();
+    stubNotification('granted');
+    mount();
+    await new Promise(r => setTimeout(r, 50));
+    expect(showNotification).not.toHaveBeenCalled();
+    expect(await lastNotifiedDate()).toBeNull(); // gated out, not marked notified
+
+    vi.setSystemTime(new Date(2026, 0, 15, 9, 0, 0)); // 09:00, same calendar day
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => expect(showNotification).toHaveBeenCalledTimes(1));
+  });
+
+  it('fires regardless of hour when no "notify after" restriction is configured (the default)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 0, 15, 0, 30, 0)); // 00:30 local
+    await boot({
+      dbName: freshName(),
+      initialState: {
+        goals: { '2026': { capstone: [{ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 }, dueDate: '2026-01-14' }], milestones: [], wow: [] } },
+        lists: [],
+      },
+    });
+    setNotificationsEnabled(true);
+    const showNotification = stubServiceWorker();
+    stubNotification('granted');
+    mount();
     await vi.waitFor(() => expect(showNotification).toHaveBeenCalledTimes(1));
   });
 

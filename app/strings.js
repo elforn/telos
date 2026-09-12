@@ -444,6 +444,8 @@ defineStrings({
   'settings.notifications-on':       'On',
   'settings.notifications-off':      'Off',
   'settings.notifications-denied':   'Notifications are blocked for this site — enable them in your browser settings to turn this on.',
+  'settings.notify-after':           'Notify after',
+  'settings.notify-anytime':         'Any time',
 
   'notifications.digest-title':      '{count} items need attention',
   'notifications.digest-overdue':    'Overdue ({count})',

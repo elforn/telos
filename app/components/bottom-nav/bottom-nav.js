@@ -15,7 +15,7 @@ import { percentValue } from '../../utils/tracking.js';
 import { repairInstallation } from '../../../_lib/core/sw-manager/sw-repair.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
 import { backupBeforeRepair, LAST_EXPORT_KEY } from '../../utils/backup-before-repair.js';
-import { notificationsEnabled, setNotificationsEnabled } from '../../utils/notification-prefs.js';
+import { notificationsEnabled, setNotificationsEnabled, notifyAfterHour, setNotifyAfterHour } from '../../utils/notification-prefs.js';
 import { registerPeriodicSync, unregisterPeriodicSync } from '../../utils/periodic-sync.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
@@ -68,6 +68,10 @@ function _themeName(theme) {
 }
 const LOCALE_LABELS = { en: 'English', fr: 'Français', ca: 'Català' };
 function _localeName(locale) { return LOCALE_LABELS[locale] ?? locale; }
+
+// Plain 24-hour "HH:00" labels — universal digits, no AM/PM translation to maintain per locale.
+const NOTIFY_HOURS = Array.from({ length: 24 }, (_, h) => h);
+function _formatHour(h) { return `${String(h).padStart(2, '0')}:00`; }
 
 const EXPORT_REMINDER_KEY = 'telos:exportReminderEnabled';
 const REMINDER_DAYS       = 30;
@@ -326,6 +330,38 @@ class BottomNav extends AppElement {
           outline-offset: 2px;
         }
 
+        .hour-picker {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          margin-block-start: var(--space-3);
+        }
+
+        .hour-picker[hidden] { display: none; }
+
+        .hour-picker label {
+          font-size: var(--font-size-body);
+          color: var(--color-text-primary);
+        }
+
+        .settings-select {
+          flex: 1;
+          min-block-size: var(--touch-target);
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding: var(--space-2) var(--space-3);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          text-align: center;
+          text-align-last: center;
+          outline: none;
+          cursor: pointer;
+        }
+
+        .settings-select:focus { border-color: var(--color-accent); }
+
         .actions-group {
           display: flex;
           flex-direction: column;
@@ -534,6 +570,13 @@ class BottomNav extends AppElement {
             <button class="option-pill" data-notifications="on">${t('settings.notifications-on')}</button>
             <button class="option-pill" data-notifications="off">${t('settings.notifications-off')}</button>
           </div>
+          <div class="hour-picker" id="notify-hour-row" hidden>
+            <label for="notify-hour-select">${t('settings.notify-after')}</label>
+            <select id="notify-hour-select" class="settings-select">
+              <option value="">${t('settings.notify-anytime')}</option>
+              ${NOTIFY_HOURS.map(h => `<option value="${h}">${_formatHour(h)}</option>`).join('')}
+            </select>
+          </div>
         </div>
 
         <div class="section">
@@ -670,6 +713,13 @@ class BottomNav extends AppElement {
       this._updateSettingsPills();
     };
     this.shadowRoot.querySelector('#notifications-group').addEventListener('click', this._onNotificationsGroup);
+
+    this._notifyHourSelect = this.shadowRoot.querySelector('#notify-hour-select');
+    this._onNotifyHourChange = e => {
+      const raw = e.target.value;
+      setNotifyAfterHour(raw === '' ? null : Number(raw));
+    };
+    this._notifyHourSelect.addEventListener('change', this._onNotifyHourChange);
   }
 
   _subscribeNav() {
@@ -1360,6 +1410,7 @@ class BottomNav extends AppElement {
     this.shadowRoot?.querySelector('#repair-btn')?.removeEventListener('click', this._onRepairBtn);
     this.shadowRoot?.querySelector('#reminder-group')?.removeEventListener('click', this._onReminderGroup);
     this.shadowRoot?.querySelector('#notifications-group')?.removeEventListener('click', this._onNotificationsGroup);
+    this._notifyHourSelect?.removeEventListener('change', this._onNotifyHourChange);
     this._ro?.disconnect();
     document.documentElement.style.removeProperty('--bottom-nav-height');
   }
@@ -1410,6 +1461,10 @@ class BottomNav extends AppElement {
       btn.classList.toggle('active', active);
       btn.setAttribute('aria-pressed', String(active));
     });
+    // Meaningless while notifications are off — hidden rather than just disabled.
+    this.shadowRoot.querySelector('#notify-hour-row').hidden = !notifsOn;
+    const hour = notifyAfterHour();
+    this._notifyHourSelect.value = hour === null ? '' : String(hour);
   }
 }
 

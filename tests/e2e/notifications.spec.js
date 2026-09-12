@@ -56,4 +56,41 @@ test.describe('Notifications — settings toggle', () => {
     expect(await getStoredPref(page)).not.toBe('true');
     expect(await isPillActive(page, 'off')).toBe(true);
   });
+
+  // The "notify after" hour row is meaningful only once notifications are
+  // actually on, which (see the module note above) can't be reached in
+  // headless E2E at all — so this can't be a real interaction test. What it
+  // *can* verify for real, and what a happy-dom unit test structurally
+  // cannot (see CLAUDE.md's own note on [hidden] vs. author `display` CSS),
+  // is that the row's [hidden] attribute actually renders as
+  // `display: none` here, not just that the DOM property is set — the
+  // `.hour-picker` rule sets `display: flex` unconditionally, which is
+  // exactly the class of bug that silently un-hides an element despite
+  // `hidden` being true.
+  test('the notify-after-hour row is really display:none while notifications are off, not just [hidden] in the DOM', async ({ page }) => {
+    const display = await page.evaluate(() =>
+      getComputedStyle(
+        document.querySelector('bottom-nav').shadowRoot.querySelector('#notify-hour-row')
+      ).display
+    );
+    expect(display).toBe('none');
+  });
+
+  // The row itself only ever renders visible when notifications are actually
+  // granted, which headless Chromium can't reach here (see the module note
+  // above) — but the select's stored *value* is still updated on every
+  // settings-open regardless of the row's own hidden state, so a real reload
+  // still genuinely exercises "does the preference survive a page reload,"
+  // just via the hidden control rather than a visibly-open one.
+  test('a stored "notify after" hour survives a real reload', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('telos:notifyAfterHour', '9'));
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    await openSettings(page);
+    const value = await page.evaluate(() =>
+      document.querySelector('bottom-nav').shadowRoot.querySelector('#notify-hour-select').value
+    );
+    expect(value).toBe('9');
+  });
 });

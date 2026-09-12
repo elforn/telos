@@ -440,6 +440,8 @@ defineStrings({
   'settings.notifications-on':     'Activées',
   'settings.notifications-off':    'Désactivées',
   'settings.notifications-denied': 'Les notifications sont bloquées pour ce site — activez-les dans les réglages de votre navigateur pour les activer ici.',
+  'settings.notify-after':      'Notifier après',
+  'settings.notify-anytime':    'À tout moment',
 
   'notifications.digest-title':    '{count} éléments nécessitent votre attention',
   'notifications.digest-overdue':  'En retard ({count})',

@@ -538,6 +538,60 @@ describe('bottom-nav — notifications: pill group', () => {
   });
 });
 
+describe('bottom-nav — notify-after-hour picker', () => {
+  const HOUR_KEY = 'telos:notifyAfterHour';
+  beforeEach(() => { localStorage.clear(); _resetToast(); });
+  afterEach(() => { localStorage.clear(); vi.unstubAllGlobals(); });
+
+  it('is hidden when notifications are off', () => {
+    vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() });
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    expect(el.shadowRoot.querySelector('#notify-hour-row').hidden).toBe(true);
+  });
+
+  it('is shown, defaulting to "Any time", once notifications are actually on', () => {
+    localStorage.setItem(NOTIFICATIONS_KEY, 'true');
+    vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() });
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    expect(el.shadowRoot.querySelector('#notify-hour-row').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#notify-hour-select').value).toBe('');
+  });
+
+  it('reflects a previously stored hour when settings reopen', () => {
+    localStorage.setItem(NOTIFICATIONS_KEY, 'true');
+    localStorage.setItem(HOUR_KEY, '9');
+    vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() });
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    expect(el.shadowRoot.querySelector('#notify-hour-select').value).toBe('9');
+  });
+
+  it('picking an hour persists it to localStorage', () => {
+    localStorage.setItem(NOTIFICATIONS_KEY, 'true');
+    vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() });
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const select = el.shadowRoot.querySelector('#notify-hour-select');
+    select.value = '9';
+    select.dispatchEvent(new Event('change'));
+    expect(localStorage.getItem(HOUR_KEY)).toBe('9');
+  });
+
+  it('picking "Any time" clears the stored hour', () => {
+    localStorage.setItem(NOTIFICATIONS_KEY, 'true');
+    localStorage.setItem(HOUR_KEY, '9');
+    vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() });
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    const select = el.shadowRoot.querySelector('#notify-hour-select');
+    select.value = '';
+    select.dispatchEvent(new Event('change'));
+    expect(localStorage.getItem(HOUR_KEY)).toBeNull();
+  });
+});
+
 // ── Repair (manual, via Settings) ───────────────────────────────────────────
 // Loop-detected auto-repair lives entirely in <sw-manager> now (_lib); this button
 // is the only repair path bottom-nav still owns.
