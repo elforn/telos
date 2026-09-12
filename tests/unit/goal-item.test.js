@@ -390,7 +390,79 @@ describe('goal-item — hold drag', () => {
     el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 100, clientY: 20, pointerId: 1, button: 0 }));
 
     expect(events).toHaveLength(1);
-    expect(events[0].detail.percentage).toBe(50);
+    // Midpoint of a 200px bar reads slightly past 50 — DRAG_100_INSET (7px)
+    // is shaved off the drag denominator so 100% is reachable without
+    // dragging into the bar's very last few px (see the test below).
+    expect(events[0].detail.percentage).toBe(52);
+  });
+
+  it('reaches 100% a few px before the bar\'s right edge (DRAG_100_INSET)', async () => {
+    const el = mount({ id: 'g1', title: 'Run', tracking: { type: 'percentage', value: 0 } });
+    el.shadowRoot.querySelector('.bar').getBoundingClientRect = () => ({ left: 0, width: 200, top: 0, height: 40 });
+
+    const events = [];
+    el.addEventListener('goal-progress', e => events.push(e));
+
+    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
+    await vi.waitFor(() => expect(el.classList.contains('hold-active')).toBe(true), { timeout: 600 });
+    // 7px short of the bar's right edge (200px wide) — should already read 100%.
+    el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 193, clientY: 20, pointerId: 1 }));
+    el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 193, clientY: 20, pointerId: 1, button: 0 }));
+
+    expect(events[0].detail.percentage).toBe(100);
+  });
+
+  it('a fast flick reaches 100% farther from the edge than a slow drag would', () => {
+    vi.useFakeTimers();
+    try {
+      const el = mount({ id: 'g1', title: 'Run', tracking: { type: 'percentage', value: 0 } });
+      el.shadowRoot.querySelector('.bar').getBoundingClientRect = () => ({ left: 0, width: 200, top: 0, height: 40 });
+
+      const events = [];
+      el.addEventListener('goal-progress', e => events.push(e));
+
+      el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
+      vi.advanceTimersByTime(500); // clears the hold-drag long-press delay
+      expect(el.classList.contains('hold-active')).toBe(true);
+
+      // Two big jumps 5ms apart (16px/ms, well past DRAG_VELOCITY_FOR_MAX_INSET)
+      // landing 20px short of the bar's true right edge — farther than the 7px
+      // static DRAG_100_INSET alone would forgive.
+      el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 100, clientY: 20, pointerId: 1 }));
+      vi.advanceTimersByTime(5);
+      el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 180, clientY: 20, pointerId: 1 }));
+      el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 180, clientY: 20, pointerId: 1, button: 0 }));
+
+      expect(events[events.length - 1].detail.percentage).toBe(100);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a slow drag to the same point does not reach 100% — only the static DRAG_100_INSET applies', () => {
+    vi.useFakeTimers();
+    try {
+      const el = mount({ id: 'g1', title: 'Run', tracking: { type: 'percentage', value: 0 } });
+      el.shadowRoot.querySelector('.bar').getBoundingClientRect = () => ({ left: 0, width: 200, top: 0, height: 40 });
+
+      const events = [];
+      el.addEventListener('goal-progress', e => events.push(e));
+
+      el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
+      vi.advanceTimersByTime(500);
+
+      // Same 20px-short-of-the-edge endpoint as the fast-flick test above, but
+      // 200ms apart (0.4px/ms, smoothed against the 0 starting velocity down
+      // to 0.2px/ms) — nowhere near fast enough to earn much extra inset.
+      el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 100, clientY: 20, pointerId: 1 }));
+      vi.advanceTimersByTime(200);
+      el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 180, clientY: 20, pointerId: 1 }));
+      el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 180, clientY: 20, pointerId: 1, button: 0 }));
+
+      expect(events[events.length - 1].detail.percentage).toBe(95);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('a decreasing goal ignores drag entirely — hold toggles instead of scrubbing', async () => {
@@ -1042,5 +1114,28 @@ describe('goal-item — frequency: log tick + celebration', () => {
     expect(el.classList.contains('celebrating')).toBe(false);
     el.goal = weeklyGoal([...closed, isoDaysFromNow(0)], 1);
     expect(el.classList.contains('celebrating')).toBe(true);
+  });
+
+  it('celebration spawns particles into .particle-field, then cleans them all up', () => {
+    vi.useFakeTimers();
+    try {
+      const closed = [1, 2, 3, 4, 5].map(w => isoDaysFromNow(-w * 7));
+      const el = mount(weeklyGoal(closed, 1));
+      el.goal = weeklyGoal([...closed, isoDaysFromNow(0)], 1);
+
+      // Particles spawn staggered over a short window — advance past it.
+      vi.advanceTimersByTime(1000);
+      const field = el.shadowRoot.querySelector('.particle-field');
+      expect(field.children.length).toBeGreaterThan(0);
+
+      // Advance well past the longest possible flight duration — each
+      // particle removes itself via its own setTimeout (see
+      // _spawnParticles's comment on why that's used instead of
+      // 'animationend').
+      vi.advanceTimersByTime(5000);
+      expect(field.children.length).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

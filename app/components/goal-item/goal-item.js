@@ -18,6 +18,9 @@ const COLOR_WIDTH = 48;    // left-side colour panel, revealed by swiping right 
 const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
 const SWIPE_DEAD_ZONE = 15;   // px of drag before bar starts moving
+const DRAG_100_INSET = 7;         // px shaved off the drag-to-set-% denominator so the last few px of the bar aren't needed to reach 100 — the fill/UI itself is untouched, only how far a drag has to travel
+const DRAG_100_INSET_MAX = 28;    // px — the inset grows toward this ceiling the faster the drag is moving, so a fast flick to the end reaches 100 sooner than a slow, deliberate drag would
+const DRAG_VELOCITY_FOR_MAX_INSET = 1.2; // px/ms — drag speed at/above which the full extra inset applies; roughly a brisk flick
 
 // Frequency "today" token geometry — a 40px tap-target box (== --touch-target,
 // unchanged, so alignment across goal types stays exact) holding a 27px dot
@@ -29,6 +32,33 @@ const TODAY_BOX = 40;
 const TODAY_RING_SIZE = 31;   // the <rect>'s width/height, inset within TODAY_BOX — same dot+4 gap as before, just at the smaller scale
 const TODAY_RING_INSET = (TODAY_BOX - TODAY_RING_SIZE) / 2;
 const TODAY_RING_RX = { weekly: TODAY_RING_SIZE / 2, monthly: 7 }; // monthly's corner radius scaled down with it (was 8 at the old 34px ring)
+
+// Completion-burst particles — replaces the old fixed 3-tone box-shadow
+// confetti (burst-1/burst-2) with real DOM dots that shift colour via
+// filter: hue-rotate() instead of animating background-color, so the
+// browser re-tints already-painted pixels each frame rather than
+// repainting (see joshwcomeau.com/animation/color-shifting). Values below
+// came out of an animation-lab prototyping session, tuned by eye.
+const PARTICLE_COUNT = 36;
+const PARTICLE_BASE_SIZE = 18; // px, jittered ±25% per particle
+const PARTICLE_ORIGIN_SPREAD_RATIO = 0.85; // fraction of the bar's rendered width particles spawn across, not a fixed px amount, so it scales with the row
+const PARTICLE_FLIGHT_SPREAD = 130; // px outward travel, jittered per particle
+const PARTICLE_FAN_DEG = 165; // ± fan around straight-up for each particle's flight angle
+const PARTICLE_FLY_DUR = 2400; // ms, jittered ±15% per particle — also sets how long :host must stay overflow:visible
+const PARTICLE_HUE_DEG = 120; // deg the hue-rotate travels over one shift cycle, jittered per particle
+const PARTICLE_SHIFT_DUR = 800; // ms per hue/brightness cycle, jittered per particle
+const PARTICLE_START_HUE_JITTER = 28; // deg — per-particle starting-hue offset so the burst isn't one flat colour
+// Spawned one at a time, staggered, rather than all 36 in a single tick —
+// spawning them together meant they also mostly *finished* (and got
+// removed) together, since PARTICLE_FLY_DUR only jitters ±15%: a sustained
+// peak of 36 simultaneous filter-animated DOM nodes for ~2.4s, then a
+// synchronized pile of removals right at the tail end. That pattern was
+// confirmed (on real Android Chrome, not reproducible headless) to trigger
+// a GPU/compositor hiccup visible as the fixed bottom-nav sliding out and
+// back. Staggering spreads both the peak concurrent count and the
+// tail-end removal burst, at 12ms/particle it's still well under human
+// perception of sequencing (reads as one eruption, not a trickle).
+const PARTICLE_SPAWN_STAGGER_MS = 12;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -683,134 +713,66 @@ class GoalItem extends Gestures(AppElement) {
         :host(.celebrating) {
           overflow: visible;
           animation: goal-ring 700ms ease-out forwards;
+          /* Every row's .bar is already z-index: 1 *and* will-change:
+             transform (row-chrome.js's rowChromeStyles(), shared by every
+             goal-item/list-item whether celebrating or not) — will-change:
+             transform alone creates a stacking context, so every row is
+             already an opaque z-index:1 layer. Setting :host(.celebrating)
+             to that same value ties against every sibling's .bar, and ties
+             break by DOM order (later wins) — that's exactly the asymmetry
+             this was chasing: the celebrating row (later than the row
+             above) won there, but the row below (later still) won against
+             it. Needs to clear 1, not match it. */
+          z-index: 5;
         }
 
-        /* ── Particle bursts ─────────────────────────────────────────────────── */
-
-        :host(.celebrating)::before,
-        :host(.celebrating)::after {
-          content: '';
+        /* ── Particle burst ──────────────────────────────────────────────────
+           A dedicated container, not :host's own pseudo-elements — real DOM
+           particles need real child nodes, which pseudo-elements can't hold.
+           It's a direct child of :host (a sibling of .bar), not nested
+           inside .bar, because .bar sets its own overflow: hidden — bursting
+           particles need to escape :host's box instead (see
+           :host(.celebrating)'s overflow: visible below), same reason the
+           old ::before/::after bursts also lived on :host directly. */
+        .particle-field {
           position: absolute;
-          width: 0;
-          height: 0;
-          top: 50%;
-          left: 50%;
+          inset: 0;
           pointer-events: none;
           z-index: 10;
         }
 
-        :host(.celebrating)::before {
-          animation: burst-1 1500ms ease-out forwards;
-          transform: rotate(var(--b1-rot, 0deg)) scale(var(--b-scale, 1));
-          border-radius: var(--b1-radius, 50%);
+        .particle {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          inline-size: var(--size);
+          block-size: var(--size);
+          border-radius: 50%;
+          background: var(--color-accent);
+          animation:
+            particle-fly var(--fly-dur) cubic-bezier(.15, .85, .4, 1) forwards,
+            particle-shift var(--shift-dur) var(--phase, 0ms) ease-in-out infinite;
         }
 
-        :host(.celebrating)::after {
-          animation: burst-2 1500ms var(--b2-delay, 120ms) ease-out forwards;
-          transform: rotate(var(--b2-rot, 0deg)) scale(var(--b-scale, 1));
-          border-radius: var(--b2-radius, 50%);
+        @keyframes particle-fly {
+          0%   { transform: translate(-50%, -50%) translate(0, 0) scale(1); opacity: 1; }
+          72%  { opacity: 1; }
+          100% { transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) scale(0.35); opacity: 0; }
         }
 
-        @keyframes burst-1 {
-          0% {
-            opacity: 1;
-            box-shadow:
-              -175px 0px 0 5px #FFFFFF,
-              -142px 0px 0 5px var(--color-accent),
-              -110px 0px 0 5px var(--color-accent-dark),
-               -77px 0px 0 5px #FFFFFF,
-               -44px 0px 0 5px var(--color-accent),
-               -11px 0px 0 5px var(--color-accent-dark),
-                21px 0px 0 5px #FFFFFF,
-                54px 0px 0 5px var(--color-accent),
-                87px 0px 0 5px var(--color-accent-dark),
-               120px 0px 0 5px #FFFFFF,
-               152px 0px 0 5px var(--color-accent),
-               185px 0px 0 5px var(--color-accent-dark);
-          }
-          60% {
-            opacity: 0.85;
-            box-shadow:
-              -175px -50px 0 4px #FFFFFF,
-              -142px -68px 0 4px var(--color-accent),
-              -110px -57px 0 4px var(--color-accent-dark),
-               -77px -75px 0 4px #FFFFFF,
-               -44px -63px 0 4px var(--color-accent),
-               -11px -51px 0 4px var(--color-accent-dark),
-                21px -70px 0 4px #FFFFFF,
-                54px -58px 0 4px var(--color-accent),
-                87px -76px 0 4px var(--color-accent-dark),
-               120px -64px 0 4px #FFFFFF,
-               152px -53px 0 4px var(--color-accent),
-               185px -71px 0 4px var(--color-accent-dark);
-          }
-          100% {
-            opacity: 0;
-            box-shadow:
-              -175px  -78px 0 2px #FFFFFF,
-              -142px -102px 0 2px var(--color-accent),
-              -110px  -87px 0 2px var(--color-accent-dark),
-               -77px -111px 0 2px #FFFFFF,
-               -44px  -95px 0 2px var(--color-accent),
-               -11px  -80px 0 2px var(--color-accent-dark),
-                21px -104px 0 2px #FFFFFF,
-                54px  -88px 0 2px var(--color-accent),
-                87px -113px 0 2px var(--color-accent-dark),
-               120px  -97px 0 2px #FFFFFF,
-               152px  -81px 0 2px var(--color-accent),
-               185px -106px 0 2px var(--color-accent-dark);
-          }
-        }
-
-        @keyframes burst-2 {
-          0% {
-            opacity: 1;
-            box-shadow:
-              -155px 0px 0 5px var(--color-accent),
-              -126px 0px 0 5px #FFFFFF,
-               -97px 0px 0 5px var(--color-accent-dark),
-               -68px 0px 0 5px var(--color-accent),
-               -39px 0px 0 5px #FFFFFF,
-               -10px 0px 0 5px var(--color-accent-dark),
-                20px 0px 0 5px var(--color-accent),
-                49px 0px 0 5px #FFFFFF,
-                78px 0px 0 5px var(--color-accent-dark),
-               107px 0px 0 5px var(--color-accent),
-               136px 0px 0 5px #FFFFFF,
-               165px 0px 0 5px var(--color-accent-dark);
-          }
-          60% {
-            opacity: 0.85;
-            box-shadow:
-              -155px -57px 0 4px var(--color-accent),
-              -126px -75px 0 4px #FFFFFF,
-               -97px -63px 0 4px var(--color-accent-dark),
-               -68px -51px 0 4px var(--color-accent),
-               -39px -70px 0 4px #FFFFFF,
-               -10px -58px 0 4px var(--color-accent-dark),
-                20px -76px 0 4px var(--color-accent),
-                49px -64px 0 4px #FFFFFF,
-                78px -53px 0 4px var(--color-accent-dark),
-               107px -71px 0 4px var(--color-accent),
-               136px -59px 0 4px #FFFFFF,
-               165px -77px 0 4px var(--color-accent-dark);
-          }
-          100% {
-            opacity: 0;
-            box-shadow:
-              -155px  -87px 0 2px var(--color-accent),
-              -126px -111px 0 2px #FFFFFF,
-               -97px  -95px 0 2px var(--color-accent-dark),
-               -68px  -80px 0 2px var(--color-accent),
-               -39px -104px 0 2px #FFFFFF,
-               -10px  -88px 0 2px var(--color-accent-dark),
-                20px -113px 0 2px var(--color-accent),
-                49px  -97px 0 2px #FFFFFF,
-                78px  -81px 0 2px var(--color-accent-dark),
-               107px -106px 0 2px var(--color-accent),
-               136px  -90px 0 2px #FFFFFF,
-               165px -115px 0 2px var(--color-accent-dark);
-          }
+        /* filter-only colour animation: hue-rotate + brightness on the same
+           property so the browser re-tints the one painted dot each frame
+           instead of repainting a changed background-color. The brightness
+           wobble is what reads as a "blink" — deliberately not layered as a
+           separate opacity animation, since opacity is already owned by
+           particle-fly's fade-out above and a second animation on the same
+           property would just override it instead of combining. */
+        @keyframes particle-shift {
+          0%   { filter: hue-rotate(var(--start-hue)) brightness(1); }
+          25%  { filter: hue-rotate(calc(var(--start-hue) + var(--hue-deg) * 0.35)) brightness(1.75); }
+          50%  { filter: hue-rotate(calc(var(--start-hue) + var(--hue-deg) * 0.6))  brightness(0.25); }
+          75%  { filter: hue-rotate(calc(var(--start-hue) + var(--hue-deg) * 0.85)) brightness(1.75); }
+          100% { filter: hue-rotate(calc(var(--start-hue) + var(--hue-deg))) brightness(1); }
         }
 
         @keyframes peek-hint {
@@ -838,8 +800,7 @@ class GoalItem extends Gestures(AppElement) {
         @media (prefers-reduced-motion: reduce) {
           .fill.celebrate { animation: none; }
           :host(.celebrating) { animation: none; }
-          :host(.celebrating)::before { animation: none; }
-          :host(.celebrating)::after  { animation: none; }
+          .particle { animation: none; opacity: 0; }
           :host(.peek-hint) .bar { animation: none; }
           :host(.pop-confirm) { animation: none; }
         }
@@ -876,6 +837,7 @@ class GoalItem extends Gestures(AppElement) {
           </span>
         </span>
       </div>
+      <span class="particle-field" aria-hidden="true"></span>
     `;
   }
 
@@ -893,6 +855,7 @@ class GoalItem extends Gestures(AppElement) {
     this._freqTargetNum = this._freqToday.querySelector('.freq-target-num');
     this._freqRing = this.shadowRoot.querySelector('.freq-ring .progress');
     this._colorPanel = this.shadowRoot.querySelector('#color-panel');
+    this._particleField = this.shadowRoot.querySelector('.particle-field');
     this._revealedDir = null;
     this._wasLoggedToday = undefined; // undefined (not false) so the first _update() never ticks — mirrors _celebrate()'s prevPct guard below
 
@@ -1013,6 +976,12 @@ class GoalItem extends Gestures(AppElement) {
     this.classList.add('hold-active');
     this._bar.style.transition = 'none';
     this._setDragMode(true);
+    // Reset per-drag velocity tracking (see onHoldDrag below) — holddrag
+    // events carry no velocity of their own (only holdswipeend does), so
+    // it's tracked here across consecutive onHoldDrag calls.
+    this._dragLastX = null;
+    this._dragLastT = null;
+    this._dragVelocity = 0;
   }
 
   onHoldDragKey(dir) {
@@ -1026,7 +995,22 @@ class GoalItem extends Gestures(AppElement) {
     if (isEntryBased(this._goal)) return;
     const rect = this._bar.getBoundingClientRect();
     if (!rect.width) return;
-    const pct = Math.round(Math.max(0, Math.min(100, (e.endX - rect.left) / rect.width * 100)));
+
+    const now = Date.now();
+    if (this._dragLastX !== null) {
+      const dt = now - this._dragLastT;
+      if (dt > 0) {
+        const instVelocity = Math.abs(e.endX - this._dragLastX) / dt;
+        this._dragVelocity = this._dragVelocity * 0.5 + instVelocity * 0.5; // smoothed, so one jittery sample can't spike the inset
+      }
+    }
+    this._dragLastX = e.endX;
+    this._dragLastT = now;
+
+    const velocityFactor = Math.min(1, this._dragVelocity / DRAG_VELOCITY_FOR_MAX_INSET);
+    const inset = DRAG_100_INSET + (DRAG_100_INSET_MAX - DRAG_100_INSET) * velocityFactor;
+    const dragWidth = Math.max(1, rect.width - inset);
+    const pct = Math.round(Math.max(0, Math.min(100, (e.endX - rect.left) / dragWidth * 100)));
     this._setPct(pct);
   }
 
@@ -1144,19 +1128,78 @@ class GoalItem extends Gestures(AppElement) {
   _celebrate() {
     this._fill.classList.add('celebrate');
     this._fill.addEventListener('animationend', () => this._fill.classList.remove('celebrate'), { once: true });
-    const r = (a, b) => +(a + Math.random() * (b - a)).toFixed(1);
-    const shape = () => ['50%', '50%', '20%', '0%'][Math.floor(Math.random() * 4)];
-    this.style.setProperty('--b1-rot', `${r(-20, 20)}deg`);
-    this.style.setProperty('--b2-rot', `${r(-20, 20)}deg`);
-    this.style.setProperty('--b-scale', `${r(0.82, 1.18)}`);
-    this.style.setProperty('--b2-delay', `${Math.round(80 + Math.random() * 120)}ms`);
-    this.style.setProperty('--b1-radius', shape());
-    this.style.setProperty('--b2-radius', shape());
     this.classList.add('celebrating');
-    // Use setTimeout rather than animationend — multiple animations run on :host
-    // (goal-ring 700ms, burst-1 1500ms, burst-2 1500ms+120ms delay) and we
-    // must keep .celebrating alive until the last one finishes.
-    setTimeout(() => this.classList.remove('celebrating'), 1700);
+    this._spawnParticles();
+    // Use setTimeout rather than animationend — :host must stay
+    // overflow:visible for as long as the longest-lived particle can
+    // possibly be flying, including the staggered spawn delay of the very
+    // last particle (see PARTICLE_SPAWN_STAGGER_MS/PARTICLE_FLY_DUR below),
+    // not just the shorter 700ms goal-ring pulse also running on :host.
+    const maxCelebrateMs = (PARTICLE_COUNT - 1) * PARTICLE_SPAWN_STAGGER_MS + Math.round(PARTICLE_FLY_DUR * 1.15) + 100;
+    setTimeout(() => this.classList.remove('celebrating'), maxCelebrateMs);
+  }
+
+  // Real DOM particles (not :host pseudo-elements, which can't hold
+  // generated child nodes) so each dot can carry its own randomised
+  // custom properties. Cleanup is a setTimeout matched to each particle's
+  // own flight duration, not 'animationend' — under prefers-reduced-motion
+  // the .particle rule sets animation: none, so 'animationend' would never
+  // fire and every burst would leak 36 orphaned nodes into the shadow root
+  // (mirrors _logTick()'s own comment on the same tradeoff, below).
+  _spawnParticles() {
+    if (!this._particleField) return;
+    const r = (a, b) => a + Math.random() * (b - a);
+    const rect = this._bar.getBoundingClientRect();
+    const originSpread = rect.width * PARTICLE_ORIGIN_SPREAD_RATIO;
+    // At the fan's wide extremes (±165° around straight-up) a particle's
+    // flight angle approaches fully horizontal, not just "up and to the
+    // side" — combined with an origin near the row's own edge, that can
+    // push a particle's absolute screen position past the viewport edge
+    // while :host is overflow:visible. On a device-width mobile viewport,
+    // *any* horizontal overflow — even from one particle, regardless of
+    // how many are animating or how they're staggered — makes the browser
+    // briefly rescale the whole page to fit the wider content, then snap
+    // back once .celebrating removes overflow:visible and re-clips it.
+    // Confirmed on real Android Chrome as the actual cause of a reported
+    // "photo zooms + bottom-nav slides" glitch at the tail end of the
+    // burst; staggering spawn timing (a load/GPU theory) had no effect,
+    // which is what pointed at a geometry cause instead. Clamped here
+    // rather than by narrowing PARTICLE_FAN_DEG, so the tuned spread of
+    // angles is untouched for every particle that doesn't need clamping.
+    const halfMaxSize = (PARTICLE_BASE_SIZE * 1.25) / 2;
+    const minX = halfMaxSize;
+    const maxX = window.innerWidth - halfMaxSize;
+
+    const spawnOne = () => {
+      if (!this._particleField) return; // disconnected mid-burst
+      const el = document.createElement('span');
+      el.className = 'particle';
+      const angle = (-90 + r(-PARTICLE_FAN_DEG, PARTICLE_FAN_DEG)) * Math.PI / 180;
+      const dist = r(PARTICLE_FLIGHT_SPREAD * 0.5, PARTICLE_FLIGHT_SPREAD);
+      const flyDur = PARTICLE_FLY_DUR * r(0.85, 1.15);
+      const shiftDur = PARTICLE_SHIFT_DUR * r(0.7, 1.3);
+      const originX = r(-originSpread / 2, originSpread / 2);
+      let dx = Math.cos(angle) * dist;
+      const absoluteX = rect.left + rect.width / 2 + originX + dx;
+      if (absoluteX < minX) dx += minX - absoluteX;
+      else if (absoluteX > maxX) dx -= absoluteX - maxX;
+      el.style.setProperty('--dx', `${dx.toFixed(1)}px`);
+      el.style.setProperty('--dy', `${(Math.sin(angle) * dist).toFixed(1)}px`);
+      el.style.setProperty('--size', `${(PARTICLE_BASE_SIZE * r(0.75, 1.25)).toFixed(1)}px`);
+      el.style.setProperty('--hue-deg', `${(PARTICLE_HUE_DEG * r(0.7, 1.3)).toFixed(0)}deg`);
+      el.style.setProperty('--start-hue', `${r(-PARTICLE_START_HUE_JITTER, PARTICLE_START_HUE_JITTER).toFixed(0)}deg`);
+      el.style.setProperty('--fly-dur', `${flyDur.toFixed(0)}ms`);
+      el.style.setProperty('--shift-dur', `${shiftDur.toFixed(0)}ms`);
+      el.style.setProperty('--phase', `${(-r(0, shiftDur)).toFixed(0)}ms`);
+      el.style.left = `calc(50% + ${originX.toFixed(1)}px)`;
+      el.style.top = `calc(50% + ${r(-6, 6).toFixed(1)}px)`;
+      this._particleField.appendChild(el);
+      setTimeout(() => el.remove(), flyDur + 50);
+    };
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      setTimeout(spawnOne, i * PARTICLE_SPAWN_STAGGER_MS);
+    }
   }
 
   // The base label is just the title, or title+urgency if a deadline is
