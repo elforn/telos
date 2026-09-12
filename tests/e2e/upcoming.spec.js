@@ -85,7 +85,7 @@ test.describe('Upcoming dialog', () => {
     await seedState(page, {
       goals: { [otherYear]: { capstone: [{ id: 'g1', title: 'Ship investor deck', tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-2) }], milestones: [], wow: [], focus: [] } },
       lists: [],
-      goalsDeadlinesVisible: { [otherYear]: true },
+      goalsDeadlinesVisible: { [otherYear]: 'full' },
     });
     await page.reload();
     await waitForPage(page);

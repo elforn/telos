@@ -166,20 +166,24 @@ class ListsPageItem extends Gestures(AppElement) {
           block-size: var(--icon-size-sm);
         }
 
-        /* ── Overdue trickle-up — full-row red when any item in this list is
-           overdue ────────────────────────────────────────────────────────
-           :host([data-urgency="overdue"]) is set in _update() below, from
-           the same mostUrgent() bucket the roll-up dot already reads — not a
-           separate computation. The existing dot/count badge stays as its
-           own element on top; only its own colours invert here so it still
-           reads against the now-solid-red row instead of blending into it,
-           mirroring how goal-item/list-item's calendar badge already works. */
-        :host([data-urgency="overdue"]) .row { background: var(--color-danger); }
-        :host([data-urgency="overdue"]) .list-name { color: var(--color-text-inverse); }
-        :host([data-urgency="overdue"]) .item-count { color: color-mix(in srgb, var(--color-text-inverse) 70%, transparent); }
-        :host([data-urgency="overdue"]) .chevron { color: var(--color-text-inverse); opacity: 0.7; }
-        :host([data-urgency="overdue"]) .drag-btn { color: var(--color-text-inverse); }
-        :host([data-urgency="overdue"]) .urgency[data-urgency="overdue"] {
+        /* ── Failed trickle-up — full-row red when any item in this list has
+           lapsed ──────────────────────────────────────────────────────────
+           data-failed is its own boolean attribute (bucket === 'overdue'),
+           set in _update() below alongside — not instead of — data-urgency,
+           which still carries the raw bucket for the roll-up dot's own
+           colour. Two attributes, two purposes, even though both currently
+           derive from the same underlying mostUrgent() call (lists have no
+           frequency/tracking of their own to diverge from). The existing
+           dot/count badge stays as its own element on top; only its own
+           colours invert here so it still reads against the now-solid-red
+           row instead of blending into it, mirroring how goal-item/
+           list-item's calendar badge already works. */
+        :host([data-failed]) .row { background: var(--color-danger); }
+        :host([data-failed]) .list-name { color: var(--color-text-inverse); }
+        :host([data-failed]) .item-count { color: color-mix(in srgb, var(--color-text-inverse) 70%, transparent); }
+        :host([data-failed]) .chevron { color: var(--color-text-inverse); opacity: 0.7; }
+        :host([data-failed]) .drag-btn { color: var(--color-text-inverse); }
+        :host([data-failed]) .urgency[data-urgency="overdue"] {
           background: var(--color-text-inverse);
           color: var(--color-danger);
         }
@@ -301,7 +305,13 @@ class ListsPageItem extends Gestures(AppElement) {
     const bucket = mostUrgent(buckets);
     const urgent = urgentCount(buckets);
     const show = bucket !== 'none' && bucket !== 'far';
+    // data-urgency (icon/roll-up dot colour) and data-failed (full-row-red)
+    // are both derived from the same `bucket` here — lists have no
+    // frequency/tracking of their own to diverge from, unlike goal-item.js —
+    // but each is still its own attribute/mechanism, not one value read
+    // twice under different names.
     this.dataset.urgency = bucket;
+    this.toggleAttribute('data-failed', bucket === 'overdue');
     this._urgencyEl.hidden = !show;
     let ariaLabel = name;
     if (show) {

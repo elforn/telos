@@ -112,7 +112,7 @@ describe('upcoming — collectUpcoming buckets', () => {
     // Neither 2025 nor 2027 is the real current year, so both default to
     // deadlines-hidden (see deadline-visibility.js) unless explicitly shown —
     // this test is about cross-year aggregation itself, not the default.
-    const goalsDeadlinesVisible = { '2025': true, '2027': true };
+    const goalsDeadlinesVisible = { '2025': 'full', '2027': 'full' };
     const { overdue, today } = collectUpcoming({ goals, lists: [], goalsDeadlinesVisible });
     expect(overdue.map(e => e.id)).toEqual(['past-year']);
     expect(today.map(e => e.id)).toEqual(['future-year']);
@@ -122,7 +122,7 @@ describe('upcoming — collectUpcoming buckets', () => {
     const goals = {
       '2025': { capstone: [goal({ id: 'past-year', dueDate: isoDaysFromNow(-1) })], milestones: [], wow: [], focus: [] },
     };
-    const { overdue } = collectUpcoming({ goals, lists: [], goalsDeadlinesVisible: { '2025': false } });
+    const { overdue } = collectUpcoming({ goals, lists: [], goalsDeadlinesVisible: { '2025': 'off' } });
     expect(overdue).toHaveLength(0);
   });
 
@@ -130,6 +130,14 @@ describe('upcoming — collectUpcoming buckets', () => {
     const lists = [{ id: 'l1', name: 'Admin', items: [item({ dueDate: isoDaysFromNow(-1) })] }];
     const { overdue } = collectUpcoming({ goals: {}, lists, listsDeadlinesVisible: { l1: false } });
     expect(overdue).toHaveLength(0);
+  });
+
+  it('includes a year at \'warn\' — this function only ever reads the icon-facing bucket, which \'warn\' never suppresses', () => {
+    const goals = {
+      '2025': { capstone: [goal({ id: 'warn-year', dueDate: isoDaysFromNow(-1) })], milestones: [], wow: [], focus: [] },
+    };
+    const { overdue } = collectUpcoming({ goals, lists: [], goalsDeadlinesVisible: { '2025': 'warn' } });
+    expect(overdue.map(e => e.id)).toEqual(['warn-year']);
   });
 });
 
@@ -140,11 +148,12 @@ describe('upcoming — frequency goals feed the same buckets as dueDate', () => 
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  it('buckets an Nx-mode weekly goal as overdue once slack hits 0', () => {
-    vi.setSystemTime(new Date(2026, 7, 14)); // Friday — 3 days left, target 3, slack 0
+  it('buckets an Nx-mode weekly goal as today at slack == 0 while still recoverable', () => {
+    vi.setSystemTime(new Date(2026, 7, 14)); // Friday — 3 days left, target 3, slack 0, still fully catchable
     const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: 'any' } })], milestones: [], wow: [], focus: [] } };
-    const { overdue } = collectUpcoming({ goals, lists: [] });
-    expect(overdue.map(e => e.id)).toEqual(['g1']);
+    const { today, overdue } = collectUpcoming({ goals, lists: [] });
+    expect(today.map(e => e.id)).toEqual(['g1']);
+    expect(overdue).toHaveLength(0);
   });
 
   it('buckets an Nx-mode weekly goal as tomorrow at slack == 1, not counted toward the badge', () => {
@@ -157,26 +166,27 @@ describe('upcoming — frequency goals feed the same buckets as dueDate', () => 
     expect(upcomingBadgeCount({ today, overdue })).toBe(0);
   });
 
-  it('buckets a scheduled-days goal as overdue after a recoverable miss', () => {
-    vi.setSystemTime(new Date(2026, 7, 11)); // Tuesday — Monday was scheduled and missed
+  it('buckets a scheduled-days goal as today after a still-recoverable miss', () => {
+    vi.setSystemTime(new Date(2026, 7, 11)); // Tuesday — Monday was scheduled and missed, but 6 days remain for the 3 needed
     const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: ['mon', 'wed', 'fri'] } })], milestones: [], wow: [], focus: [] } };
-    const { overdue } = collectUpcoming({ goals, lists: [] });
-    expect(overdue.map(e => e.id)).toEqual(['g1']);
+    const { today, overdue } = collectUpcoming({ goals, lists: [] });
+    expect(today.map(e => e.id)).toEqual(['g1']);
+    expect(overdue).toHaveLength(0);
   });
 
-  it('attaches a "count" detail for an Any-mode frequency shortfall, with no dueDate involved', () => {
+  it('attaches a "count" detail for an Any-mode frequency shortfall even while bucketed as today, with no dueDate involved', () => {
     vi.setSystemTime(new Date(2026, 7, 14)); // Friday — 3 days left, target 3, slack 0
     const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: 'any' } })], milestones: [], wow: [], focus: [] } };
-    const { overdue } = collectUpcoming({ goals, lists: [] });
-    expect(overdue[0].detail).toEqual({ kind: 'count', count: 3 });
+    const { today } = collectUpcoming({ goals, lists: [] });
+    expect(today[0].detail).toEqual({ kind: 'count', count: 3 });
   });
 
-  it('attaches a "days" detail for a scheduled-days frequency miss', () => {
+  it('attaches a "days" detail for a scheduled-days frequency miss even while bucketed as today', () => {
     vi.setSystemTime(new Date(2026, 7, 11)); // Tuesday — Monday was scheduled and missed
     const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: ['mon', 'wed', 'fri'] } })], milestones: [], wow: [], focus: [] } };
-    const { overdue } = collectUpcoming({ goals, lists: [] });
-    expect(overdue[0].detail.kind).toBe('days');
-    expect(overdue[0].detail.days.find(d => d.wd === 'mon').state).toBe('missed');
+    const { today } = collectUpcoming({ goals, lists: [] });
+    expect(today[0].detail.kind).toBe('days');
+    expect(today[0].detail.days.find(d => d.wd === 'mon').state).toBe('missed');
   });
 
   it('prefers the dueDate detail over the frequency one when a goal is overdue by both', () => {
@@ -220,10 +230,11 @@ describe('upcoming — frequency goals feed the same buckets as dueDate', () => 
   });
 
   it('a monthly goal participates without ever setting reminderDays — unconditional, no opt-in', () => {
-    vi.setSystemTime(new Date(2026, 7, 22)); // Aug 22: 10 days left, target 10, slack 0
+    vi.setSystemTime(new Date(2026, 7, 22)); // Aug 22: 10 days left, target 10, slack 0, still exactly recoverable
     const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'monthly', target: 10, entries: [] } })], milestones: [], wow: [], focus: [] } };
-    const { overdue } = collectUpcoming({ goals, lists: [] });
-    expect(overdue.map(e => e.id)).toEqual(['g1']);
+    const { today, overdue } = collectUpcoming({ goals, lists: [] });
+    expect(today.map(e => e.id)).toEqual(['g1']);
+    expect(overdue).toHaveLength(0);
   });
 });
 
@@ -245,31 +256,36 @@ describe('upcoming — upcomingBadgeCount', () => {
 describe('upcoming — collectHiddenUrgent (the exact inverse gating of collectUpcoming)', () => {
   it('is empty when nothing is hidden', () => {
     const goals = { '2026': { capstone: [goal({ dueDate: isoDaysFromNow(-1) })], milestones: [], wow: [], focus: [] } };
-    expect(collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2026: true } })).toEqual([]);
+    expect(collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2026: 'full' } })).toEqual([]);
   });
 
   it('includes an overdue goal from a year whose deadlines are hidden', () => {
     const goals = { '2025': { capstone: [goal({ dueDate: isoDaysFromNow(-1) })], milestones: [], wow: [], focus: [] } };
-    const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2025: false } });
+    const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2025: 'off' } });
     expect(hidden).toHaveLength(1);
     expect(hidden[0]).toMatchObject({ kind: 'goal', id: 'g1', title: 'Goal', year: '2025', section: 'capstone' });
   });
 
+  it('is empty for a year at \'warn\' — not "hidden" in this sense, it already gets full normal placement in collectUpcoming', () => {
+    const goals = { '2025': { capstone: [goal({ dueDate: isoDaysFromNow(-1) })], milestones: [], wow: [], focus: [] } };
+    expect(collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2025: 'warn' } })).toEqual([]);
+  });
+
   it('includes a today goal too, not just overdue', () => {
     const goals = { '2025': { capstone: [goal({ dueDate: isoDaysFromNow(0) })], milestones: [], wow: [], focus: [] } };
-    const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2025: false } });
+    const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2025: 'off' } });
     expect(hidden).toHaveLength(1);
   });
 
   it('excludes a tomorrow goal — second-class list is overdue/today only', () => {
     const goals = { '2025': { capstone: [goal({ dueDate: isoDaysFromNow(1) })], milestones: [], wow: [], focus: [] } };
-    const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2025: false } });
+    const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2025: 'off' } });
     expect(hidden).toHaveLength(0);
   });
 
   it('never attaches entry.detail — deliberately simpler than collectUpcoming\'s entries', () => {
     const goals = { '2025': { capstone: [goal({ dueDate: isoDaysFromNow(-4) })], milestones: [], wow: [], focus: [] } };
-    const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2025: false } });
+    const hidden = collectHiddenUrgent({ goals, lists: [], goalsDeadlinesVisible: { 2025: 'off' } });
     expect(hidden[0].detail).toBeUndefined();
   });
 

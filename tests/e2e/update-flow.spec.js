@@ -201,6 +201,16 @@ test.describe('Update flow — content clearance on other pages', () => {
         .querySelector('list-dialog').shadowRoot
         .querySelector('#close').click();
     });
+    // The new list's setState() commit and this page's re-render are both
+    // async relative to the dialog-close click — querying for the rendered
+    // lists-page-item immediately (no wait) races that render and is flaky
+    // under light load (passes when the suite runs under parallel/trace
+    // overhead, fails when nothing slows it down enough).
+    await page.waitForFunction(() =>
+      !!document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('lists-page')?.shadowRoot
+        ?.querySelector('#list-container')?.querySelector('lists-page-item')
+    );
     await page.evaluate(() => {
       const row = document.querySelector('app-router').shadowRoot
         .querySelector('lists-page').shadowRoot

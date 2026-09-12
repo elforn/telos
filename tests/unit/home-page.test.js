@@ -1388,13 +1388,20 @@ describe('home-page — resuming on a new calendar day refreshes goal urgency', 
     });
     const item = el.shadowRoot.querySelector('#capstone-list goal-item');
     expect(item.dataset.urgency).toBe('today'); // Monday is itself scheduled — setState notifies synchronously
+    expect(item.hasAttribute('data-failed')).toBe(false);
 
-    // Tuesday: Monday's scheduled day was missed, still recoverable -> overdue.
+    // Tuesday: Monday's scheduled day was missed and nothing has paid it
+    // down since. The two mechanisms diverge here: the dialog-facing icon
+    // only checks aggregate count vs. days left (6 days remain for the 1
+    // still needed -> still recoverable -> 'today'), but the row's own debt
+    // ledger asks the stricter question — was Monday's specific slot ever
+    // paid? — and says no: Failed, regardless of the aggregate being fine.
     vi.setSystemTime(new Date(2026, 7, 11));
     setVisibility('visible');
     document.dispatchEvent(new Event('visibilitychange'));
 
-    expect(item.dataset.urgency).toBe('overdue');
+    expect(item.dataset.urgency).toBe('today');
+    expect(item.hasAttribute('data-failed')).toBe(true);
   });
 
   it('does not refresh while the tab stays hidden, even once the day has moved on', async () => {
@@ -1435,6 +1442,7 @@ describe('home-page — goalsDeadlinesVisible gates every goal-item and year-hea
     });
     const item = el.shadowRoot.querySelector('#capstone-list goal-item');
     expect(item.dataset.urgency).toBe('overdue');
+    expect(item.hasAttribute('data-failed')).toBe(true);
     expect(badgeHidden(el)).toBe(true);
   });
 
@@ -1444,7 +1452,7 @@ describe('home-page — goalsDeadlinesVisible gates every goal-item and year-hea
     setState('goals', {
       '2026': { capstone: [{ id: 'g1', title: 'Gym', tracking: { type: 'percentage', value: 40 }, dueDate: '2020-01-01' }], milestones: [], wow: [], focus: [] },
     });
-    setState('goalsDeadlinesVisible', { 2026: false });
+    setState('goalsDeadlinesVisible', { 2026: 'off' });
     const item = el.shadowRoot.querySelector('#capstone-list goal-item');
     expect(item.dataset.urgency).toBe('none');
     expect(badgeHidden(el)).toBe(false);
@@ -1461,9 +1469,23 @@ describe('home-page — goalsDeadlinesVisible gates every goal-item and year-hea
     expect(item.dataset.urgency).toBe('none');
     expect(badgeHidden(el)).toBe(false);
 
-    setState('goalsDeadlinesVisible', { 2020: true });
+    setState('goalsDeadlinesVisible', { 2020: 'full' });
     item = el.shadowRoot.querySelector('#capstone-list goal-item');
     expect(item.dataset.urgency).toBe('overdue');
+    expect(item.hasAttribute('data-failed')).toBe(true);
     expect(badgeHidden(el)).toBe(true);
+  });
+
+  it('\'warn\' shows the icon and is not treated as hidden, but never shows Failed', async () => {
+    await boot({ dbName: freshName(), initialState: { goals: {} } });
+    const el = mount(2020);
+    setState('goals', {
+      '2020': { capstone: [{ id: 'g1', title: 'Gym', tracking: { type: 'percentage', value: 40 }, dueDate: '2020-01-01' }], milestones: [], wow: [], focus: [] },
+    });
+    setState('goalsDeadlinesVisible', { 2020: 'warn' });
+    const item = el.shadowRoot.querySelector('#capstone-list goal-item');
+    expect(item.dataset.urgency).toBe('overdue');
+    expect(item.hasAttribute('data-failed')).toBe(false);
+    expect(badgeHidden(el)).toBe(true); // badge's own .hidden stays true (not shown) — 'warn' is not "hidden", only 'off' shows the awareness badge
   });
 });

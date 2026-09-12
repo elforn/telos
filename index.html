@@ -76,6 +76,16 @@
            same technique as --color-danger-track above. 50/50 lands on a
            clean orange roughly between amber and red. */
         --color-tomorrow: color-mix(in srgb, var(--color-warning) 50%, var(--color-danger));
+        /* Icon-level "overdue" pill background (urgency-badge.js) —
+           deliberately theme-invariant, unlike every other token on this
+           page: it does NOT derive from --color-text-primary/-inverse the
+           way --color-danger-track above does, because that would flip it
+           to a near-white surface in dark mode. This pill's black identity
+           is the point (distinguishing it from the red-filled 'today'/
+           Failed pills), so it stays the same fixed near-black in both
+           themes; only the glyph inside (--color-danger, already
+           theme-aware) changes. */
+        --color-overdue-bg: #1C1C1E;
         /* Fixed aliases — never changed by year-header accent picker */
         --color-app-accent:        #5BADE0;
         --color-app-accent-light:  #E2F3FB;

@@ -4,7 +4,7 @@ import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { tagStrip } from '../../utils/tag-color.js';
 import { urgencyOf, mostUrgent } from '../../utils/urgency.js';
-import { frequencyRowUrgencyOf } from '../../utils/frequency-urgency.js';
+import { frequencyUrgencyOf, frequencyRowUrgencyOf } from '../../utils/frequency-urgency.js';
 import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
 import { rowChromeStyles } from '../../utils/row-chrome.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
@@ -119,14 +119,17 @@ class GoalItem extends Gestures(AppElement) {
     if (this.shadowRoot) this._update();
   }
 
-  // Whether this goal's year currently has deadline markers visible at all
-  // (see deadline-visibility.js) — home-page.js resolves and pushes this in,
+  // This goal's year-level deadline setting — 'off' | 'warn' | 'full' (see
+  // deadline-visibility.js) — home-page.js resolves and pushes this in,
   // rather than this element reading the store itself, matching how
   // lists-page-item.js receives `rollupVisible` as a plain property. Absent
-  // (undefined) defaults to visible, matching every test/caller that never
-  // sets it.
-  set deadlinesVisible(value) {
-    this._deadlinesVisible = value;
+  // (undefined) defaults to 'full', matching every test/caller that never
+  // sets it. 'off' suppresses the icon and Failed both; 'warn' keeps the
+  // icon (and therefore notifications, which read the same computation)
+  // but forces Failed to never fire; 'full' is the original, single-level
+  // behaviour unchanged.
+  set deadlinesLevel(value) {
+    this._deadlinesLevel = value;
     if (this.shadowRoot) this._update();
   }
 
@@ -198,50 +201,53 @@ class GoalItem extends Gestures(AppElement) {
           pointer-events: none;
         }
 
-        /* ── Overdue escalation — full-row red once a dueDate has lapsed ──
-           :host([data-urgency="overdue"]) is set in _update() below, from
-           the same urgencyOf() call the calendar badge already reads.
+        /* ── Failed escalation — full-row red once a dueDate has lapsed or a
+           pace debt has gone unpaid ── data-failed is its own boolean
+           attribute, computed independently in _update() below from
+           frequencyRowUrgencyOf (not the same computation the calendar
+           badge's data-urgency reads — see _update() for why the two are
+           kept genuinely separate, not just differently named).
            Filled portion goes solid --color-danger (the same token/pairing
            the badge above already proves correct in both themes); the
            unfilled track becomes --color-danger-track (see index.html —
            theme-aware so text stays legible on it in both modes) instead of
            the plain accent-tinted fill/surface pairing every other state uses. */
-        :host([data-urgency="overdue"]) .bar { background: var(--color-danger-track); }
-        :host([data-urgency="overdue"]) .fill { background: var(--color-danger); }
-        :host([data-urgency="overdue"]) .title,
-        :host([data-urgency="overdue"]) .pct-label { color: var(--color-text-inverse); }
-        :host([data-urgency="overdue"]) .desc-icon { color: var(--color-text-inverse); opacity: 0.7; }
-        :host([data-urgency="overdue"]) .drag-btn { color: var(--color-text-inverse); }
+        :host([data-failed]) .bar { background: var(--color-danger-track); }
+        :host([data-failed]) .fill { background: var(--color-danger); }
+        :host([data-failed]) .title,
+        :host([data-failed]) .pct-label { color: var(--color-text-inverse); }
+        :host([data-failed]) .desc-icon { color: var(--color-text-inverse); opacity: 0.7; }
+        :host([data-failed]) .drag-btn { color: var(--color-text-inverse); }
 
         /* Frequency dot-strip and the decreasing/"Avoid" septagon strip both
            key their history off --color-accent/--color-border normally —
-           neither reads legibly against a solid danger-red row, so overdue
-           re-themes them onto --color-text-inverse instead. Applies whenever
-           the goal itself is overdue by dueDate; Part 5's scheduled-day-miss
-           trigger for frequency goals sets the same data-urgency attribute,
-           so no separate rule is needed for that case. */
-        :host([data-urgency="overdue"]) .freq-dot {
+           neither reads legibly against a solid danger-red row, so Failed
+           re-themes them onto --color-text-inverse instead. Applies
+           whenever the goal is Failed for any reason (lapsed dueDate or a
+           frequency debt/allowance failure) — every path sets the same
+           data-failed attribute, so no separate rule is needed per source. */
+        :host([data-failed]) .freq-dot {
           background: color-mix(in srgb, var(--color-text-inverse) 35%, transparent);
         }
-        :host([data-urgency="overdue"]) .freq-dot.met { background: var(--color-text-inverse); }
-        :host([data-urgency="overdue"]) .freq-dot.partial {
+        :host([data-failed]) .freq-dot.met { background: var(--color-text-inverse); }
+        :host([data-failed]) .freq-dot.partial {
           background: conic-gradient(var(--color-text-inverse) var(--frac, 50%), color-mix(in srgb, var(--color-text-inverse) 35%, transparent) 0);
         }
-        :host([data-urgency="overdue"]) .septagon-fill path[data-state="clean"],
-        :host([data-urgency="overdue"]) .septagon-fill path[data-state="within"] {
+        :host([data-failed]) .septagon-fill path[data-state="clean"],
+        :host([data-failed]) .septagon-fill path[data-state="within"] {
           fill: var(--color-text-inverse);
         }
         /* "Over" is fully transparent (see the base rule above) — nothing
            opaque to re-theme, the red shows straight through in any state.
            "Future" still needs one, the same re-theme the frequency
            dot-strip's own empty/missed dot gets a few lines up. */
-        :host([data-urgency="overdue"]) .septagon-fill path[data-state="future"] {
+        :host([data-failed]) .septagon-fill path[data-state="future"] {
           fill: color-mix(in srgb, var(--color-text-inverse) 35%, transparent);
         }
-        :host([data-urgency="overdue"]) .septagon-clock-line {
+        :host([data-failed]) .septagon-clock-line {
           stroke: var(--color-text-inverse);
         }
-        :host([data-urgency="overdue"]) .septagon-within-dot { fill: var(--color-danger-track); }
+        :host([data-failed]) .septagon-within-dot { fill: var(--color-danger-track); }
 
         .content {
           position: relative;
@@ -295,12 +301,13 @@ class GoalItem extends Gestures(AppElement) {
         .bar[data-has-desc="true"] .desc-icon { display: block; }
 
         /* Deadline calendar — shared with list-item's due-date badge, see
-           app/utils/urgency-badge.js. Year-level visibility (default on for
-           the current year, off otherwise — see deadline-visibility.js) is
-           gated in JS via the deadlinesVisible property below, not CSS —
-           the whole merged bucket collapses to 'none' when hidden, which
-           already means no rule here matches, so the icon needs no separate
-           display toggle of its own. */
+           app/utils/urgency-badge.js. Year-level setting (default 'full' for
+           the current year, 'off' otherwise — see deadline-visibility.js) is
+           gated in JS via the deadlinesLevel property below, not CSS — the
+           whole merged bucket collapses to 'none' at 'off', which already
+           means no rule here matches, so the icon needs no separate display
+           toggle of its own. ('warn' leaves the icon fully alone — only
+           Failed is affected by that level.) */
         .urgency-icon { margin-inline-start: var(--space-1); }
         ${urgencyBadgeStyles()}
 
@@ -526,8 +533,8 @@ class GoalItem extends Gestures(AppElement) {
         /* "Over" (missed): the fill drops out entirely — reads as
            "drained/empty" the way an unchecked box reads unchecked. Fully
            transparent rather than any particular colour means it needs no
-           re-theming under the full-row-red overdue state either (see
-           :host([data-urgency="overdue"]) below) — there's nothing opaque
+           re-theming under the full-row-red Failed state either (see
+           :host([data-failed]) below) — there's nothing opaque
            to clash with whatever's behind it. */
         .septagon-fill path[data-state="over"] { fill: transparent; }
 
@@ -1155,7 +1162,7 @@ class GoalItem extends Gestures(AppElement) {
   // The base label is just the title, or title+urgency if a deadline is
   // active; frequency and decreasing goals each layer their own count/target
   // (and a "logged"/"slipped today" suffix) on top of that same base.
-  _buildAriaLabel({ isFreq, isDecr, title, urgency }) {
+  _buildAriaLabel({ isFreq, isDecr, title, urgency, failed }) {
     let label = urgency === 'none' ? title : t('goal-item.duedate-aria', { title, when: t(`urgency.${urgency}`) });
     if (isFreq) {
       const { type, target } = this._goal.tracking;
@@ -1168,6 +1175,15 @@ class GoalItem extends Gestures(AppElement) {
       label = t('goal-item.decr-aria', { title: label, pct: this._pct, count, target });
       if (isLoggedOn(this._goal)) label += t('goal-item.decr-logged-suffix');
     }
+    // data-failed (full-row-red) is a separate mechanism from the icon's own
+    // urgency and can be true while urgency reads something milder (e.g. a
+    // scheduled-days goal still 'today' by aggregate count but Failed by its
+    // stricter debt ledger — see frequency-urgency.js). Only announce it
+    // when it adds real information: a lapsed dueDate's own 'overdue' bucket
+    // is always Failed too (dueDate has no separate row-vs-icon split the
+    // way frequency does), so appending the suffix there would just repeat
+    // what was already said.
+    if (failed && urgency !== 'overdue') label += t('goal-item.failed-suffix');
     return label;
   }
 
@@ -1181,31 +1197,45 @@ class GoalItem extends Gestures(AppElement) {
     this._pct = Math.max(0, pct);
     const title = this._goal?.title ?? '';
     const active = this._pct < 100 && !this._goal?.archived;
-    // Two independent urgency sources merged to whichever is worse — a
-    // frequency goal's own pace (see frequency-urgency.js) alongside its
-    // plain dueDate countdown, if it has one. Before a dueDate, frequency
-    // pace alone decides; once the dueDate itself lapses, urgencyOf already
-    // returns 'overdue', which always wins the merge — no separate
-    // before/after phase switch needed. Uses frequencyRowUrgencyOf, not
-    // frequencyUrgencyOf — the row deliberately latches to 'overdue' once a
-    // miss is unrecoverable and stays there for the rest of the period,
-    // unlike the Upcoming dialog/badge (see frequency-urgency.js's module doc).
+    // TWO genuinely independent mechanisms, each with its own merge, its own
+    // DOM attribute, and its own CSS — not one computed value read by both.
+    // (An earlier version of this file computed a single merged bucket and
+    // relabelled its top value for the row's CSS to key off — that still
+    // left the icon and the row reading the exact same computation, just
+    // under a translated name, which defeats the point of separating them.)
     //
-    // deadlinesVisible === false suppresses the *entire* merged bucket, not
-    // just the dueDate half — a year with deadline markers hidden goes fully
-    // quiet (no icon, no full-row-red) regardless of which source would
-    // have triggered it, matching collectUpcoming's own gating (see
-    // deadline-visibility.js for why this is one toggle, not two).
-    const urgency = this._deadlinesVisible === false
+    // - data-urgency (icon): aligned 1:1 with the internal notification —
+    //   same dialog-facing frequencyUrgencyOf the Upcoming dialog/bell badge
+    //   use, not the row's own pace bookkeeping. This is what the calendar
+    //   badge in urgency-badge.js renders.
+    // - data-failed (full-row-red): its own boolean, from frequencyRowUrgencyOf
+    //   — the row's stricter, debt-ledger-based "can this still be recovered"
+    //   check (see frequency-urgency.js's module doc). A goal can be Failed
+    //   without the icon being 'overdue', and vice versa; they are not the
+    //   same question.
+    //
+    // The year-level setting gates the two mechanisms independently now,
+    // not identically: 'off' suppresses both (no icon, no Failed) — the
+    // dueDate half included, not just frequency — matching collectUpcoming's
+    // own gating (see deadline-visibility.js). 'warn' keeps the icon (and so
+    // notifications, which read the same computation) but forces Failed off
+    // regardless of what the underlying merge would say. 'full' is the
+    // original, single-level behaviour: both mechanisms compute normally.
+    const level = this._deadlinesLevel ?? 'full';
+    const dueDate = this._goal?.dueDate;
+    const iconUrgency = level === 'off'
       ? 'none'
-      : mostUrgent([urgencyOf(this._goal?.dueDate, active), frequencyRowUrgencyOf(this._goal, active)]);
+      : mostUrgent([urgencyOf(dueDate, active), frequencyUrgencyOf(this._goal, active)]);
+    const failed = level === 'full'
+      && mostUrgent([urgencyOf(dueDate, active), frequencyRowUrgencyOf(this._goal, active)]) === 'overdue';
     this._title.textContent = title;
 
-    this._bar.setAttribute('aria-label', this._buildAriaLabel({ isFreq, isDecr, title, urgency }));
+    this._bar.setAttribute('aria-label', this._buildAriaLabel({ isFreq, isDecr, title, urgency: iconUrgency, failed }));
 
     this._bar.dataset.hasDesc = String(!!this._goal?.notes);
     this.dataset.archived = String(!!this._goal?.archived);
-    this.dataset.urgency = urgency;
+    this.dataset.urgency = iconUrgency;
+    this.toggleAttribute('data-failed', failed);
     this._bar.dataset.type = this._goal?.tracking?.type ?? 'percentage';
     this._setPct(this._pct);
     if (this._pct === 100 && prevPct !== undefined && prevPct < 100) this._celebrate();

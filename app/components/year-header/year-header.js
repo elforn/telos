@@ -9,7 +9,7 @@ import '../reflection-dialog/reflection-dialog.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import { icons } from '../../icons.js';
 import { aggregateScore } from '../../utils/reflection.js';
-import { yearDeadlinesVisible } from '../../utils/deadline-visibility.js';
+import { yearDeadlinesLevel } from '../../utils/deadline-visibility.js';
 import { deadlinesHiddenBadgeMarkup, deadlinesHiddenBadgeStyles } from '../../utils/deadline-hidden-badge.js';
 
 // No red option: --color-accent drives the goal progress fill, so a red year
@@ -572,8 +572,9 @@ class YearHeader extends Gestures(AppElement) {
         <div class="menu-section">
           <p class="menu-section-label">${t('settings.deadlines')}</p>
           <div class="status-pill-group" role="group" aria-label="${t('settings.deadlines')}">
-            <button class="status-pill" id="deadlines-show-btn">${t('settings.toggle-on')}</button>
-            <button class="status-pill" id="deadlines-hide-btn">${t('settings.toggle-off')}</button>
+            <button class="status-pill" id="deadlines-off-btn">${t('settings.level-off')}</button>
+            <button class="status-pill" id="deadlines-warn-btn">${t('settings.level-warn')}</button>
+            <button class="status-pill" id="deadlines-full-btn">${t('settings.level-full')}</button>
           </div>
         </div>
         <button class="menu-item" id="year-photo-btn">
@@ -675,15 +676,16 @@ class YearHeader extends Gestures(AppElement) {
     };
     Store.subscribe('goalsTagsVisible', this._onGoalsTagsVisible);
 
-    // Deadline markers default ON for the current year, OFF for other years;
-    // an explicit per-year choice overrides the default. Visibility itself
-    // is applied by home-page.js (via each goal-item's `deadlinesVisible`
-    // property, see deadline-visibility.js) — this menu only needs the same
-    // resolved value to keep its own Show/Hide pills in sync.
+    // Deadline level defaults 'full' for the current year, 'off' for other
+    // years; an explicit per-year choice overrides the default. The setting
+    // itself is applied by home-page.js (via each goal-item's
+    // `deadlinesLevel` property, see deadline-visibility.js) — this menu
+    // only needs the same resolved value to keep its own three pills in sync.
     this._onGoalsDeadlinesVisible = deadlinesVisible => {
-      const visible = yearDeadlinesVisible(deadlinesVisible, this._year);
-      this.shadowRoot?.querySelector('#deadlines-show-btn')?.classList.toggle('active', visible);
-      this.shadowRoot?.querySelector('#deadlines-hide-btn')?.classList.toggle('active', !visible);
+      const level = yearDeadlinesLevel(deadlinesVisible, this._year);
+      this.shadowRoot?.querySelector('#deadlines-off-btn')?.classList.toggle('active', level === 'off');
+      this.shadowRoot?.querySelector('#deadlines-warn-btn')?.classList.toggle('active', level === 'warn');
+      this.shadowRoot?.querySelector('#deadlines-full-btn')?.classList.toggle('active', level === 'full');
     };
     Store.subscribe('goalsDeadlinesVisible', this._onGoalsDeadlinesVisible);
 
@@ -750,8 +752,9 @@ class YearHeader extends Gestures(AppElement) {
     Store.unsubscribe('reflections', this._onReflections);
     this.shadowRoot?.querySelector('#tags-show-btn')?.removeEventListener('click', this._onTagsShowBtn);
     this.shadowRoot?.querySelector('#tags-hide-btn')?.removeEventListener('click', this._onTagsHideBtn);
-    this.shadowRoot?.querySelector('#deadlines-show-btn')?.removeEventListener('click', this._onDeadlinesShowBtn);
-    this.shadowRoot?.querySelector('#deadlines-hide-btn')?.removeEventListener('click', this._onDeadlinesHideBtn);
+    this.shadowRoot?.querySelector('#deadlines-off-btn')?.removeEventListener('click', this._onDeadlinesOffBtn);
+    this.shadowRoot?.querySelector('#deadlines-warn-btn')?.removeEventListener('click', this._onDeadlinesWarnBtn);
+    this.shadowRoot?.querySelector('#deadlines-full-btn')?.removeEventListener('click', this._onDeadlinesFullBtn);
     if (this._imageUrl) URL.revokeObjectURL(this._imageUrl);
 
     ['#prev', '#next', '#menu-btn', '#filter-btn', '#year'].forEach(sel =>
@@ -1037,18 +1040,17 @@ class YearHeader extends Gestures(AppElement) {
   }
 
   _setupDeadlines() {
-    this._onDeadlinesShowBtn = () => {
+    const setLevel = (level) => {
       const year = String(this._year);
-      Store.setState('goalsDeadlinesVisible', { ...Store.getState().goalsDeadlinesVisible, [year]: true });
+      Store.setState('goalsDeadlinesVisible', { ...Store.getState().goalsDeadlinesVisible, [year]: level });
       this._menuDialog.close();
     };
-    this._onDeadlinesHideBtn = () => {
-      const year = String(this._year);
-      Store.setState('goalsDeadlinesVisible', { ...Store.getState().goalsDeadlinesVisible, [year]: false });
-      this._menuDialog.close();
-    };
-    this.shadowRoot.querySelector('#deadlines-show-btn').addEventListener('click', this._onDeadlinesShowBtn);
-    this.shadowRoot.querySelector('#deadlines-hide-btn').addEventListener('click', this._onDeadlinesHideBtn);
+    this._onDeadlinesOffBtn = () => setLevel('off');
+    this._onDeadlinesWarnBtn = () => setLevel('warn');
+    this._onDeadlinesFullBtn = () => setLevel('full');
+    this.shadowRoot.querySelector('#deadlines-off-btn').addEventListener('click', this._onDeadlinesOffBtn);
+    this.shadowRoot.querySelector('#deadlines-warn-btn').addEventListener('click', this._onDeadlinesWarnBtn);
+    this.shadowRoot.querySelector('#deadlines-full-btn').addEventListener('click', this._onDeadlinesFullBtn);
   }
 
   _setupYearPicker() {

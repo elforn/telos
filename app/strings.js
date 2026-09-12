@@ -38,6 +38,7 @@ defineStrings({
   'goal-item.freq-logged-suffix': ', logged today',
   'goal-item.decr-aria':          '{title}, {pct}% clean, {count} slips this week, {target} allowed',
   'goal-item.decr-logged-suffix': ', slipped today',
+  'goal-item.failed-suffix':      ', failed',
 
   // Deadline / due-date urgency phrasing (shared by goals, items, roll-ups).
   'urgency.far':          'upcoming',
@@ -433,6 +434,9 @@ defineStrings({
   'settings.deadlines':         'Deadline markers',
   'settings.toggle-on':         'On',
   'settings.toggle-off':        'Off',
+  'settings.level-off':         'Off',
+  'settings.level-warn':        'Warn',
+  'settings.level-full':        'Full',
   'settings.tags-shown':        'Shown',
   'settings.tags-hidden':       'Hidden',
   'settings.notifications':          'Notifications',
@@ -443,7 +447,6 @@ defineStrings({
   'notifications.digest-title':      '{count} items need attention',
   'notifications.digest-overdue':    'Overdue ({count})',
   'notifications.digest-today':      'Due today ({count})',
-  'notifications.digest-tomorrow':   'Due tomorrow ({count})',
   'notifications.digest-hidden':     '{count} hidden',
   'notifications.digest-hidden-only-title': '{count} hidden',
   'notifications.digest-hidden-only-body':  'Tap to review',

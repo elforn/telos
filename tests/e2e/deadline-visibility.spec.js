@@ -45,12 +45,21 @@ async function openYearMenu(page) {
   );
 }
 
-async function clickYearDeadlinesHide(page) {
+async function clickYearDeadlinesOff(page) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
       .querySelector('year-header').shadowRoot
-      .querySelector('#deadlines-hide-btn').click();
+      .querySelector('#deadlines-off-btn').click();
+  });
+}
+
+async function clickYearDeadlinesWarn(page) {
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot
+      .querySelector('year-header').shadowRoot
+      .querySelector('#deadlines-warn-btn').click();
   });
 }
 
@@ -115,7 +124,7 @@ test.describe('Deadline visibility — year level', () => {
     expect(await badgeDisplay(page, badgePath)).toBe('none');
 
     await openYearMenu(page);
-    await clickYearDeadlinesHide(page);
+    await clickYearDeadlinesOff(page);
 
     await page.waitForFunction(() =>
       document.querySelector('app-router')?.shadowRoot
@@ -135,6 +144,73 @@ test.describe('Deadline visibility — year level', () => {
       document.querySelector('bottom-nav').shadowRoot.querySelector('#bell-btn').hidden
     );
     expect(bellHiddenAfter).toBe(false);
+  });
+});
+
+test.describe('Deadline visibility — the Warn level', () => {
+  test('Warn clears a goal\'s full-row-red but keeps its icon, is not treated as hidden, and survives a cold reload', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    await seedState(page, {
+      goals: { [currentYear]: { capstone: [{ id: 'g1', title: 'Ship investor deck', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-2) }], milestones: [], wow: [], focus: [] } },
+    });
+    await page.reload();
+    await waitForPage(page);
+    await page.waitForFunction(() =>
+      document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('#capstone-list goal-item')?.hasAttribute('data-failed')
+    );
+
+    const badgePath = ['home-page', 'year-header', '#deadlines-hidden-badge'];
+    expect(await badgeDisplay(page, badgePath)).toBe('none'); // 'full' isn't hidden either
+
+    await openYearMenu(page);
+    await clickYearDeadlinesWarn(page);
+
+    // Failed clears, but the icon itself stays exactly as it was.
+    await page.waitForFunction(() =>
+      document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('#capstone-list goal-item')?.hasAttribute('data-failed') === false
+    );
+    const iconAtWarn = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item').dataset.urgency
+    );
+    expect(iconAtWarn).toBe('overdue');
+
+    // 'warn' is not "hidden" — the awareness badge stays off, unlike 'off'.
+    expect(await badgeDisplay(page, badgePath)).toBe('none');
+
+    // Persists across a cold reload, both the stored value and the render.
+    const stored = await page.evaluate(() => new Promise(res => {
+      const r = indexedDB.open('telos', 1);
+      r.onsuccess = () => {
+        const db = r.result;
+        const tx = db.transaction('state', 'readonly');
+        const req = tx.objectStore('state').get('root');
+        req.onsuccess = () => { db.close(); res(req.result?.data?.goalsDeadlinesVisible); };
+      };
+    }));
+    expect(stored).toEqual({ [currentYear]: 'warn' });
+
+    await page.reload();
+    await waitForPage(page);
+    await page.waitForFunction(() =>
+      document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('#capstone-list goal-item')?.dataset.urgency === 'overdue'
+    );
+    const failedAfterReload = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item').hasAttribute('data-failed')
+    );
+    expect(failedAfterReload).toBe(false);
   });
 });
 

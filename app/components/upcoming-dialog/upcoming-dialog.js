@@ -88,10 +88,17 @@ class UpcomingDialog extends AppElement {
         }
 
         /* Larger and bolder than a plain caption label so each section reads
-           as its own clearly-separated block, not just a small heading —
-           and coloured to match that bucket's own calendar-badge colour
-           elsewhere in the app (see urgency-badge.js), so the dialog and a
-           goal/item's own row always agree on what each colour means. */
+           as its own clearly-separated block, not just a small heading. The
+           icon below is what actually mirrors each bucket's own
+           calendar-badge colour (see urgency-badge.js) pixel-for-pixel; the
+           label text here is a softer echo of the same identity rather than
+           a literal colour match — 'overdue' in particular uses
+           --color-overdue-bg's *pill* as its icon fill, but that fixed,
+           theme-invariant value is not safe as plain text colour (it sits
+           too close to --color-surface's own dark-theme value to stay
+           legible) — --color-text-primary reads as "the most serious,
+           matter-of-fact" heading instead, which fits the pill's own
+           deliberately-uncoloured, no-nonsense identity. */
         .upcoming-section-label {
           font-size: var(--font-size-body);
           font-weight: var(--font-weight-bold);
@@ -99,25 +106,33 @@ class UpcomingDialog extends AppElement {
           letter-spacing: var(--letter-spacing-caps);
         }
 
-        .upcoming-section-head[data-key="overdue"] .upcoming-section-label,
-        .upcoming-section-head[data-key="today"] .upcoming-section-label {
-          color: var(--color-danger);
+        .upcoming-section-head[data-key="overdue"] .upcoming-section-label {
+          color: var(--color-text-primary);
         }
+        .upcoming-section-head[data-key="today"] .upcoming-section-label,
         .upcoming-section-head[data-key="tomorrow"] .upcoming-section-label {
-          color: var(--color-tomorrow);
+          color: var(--color-danger);
         }
 
         /* The same calendar glyph (icons.calendar) every bucket already
-           uses elsewhere (see urgency-badge.js), just styled per section:
-           Overdue gets the filled solid-red chip (white-on-red) — the
-           loudest, only-filled treatment, matching the full-row-red state
-           it mirrors. Today/Tomorrow get the plain (unfilled) icon in
-           their own colour, matching the plain calendar badge those
-           buckets get on an ordinary row. */
+           uses elsewhere (see urgency-badge.js), styled identically here —
+           this dialog is populated directly from the same buckets
+           (collectUpcoming) that drive a goal/item's own row icon, so the
+           two must always agree on what each bucket looks like. Overdue and
+           Today both get the filled-pill treatment (dark-neutral-on-red-
+           glyph and red-on-inverse-glyph respectively — see urgency-badge.js
+           for why 'overdue' deliberately isn't red, distinguishing it from
+           'today's still-actionable red); Tomorrow stays the plain
+           (unfilled) icon, matching the plain badge that bucket gets on an
+           ordinary row. Padding/border-radius apply to every bucket
+           unconditionally (mirroring urgency-badge.js's own base rule) so
+           the icon occupies the same footprint whether or not it's filled. */
         .upcoming-section-icon {
           display: flex;
           flex-shrink: 0;
           align-items: center;
+          border-radius: var(--radius-sm);
+          padding: 2px;
         }
         .upcoming-section-icon svg {
           display: block;
@@ -125,16 +140,15 @@ class UpcomingDialog extends AppElement {
           block-size: var(--icon-size-sm);
         }
         .upcoming-section-head[data-key="overdue"] .upcoming-section-icon {
-          color: var(--color-text-inverse);
-          background: var(--color-danger);
-          border-radius: var(--radius-sm);
-          padding: 2px;
+          color: var(--color-danger);
+          background: var(--color-overdue-bg);
         }
         .upcoming-section-head[data-key="today"] .upcoming-section-icon {
-          color: var(--color-danger);
+          color: var(--color-text-inverse);
+          background: var(--color-danger);
         }
         .upcoming-section-head[data-key="tomorrow"] .upcoming-section-icon {
-          color: var(--color-tomorrow);
+          color: var(--color-danger);
         }
 
         .upcoming-section-count {

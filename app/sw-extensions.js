@@ -70,12 +70,19 @@ function isActive(goal) {
   return goal?.tracking?.type === 'percentage' ? (goal.tracking.value ?? 0) < 100 : true;
 }
 
-// Duplicated from app/utils/deadline-visibility.js's yearDeadlinesVisible —
-// same default (on for the current real year, off otherwise) — this file
-// can't import that module (see the header doc above).
+// Duplicated from app/utils/deadline-visibility.js's yearDeadlinesLevel —
+// same default (full/on for the current real year, off otherwise) — this
+// file can't import that module (see the header doc above). Years now have
+// a third, in-app-only 'warn' level (icon + notifications, never Failed),
+// but that distinction is meaningless here: this file has no concept of
+// Failed/full-row-red to suppress, only whether to notify at all — so
+// 'warn' and 'full' both mean "participate," collapsed back to the same
+// on/off this always was.
 function isYearVisible(goalsDeadlinesVisible, year) {
   const stored = goalsDeadlinesVisible?.[String(year)];
-  return stored ?? (Number(year) === new Date().getFullYear());
+  const isValidLevel = stored === 'off' || stored === 'warn' || stored === 'full';
+  const level = isValidLevel ? stored : (Number(year) === new Date().getFullYear() ? 'full' : 'off');
+  return level !== 'off';
 }
 
 // Duplicated from listDeadlinesVisible — lists default visible always,
@@ -168,7 +175,10 @@ async function checkDueDatesInBackground() {
   if (!state) return; // app never booted yet — nothing to check
 
   const buckets = collectDueDateUpcoming(state, today);
-  const total = buckets.overdue.length + buckets.today.length + buckets.tomorrow.length;
+  // Tomorrow is deliberately excluded here too, mirroring notification-
+  // digest.js's own foreground buildDigest — an OS-level push is for what
+  // needs attention now, not a day-ahead heads-up.
+  const total = buckets.overdue.length + buckets.today.length;
   if (total === 0) return;
 
   // Plain English only — this file can't reach app/strings.js's t() (see
@@ -178,7 +188,6 @@ async function checkDueDatesInBackground() {
   const parts = [];
   if (buckets.overdue.length)  parts.push(`Overdue (${buckets.overdue.length})`);
   if (buckets.today.length)    parts.push(`Due today (${buckets.today.length})`);
-  if (buckets.tomorrow.length) parts.push(`Due tomorrow (${buckets.tomorrow.length})`);
 
   await self.registration.showNotification(`${total} items need attention`, {
     body: parts.join(' · '),

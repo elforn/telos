@@ -38,6 +38,7 @@ defineStrings({
   'goal-item.freq-logged-suffix': ', registrat avui',
   'goal-item.decr-aria':          '{title}, {pct}% net, {count} faltes aquesta setmana, {target} permeses',
   'goal-item.decr-logged-suffix': ', falta avui',
+  'goal-item.failed-suffix':      ', fallat',
 
   // Urgència dels venciments (compartit per objectius, elements, agregats).
   'urgency.far':          'properament',
@@ -429,6 +430,9 @@ defineStrings({
   'settings.deadlines':        'Marcadors de venciment',
   'settings.toggle-on':        'Activat',
   'settings.toggle-off':       'Desactivat',
+  'settings.level-off':        'Desactivat',
+  'settings.level-warn':       'Avís',
+  'settings.level-full':       'Complet',
   'settings.tags-shown':       'Mostrades',
   'settings.tags-hidden':      'Ocultes',
   'settings.notifications':        'Notificacions',
@@ -439,7 +443,6 @@ defineStrings({
   'notifications.digest-title':    '{count} elements necessiten atenció',
   'notifications.digest-overdue':  'Vençuts ({count})',
   'notifications.digest-today':    'Venciment avui ({count})',
-  'notifications.digest-tomorrow': 'Venciment demà ({count})',
   'notifications.digest-hidden':     '{count} amagats',
   'notifications.digest-hidden-only-title': '{count} amagats',
   'notifications.digest-hidden-only-body':  'Toca per revisar',

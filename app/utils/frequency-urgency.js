@@ -19,7 +19,7 @@
 // unconditionally times-per-period.
 //
 // TWO exported functions, not one, because the row and the Upcoming dialog
-// now deliberately disagree once a goal is behind schedule:
+// deliberately disagree about what 'overdue' means:
 //
 // - frequencyUrgencyOf (dialog/Upcoming/notification-facing) stays fully
 //   actionable — 'overdue' means "behind and nothing logged today," full
@@ -27,12 +27,15 @@
 //   already-unreachable one (don't hint at recoverability); logging today
 //   always clears or downgrades it, so the bell badge and dialog never get
 //   stuck showing something the user can't act on to resolve.
-// - frequencyRowUrgencyOf (the goal's own row icon) uses the exact same
-//   "behind = overdue, no distinction" rule for a day that hasn't been
-//   logged yet — but once a miss turns out to be *unrecoverable*, the row
-//   latches to 'overdue' for the rest of the period regardless of further
-//   logging: "the week is lost, do better next week," a deliberately
-//   sticky consequence the dialog is not supposed to carry.
+// - frequencyRowUrgencyOf (the goal's own row icon, and specifically the
+//   full-row-red "Failed" treatment) reserves 'overdue' for a genuinely
+//   unrecoverable miss only — as long as the target is still reachable by
+//   period end, it is not Failed, even on a day nothing's been logged yet
+//   at all. That day shows 'today' (or 'tomorrow' once today's own entry is
+//   in) instead. Once a miss turns out to be *unrecoverable*, though, the
+//   row latches to 'overdue' for the rest of the period regardless of
+//   further logging: "the week is lost, do better next week," a
+//   deliberately sticky consequence the dialog is not supposed to carry.
 //
 // Recoverability (see isRecoverable below) needs no memory of past days to
 // support that stickiness — it's recomputed fresh every time from current
@@ -102,19 +105,21 @@ function isRecoverable(goal, todayIso) {
 // Times-per-period ("x") mode, weekly, dialog-facing — weekly goals with
 // reminderDays: 'any'. slack = days left, inclusive of today, minus entries
 // still needed this period. slack<=0 means every remaining day is now
-// required. 'overdue' (not 'today') once slack<=0 and nothing's logged yet
-// — Any mode has no "day zero, nothing missed yet" state at all: its
-// tightest possible target (6, since 7 routes to the every-day/
-// scheduled-days path below) means slack can never even reach <=0 on day 1
-// of a fresh period, so this state is always at least some accumulated
-// shortfall, never a first-time "your task for today" moment the way
-// scheduled-days' today-wins case is — 'overdue' was always the more
-// honest label for it.
+// required — 'overdue' only once that's genuinely unrecoverable; while
+// still catchable it's 'today', the same recoverability split the row uses
+// (see nxRowBucketWeekly). Earlier versions of this function called every
+// slack<=0/not-logged day 'overdue' unconditionally, deliberately never
+// hinting at recoverability — that made sense back when the dialog was the
+// only place any of this showed up (a "you can't fix this" message with no
+// alternative would be pure discouragement). Now that the row carries its
+// own dedicated, honest "truly unrecoverable" signal (Failed), the dialog
+// is free to be this precise without losing that safety net.
 //
 // Once today's own entry is logged, though, there's nothing more the user
-// can act on until tomorrow, so it downgrades to 'tomorrow' — this stays
-// true even once the miss is unrecoverable (that distinction is the row's
-// job now, see nxRowBucketWeekly, not the dialog's).
+// can act on until tomorrow, so it downgrades to 'tomorrow' regardless of
+// recoverability — the dialog still always gives grace once you've acted
+// today, unlike the row, which latches to Failed even after logging if the
+// miss is unrecoverable (see nxRowBucketWeekly's own sticky behaviour).
 //
 // No 'week' tier here (unlike monthly) — a week is only ever 7 days long,
 // so once slack passes 1 there's nowhere near enough runway left in the
@@ -126,27 +131,40 @@ function nxBucketWeekly(goal, todayIso) {
   const remainingNeed = target - count;
   if (remainingNeed <= 0) return 'none'; // already met this period
   const slack = remainingDaysInPeriod('weekly', todayIso) - remainingNeed;
-  if (slack <= 0) return entries?.includes(todayIso) ? 'tomorrow' : 'overdue';
+  if (slack <= 0) {
+    if (entries?.includes(todayIso)) return 'tomorrow'; // logged today — always grace, regardless of recoverability
+    return isRecoverable(goal, todayIso) ? 'today' : 'overdue'; // 'overdue' only once genuinely unrecoverable
+  }
   if (slack === 1) return 'tomorrow';
   return 'none';
 }
 
-// nxBucketWeekly's row-facing counterpart: identical whenever nothing's
-// behind (slack > 0) or nothing's been logged yet (both agree on
-// 'overdue'/'tomorrow'/'none' there). Diverges only once today IS logged
-// but the miss turns out to be unrecoverable — the dialog would clear that
-// to 'tomorrow', but the row latches to 'overdue' instead and stays there
-// for the rest of the period, regardless of any further logging: "the week
-// is lost, do better next week."
+// nxBucketWeekly's row-facing counterpart. Only ever returns 'overdue' when
+// the miss is mathematically unrecoverable — that's the one state that's
+// genuinely Failed. A shortfall that's still catchable by period end shows
+// 'today' (still time to act, even with zero slack left) or 'tomorrow'
+// (today's own entry is already in, nothing more to do until tomorrow)
+// instead — never 'overdue', even though the dialog calls that same
+// not-yet-logged day 'overdue'. Once unrecoverable, this latches for the
+// rest of the period regardless of any further logging: "the week is lost,
+// do better next week."
 function nxRowBucketWeekly(goal, todayIso) {
-  const { target, entries } = goal.tracking;
+  const { target } = goal.tracking;
   const count = currentPeriodCount(goal.tracking, todayIso);
   const remainingNeed = target - count;
   if (remainingNeed <= 0) return 'none';
   const slack = remainingDaysInPeriod('weekly', todayIso) - remainingNeed;
   if (slack <= 0) {
-    if (!isRecoverable(goal, todayIso)) return 'overdue'; // sticky — logging today can't undo this
-    return entries?.includes(todayIso) ? 'tomorrow' : 'overdue'; // recoverable — same as the dialog
+    // Whenever slack<=0, logging today can only ever move the needle by
+    // exactly the +1 day of slack a same-day entry buys — never enough to
+    // cross back above 0, since slack<=0 here means the days left already
+    // don't cover what's needed even before today's own contribution is
+    // subtracted out again for recoverability's opportunity-days count.
+    // Concretely: isRecoverable is always false whenever today is already
+    // logged in this branch (provable from the arithmetic alone, verified
+    // exhaustively too) — so 'today' is the only reachable outcome once the
+    // unrecoverable case above has been ruled out, logged or not.
+    return isRecoverable(goal, todayIso) ? 'today' : 'overdue'; // 'overdue' only once genuinely unrecoverable
   }
   if (slack === 1) return 'tomorrow';
   return 'none';
@@ -154,36 +172,45 @@ function nxRowBucketWeekly(goal, todayIso) {
 
 // Times-per-period mode, monthly, dialog-facing — every monthly goal,
 // unconditionally (no reminderDays opt-in exists for monthly at all, see
-// the module doc above). Same shape and same today/overdue collapse as
-// weekly — kept deliberately consistent rather than diverging further —
-// but a month is long enough to still earn a genuine third tier: 'week' at
-// 2-7 days of slack, a moderate early warning distinct from 'tomorrow'/
-// 'today's immediate urgency and from 'none's comfortable quiet — mirrors
-// dueDate's own week/tomorrow/today split, just computed from pace instead
-// of a fixed date.
+// the module doc above). Same shape and same recoverability split as
+// weekly (see nxBucketWeekly's own doc for why 'overdue' now means
+// genuinely unrecoverable, not just "slack hit zero") — kept deliberately
+// consistent rather than diverging further — but a month is long enough to
+// still earn a genuine third tier: 'week' at 2-7 days of slack, a moderate
+// early warning distinct from 'tomorrow'/'today's immediate urgency and
+// from 'none's comfortable quiet — mirrors dueDate's own week/tomorrow/
+// today split, just computed from pace instead of a fixed date.
 function nxBucketMonthly(goal, todayIso) {
   const { target, entries } = goal.tracking;
   const count = currentPeriodCount(goal.tracking, todayIso);
   const remainingNeed = target - count;
   if (remainingNeed <= 0) return 'none'; // already met this period
   const slack = remainingDaysInPeriod('monthly', todayIso) - remainingNeed;
-  if (slack <= 0) return entries?.includes(todayIso) ? 'tomorrow' : 'overdue';
+  if (slack <= 0) {
+    if (entries?.includes(todayIso)) return 'tomorrow'; // logged today — always grace, regardless of recoverability
+    return isRecoverable(goal, todayIso) ? 'today' : 'overdue';
+  }
   if (slack === 1) return 'tomorrow';
   if (slack <= 7) return 'week';
   return 'none';
 }
 
 // nxBucketMonthly's row-facing counterpart — same relationship to it as
-// nxRowBucketWeekly has to nxBucketWeekly above.
+// nxRowBucketWeekly has to nxBucketWeekly above: 'overdue' only once the
+// miss is unrecoverable, 'today'/'tomorrow' for a shortfall that's still
+// catchable by month end.
 function nxRowBucketMonthly(goal, todayIso) {
-  const { target, entries } = goal.tracking;
+  const { target } = goal.tracking;
   const count = currentPeriodCount(goal.tracking, todayIso);
   const remainingNeed = target - count;
   if (remainingNeed <= 0) return 'none';
   const slack = remainingDaysInPeriod('monthly', todayIso) - remainingNeed;
   if (slack <= 0) {
-    if (!isRecoverable(goal, todayIso)) return 'overdue';
-    return entries?.includes(todayIso) ? 'tomorrow' : 'overdue';
+    // Same proof as nxRowBucketWeekly's own version of this branch (see its
+    // doc): whenever slack<=0, isRecoverable is always false if today is
+    // already logged, so 'today' is the only reachable outcome once the
+    // unrecoverable case has been ruled out.
+    return isRecoverable(goal, todayIso) ? 'today' : 'overdue'; // 'overdue' only once genuinely unrecoverable
   }
   if (slack === 1) return 'tomorrow';
   if (slack <= 7) return 'week';
@@ -197,24 +224,30 @@ function nxRowBucketMonthly(goal, todayIso) {
 // above): if fewer entries exist than scheduled days already elapsed,
 // something scheduled hasn't been caught up on yet.
 //
-// Today wins — but only while there's no earlier debt. If today itself is
-// scheduled and not yet logged, and nothing before today was missed
-// either, that's just the ordinary, unremarkable "your task for today"
-// state ('today'). But if an earlier day WAS missed, 'overdue' takes
-// precedence even on a day that's also itself scheduled and unlogged — the
+// Today wins — but only while there's no earlier debt that's still
+// unrecoverable. If today itself is scheduled and not yet logged, and
+// nothing before today was missed (or an earlier miss is still catchable),
+// that's just the ordinary, unremarkable "your task for today" state
+// ('today'). Only a genuinely unrecoverable earlier miss escalates to
+// 'overdue' even on a day that's also itself scheduled and unlogged — the
 // earlier miss is the more urgent story, and masking it behind today's own
 // normal task would hide it. (Contrast: the very first scheduled day of a
 // fresh period trivially has no earlier debt — scheduledSoFar is 0 — so it
 // always reads as plain 'today', never 'overdue'.)
 //
-// Beyond that: 'overdue' now covers every "behind, nothing logged today"
-// case uniformly, recoverable or not — don't hint at recoverability, and
-// keep the dialog fully actionable. Once today IS logged, it either clears
-// to 'none' (already caught up, WITH enough runway left for what remains)
-// or downgrades to 'tomorrow' (still short, but nothing more to act on
-// until tomorrow) — recoverability plays no part in *which of those two*
-// the dialog shows; that distinction is the row's separate concern (see
-// scheduledRowBucket).
+// Beyond that: 'overdue' means genuinely unrecoverable, same recoverability
+// split the row uses (see scheduledRowBucket) — this used to call every
+// "behind, nothing logged today" case 'overdue' uniformly, deliberately
+// never hinting at recoverability, back when the dialog was the only place
+// any of this showed up. Now that the row carries its own dedicated
+// "truly unrecoverable" signal (Failed), the dialog is free to say 'today'
+// instead whenever there's still a way to catch up. Once today IS logged,
+// it either clears to 'none' (already caught up, WITH enough runway left
+// for what remains) or downgrades to 'tomorrow' (still short, but nothing
+// more to act on until tomorrow) — regardless of recoverability, the
+// dialog always gives grace once you've acted today, unlike the row, which
+// latches to Failed even after logging if the miss is unrecoverable (see
+// scheduledRowBucket's own sticky behaviour).
 //
 // "Caught up" requires more than just clearing the historical debt count
 // (count >= scheduledSoFar) — that only checks whether earlier scheduled
@@ -224,7 +257,8 @@ function nxRowBucketMonthly(goal, todayIso) {
 // (nothing missed *before* today) while leaving too few days for the
 // third — genuinely still behind despite looking "on pace" by that
 // narrower measure. isRecoverable folds in exactly that forward-looking
-// check, so 'none' now requires both conditions together.
+// check, so 'none' now requires both conditions together, and so does the
+// choice between 'today' and 'overdue' for an unresolved debt.
 function scheduledBucket(goal, todayIso) {
   const { target, entries, reminderDays } = goal.tracking;
   const count = currentPeriodCount(goal.tracking, todayIso);
@@ -235,45 +269,70 @@ function scheduledBucket(goal, todayIso) {
   const loggedToday = entries?.includes(todayIso);
   const todayIdx = WEEKDAYS.indexOf(todayKey);
   const scheduledSoFar = reminderDays.filter(d => WEEKDAYS.indexOf(d) < todayIdx).length;
+  const recoverable = isRecoverable(goal, todayIso);
 
   if (reminderDays.includes(todayKey) && !loggedToday) {
-    return count < scheduledSoFar ? 'overdue' : 'today';
+    if (count < scheduledSoFar) return recoverable ? 'today' : 'overdue';
+    return 'today';
   }
 
-  if (count >= scheduledSoFar && isRecoverable(goal, todayIso)) return 'none'; // caught up AND still enough runway left
-  if (loggedToday) return 'tomorrow'; // still short, but nothing more actionable today
-  return 'overdue'; // not logged, behind, today isn't itself the scheduled slot in question
+  if (count >= scheduledSoFar && recoverable) return 'none'; // caught up AND still enough runway left
+  if (loggedToday) return 'tomorrow'; // still short, but nothing more actionable today — grace regardless of recoverability
+  return recoverable ? 'today' : 'overdue'; // not logged, behind, today isn't itself the scheduled slot in question
 }
 
-// scheduledBucket's row-facing counterpart. Agrees with the dialog in
-// every case except one: today logged, still short of target, but the miss
-// turns out to be unrecoverable — the dialog clears that to 'tomorrow', the
-// row latches to 'overdue' and stays there for the rest of the period,
-// exactly mirroring nxRowBucketWeekly's own single point of divergence.
+// Debt ledger for scheduled-days mode — the row's own measure of "did you
+// keep each specific commitment," not just "is the week's count on pace."
+// Each scheduled day, once it's fully in the past, is its own slot: it's
+// paid only by an entry on that exact date, never by a later entry landing
+// on some other day. An entry on a day with no scheduled requirement of its
+// own is surplus, banked to pay down exactly that much outstanding debt —
+// this is the only way a missed day clears, since its own date can't be
+// relogged after the fact. Deliberately stricter than a plain running
+// count: hitting Wednesday's own session doesn't retroactively cover a
+// missed Monday, even though the week's total might still be on pace —
+// only something *extra* does. Today itself is never judged as missed here
+// (that's "still due", not "already failed") but an unscheduled today's
+// entry does count as surplus immediately, same as any other day.
+function scheduledDebt(goal, todayIso) {
+  // Reuses scheduledDayStates' own per-day classification (see below) rather
+  // than re-deriving missed/unscheduled-with-entry from scratch — the two
+  // functions must agree on what counts as "missed" or "surplus" (this
+  // one's terms) vs. "missed" or "unscheduled" (that one's terms, feeding
+  // the Upcoming dialog's own day-strip detail), and reusing one guarantees
+  // it rather than relying on two implementations staying in sync by hand.
+  const todayIdx = WEEKDAYS.indexOf(weekdayKeyOf(todayIso));
+  let missed = 0;
+  let surplus = 0;
+  scheduledDayStates(goal, todayIso, goal.tracking.reminderDays).forEach((day, idx) => {
+    if (idx > todayIdx) return; // only today and earlier days are in play
+    if (day.state === 'missed') missed += 1; // a past scheduled day left unfilled
+    else if (day.state === 'unscheduled') surplus += 1; // an entry on a day with no requirement of its own
+  });
+  return Math.max(0, missed - surplus);
+}
+
+// scheduledBucket's row-facing counterpart. Reserves 'overdue' for genuine
+// unpaid debt (see scheduledDebt above) rather than the dialog's plain
+// behind-schedule check — a debt day that's still payable by an extra
+// session reads as 'today' instead of 'overdue' the dialog would show, and
+// once debt exists it stays 'overdue' for the rest of the period regardless
+// of further on-schedule logging (only a surplus entry — one on a day with
+// no requirement of its own — ever pays it down), mirroring
+// nxRowBucketWeekly's own sticky-until-resolved behaviour.
 function scheduledRowBucket(goal, todayIso) {
   const { target, entries, reminderDays } = goal.tracking;
   const count = currentPeriodCount(goal.tracking, todayIso);
   const remainingNeed = target - count;
   if (remainingNeed <= 0) return 'none';
 
+  if (scheduledDebt(goal, todayIso) > 0) return 'overdue'; // a specific missed day was never made up — Failed
+
   const todayKey = weekdayKeyOf(todayIso);
   const loggedToday = entries?.includes(todayIso);
-  const todayIdx = WEEKDAYS.indexOf(todayKey);
-  const scheduledSoFar = reminderDays.filter(d => WEEKDAYS.indexOf(d) < todayIdx).length;
-
-  if (reminderDays.includes(todayKey) && !loggedToday) {
-    return count < scheduledSoFar ? 'overdue' : 'today';
-  }
-
-  // Same "caught up AND still enough runway left" requirement as the
-  // dialog's own scheduledBucket — see its doc for why the historical
-  // debt count alone isn't sufficient.
-  const recoverable = isRecoverable(goal, todayIso);
-  if (count >= scheduledSoFar && recoverable) return 'none';
-  if (loggedToday) {
-    return recoverable ? 'tomorrow' : 'overdue'; // sticky if unrecoverable
-  }
-  return 'overdue';
+  if (reminderDays.includes(todayKey) && !loggedToday) return 'today'; // today's own slot is due
+  if (loggedToday) return 'tomorrow'; // logged today, nothing more actionable until tomorrow
+  return 'none'; // no debt, and today isn't a scheduled slot
 }
 
 // scheduledBucket() plus the day-ahead heads-up: if today's own state comes
@@ -455,13 +514,21 @@ export function frequencyUrgencyOf(goal, active, todayIso = todayISO()) {
 // and a bigger one: the dialog never produces anything but 'none' for
 // decreasing goals (no due-tomorrow/due-today concept applies to an
 // anti-habit at all), but the row now also carries a second, unrelated
-// signal on top of pace/deadline urgency — plain failure. Once the current
-// week's (or 4-week block's) slip allowance is exceeded, the row goes
-// full-row-red exactly like an unrecoverable miss does elsewhere, not as a
-// prompt to act (nothing today fixes an already-blown allowance) but as a
-// static "the week is lost, do better next week" consequence — deliberately
-// invisible to the dialog/bell badge/notifications, which stay about
-// what's actionable, never about a retrospective failure to note.
+// signal on top of pace/deadline urgency — plain failure. Failed here is
+// evaluated per week, not per block: isOverAllowance alone answers "is the
+// block's pooled allowance currently exhausted," which for a 4-week
+// allowancePeriod can stay true for the rest of the block once a single bad
+// week blows it — that's the right answer for the dialog's own allowance
+// summary (currentAllowanceSpent), but wrong for a *day-to-day* red
+// indicator: a week with zero new slips shouldn't read as failing today
+// just because an earlier week in the same block already spent the whole
+// pool. Gating on currentPeriodCount too means Failed only lights up on a
+// week that itself added a slip while the (carried-over) allowance was
+// already used up — the exact week the overage actually happened in, not
+// every week after it. Once true, it's a static "the week is lost, do
+// better next week" consequence — deliberately invisible to the dialog/bell
+// badge/notifications, which stay about what's actionable, never about a
+// retrospective failure to note.
 export function frequencyRowUrgencyOf(goal, active, todayIso = todayISO()) {
   if (!active) return 'none';
   const tr = goal?.tracking;
@@ -469,7 +536,10 @@ export function frequencyRowUrgencyOf(goal, active, todayIso = todayISO()) {
 
   if (tr.type === 'monthly') return nxRowBucketMonthly(goal, todayIso);
 
-  if (tr.type === 'decreasing') return isOverAllowance(goal, todayIso) ? 'overdue' : 'none';
+  if (tr.type === 'decreasing') {
+    const failedThisWeek = isOverAllowance(goal, todayIso) && currentPeriodCount(tr, todayIso) > 0;
+    return failedThisWeek ? 'overdue' : 'none';
+  }
 
   if (tr.type === 'weekly') {
     if (tr.reminderDays === 'any' && tr.target === WEEKDAYS.length) {

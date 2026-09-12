@@ -729,3 +729,44 @@ test.describe('Frequency goals', () => {
     expect(state.pillsHidden).toBe(false);
   });
 });
+
+test.describe('Icon vs Failed: independent mechanisms on a real page', () => {
+  test('a scheduled-days goal shows a plain "today" icon while still being Failed on the row, when its own missed slot has no aggregate slack left to hide behind', async ({ page }) => {
+    // Regression test for the debt-ledger vs. aggregate-count divergence:
+    // Monday is the only scheduled day (target 1), missed; checked Tuesday.
+    // The icon (dialog-facing, aggregate count vs. days left) still reads
+    // this as perfectly on-pace -> 'today'. The row's own debt ledger asks
+    // the stricter question — was Monday's specific slot ever paid? — and
+    // says no: Failed, regardless of the icon's calmer read.
+    await page.clock.setFixedTime(new Date(2026, 7, 11, 10, 0, 0)); // Tuesday
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+
+    await openDialog(page, '#add-focus');
+    await selectType(page, 'weekly');
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('.reminder-day-chip[data-day="mon"]').click();
+    });
+    await saveDialog(page, 'Monday-only, missed');
+
+    await page.waitForFunction(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#focus-list goal-item');
+      return item?._goal?.tracking?.target === 1;
+    });
+
+    const state = await page.evaluate(() => {
+      const item = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#focus-list goal-item');
+      return { urgency: item.dataset.urgency, failed: item.hasAttribute('data-failed') };
+    });
+    expect(state.urgency).toBe('today'); // icon: aggregate count still looks fine
+    expect(state.failed).toBe(true);     // row: Monday's own slot was never paid
+  });
+});

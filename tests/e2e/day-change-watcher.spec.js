@@ -72,16 +72,26 @@ test.describe('Resuming on a new calendar day', () => {
     );
     expect(bellBefore).toBe('1');
 
-    // Tuesday, no reload — Monday's scheduled day was missed and is still
-    // recoverable, so the row should turn full-row-red once the app notices.
+    // Tuesday, no reload — Monday's scheduled day was missed and nothing has
+    // paid it down, so the row should turn full-row-red (Failed) once the
+    // app notices. The icon itself stays 'today' (6 days remain for the 1
+    // still needed, still recoverable in aggregate) — data-failed is its
+    // own, stricter signal.
     await page.clock.setFixedTime(new Date(2026, 7, 11, 9, 0, 0));
     await resume(page);
 
     await page.waitForFunction(() =>
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
-        .querySelector('#capstone-list goal-item')?.dataset.urgency === 'overdue'
+        .querySelector('#capstone-list goal-item')?.hasAttribute('data-failed')
     );
+
+    const iconAfter = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item')?.dataset.urgency
+    );
+    expect(iconAfter).toBe('today');
 
     const bellAfter = await page.evaluate(() =>
       document.querySelector('bottom-nav').shadowRoot.querySelector('#bell-badge')?.textContent

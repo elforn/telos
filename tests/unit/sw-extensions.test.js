@@ -167,13 +167,22 @@ describe('sw-extensions — collectDueDateUpcoming', () => {
     expect(result.overdue.map(i => i.id)).toEqual(['i1']);
   });
 
-  it('excludes a year whose goalsDeadlinesVisible is explicitly false, even with a genuinely overdue goal — the background notification must not page the user about a year they hid', () => {
+  it('excludes a year whose goalsDeadlinesVisible is explicitly \'off\', even with a genuinely overdue goal — the background notification must not page the user about a year they hid', () => {
     const state = {
       goals: { 2026: { capstone: [{ id: 'g1', dueDate: '2026-08-30', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] } },
       lists: [],
-      goalsDeadlinesVisible: { 2026: false },
+      goalsDeadlinesVisible: { 2026: 'off' },
     };
     expect(collectDueDateUpcoming(state, today)).toEqual({ overdue: [], today: [], tomorrow: [] });
+  });
+
+  it('includes a year at \'warn\' — this background layer has no concept of Failed to suppress, only whether to notify at all', () => {
+    const state = {
+      goals: { 2026: { capstone: [{ id: 'g1', dueDate: '2026-08-30', tracking: { type: 'percentage', value: 0 } }], milestones: [], wow: [] } },
+      lists: [],
+      goalsDeadlinesVisible: { 2026: 'warn' },
+    };
+    expect(collectDueDateUpcoming(state, today).overdue.map(g => g.id)).toEqual(['g1']);
   });
 
   it('defaults a non-current year to hidden, same default as deadline-visibility.js\'s yearDeadlinesVisible', () => {

@@ -114,13 +114,18 @@ describe('list-item — structure', () => {
 
 describe('list-item — due-date urgency', () => {
   const urgency = el => el.dataset.urgency;
+  const failed = el => el.hasAttribute('data-failed');
 
   it('is none when there is no dueDate', () => {
     expect(urgency(mount())).toBe('none');
   });
 
   it('classifies the buckets by how soon the date is', () => {
-    expect(urgency(mount({ ...ITEM, dueDate: isoDaysFromNow(-1) }))).toBe('overdue');
+    // List items have no frequency/tracking, so data-urgency (icon) and
+    // data-failed (row) always agree — a lapsed date is both at once.
+    const overdue = mount({ ...ITEM, dueDate: isoDaysFromNow(-1) });
+    expect(urgency(overdue)).toBe('overdue');
+    expect(failed(overdue)).toBe(true);
     expect(urgency(mount({ ...ITEM, dueDate: isoDaysFromNow(0) }))).toBe('today');
     expect(urgency(mount({ ...ITEM, dueDate: isoDaysFromNow(5) }))).toBe('week');
     expect(urgency(mount({ ...ITEM, dueDate: isoDaysFromNow(20) }))).toBe('month');
@@ -145,20 +150,25 @@ describe('list-item — due-date urgency', () => {
     const el = mount();
     el.item = { ...ITEM, dueDate: isoDaysFromNow(-1) };
     expect(urgency(el)).toBe('overdue');
+    expect(failed(el)).toBe(true);
   });
 });
 
-describe('list-item — deadlinesVisible gates urgency entirely', () => {
+describe('list-item — deadlinesVisible gates both mechanisms', () => {
   const urgency = el => el.dataset.urgency;
+  const failed = el => el.hasAttribute('data-failed');
 
   it('defaults to visible (unaffected) when the property is never set', () => {
-    expect(urgency(mount({ ...ITEM, dueDate: isoDaysFromNow(-1) }))).toBe('overdue');
+    const el = mount({ ...ITEM, dueDate: isoDaysFromNow(-1) });
+    expect(urgency(el)).toBe('overdue');
+    expect(failed(el)).toBe(true);
   });
 
-  it('suppresses the overdue bucket entirely when false', () => {
+  it('suppresses the overdue bucket entirely when false, on both the icon and the row', () => {
     const el = mount({ ...ITEM, dueDate: isoDaysFromNow(-1) });
     el.deadlinesVisible = false;
     expect(urgency(el)).toBe('none');
+    expect(failed(el)).toBe(false);
   });
 
   it('re-suppresses on every item update while the property stays false', () => {
@@ -169,12 +179,13 @@ describe('list-item — deadlinesVisible gates urgency entirely', () => {
     expect(urgency(el)).toBe('none');
   });
 
-  it('setting it back to true restores the real urgency', () => {
+  it('setting it back to true restores the real urgency on both mechanisms', () => {
     const el = mount({ ...ITEM, dueDate: isoDaysFromNow(-1) });
     el.deadlinesVisible = false;
     expect(urgency(el)).toBe('none');
     el.deadlinesVisible = true;
     expect(urgency(el)).toBe('overdue');
+    expect(failed(el)).toBe(true);
   });
 });
 

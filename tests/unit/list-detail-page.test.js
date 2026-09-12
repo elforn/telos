@@ -1866,6 +1866,7 @@ describe('list-detail-page — listsDeadlinesVisible toggle', () => {
     expect(el.shadowRoot.querySelector('#deadlines-hide-btn').classList.contains('active')).toBe(false);
     const item = el.shadowRoot.querySelector('list-item');
     expect(item.dataset.urgency).toBe('overdue');
+    expect(item.hasAttribute('data-failed')).toBe(true);
     expect(el.shadowRoot.querySelector('#deadlines-hidden-badge').hidden).toBe(true);
   });
 
@@ -1874,6 +1875,7 @@ describe('list-detail-page — listsDeadlinesVisible toggle', () => {
     const el = mount();
     const item = el.shadowRoot.querySelector('list-item');
     expect(item.dataset.urgency).toBe('overdue');
+    expect(item.hasAttribute('data-failed')).toBe(true);
   });
 
   it('clicking deadlines-show-btn sets listsDeadlinesVisible[listId] to true', async () => {

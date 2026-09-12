@@ -13,16 +13,22 @@ describe('notification-digest — buildDigest', () => {
     expect(buildDigest({})).toBeNull();
   });
 
-  it('titles with the total count across all three buckets', () => {
-    const digest = buildDigest({ overdue: [item('a')], today: [item('b'), item('c')], tomorrow: [] });
-    expect(digest.title).toBe('3 items need attention');
+  it('titles with the total count across overdue+today only, excluding tomorrow — matches upcomingBadgeCount\'s own convention', () => {
+    const digest = buildDigest({ overdue: [item('a')], today: [item('b'), item('c')], tomorrow: [item('d'), item('e'), item('f')] });
+    expect(digest.title).toBe('3 items need attention'); // tomorrow's 3 items are never part of this count
   });
 
-  it('body includes only the non-empty sections, each with its own count', () => {
+  it('body never mentions tomorrow, even when it has items and would otherwise get its own section', () => {
     const digest = buildDigest({ overdue: [item('a')], today: [], tomorrow: [item('b'), item('c')] });
     expect(digest.body).toContain('Overdue (1)');
     expect(digest.body).not.toContain('Due today');
-    expect(digest.body).toContain('Due tomorrow (2)');
+    expect(digest.body).not.toContain('tomorrow');
+    expect(digest.body).not.toContain('Tomorrow');
+    expect(digest.body).toBe('Overdue (1)');
+  });
+
+  it('produces no notification at all when only tomorrow has items — a heads-up alone is not worth an OS-level push', () => {
+    expect(buildDigest({ overdue: [], today: [], tomorrow: [item('a'), item('b')] })).toBeNull();
   });
 
   it('a single item in a single bucket still produces a valid digest', () => {

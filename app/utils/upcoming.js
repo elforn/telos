@@ -9,7 +9,7 @@
 import { urgencyOf, mostUrgent, daysUntil } from './urgency.js';
 import { percentValue } from './tracking.js';
 import { frequencyUrgencyOf, frequencyMissedDetail } from './frequency-urgency.js';
-import { yearDeadlinesVisible, listDeadlinesVisible } from './deadline-visibility.js';
+import { yearDeadlinesLevel, listDeadlinesVisible } from './deadline-visibility.js';
 
 const GOAL_SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
 
@@ -49,18 +49,22 @@ function itemDetail(item, active) {
 // take to detect the same thing.
 //
 // goalsDeadlinesVisible/listsDeadlinesVisible gate a whole year's goals or a
-// whole list's items out of this aggregation entirely when hidden — the
-// same "hides visuals AND notifications together" rule goal-item.js/
-// list-item.js apply to their own row markers, so a year/list you've
-// silenced in-app doesn't keep nagging you in the notification digest
-// either (see deadline-visibility.js).
+// whole list's items out of this aggregation entirely when 'off' — the same
+// "hides icon AND notifications together" rule goal-item.js/list-item.js
+// apply to their own row markers, so a year/list you've silenced in-app
+// doesn't keep nagging you in the notification digest either (see
+// deadline-visibility.js). A year at 'warn' participates fully here, same
+// as 'full' — this function only ever reads the icon-facing computation
+// (frequencyUrgencyOf, not the row's frequencyRowUrgencyOf), so it has no
+// concept of Failed to suppress in the first place; 'warn' only affects
+// whether a goal's *row* can go full-row-red, never its Upcoming placement.
 export function collectUpcoming({ goals, lists, goalsDeadlinesVisible, listsDeadlinesVisible } = {}) {
   const overdue = [];
   const today = [];
   const tomorrow = [];
 
   for (const [year, yg] of Object.entries(goals ?? {})) {
-    if (!yearDeadlinesVisible(goalsDeadlinesVisible, year)) continue;
+    if (yearDeadlinesLevel(goalsDeadlinesVisible, year) === 'off') continue;
     for (const section of GOAL_SECTIONS) {
       for (const goal of yg?.[section] ?? []) {
         if (goal.archived) continue;
@@ -103,17 +107,19 @@ export function upcomingBadgeCount({ overdue, today }) {
 }
 
 // The exact inverse of collectUpcoming's own gating — only years/lists whose
-// deadlines are currently *hidden*, and only their overdue/today items (no
-// 'tomorrow' tier, and no entry.detail commentary): these are deliberately
-// second-class, a quiet "here's what you're not seeing" list, not a parallel
-// Upcoming view. Reachable only from a link inside <upcoming-dialog> — see
-// hidden-items-dialog.js — never a notification trigger on its own (see
-// buildDigest's own doc in notification-digest.js).
+// deadlines are currently *hidden* ('off' — 'warn' is not hidden, it already
+// gets full normal placement in collectUpcoming above), and only their
+// overdue/today items (no 'tomorrow' tier, and no entry.detail commentary):
+// these are deliberately second-class, a quiet "here's what you're not
+// seeing" list, not a parallel Upcoming view. Reachable only from a link
+// inside <upcoming-dialog> — see hidden-items-dialog.js — never a
+// notification trigger on its own (see buildDigest's own doc in
+// notification-digest.js).
 export function collectHiddenUrgent({ goals, lists, goalsDeadlinesVisible, listsDeadlinesVisible } = {}) {
   const hidden = [];
 
   for (const [year, yg] of Object.entries(goals ?? {})) {
-    if (yearDeadlinesVisible(goalsDeadlinesVisible, year)) continue;
+    if (yearDeadlinesLevel(goalsDeadlinesVisible, year) !== 'off') continue;
     for (const section of GOAL_SECTIONS) {
       for (const goal of yg?.[section] ?? []) {
         if (goal.archived) continue;

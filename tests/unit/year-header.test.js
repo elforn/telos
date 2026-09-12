@@ -477,45 +477,53 @@ describe('year-header — deadline markers toggle', () => {
     Store.setState('goalsDeadlinesVisible', {});
   });
 
-  // The actual visibility (icon/full-row-red/notifications) is applied by
-  // home-page.js via each goal-item's own `deadlinesVisible` property, not
-  // by year-header.js at all any more (see deadline-visibility.js) — this
-  // menu only needs its own Show/Hide pills to reflect the same resolved
-  // value, which is what these assert.
-  it('defaults ON for the current year when nothing is stored', () => {
+  // The actual setting (icon/full-row-red/notifications) is applied by
+  // home-page.js via each goal-item's own `deadlinesLevel` property, not by
+  // year-header.js at all any more (see deadline-visibility.js) — this menu
+  // only needs its own three pills to reflect the same resolved value,
+  // which is what these assert.
+  function activePill(el) {
+    if (el.shadowRoot.querySelector('#deadlines-off-btn').classList.contains('active')) return 'off';
+    if (el.shadowRoot.querySelector('#deadlines-warn-btn').classList.contains('active')) return 'warn';
+    if (el.shadowRoot.querySelector('#deadlines-full-btn').classList.contains('active')) return 'full';
+    return null;
+  }
+
+  it('defaults to Full for the current year when nothing is stored', () => {
     const el = mount(CURRENT);
-    expect(el.shadowRoot.querySelector('#deadlines-show-btn').classList.contains('active')).toBe(true);
-    expect(el.shadowRoot.querySelector('#deadlines-hide-btn').classList.contains('active')).toBe(false);
+    expect(activePill(el)).toBe('full');
   });
 
-  it('defaults OFF for a non-current year when nothing is stored', () => {
+  it('defaults to Off for a non-current year when nothing is stored', () => {
     const el = mount(PAST);
-    expect(el.shadowRoot.querySelector('#deadlines-hide-btn').classList.contains('active')).toBe(true);
-    expect(el.shadowRoot.querySelector('#deadlines-show-btn').classList.contains('active')).toBe(false);
+    expect(activePill(el)).toBe('off');
   });
 
-  it('clicking deadlines-show-btn sets goalsDeadlinesVisible[year] to true', () => {
+  it('clicking each pill sets goalsDeadlinesVisible[year] to the matching level', () => {
     const el = mount(PAST);
-    el.shadowRoot.querySelector('#deadlines-show-btn').click();
-    expect(Store.getState().goalsDeadlinesVisible?.[String(PAST)]).toBe(true);
+    el.shadowRoot.querySelector('#deadlines-full-btn').click();
+    expect(Store.getState().goalsDeadlinesVisible?.[String(PAST)]).toBe('full');
+    el.shadowRoot.querySelector('#deadlines-warn-btn').click();
+    expect(Store.getState().goalsDeadlinesVisible?.[String(PAST)]).toBe('warn');
+    el.shadowRoot.querySelector('#deadlines-off-btn').click();
+    expect(Store.getState().goalsDeadlinesVisible?.[String(PAST)]).toBe('off');
   });
 
-  it('clicking deadlines-hide-btn sets goalsDeadlinesVisible[year] to false', () => {
-    const el = mount(CURRENT);
-    el.shadowRoot.querySelector('#deadlines-hide-btn').click();
-    expect(Store.getState().goalsDeadlinesVisible?.[String(CURRENT)]).toBe(false);
-  });
-
-  it('an explicit stored value overrides the year default', () => {
-    // Current year, but explicitly hidden.
-    Store.setState('goalsDeadlinesVisible', { [String(CURRENT)]: false });
-    const hidden = mount(CURRENT);
-    expect(hidden.shadowRoot.querySelector('#deadlines-hide-btn').classList.contains('active')).toBe(true);
-    hidden.remove();
-    // Past year, but explicitly shown.
-    Store.setState('goalsDeadlinesVisible', { [String(PAST)]: true });
-    const shown = mount(PAST);
-    expect(shown.shadowRoot.querySelector('#deadlines-show-btn').classList.contains('active')).toBe(true);
+  it('an explicit stored value overrides the year default, including \'warn\'', () => {
+    // Current year, but explicitly off.
+    Store.setState('goalsDeadlinesVisible', { [String(CURRENT)]: 'off' });
+    const off = mount(CURRENT);
+    expect(activePill(off)).toBe('off');
+    off.remove();
+    // Past year, but explicitly full.
+    Store.setState('goalsDeadlinesVisible', { [String(PAST)]: 'full' });
+    const full = mount(PAST);
+    expect(activePill(full)).toBe('full');
+    full.remove();
+    // Past year, explicitly warn.
+    Store.setState('goalsDeadlinesVisible', { [String(PAST)]: 'warn' });
+    const warn = mount(PAST);
+    expect(activePill(warn)).toBe('warn');
   });
 });
 

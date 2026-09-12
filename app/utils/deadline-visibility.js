@@ -1,15 +1,20 @@
-// Single source of truth for whether deadline/urgency markers are visible at
-// each of the app's two scoped levels — goals (per year) and list items (per
-// list). Both gate the *entire* merged urgency picture when off (calendar
-// icon, full-row-red, and notification-digest/Upcoming-dialog placement),
-// not just the due-date component — see CLAUDE.md's Urgency section for why
-// a single "less noise" toggle beats separately silencing due-date vs
-// frequency-pace urgency. Reused by year-header.js/home-page.js (goals) and
-// list-detail-page.js (list items) so the default resolution logic exists in
-// exactly one place, instead of duplicated inline per caller.
-export function yearDeadlinesVisible(goalsDeadlinesVisible, year) {
+// Single source of truth for deadline/urgency visibility at the app's two
+// scoped levels — goals (per year) and list items (per list). Lists stay a
+// plain on/off toggle (listDeadlinesVisible below), but goals have a third,
+// intermediate level: 'off' (nothing at all), 'warn' (icon + notifications,
+// but the row can never go Failed/full-row-red), and 'full' (everything,
+// matching what a single on/off toggle used to mean). 'off'/'full' behave
+// exactly as the old boolean false/true did; 'warn' is the new middle
+// ground — for a user who wants a heads-up system without the punishing
+// red consequence. Reused by year-header.js/home-page.js/sw-extensions.js
+// (which can't import this module directly — see its own duplicated copy)
+// so the default resolution logic exists in exactly one place.
+export const DEADLINE_LEVELS = ['off', 'warn', 'full'];
+
+export function yearDeadlinesLevel(goalsDeadlinesVisible, year) {
   const stored = goalsDeadlinesVisible?.[String(year)];
-  return stored ?? (Number(year) === new Date().getFullYear());
+  if (DEADLINE_LEVELS.includes(stored)) return stored;
+  return Number(year) === new Date().getFullYear() ? 'full' : 'off';
 }
 
 // Unlike years, lists have no "current" to default against — they're

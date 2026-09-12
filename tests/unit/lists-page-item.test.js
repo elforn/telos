@@ -402,11 +402,13 @@ describe('lists-page-item — urgency roll-up', () => {
   });
 
   // The host's own data-urgency (distinct from the inner .urgency dot's,
-  // tested above) drives the full-row overdue trickle-up CSS — see
-  // lists-page-item.js's :host([data-urgency="overdue"]) rules.
-  it('sets data-urgency on the host to the list\'s most-urgent bucket', () => {
+  // tested above) mirrors the same bucket; data-failed (its own boolean
+  // attribute) drives the full-row Failed trickle-up CSS — see
+  // lists-page-item.js's :host([data-failed]) rules.
+  it('sets data-urgency on the host to the list\'s most-urgent bucket, and data-failed when that bucket is overdue', () => {
     const el = mount({ ...LIST, items: [item({ dueDate: isoDaysFromNow(-1) })] });
     expect(el.dataset.urgency).toBe('overdue');
+    expect(el.hasAttribute('data-failed')).toBe(true);
   });
 
   it('sets the host\'s data-urgency to "none" when no item has a due date', () => {

@@ -23,8 +23,15 @@ import { t } from '../../_lib/core/strings.js';
 // ever found by chance, not proactively surfaced at all — so this one case
 // still fires, with a minimal body naming only the hidden count, not the
 // normal per-bucket breakdown.
-export function buildDigest({ overdue, today, tomorrow }, hiddenCount = 0) {
-  const total = (overdue?.length ?? 0) + (today?.length ?? 0) + (tomorrow?.length ?? 0);
+// Tomorrow is deliberately never mentioned here, even though collectUpcoming
+// still returns it — an OS-level push is for what needs attention now
+// (overdue/today), same split upcomingBadgeCount already uses for the bell
+// badge's own number. A day with only "tomorrow" items and nothing overdue
+// or due today produces no notification at all; the heads-up stays an
+// in-app-only concern (the icon, the Upcoming dialog), not something worth
+// interrupting the user for.
+export function buildDigest({ overdue, today }, hiddenCount = 0) {
+  const total = (overdue?.length ?? 0) + (today?.length ?? 0);
   if (total === 0 && hiddenCount === 0) return null;
 
   if (total === 0) {
@@ -37,7 +44,6 @@ export function buildDigest({ overdue, today, tomorrow }, hiddenCount = 0) {
   const parts = [];
   if (overdue?.length)  parts.push(t('notifications.digest-overdue',  { count: overdue.length }));
   if (today?.length)    parts.push(t('notifications.digest-today',    { count: today.length }));
-  if (tomorrow?.length) parts.push(t('notifications.digest-tomorrow', { count: tomorrow.length }));
   if (hiddenCount > 0)  parts.push(t('notifications.digest-hidden',   { count: hiddenCount }));
 
   return {

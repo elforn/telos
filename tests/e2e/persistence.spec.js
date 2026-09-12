@@ -421,7 +421,7 @@ test.describe('Data persistence', () => {
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('year-header').shadowRoot
-        .querySelector('#deadlines-hide-btn').click();
+        .querySelector('#deadlines-off-btn').click();
     });
 
     await waitForIDBFlush(page);
@@ -437,7 +437,7 @@ test.describe('Data persistence', () => {
         req.onsuccess = () => { db.close(); res(req.result?.data?.goalsDeadlinesVisible); };
       };
     }));
-    expect(stored).toEqual({ [currentYear]: false });
+    expect(stored).toEqual({ [currentYear]: 'off' });
 
     // The menu's own pill state reflects the persisted value after the
     // cold reload too, not just the raw IDB record.
@@ -453,12 +453,12 @@ test.describe('Data persistence', () => {
         ?.querySelector('year-header')?.shadowRoot
         ?.querySelector('#menu')?.shadowRoot?.querySelector('dialog')?.open
     );
-    const hideActive = await page.evaluate(() =>
+    const offActive = await page.evaluate(() =>
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('year-header').shadowRoot
-        .querySelector('#deadlines-hide-btn').classList.contains('active')
+        .querySelector('#deadlines-off-btn').classList.contains('active')
     );
-    expect(hideActive).toBe(true);
+    expect(offActive).toBe(true);
   });
 });

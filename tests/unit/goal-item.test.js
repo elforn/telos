@@ -69,12 +69,19 @@ describe('goal-item — structure', () => {
 });
 
 describe('goal-item — deadline urgency', () => {
+  const failed = el => el.hasAttribute('data-failed');
+
   it('is none when there is no dueDate', () => {
     expect(mount().dataset.urgency).toBe('none');
   });
 
   it('classifies the buckets by how soon the deadline is', () => {
-    expect(mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1) }).dataset.urgency).toBe('overdue');
+    // No frequency component on a percentage goal, so data-urgency (icon,
+    // dialog-facing) and data-failed (row) always agree here — a lapsed
+    // dueDate is both 'overdue' and Failed at once, nothing to diverge.
+    const overdue = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1) });
+    expect(overdue.dataset.urgency).toBe('overdue');
+    expect(failed(overdue)).toBe(true);
     expect(mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(0) }).dataset.urgency).toBe('today');
     expect(mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(5) }).dataset.urgency).toBe('week');
     expect(mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(20) }).dataset.urgency).toBe('month');
@@ -100,88 +107,163 @@ describe('goal-item — deadline urgency', () => {
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 0 } });
     el.goal = { id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 0 }, dueDate: isoDaysFromNow(-1) };
     expect(el.dataset.urgency).toBe('overdue');
+    expect(failed(el)).toBe(true);
   });
 });
 
-describe('goal-item — deadlinesVisible gates the whole merged bucket', () => {
+describe('goal-item — deadlinesLevel gates the icon and Failed independently across off/warn/full', () => {
+  const failed = el => el.hasAttribute('data-failed');
+
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  it('defaults to visible (unaffected) when the property is never set', () => {
+  it('defaults to \'full\' (unaffected) when the property is never set', () => {
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1) });
     expect(el.dataset.urgency).toBe('overdue');
+    expect(failed(el)).toBe(true);
   });
 
-  it('suppresses a dueDate-driven overdue bucket entirely when false', () => {
+  it('\'off\' suppresses a dueDate-driven overdue bucket entirely, on both the icon and the row', () => {
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1) });
-    el.deadlinesVisible = false;
+    el.deadlinesLevel = 'off';
     expect(el.dataset.urgency).toBe('none');
+    expect(failed(el)).toBe(false);
   });
 
-  it('also suppresses a frequency-pace-driven overdue bucket, not just dueDate', () => {
-    vi.setSystemTime(new Date(2026, 7, 14)); // Friday — 3 days left, target 3, slack 0 (see the frequency describe block below)
+  it('\'off\' also suppresses a frequency-pace-driven Failed row, not just the icon/dueDate', () => {
+    vi.setSystemTime(new Date(2026, 7, 15)); // Saturday — 2 days left, target 3: unrecoverable even before logging
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 3, value: 0, entries: [], reminderDays: 'any' } });
-    expect(el.dataset.urgency).toBe('overdue'); // sanity check: real pace-driven overdue with no dueDate at all
-    el.deadlinesVisible = false;
+    expect(el.dataset.urgency).toBe('overdue'); // sanity check: real pace-driven state with no dueDate at all
+    expect(failed(el)).toBe(true);
+    el.deadlinesLevel = 'off';
     expect(el.dataset.urgency).toBe('none');
+    expect(failed(el)).toBe(false);
   });
 
-  it('re-suppresses on every goal update while the property stays false', () => {
+  it('re-suppresses on every goal update while the level stays \'off\'', () => {
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1) });
-    el.deadlinesVisible = false;
+    el.deadlinesLevel = 'off';
     expect(el.dataset.urgency).toBe('none');
     el.goal = { id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(0) };
     expect(el.dataset.urgency).toBe('none');
   });
 
-  it('setting it back to true restores the real urgency', () => {
+  it('setting it back to \'full\' restores the real urgency on both mechanisms', () => {
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1) });
-    el.deadlinesVisible = false;
+    el.deadlinesLevel = 'off';
     expect(el.dataset.urgency).toBe('none');
-    el.deadlinesVisible = true;
+    el.deadlinesLevel = 'full';
     expect(el.dataset.urgency).toBe('overdue');
+    expect(failed(el)).toBe(true);
+  });
+
+  it('\'warn\' keeps the icon exactly as \'full\' would show it, but forces Failed off even for an otherwise-Failed goal', () => {
+    // Same lapsed-dueDate goal as the 'full'-default test above, where
+    // Failed is true at 'full' — 'warn' must still show the same icon
+    // (still 'overdue', still notification-aligned) while never going red.
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(-1) });
+    el.deadlinesLevel = 'warn';
+    expect(el.dataset.urgency).toBe('overdue');
+    expect(failed(el)).toBe(false);
+  });
+
+  it('\'warn\' also forces off a frequency-pace-driven Failed row that would otherwise fire, while keeping the icon', () => {
+    vi.setSystemTime(new Date(2026, 7, 15)); // Saturday — genuinely unrecoverable, Failed at 'full' (see test above)
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 3, value: 0, entries: [], reminderDays: 'any' } });
+    el.deadlinesLevel = 'warn';
+    expect(el.dataset.urgency).toBe('overdue');
+    expect(failed(el)).toBe(false);
+  });
+
+  it('\'warn\' does not affect a goal that was never going to be Failed in the first place', () => {
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: isoDaysFromNow(5) });
+    el.deadlinesLevel = 'warn';
+    expect(el.dataset.urgency).toBe('week');
+    expect(failed(el)).toBe(false);
   });
 });
 
-describe('goal-item — frequency pace urgency, merged with dueDate to whichever is worse', () => {
+describe('goal-item — icon (data-urgency, notification-aligned) vs Failed (data-failed, row-only): two independent mechanisms', () => {
   // 2026-08-10 is a Monday.
   const MON = new Date(2026, 7, 10);
+  const failed = el => el.hasAttribute('data-failed');
 
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  it('shows the full-row overdue state from an Nx-mode weekly goal\'s own pace, with no dueDate at all', () => {
-    vi.setSystemTime(new Date(2026, 7, 14)); // Friday — 3 days left, target 3, slack 0
+  it('agrees on both at slack == 0 while still recoverable: today, not overdue/Failed', () => {
+    // Friday, target 3, 3 days left, nothing logged: still fully catchable
+    // (log Fri/Sat/Sun). Both the icon (dialog-facing, notification-aligned)
+    // and the row now share the same recoverability check — neither has
+    // reason to escalate while the target is still reachable.
+    vi.setSystemTime(new Date(2026, 7, 14));
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 3, value: 0, entries: [], reminderDays: 'any' } });
-    expect(el.dataset.urgency).toBe('overdue');
+    expect(el.dataset.urgency).toBe('today');
+    expect(failed(el)).toBe(false);
   });
 
-  it('shows the orange tomorrow state at slack == 1', () => {
+  it('agrees on both once genuinely unrecoverable, with no dueDate at all', () => {
+    vi.setSystemTime(new Date(2026, 7, 15)); // Saturday — only 2 days left, target 3: unrecoverable
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 3, value: 0, entries: [], reminderDays: 'any' } });
+    expect(el.dataset.urgency).toBe('overdue');
+    expect(failed(el)).toBe(true);
+  });
+
+  it('shows the red tomorrow icon at slack == 1, not Failed', () => {
     vi.setSystemTime(new Date(2026, 7, 13)); // Thursday — slack 1
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 3, value: 0, entries: [], reminderDays: 'any' } });
     expect(el.dataset.urgency).toBe('tomorrow');
+    expect(failed(el)).toBe(false);
   });
 
-  it('an Nx-mode goal logged today still shows sticky overdue on the row once the miss is unrecoverable', () => {
+  it('diverges once logged today but the miss is unrecoverable: the icon clears to tomorrow, the row stays Failed', () => {
     // 6x/week, nothing logged all week, checked Wednesday (slack -1). Even
     // after logging today, only 4 opportunity days remain (Thu-Sun) for the
-    // still-needed 5 -> unrecoverable, so the row's own urgency (unlike the
-    // Upcoming dialog) latches to 'overdue' rather than downgrading.
+    // still-needed 5 -> unrecoverable. The dialog-facing icon gives grace
+    // once today is logged (nothing more to act on) — 'tomorrow'. The row's
+    // own bookkeeping latches to Failed instead and stays there for the
+    // rest of the period, regardless of this same logging.
     vi.setSystemTime(new Date(2026, 7, 12)); // Wednesday
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 6, value: 0, entries: ['2026-08-12'], reminderDays: 'any' } });
-    expect(el.dataset.urgency).toBe('overdue');
+    expect(el.dataset.urgency).toBe('tomorrow');
+    expect(failed(el)).toBe(true);
   });
 
-  it('goes full-row overdue for a scheduled-days goal the day after a recoverable miss', () => {
-    vi.setSystemTime(new Date(2026, 7, 11)); // Tuesday — Monday was scheduled and missed
+  it('diverges for a scheduled-days goal the day after a missed day: the icon says today (aggregate still on pace), the row is Failed (its specific debt is unpaid)', () => {
+    // Monday was scheduled and missed; nothing has been logged since, but 6
+    // days remain for the 3 still needed in aggregate -> the dialog-facing
+    // icon (which only checks the overall count vs. days left) reads this
+    // as still fully recoverable -> 'today'. The row's own debt ledger asks
+    // a stricter question — was Monday's specific slot ever paid? — and
+    // answers no: Failed, regardless of the aggregate still being on pace.
+    vi.setSystemTime(new Date(2026, 7, 11)); // Tuesday
     const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'weekly', target: 3, value: 0, entries: [], reminderDays: ['mon', 'wed', 'fri'] } });
-    expect(el.dataset.urgency).toBe('overdue');
+    expect(el.dataset.urgency).toBe('today');
+    expect(failed(el)).toBe(true);
+    // The aria-label must surface Failed too, not just what the icon says —
+    // a screen-reader user should hear about the same full-row-red state a
+    // sighted user sees, even though the icon alone reads as merely "today".
+    expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-label')).toContain('failed');
   });
 
-  it('a monthly goal gets pace urgency unconditionally, with no reminderDays ever set', () => {
-    vi.setSystemTime(new Date(2026, 7, 22)); // Aug 22 — 10 days left, target 10, slack 0
-    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'monthly', target: 10, value: 0, entries: [] } });
+  it('does not repeat "failed" in the aria-label when the icon already says overdue', () => {
+    // A lapsed dueDate is Failed and 'overdue' at once (no row-vs-icon split
+    // for plain dueDate urgency) — the aria-label already says "overdue",
+    // so a redundant ", failed" suffix would just repeat the same fact twice.
+    vi.setSystemTime(MON);
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 40 }, dueDate: '2026-08-01' });
     expect(el.dataset.urgency).toBe('overdue');
+    expect(failed(el)).toBe(true);
+    const label = el.shadowRoot.querySelector('.bar').getAttribute('aria-label');
+    expect(label).toContain('overdue');
+    expect(label).not.toContain('failed');
+  });
+
+  it('agrees on both for a monthly goal at slack == 0 while still exactly recoverable, with no reminderDays ever set', () => {
+    vi.setSystemTime(new Date(2026, 7, 22)); // Aug 22 — 10 days left, target 10, slack 0, still exactly recoverable
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'monthly', target: 10, value: 0, entries: [] } });
+    expect(el.dataset.urgency).toBe('today');
+    expect(failed(el)).toBe(false);
   });
 
   it('takes the worse of dueDate and frequency pace, even before the deadline — a tight deadline wins over quiet pace', () => {
@@ -192,9 +274,10 @@ describe('goal-item — frequency pace urgency, merged with dueDate to whichever
       dueDate: '2026-08-14', // 4 days out -> dueDate's own 'week' bucket
     });
     expect(el.dataset.urgency).toBe('week');
+    expect(failed(el)).toBe(false);
   });
 
-  it('a lapsed deadline always wins the merge, even when frequency pace itself is quiet', () => {
+  it('a lapsed deadline always wins the merge on both mechanisms, even when frequency pace itself is quiet', () => {
     vi.setSystemTime(MON);
     const el = mount({
       id: 'g1', title: 'Goal',
@@ -202,6 +285,7 @@ describe('goal-item — frequency pace urgency, merged with dueDate to whichever
       dueDate: '2026-08-01',
     });
     expect(el.dataset.urgency).toBe('overdue');
+    expect(failed(el)).toBe(true);
   });
 
   it('percentage and decreasing goals are unaffected — dueDate urgency alone, as before', () => {

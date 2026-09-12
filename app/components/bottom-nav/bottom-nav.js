@@ -10,7 +10,7 @@ import { onDayChange } from '../../utils/day-change-watcher.js';
 import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
 import { frequencyUrgencyOf } from '../../utils/frequency-urgency.js';
 import { collectUpcoming, collectHiddenUrgent, upcomingBadgeCount } from '../../utils/upcoming.js';
-import { yearDeadlinesVisible, listDeadlinesVisible } from '../../utils/deadline-visibility.js';
+import { yearDeadlinesLevel, listDeadlinesVisible } from '../../utils/deadline-visibility.js';
 import { percentValue } from '../../utils/tracking.js';
 import { repairInstallation } from '../../../_lib/core/sw-manager/sw-repair.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
@@ -1240,7 +1240,7 @@ class BottomNav extends AppElement {
     // Always the actual calendar year — not the viewed year (_currentYear
     // tracks navigation and would make the pill follow year-swipes).
     const currentYear = new Date().getFullYear();
-    const year = yearDeadlinesVisible(getState().goalsDeadlinesVisible, currentYear) ? (goals[currentYear] ?? {}) : {};
+    const year = yearDeadlinesLevel(getState().goalsDeadlinesVisible, currentYear) !== 'off' ? (goals[currentYear] ?? {}) : {};
     // Merges dueDate urgency with the goal's own frequency/pace urgency —
     // dialog-facing (frequencyUrgencyOf), matching the Upcoming dialog/bell
     // badge's own actionable semantics, not the row's separate sticky

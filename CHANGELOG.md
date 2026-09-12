@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.17.0] — 2026-09-12
+
+### Added
+- **Deadline markers for a year now have three levels instead of two: Off, Warn, and Full.** Off is unchanged (nothing shown for that year). Full is the original behaviour — calendar icon, red row, and notifications all active. Warn is new: you still get the calendar icon and notifications, but the row never turns red — a middle ground for a heads-up system without the "failed" consequence. If a year already had a custom setting from before this update, it resets to the default for that year (current year: Full, other years: Off) — you can reselect it from the year menu.
+
+### Changed
+- **The red "failed" row indicator now only appears once a goal genuinely can't be caught up this period.** Previously it could turn red just because nothing was logged yet that day, even with plenty of time left — now it stays calm as long as hitting the target is still possible, and only turns red once it truly isn't.
+- **Weekly goals scheduled for specific days now track each day on its own.** Missing Monday and then doing extra work later in the week no longer quietly clears the miss — only something done on a day that wasn't already required pays it down.
+- **"Avoid" goals' failed indicator now resets each week.** A clean week no longer shows as failed just because an earlier week in the same rolling allowance period went over.
+- **The calendar icon and the red row indicator are now independent signals.** A goal can show its calendar icon without its row ever turning red, and the row can turn red even when the icon looks calm — whichever is the more accurate warning for that goal.
+- **Goal and list item calendar icons have a new look**: a dark icon for overdue, a solid red icon for due today, and a plain red icon for due tomorrow. The ambiguous orange previously used for "due tomorrow" is gone.
+- **Notifications (both in-app and background) no longer mention items due tomorrow.** Only overdue and due-today items are announced; a day with nothing but a "due tomorrow" heads-up produces no notification at all.
+
+### Fixed
+- **The overdue calendar icon now has a thin red outline**, so it stays visible against a dark background in dark mode.
+
 ## [2.16.0] — 2026-09-07
 
 ### Changed

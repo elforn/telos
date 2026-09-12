@@ -270,19 +270,22 @@ class ListItem extends Gestures(AppElement) {
           color: var(--color-text-muted);
         }
 
-        /* ── Overdue escalation — full-row red once a dueDate has lapsed ──
-           :host([data-urgency="overdue"]) is set in _update() below, from
-           the same urgencyOf() call the calendar badge already reads. No
-           progress fill to recolour here (unlike goal-item) — the whole row
-           just flips to solid --color-danger, the same token/pairing the
+        /* ── Failed escalation — full-row red once a dueDate has lapsed ──
+           data-failed is its own boolean attribute, set in _update() below
+           alongside — not instead of — data-urgency, which still carries
+           the raw bucket for the calendar badge. List items have no
+           frequency source to diverge from, so the two happen to derive
+           from the same urgencyOf() call here, but remain two attributes.
+           No progress fill to recolour here (unlike goal-item) — the whole
+           row just flips to solid --color-danger, the same token/pairing the
            badge above already proves correct in both themes. The badge
            itself is left unstyled: its white glyph still reads fine even
            once its own small chip background blends into the row. */
-        :host([data-urgency="overdue"]) .row { background: var(--color-danger); }
-        :host([data-urgency="overdue"]) .title { color: var(--color-text-inverse); }
-        :host([data-urgency="overdue"]) .note-icon,
-        :host([data-urgency="overdue"]) .url-icon { color: var(--color-text-inverse); opacity: 0.75; }
-        :host([data-urgency="overdue"]) .drag-btn { color: var(--color-text-inverse); }
+        :host([data-failed]) .row { background: var(--color-danger); }
+        :host([data-failed]) .title { color: var(--color-text-inverse); }
+        :host([data-failed]) .note-icon,
+        :host([data-failed]) .url-icon { color: var(--color-text-inverse); opacity: 0.75; }
+        :host([data-failed]) .drag-btn { color: var(--color-text-inverse); }
 
         /* ── Selection mode ─────────────────────────────────────────────── */
 
@@ -540,7 +543,14 @@ class ListItem extends Gestures(AppElement) {
     // deadlinesVisible === false suppresses this item's due-date urgency
     // entirely (no icon, no full-row-red) — mirrors goal-item.js's own gate
     // and collectUpcoming's notification-level gating (deadline-visibility.js).
+    // List items have no frequency/tracking, so the icon and the full-row-red
+    // "Failed" mechanism both derive from this one urgencyOf call — unlike
+    // goal-item.js, there's no second, independent source to diverge from.
+    // They're still set as two separate attributes below rather than one
+    // reused value, so a future per-item difference wouldn't require
+    // re-threading this — see goal-item.js for why that separation matters.
     const urgency = this._deadlinesVisible === false ? 'none' : urgencyOf(this._item?.dueDate, active);
+    const failed = urgency === 'overdue';
     this._title.textContent = title;
     this._row.setAttribute('aria-label',
       urgency === 'none' ? title : t('list-item.duedate-aria', { title, when: t(`urgency.${urgency}`) }));
@@ -548,6 +558,7 @@ class ListItem extends Gestures(AppElement) {
     this._row.dataset.hasNote = String(!!this._item?.note);
     this._row.dataset.hasUrl = String(!!this._item?.url);
     this.dataset.urgency = urgency;
+    this.toggleAttribute('data-failed', failed);
     this._badge.textContent = t(`item-dialog.status-${status}`);
     this._badge.dataset.status = status;
     if (this._tagPillsEl) {

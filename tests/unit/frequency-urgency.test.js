@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { frequencyUrgencyOf, frequencyRowUrgencyOf, frequencyMissedDetail } from '../../app/utils/frequency-urgency.js';
+import { isOverAllowance } from '../../app/utils/tracking.js';
 
 // Reference week: 2026-08-10 is a Monday, 2026-08-16 the following Sunday
 // (confirmed against isoWeekKey's own test fixtures in tracking.test.js).
@@ -83,6 +84,25 @@ describe('frequency-urgency — decreasing ("Avoid") goals: row-only failure mar
     const control = decreasing(2, [...blockStartWeek, MON], 'week'); // same entries, "week" mode resets — unaffected
     expect(frequencyRowUrgencyOf(control, true, MON)).toBe('none');
   });
+
+  it('is Failed evaluated per week, not per block: a week with zero new slips is not Failed even though an earlier week in the same 4-week block already blew the pooled allowance', () => {
+    // Block-start week (3 weeks before MON) already has 3 slips against an
+    // allowance of 2 — the block's pooled budget is blown. This week (MON)
+    // has no new entries at all. isOverAllowance (the block-level, purely
+    // cumulative check) is still true — that's correct for e.g. the
+    // dialog's own allowance summary — but the row's Failed indicator must
+    // not carry a past week's overage forward onto a clean week.
+    const blockStartWeek = ['2026-07-20', '2026-07-21', '2026-07-22'];
+    const goal = decreasing(2, [...blockStartWeek], '4weeks');
+    expect(isOverAllowance(goal, MON)).toBe(true); // sanity check: the block really is over
+    expect(frequencyRowUrgencyOf(goal, true, MON)).toBe('none');
+  });
+
+  it('is Failed the exact week a slip pushes an already-blown block over again, even mid-week', () => {
+    const blockStartWeek = ['2026-07-20', '2026-07-21', '2026-07-22']; // already over (3 vs allowance 2)
+    const goal = decreasing(2, [...blockStartWeek, MON], '4weeks'); // one new slip this week
+    expect(frequencyRowUrgencyOf(goal, true, MON)).toBe('overdue');
+  });
 });
 
 describe('frequency-urgency — Nx (times-per-period) mode, weekly — dialog-facing', () => {
@@ -100,20 +120,19 @@ describe('frequency-urgency — Nx (times-per-period) mode, weekly — dialog-fa
     expect(frequencyUrgencyOf(weeklyAny(3), true, THU)).toBe('tomorrow');
   });
 
-  it('shows overdue (not a milder today) at slack == 0, unlogged — Any mode has no "nothing missed yet" state to protect', () => {
-    // Friday, nothing logged, target 3: 3 days remain (Fri-Sun), 3 needed -> slack 0.
-    // Any mode's tightest possible target (6, since 7 routes to the
-    // every-day path) means slack can never hit <=0 on day 1 of a fresh
-    // period — so this state always represents some accumulated shortfall,
-    // never a first-time "your task for today" moment. 'overdue' is the
-    // honest label, matching scheduled-days' own collapse.
-    expect(frequencyUrgencyOf(weeklyAny(3), true, FRI)).toBe('overdue');
+  it('shows today (not overdue) at slack == 0, unlogged, while still recoverable', () => {
+    // Friday, nothing logged, target 3: 3 days remain (Fri-Sun), 3 needed ->
+    // slack 0, but logging all three remaining days still hits the target,
+    // so this is genuinely recoverable — 'today', not 'overdue'. Matches
+    // the row's own recoverability split (see nxRowBucketWeekly).
+    expect(frequencyUrgencyOf(weeklyAny(3), true, FRI)).toBe('today');
   });
 
-  it('stays on overdue even once slack goes further negative — never goes silent, never overdue used to mean anything looser', () => {
-    // Saturday, nothing logged, target 3: 2 days remain, 3 needed -> slack -1.
+  it('escalates to overdue once slack goes negative enough to be genuinely unrecoverable', () => {
+    // Saturday, nothing logged, target 3: 2 days remain, 3 needed -> only 2
+    // opportunity days for 3 required -> unrecoverable.
     expect(frequencyUrgencyOf(weeklyAny(3), true, SAT)).toBe('overdue');
-    // Sunday, still nothing logged: 1 day remains, 3 needed -> slack -2.
+    // Sunday, still nothing logged: 1 day remains, 3 needed -> unrecoverable.
     expect(frequencyUrgencyOf(weeklyAny(3), true, SUN)).toBe('overdue');
   });
 
@@ -174,10 +193,12 @@ describe('frequency-urgency — Nx mode, monthly (always active, no opt-in) — 
     expect(frequencyUrgencyOf(monthly(target), true, '2026-08-14')).toBe('none');
   });
 
-  it('shows overdue at slack == 0, unlogged, kept consistent with weekly\'s own collapse', () => {
-    // Aug 22: 10 days remain, 10 needed -> slack 0.
-    expect(frequencyUrgencyOf(monthly(target), true, '2026-08-22')).toBe('overdue');
-    // Aug 25: 7 days remain, 10 needed -> slack -3.
+  it('shows today (not overdue) at slack == 0 while still recoverable, escalating to overdue only once genuinely unrecoverable', () => {
+    // Aug 22: 10 days remain, 10 needed -> slack 0, but exactly enough days
+    // left to hit it -> recoverable -> 'today'.
+    expect(frequencyUrgencyOf(monthly(target), true, '2026-08-22')).toBe('today');
+    // Aug 25: 7 days remain, 10 needed -> only 7 opportunity days for 10
+    // required -> unrecoverable -> 'overdue'.
     expect(frequencyUrgencyOf(monthly(target), true, '2026-08-25')).toBe('overdue');
   });
 
@@ -193,13 +214,14 @@ describe('frequency-urgency — scheduled-days mode, weekly — dialog-facing', 
     expect(frequencyUrgencyOf(goal, true, MON)).toBe('today');
   });
 
-  it('overdue now takes precedence over today once an earlier scheduled day was missed', () => {
+  it('stays today (not overdue) on a later scheduled day even with an earlier miss, as long as it\'s still recoverable', () => {
     // Monday missed; checking Friday, which is itself also scheduled and
-    // unlogged. Today's own normal task no longer masks the earlier debt —
-    // the miss is the more urgent story, so 'overdue' wins even though
-    // Friday's own slot is simultaneously outstanding too.
+    // unlogged. 3 days remain (Fri-Sun) for the 3 still needed -> still
+    // fully recoverable, so today's own task reads as plain 'today' rather
+    // than escalating over an earlier miss that hasn't actually run out of
+    // road yet.
     const goal = scheduled(3, ['mon', 'wed', 'fri']); // Monday missed (no entries)
-    expect(frequencyUrgencyOf(goal, true, FRI)).toBe('overdue');
+    expect(frequencyUrgencyOf(goal, true, FRI)).toBe('today');
   });
 
   it('clears the today icon once today\'s own entry is logged, even though the period target is not fully met yet', () => {
@@ -228,28 +250,27 @@ describe('frequency-urgency — scheduled-days mode, weekly — dialog-facing', 
     expect(frequencyUrgencyOf(goal, true, WED)).toBe('none');
   });
 
-  it('turns overdue the day after a missed scheduled day, regardless of recoverability — the dialog no longer distinguishes', () => {
-    // Tuesday, Monday was scheduled and missed (0 entries). Recoverable or
-    // not, the dialog's answer is the same now: 'overdue', full stop.
+  it('stays today the day after a missed scheduled day, as long as it\'s still recoverable', () => {
+    // Tuesday, Monday was scheduled and missed (0 entries). 6 days remain
+    // for the 3 still needed -> comfortably recoverable -> 'today'.
     const goal = scheduled(3, ['mon', 'wed', 'fri']);
-    expect(frequencyUrgencyOf(goal, true, TUE)).toBe('overdue');
+    expect(frequencyUrgencyOf(goal, true, TUE)).toBe('today');
   });
 
-  it('stays overdue even once recovery is mathematically impossible — recoverability no longer decides the dialog\'s answer at all', () => {
+  it('escalates to overdue once recovery is mathematically impossible', () => {
     // Saturday, all three scheduled days (mon/wed/fri) missed, target 3.
-    // 2 days remain (sat, sun), 3 needed -> unrecoverable. The dialog used
-    // to downgrade this to a milder 'today'; it no longer distinguishes —
-    // don't hint at recoverability, keep one simple rule ("behind and
-    // unlogged today = overdue"), and stay fully actionable (still clears
-    // on logging, see the next test).
+    // 2 days remain (sat, sun), 3 needed -> genuinely unrecoverable, unlike
+    // the same-goal-earlier-in-the-week cases above which still had road
+    // left. Recoverability now decides the dialog's answer, same as the row.
     const goal = scheduled(3, ['mon', 'wed', 'fri']);
     expect(frequencyUrgencyOf(goal, true, SAT)).toBe('overdue');
   });
 
-  it('never gives up while even one day of slack remains — the last possible day still warns', () => {
-    // Sunday, the only scheduled day (Monday) was missed, target 1.
+  it('still shows today, not overdue, on the last possible day if that day alone can still close the gap', () => {
+    // Sunday, the only scheduled day (Monday) was missed, target 1 -> 1 day
+    // left (today) for 1 still needed -> just barely recoverable -> 'today'.
     const goal = scheduled(1, ['mon']);
-    expect(frequencyUrgencyOf(goal, true, SUN)).toBe('overdue');
+    expect(frequencyUrgencyOf(goal, true, SUN)).toBe('today');
   });
 
   it('logging a catch-up entry on an unscheduled day still clears the dialog to tomorrow, whether or not the miss is recoverable', () => {
@@ -272,10 +293,11 @@ describe('frequency-urgency — scheduled-days mode, weekly — dialog-facing', 
     expect(frequencyUrgencyOf(scheduled(4, base, [FRI, SAT]), true, SAT)).toBe('tomorrow'); // Saturday logged too
   });
 
-  it('still reaches overdue on an unscheduled day when the miss was already recoverable beforehand', () => {
+  it('shows today, not overdue, on an unscheduled day when the miss is still recoverable', () => {
     // Mon-Thu scheduled, target 4, only Monday missed (Tue/Wed/Thu logged).
+    // 3 days remain (Fri-Sun) for the 1 still needed -> recoverable -> 'today'.
     const goal = scheduled(4, ['mon', 'tue', 'wed', 'thu'], [TUE, WED, THU]);
-    expect(frequencyUrgencyOf(goal, true, FRI)).toBe('overdue');
+    expect(frequencyUrgencyOf(goal, true, FRI)).toBe('today');
   });
 
   it('shows the orange tomorrow icon when nothing is missed, today is unscheduled, and tomorrow is scheduled', () => {
@@ -283,9 +305,9 @@ describe('frequency-urgency — scheduled-days mode, weekly — dialog-facing', 
     expect(frequencyUrgencyOf(goal, true, THU)).toBe('tomorrow');
   });
 
-  it('overdue takes precedence over today\'s own masking once an earlier miss exists, even on a day that is itself scheduled', () => {
-    const missedYesterday = scheduled(2, ['mon', 'tue']); // Monday missed
-    expect(frequencyUrgencyOf(missedYesterday, true, TUE)).toBe('overdue'); // Tuesday itself scheduled, but Monday's debt wins
+  it('stays today despite an earlier miss, on a day that is itself scheduled, as long as it\'s still recoverable', () => {
+    const missedYesterday = scheduled(2, ['mon', 'tue']); // Monday missed, 6 days left for the 2 needed
+    expect(frequencyUrgencyOf(missedYesterday, true, TUE)).toBe('today');
   });
 
   it('shows no row icon when tomorrow is not a scheduled day either', () => {
@@ -346,12 +368,24 @@ describe('frequency-urgency — "every day" unification (Any at target 7 == all 
   });
 });
 
-describe('frequency-urgency — row-facing (frequencyRowUrgencyOf): sticky once unrecoverable', () => {
-  it('matches the dialog exactly while nothing has been logged today, for both recoverable and unrecoverable misses', () => {
-    // Recoverable (Tuesday, one day behind, still fixable): both agree overdue.
-    const recoverable = scheduled(3, ['mon', 'wed', 'fri']);
-    expect(frequencyRowUrgencyOf(recoverable, true, TUE)).toBe('overdue');
-    // Unrecoverable (Saturday, all three scheduled days missed): both still agree overdue.
+describe('frequency-urgency — row-facing (frequencyRowUrgencyOf): overdue only when genuinely unrecoverable', () => {
+  it('a missed scheduled day is Failed until something extra pays it down — a still-recoverable aggregate does not clear it', () => {
+    // Monday scheduled and missed; Tuesday, nothing logged yet at all. Debt
+    // of 1 (Monday), no surplus — Failed, even though the week's total is
+    // still easily on pace by plain count.
+    const untouched = scheduled(3, ['mon', 'wed', 'fri']);
+    expect(frequencyRowUrgencyOf(untouched, true, TUE)).toBe('overdue');
+    // Logging Tuesday itself (unscheduled — not one of mon/wed/fri) is
+    // surplus: it pays down exactly Monday's one unit of debt, clearing it.
+    const paidByBonus = scheduled(3, ['mon', 'wed', 'fri'], [TUE]);
+    expect(frequencyRowUrgencyOf(paidByBonus, true, TUE)).not.toBe('overdue');
+    // Logging Wednesday instead — a day that IS scheduled — only pays
+    // Wednesday's own slot, never Monday's debt. Still Failed.
+    const paidByOwnSlot = scheduled(3, ['mon', 'wed', 'fri'], [WED]);
+    expect(frequencyRowUrgencyOf(paidByOwnSlot, true, WED)).toBe('overdue');
+    // Every scheduled day missed and no days left to add surplus (Sat/Sun
+    // aren't scheduled but could still bank surplus — this is genuinely
+    // unrecoverable only once the period itself ends with debt unpaid).
     const unrecoverable = scheduled(3, ['mon', 'wed', 'fri']);
     expect(frequencyRowUrgencyOf(unrecoverable, true, SAT)).toBe('overdue');
   });
@@ -405,13 +439,15 @@ describe('frequency-urgency — row-facing (frequencyRowUrgencyOf): sticky once 
     expect(frequencyRowUrgencyOf(goal, true, SAT)).toBe('overdue');
   });
 
-  it('agrees with the dialog when logged today and the miss IS still recoverable (scheduled-days) — clears to no icon', () => {
+  it('diverges from the dialog once a debt-paying bonus entry clears Failed but Friday\'s own slot is still pending (scheduled-days)', () => {
     // MF (Mon/Fri) schedule, target 2, Monday missed. Logging Tuesday (an
-    // unscheduled catch-up day) fully covers the one miss -> back on pace
-    // -> both dialog and row clear all the way to 'none', not just 'tomorrow'.
+    // unscheduled, debt-paying day) clears Monday's debt entirely, so the
+    // row is no longer Failed — but unlike the dialog's blanket 'none'
+    // (purely on-pace by count), the row still has nothing to say about
+    // Friday's own not-yet-due slot beyond "today's own action is logged."
     const goal = scheduled(2, ['mon', 'fri'], [TUE]);
     expect(frequencyUrgencyOf(goal, true, TUE)).toBe('none');
-    expect(frequencyRowUrgencyOf(goal, true, TUE)).toBe('none');
+    expect(frequencyRowUrgencyOf(goal, true, TUE)).not.toBe('overdue');
   });
 
   it('diverges at 7x/every-day too: dialog clears to tomorrow, row stays latched to overdue', () => {

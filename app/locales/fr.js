@@ -38,6 +38,7 @@ defineStrings({
   'goal-item.freq-logged-suffix': ', enregistré aujourd’hui',
   'goal-item.decr-aria':          '{title}, {pct}% net, {count} écarts cette semaine, {target} autorisés',
   'goal-item.decr-logged-suffix': ', écart aujourd’hui',
+  'goal-item.failed-suffix':      ', échoué',
 
   // Urgence des échéances (partagé par objectifs, éléments, agrégats).
   'urgency.far':          'à venir',
@@ -429,6 +430,9 @@ defineStrings({
   'settings.deadlines':        'Marqueurs d’échéance',
   'settings.toggle-on':        'Activé',
   'settings.toggle-off':       'Désactivé',
+  'settings.level-off':        'Désactivé',
+  'settings.level-warn':       'Alerte',
+  'settings.level-full':       'Complet',
   'settings.tags-shown':       'Affichées',
   'settings.tags-hidden':      'Masquées',
   'settings.notifications':        'Notifications',
@@ -439,7 +443,6 @@ defineStrings({
   'notifications.digest-title':    '{count} éléments nécessitent votre attention',
   'notifications.digest-overdue':  'En retard ({count})',
   'notifications.digest-today':    'Aujourd\'hui ({count})',
-  'notifications.digest-tomorrow': 'Demain ({count})',
   'notifications.digest-hidden':   '{count} masqué(s)',
   'notifications.digest-hidden-only-title': '{count} masqué(s)',
   'notifications.digest-hidden-only-body':  'Appuyez pour consulter',

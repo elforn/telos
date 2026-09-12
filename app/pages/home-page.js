@@ -18,7 +18,7 @@ import { exportGoalsMarkdown, exportGoalMarkdown } from '../utils/export-markdow
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
 import { matchesDateBucket } from '../utils/urgency.js';
-import { yearDeadlinesVisible } from '../utils/deadline-visibility.js';
+import { yearDeadlinesLevel } from '../utils/deadline-visibility.js';
 import { percentValue, setPercent, logEntry, unlogEntry, isLoggedOn } from '../utils/tracking.js';
 import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
 import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
@@ -644,16 +644,17 @@ class HomePage extends AppElement {
     };
     this.watch('goals', this._onGoals);
 
-    // Deadline-visibility toggle (year-header's own menu writes this, see
+    // Deadline-level setting (year-header's own menu writes this, see
     // deadline-visibility.js) — resolved once here rather than read inline
     // by each goal-item, then re-pushed via the same render _onGoals already
     // does. Also drives year-header's own muted "hidden" badge, next to its
     // always-visible filter-toggle button — deliberately not inside the
     // collapsible filter panel, so the warning is visible before the user
-    // thinks to open it at all.
+    // thinks to open it at all. The badge only fires for 'off' — 'warn'
+    // years are fully visible (icon + notifications), just never Failed.
     this._onGoalsDeadlinesVisible = deadlinesVisible => {
-      this._deadlinesVisible = yearDeadlinesVisible(deadlinesVisible, this._year);
-      this._header.deadlinesHidden = !this._deadlinesVisible;
+      this._deadlinesLevel = yearDeadlinesLevel(deadlinesVisible, this._year);
+      this._header.deadlinesHidden = this._deadlinesLevel === 'off';
       this._onGoals(getState().goals);
     };
     this.watch('goalsDeadlinesVisible', this._onGoalsDeadlinesVisible);
@@ -1346,7 +1347,7 @@ class HomePage extends AppElement {
   _renderList(container, items) {
     syncChildren(container, items, 'goal-item', (el, goal) => {
       el.goal = goal;
-      el.deadlinesVisible = this._deadlinesVisible;
+      el.deadlinesLevel = this._deadlinesLevel;
     }, { getElId: el => el._goal?.id });
   }
 

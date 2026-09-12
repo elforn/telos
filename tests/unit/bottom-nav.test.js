@@ -686,7 +686,7 @@ describe('bottom-nav — urgency roll-up', () => {
   it('suppresses the Years pill entirely when the current year\'s own deadlines are hidden', () => {
     setState('goals', yearGoals([{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
     setState('lists', []);
-    setState('goalsDeadlinesVisible', { [YEAR]: false });
+    setState('goalsDeadlinesVisible', { [YEAR]: 'off' });
     const el = mount();
     el.refreshUrgency();
     expect(yearsDot(el).hidden).toBe(true);
@@ -763,7 +763,7 @@ describe('bottom-nav — Upcoming bell', () => {
   it('counts a non-current-year overdue goal, unlike the Years pill', () => {
     setState('goals', { [YEAR - 1]: { capstone: [{ id: 'c', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }], milestones: [], wow: [], focus: [] } });
     setState('lists', []);
-    setState('goalsDeadlinesVisible', { [YEAR - 1]: true });
+    setState('goalsDeadlinesVisible', { [YEAR - 1]: 'full' });
     const el = mount();
     expect(bellBtn(el).hidden).toBe(false);
     expect(bellBadge(el).textContent).toBe('1');
@@ -805,7 +805,7 @@ describe('bottom-nav — Upcoming bell', () => {
   it('shows the real urgent-count aria-description and red badge when count > 0, even with hidden items also present', () => {
     setState('goals', yearGoals([{ id: 'c1', title: 'x', tags: [], tracking: { type: 'percentage', value: 10 }, dueDate: isoDaysFromNow(-1) }]));
     setState('lists', []);
-    setState('goalsDeadlinesVisible', { [YEAR - 1]: false }); // irrelevant here — no goals in that year
+    setState('goalsDeadlinesVisible', { [YEAR - 1]: 'off' }); // irrelevant here — no goals in that year
     const el = mount();
     expect(bellBadge(el).hidden).toBe(false);
     expect(bellBadge(el).textContent).toBe('1');
