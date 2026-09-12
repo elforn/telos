@@ -13,6 +13,7 @@ const DELETE_WIDTH = 60;   // icon-only delete button
 const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
 const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
 const SWIPE_DEAD_ZONE = 15;   // px of drag before row starts moving
+const MULTI_TAP_WINDOW = 200; // ms between taps counted toward triple-tap-to-complete
 
 class ListItem extends Gestures(AppElement) {
   set item(value) {
@@ -442,6 +443,7 @@ class ListItem extends Gestures(AppElement) {
   }
 
   unsubscribe() {
+    clearTimeout(this._tapTimer);
     this._deleteEl?.removeEventListener('pointerdown', this._stopPointerDown);
     this._deleteEl?.removeEventListener('pointerup', this._onDeletePointerUp);
     this._deleteEl?.removeEventListener('click', this._onDeleteBtnKey);
@@ -462,9 +464,33 @@ class ListItem extends Gestures(AppElement) {
       }));
       return;
     }
-    this.dispatchEvent(new CustomEvent('item-tap', {
-      bubbles: true, composed: true, detail: { item: this._item },
-    }));
+    // Triple-tap toggles done, independent of the status badge's cycle —
+    // three taps in quick succession is deliberate (vs. two, easy to trigger
+    // by accident) and mirrors the badge's own done-celebration. A plain
+    // single tap still opens the item, but has to wait out the window first
+    // in case more taps follow (see MULTI_TAP_WINDOW); exactly two taps is a
+    // deliberate no-op, not a fallback to opening — an accidental double-tap
+    // (aiming for triple but missing) should do nothing, not misfire open.
+    this._tapCount = (this._tapCount ?? 0) + 1;
+    clearTimeout(this._tapTimer);
+    if (this._tapCount >= 3) {
+      this._tapCount = 0;
+      const status = this._item?.status ?? 'open';
+      const next = status === 'done' ? 'open' : 'done';
+      this.dispatchEvent(new CustomEvent('item-status-cycle', {
+        bubbles: true, composed: true, detail: { item: this._item, next },
+      }));
+      if (next === 'done') this._celebrate();
+      return;
+    }
+    const count = this._tapCount;
+    this._tapTimer = setTimeout(() => {
+      this._tapCount = 0;
+      if (count !== 1) return;
+      this.dispatchEvent(new CustomEvent('item-tap', {
+        bubbles: true, composed: true, detail: { item: this._item },
+      }));
+    }, MULTI_TAP_WINDOW);
   }
 
   onLongPress() {

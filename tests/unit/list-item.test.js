@@ -190,30 +190,111 @@ describe('list-item — deadlinesVisible gates both mechanisms', () => {
 });
 
 describe('list-item — item-tap event', () => {
-  it('dispatches item-tap on tap', () => {
+  // item-tap is deferred by MULTI_TAP_WINDOW so a single tap can be told
+  // apart from the start of a triple-tap — see the "triple-tap" describe
+  // block below.
+  it('dispatches item-tap on tap', async () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-tap', e => events.push(e));
     tap(el);
-    expect(events).toHaveLength(1);
+    await vi.waitFor(() => expect(events).toHaveLength(1));
   });
 
-  it('item-tap detail contains the item', () => {
+  it('item-tap detail contains the item', async () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-tap', e => events.push(e));
     tap(el);
+    await vi.waitFor(() => expect(events).toHaveLength(1));
     expect(events[0].detail.item.id).toBe('i1');
     expect(events[0].detail.item.title).toBe('Buy flowers');
   });
 
-  it('item-tap bubbles and is composed', () => {
+  it('item-tap bubbles and is composed', async () => {
     const el = mount();
     const events = [];
     el.addEventListener('item-tap', e => events.push(e));
     tap(el);
+    await vi.waitFor(() => expect(events).toHaveLength(1));
     expect(events[0].bubbles).toBe(true);
     expect(events[0].composed).toBe(true);
+  });
+});
+
+describe('list-item — triple-tap to complete', () => {
+  it('does not dispatch item-status-cycle on a single tap', async () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('item-status-cycle', e => events.push(e));
+    tap(el);
+    await new Promise(r => setTimeout(r, 400));
+    expect(events).toHaveLength(0);
+  });
+
+  it('does not dispatch item-status-cycle on a double tap', async () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('item-status-cycle', e => events.push(e));
+    tap(el);
+    tap(el);
+    await new Promise(r => setTimeout(r, 400));
+    expect(events).toHaveLength(0);
+  });
+
+  it('a double tap that never becomes a triple is a no-op — does not open the item', async () => {
+    const el = mount();
+    const taps = [];
+    el.addEventListener('item-tap', e => taps.push(e));
+    tap(el);
+    tap(el);
+    await new Promise(r => setTimeout(r, 400));
+    expect(taps).toHaveLength(0);
+  });
+
+  it('dispatches item-status-cycle with next="done" on triple tap', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('item-status-cycle', e => events.push(e));
+    tap(el); tap(el); tap(el);
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.next).toBe('done');
+    expect(events[0].detail.item.id).toBe('i1');
+  });
+
+  it('triple tap on an already-done item toggles back to open', () => {
+    const el = mount({ ...ITEM, status: 'done' });
+    const events = [];
+    el.addEventListener('item-status-cycle', e => events.push(e));
+    tap(el); tap(el); tap(el);
+    expect(events[0].detail.next).toBe('open');
+  });
+
+  it('does not dispatch item-tap when a triple tap completes', async () => {
+    const el = mount();
+    const taps = [];
+    el.addEventListener('item-tap', e => taps.push(e));
+    tap(el); tap(el); tap(el);
+    await new Promise(r => setTimeout(r, 400));
+    expect(taps).toHaveLength(0);
+  });
+
+  it('item-status-cycle from triple tap bubbles and is composed', () => {
+    const el = mount();
+    const events = [];
+    el.addEventListener('item-status-cycle', e => events.push(e));
+    tap(el); tap(el); tap(el);
+    expect(events[0].bubbles).toBe(true);
+    expect(events[0].composed).toBe(true);
+  });
+
+  it('a 4th tap right after a completed triple is treated as a fresh single tap', async () => {
+    const el = mount();
+    const taps = [];
+    el.addEventListener('item-tap', e => taps.push(e));
+    tap(el); tap(el); tap(el);
+    tap(el);
+    await vi.waitFor(() => expect(taps).toHaveLength(1));
   });
 });
 
@@ -519,13 +600,13 @@ describe('list-item — selection mode', () => {
     expect(toggles[0].detail.item).toEqual(ITEM);
   });
 
-  it('tap outside selection mode still emits item-tap', () => {
+  it('tap outside selection mode still emits item-tap', async () => {
     const el = mount();
     el.selectionMode = false;
     const taps = [];
     el.addEventListener('item-tap', e => taps.push(e));
     tap(el);
-    expect(taps).toHaveLength(1);
+    await vi.waitFor(() => expect(taps).toHaveLength(1));
   });
 
   it('item-select-toggle is bubbles and composed', () => {

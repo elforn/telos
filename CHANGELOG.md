@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.18.0] — 2026-09-12
+
+### Added
+- **Triple-tap a list item to mark it done (or back to open).** A quick way to complete a task without reaching for the status badge — tap the row three times in a row and it toggles done/open with a small celebration animation. A single tap still opens the item for editing; an accidental double-tap does nothing, so aiming for three and missing never misfires.
+
 ## [2.17.1] — 2026-09-12
 
 ### Added
