@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.22.2] — 2026-09-13
+
+### Changed
+- **The Android status/notification bar is now always the dark surface colour**, regardless of whether the app itself is in light or dark mode — previously it followed the device's light/dark setting via `prefers-color-scheme`. `manifest.json`'s static `theme_color` fallback was updated to match, so there's still no flash to a different colour once the page's own value takes over.
+
 ## [2.22.1] — 2026-09-13
 
 ### Fixed

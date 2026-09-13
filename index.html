@@ -3,15 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
-    <!-- These two are the real, theme-aware source of truth once the page is
-         actually running (a media query the manifest's own theme_color can't
-         express) — manifest.json's theme_color is a single static fallback
-         used only for the brief pre-load moment (install/splash chrome), and
-         is deliberately kept equal to background_color/this light value
-         rather than the app's accent blue, so that moment has no visible
-         mismatch to correct once these tags take over. -->
-    <meta name="theme-color" content="#F5F2EE" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#1C1C1E" media="(prefers-color-scheme: dark)" />
+    <!-- Deliberately one static value, not a prefers-color-scheme split —
+         the Android status bar/notification bar stays the dark surface
+         colour regardless of the app's own light/dark mode, by request.
+         manifest.json's theme_color is kept equal to this so there's no
+         flash between the two once the page's own value takes over (the
+         manifest's is only ever visible for the brief pre-load moment). -->
+    <meta name="theme-color" content="#1C1C1E" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="application-name" content="Telos" />
     <!-- Personal tool, not content — deliberately excluded from search indexing. -->
