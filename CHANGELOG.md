@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.22.0] — 2026-09-13
+
+### Changed
+- **Weekly, monthly, and Avoid goal rows now show a bit less history at a glance.** The dot/septagon strip covers the current period plus 2 past ones (was 3 past) — a future analytics view will cover the fuller history in detail, so the row itself only needs a quick recent glance.
+
+### Fixed
+- **Screen readers now hear a goal row's recent history, not just today's.** The dot-strip and septagon strip are purely visual (hidden from assistive tech), so their per-period history — which past weeks or months were met, partial, or missed — never reached a screen reader before. It's now folded into the row's own accessible label alongside today's count and status.
+
 ## [2.21.0] — 2026-09-13
 
 ### Added
