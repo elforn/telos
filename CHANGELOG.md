@@ -8,7 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [2.21.0] — 2026-09-13
 
 ### Added
-- **New goal type: "To date."** A self-advancing progress bar that fills automatically based on how much time has passed toward a deadline — no manual dragging, it just counts up on its own. Pick it from the type picker like any other goal type, set a deadline (the same due-date field every goal already has), and choose whether it starts counting from the beginning of the year or a specific date you pick. The row shows the number of days left instead of a percentage.
+- **New goal type: "To date."** A self-advancing progress bar that fills automatically based on how much time has passed toward a deadline — no manual dragging, it just counts up on its own. Pick it from the type picker like any other goal type, set a deadline (the same due-date field every goal already has), and set a start date — type any date you like, or tap "Year start" to quickly fill in January 1st. The row shows the number of days left instead of a percentage.
 
 ## [2.20.0] — 2026-09-13
 
