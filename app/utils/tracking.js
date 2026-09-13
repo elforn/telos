@@ -113,18 +113,18 @@ export const ALLOWANCE_PERIOD_WEEKS = { week: 1, '4weeks': 4 };
 export const PERIOD_WINDOW = { weekly: 6, monthly: 4, decreasing: 6 };
 
 // The row's glance strip deliberately shows *less* history than the score
-// actually counts, where the two windows differ (4 periods — the current
-// one plus 3 past — vs. PERIOD_WINDOW's 6/4/6) — a recent-glance view, not a
+// actually counts, where the two windows differ (3 periods — the current
+// one plus 2 past — vs. PERIOD_WINDOW's 6/4/6) — a recent-glance view, not a
 // full explanation of the score, in anticipation of a future analytics
-// feature that will cover the fuller history in detail. Monthly's display
-// window (4) happens to equal its score window (PERIOD_WINDOW.monthly, also
-// 4) at this size, so recentDots shows monthly's full scored history rather
-// than a subset — not true for weekly/decreasing, whose 6-period score
-// window is still wider than what's displayed. Purely display: recentDots()/
+// feature that will cover the fuller history in detail (shrunk from 4 to 3
+// in favour of that upcoming analytics view, to cut a bit more noise off the
+// row itself). Narrower than every type's own score window now, including
+// monthly's (PERIOD_WINDOW.monthly is 4) — recentDots never shows a type's
+// full scored history at this size. Purely display: recentDots()/
 // recentWeekStates() read this, but percentValue/weightedAverage/
 // decreasingWeightedAverage always read PERIOD_WINDOW and are completely
 // untouched by this window's size.
-export const DOT_WINDOW = { weekly: 4, monthly: 4, decreasing: 4 };
+export const DOT_WINDOW = { weekly: 3, monthly: 3, decreasing: 3 };
 
 // Fix-a-day's scrollable window, in calendar days — deliberately independent
 // of both PERIOD_WINDOW (the score) and DOT_WINDOW (the display) and

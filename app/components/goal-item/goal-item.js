@@ -129,6 +129,36 @@ const SEPTAGON_WITHIN_DOT_RADIUS = 6; // viewBox units (of 100)
 // nominally carries (see weekDayStates in tracking.js).
 export function septagonWedgeState(day) { return day.future ? 'future' : day.state; }
 
+// Folds the dot-strip's own past-period history into the aria-label as
+// plain text, since the strip itself is aria-hidden (see template()) and a
+// role="button" row's accessible name comes only from this label, never
+// from descendant content. Excludes today — already covered by the
+// count/target clause _buildAriaLabel builds alongside this. Empty string
+// (nothing appended) when recentDots trims away all history, e.g. a fresh
+// goal.
+export function freqHistoryClause(goal) {
+  const history = recentDots(goal).slice(0, -1);
+  if (!history.length) return '';
+  const words = history.map(d => t(`goal-item.freq-history-${d.state}`)).join(', ');
+  return t(`goal-item.freq-history-${goal.tracking.type}`, { history: words });
+}
+
+// Same reasoning as freqHistoryClause, for the septagon strip's history
+// weeks (everything but the current week, already covered by count/target
+// alongside this). Reports each week's slip count, not its per-day
+// within/over split — that allowance nuance is a visual-glance detail on
+// the septagon itself, not worth a second reading here. Unlike recentDots,
+// recentWeekStates is never trimmed, so this is never empty.
+export function decrHistoryClause(goal) {
+  const weekHistory = recentWeekStates(goal).slice(0, -1);
+  if (!weekHistory.length) return '';
+  const words = weekHistory.map(week => {
+    const slips = week.filter(d => d.state !== 'clean' && !d.future).length;
+    return slips === 0 ? t('goal-item.decr-history-clean') : t('goal-item.decr-history-slipped', { count: slips });
+  }).join(', ');
+  return t('goal-item.decr-history', { history: words });
+}
+
 // Exact pixel match to freq-dot's history size (13) — literal, not
 // perceptually-compensated.
 const SEPTAGON_HISTORY_SIZE = 13;
@@ -1230,11 +1260,13 @@ class GoalItem extends Gestures(AppElement) {
       const count = currentPeriodCount(this._goal.tracking);
       label = t(`goal-item.freq-aria-${type}`, { title: label, count, target });
       if (isLoggedOn(this._goal)) label += t('goal-item.freq-logged-suffix');
+      label += freqHistoryClause(this._goal);
     } else if (isDecr) {
       const { target } = this._goal.tracking;
       const count = currentPeriodCount(this._goal.tracking);
       label = t('goal-item.decr-aria', { title: label, pct: this._pct, count, target });
       if (isLoggedOn(this._goal)) label += t('goal-item.decr-logged-suffix');
+      label += decrHistoryClause(this._goal);
     } else if (isCntdn) {
       const days = countdownDaysRemaining(this._goal) ?? 0;
       label = t('goal-item.countdown-aria', { title: label, pct: this._pct, days });

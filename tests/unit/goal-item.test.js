@@ -31,6 +31,17 @@ function isoDaysFromWeekStart(days) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// A date `months` calendar-months before "now", pinned to day 15 so the
+// month arithmetic can't roll over into a different month than intended
+// (e.g. Jan 31 minus 1 month landing on Mar 3) — monthKey only ever reads
+// year+month, so the exact day is irrelevant beyond avoiding that rollover.
+function isoMonthsAgo(months) {
+  const d = new Date();
+  d.setDate(15);
+  d.setMonth(d.getMonth() - months);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 afterEach(() => { document.body.innerHTML = ''; _resetDeleteGuard(); });
 
 describe('goal-item — structure', () => {
@@ -656,9 +667,29 @@ describe('goal-item — frequency: role, aria, rendering', () => {
     expect(notLogged.shadowRoot.querySelector('.bar').getAttribute('aria-label')).not.toContain('logged today');
   });
 
-  it('renders 3 history dots plus one today token when the oldest displayed week has an entry (nothing trimmed)', () => {
-    const el = mount(weeklyGoal([isoDaysFromWeekStart(-21)])); // the oldest of the 4 displayed weeks (DOT_WINDOW.weekly)
-    expect(el.shadowRoot.querySelectorAll('.freq-dots .freq-dot')).toHaveLength(3);
+  it('aria-label omits the recent-history clause when there is no history to show (a fresh goal trims to just the current period)', () => {
+    const el = mount(weeklyGoal([]));
+    expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-label')).not.toContain('recent weeks');
+  });
+
+  it('aria-label folds the dot-strip\'s own history into text, since the strip itself is aria-hidden', () => {
+    // Oldest of the 3 displayed weeks (DOT_WINDOW.weekly) has an entry, so
+    // nothing gets trimmed; the interior week has none, so it reads "missed".
+    const el = mount(weeklyGoal([isoDaysFromWeekStart(-14), isoDaysFromWeekStart(0), isoDaysFromWeekStart(1)], 3));
+    const label = el.shadowRoot.querySelector('.bar').getAttribute('aria-label');
+    expect(label).toContain('recent weeks:');
+    expect(label).toContain('missed');
+  });
+
+  it('aria-label reports "recent months" (not "recent weeks") for a monthly goal with history', () => {
+    const el = mount(monthlyGoal([isoMonthsAgo(2), isoDaysFromNow(0)], 1));
+    const label = el.shadowRoot.querySelector('.bar').getAttribute('aria-label');
+    expect(label).toContain('recent months:');
+  });
+
+  it('renders 2 history dots plus one today token when the oldest displayed week has an entry (nothing trimmed)', () => {
+    const el = mount(weeklyGoal([isoDaysFromWeekStart(-14)])); // the oldest of the 3 displayed weeks (DOT_WINDOW.weekly)
+    expect(el.shadowRoot.querySelectorAll('.freq-dots .freq-dot')).toHaveLength(2);
     expect(el.shadowRoot.querySelector('.freq-today .freq-dot')).not.toBeNull();
   });
 
@@ -805,10 +836,10 @@ describe('goal-item — decreasing: rendering', () => {
     expect(mount(monthlyGoal()).shadowRoot.querySelector('.bar').dataset.type).toBe('monthly');
   });
 
-  it('renders 4 septagons, the last one carrying the "current" class', () => {
+  it('renders 3 septagons, the last one carrying the "current" class', () => {
     const el = mount(decreasingGoal());
     const weeks = el.shadowRoot.querySelectorAll('.septagon-strip .septagon-week');
-    expect(weeks).toHaveLength(4);
+    expect(weeks).toHaveLength(3);
     expect([...weeks].filter(w => w.classList.contains('current'))).toHaveLength(1);
     expect(weeks[weeks.length - 1].classList.contains('current')).toBe(true);
   });
@@ -907,7 +938,7 @@ describe('goal-item — decreasing: rendering', () => {
   it('no <pattern>/<defs> anywhere in the strip — the hollow-wedge "over" state needs no per-instance SVG defs, unlike the hatch fill it replaced', () => {
     const el = mount(decreasingGoal([isoDaysFromWeekStart(0)], 0)); // a slip early this week -> "over" in the current septagon
     const fills = [...el.shadowRoot.querySelectorAll('.septagon-strip .septagon-fill')];
-    expect(fills).toHaveLength(4);
+    expect(fills).toHaveLength(3);
     fills.forEach(f => {
       expect(f.querySelector('pattern')).toBeNull();
       expect(f.querySelector('defs')).toBeNull();
@@ -1088,6 +1119,20 @@ describe('goal-item — decreasing: role, aria', () => {
     expect(logged.shadowRoot.querySelector('.bar').getAttribute('aria-label')).toContain('slipped today');
     const clean = mount(decreasingGoal([]));
     expect(clean.shadowRoot.querySelector('.bar').getAttribute('aria-label')).not.toContain('slipped today');
+  });
+
+  it('aria-label always includes a recent-weeks history clause, even for a fresh goal — recentWeekStates is never trimmed (unlike recentDots)', () => {
+    const el = mount(decreasingGoal([], 0));
+    const label = el.shadowRoot.querySelector('.bar').getAttribute('aria-label');
+    expect(label).toContain('recent weeks:');
+    expect(label).toContain('clean');
+  });
+
+  it('aria-label\'s history clause reports a slip count for a week that had one', () => {
+    // 2 weeks back — the oldest of the 3 displayed weeks (DOT_WINDOW.decreasing) — had a slip.
+    const el = mount(decreasingGoal([isoDaysFromWeekStart(-14)], 0));
+    const label = el.shadowRoot.querySelector('.bar').getAttribute('aria-label');
+    expect(label).toContain('1 slips');
   });
 });
 
