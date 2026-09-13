@@ -1014,12 +1014,6 @@ class GoalDialog extends AppElement {
             <button type="button" class="copy-btn" id="desc-copy-btn" aria-label="${t('goal-dialog.copy-notes')}" title="${t('goal-dialog.copy-notes')}">${icons.copy}</button>
           </div>
           <tag-input id="tag-input"></tag-input>
-          <div class="duedate-field" hidden>
-            <input id="duedate-input"
-                   type="date"
-                   aria-label="${t('goal-dialog.duedate-toggle')}" />
-            <button type="button" id="duedate-clear" aria-label="${t('goal-dialog.duedate-clear')}">${icons.xMark}</button>
-          </div>
           <div class="type-field">
             <div class="type-pill-group" id="type-pills" role="radiogroup" aria-label="${t('goal-dialog.type-label')}">
               ${TYPES.map(ty => `
@@ -1071,6 +1065,19 @@ class GoalDialog extends AppElement {
             <div class="fixday-block" id="fixday-inline" hidden>
               <div class="day-chips" id="fixday-chips"></div>
             </div>
+          </div>
+          <!-- Below the type section (not above it) for every type, not just
+               countdown — countdown's own start-date row sits right above
+               this, so the two dates read top-to-bottom as start → end
+               without needing a text label on either. Moved here from
+               directly after tags; nothing else in this file depends on its
+               position (footer toggle/flash/scroll/height-sync all operate
+               on the element itself, not on where it sits in the tree). -->
+          <div class="duedate-field" hidden>
+            <input id="duedate-input"
+                   type="date"
+                   aria-label="${t('goal-dialog.duedate-toggle')}" />
+            <button type="button" id="duedate-clear" aria-label="${t('goal-dialog.duedate-clear')}">${icons.xMark}</button>
           </div>
         </div>
 
