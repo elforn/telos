@@ -966,6 +966,100 @@ describe('goal-item — decreasing: rendering', () => {
   });
 });
 
+function countdownGoal(startDate, dueDate, extra = {}) {
+  return { id: 'g1', title: 'Wedding', dueDate, tracking: { type: 'countdown', startDate }, ...extra };
+}
+
+describe('goal-item — countdown: rendering', () => {
+  it('sets data-type="countdown" and data-freq="false" — no freq-cluster/septagon-strip', () => {
+    const el = mount(countdownGoal('2026-01-01', '2026-12-31'));
+    const bar = el.shadowRoot.querySelector('.bar');
+    expect(bar.dataset.type).toBe('countdown');
+    expect(bar.dataset.freq).toBe('false');
+  });
+
+  it('fill width reflects elapsed/total days (percentValue), pinned to a fixed today', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 2)); // 2026-07-02 — exactly halfway through a Jan1-Dec31 span
+    const el = mount(countdownGoal('2026-01-01', '2026-12-31'));
+    expect(el.shadowRoot.querySelector('.fill').style.width).toBe('50%');
+    vi.useRealTimers();
+  });
+
+  it('the days-remaining label is always visible (not drag-gated, unlike percentage\'s own label) and reads "{count}d"', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 1)); // 2026-06-01
+    const el = mount(countdownGoal('2026-01-01', '2026-06-30'));
+    const label = el.shadowRoot.querySelector('.pct-label');
+    expect(label.hidden).toBe(false);
+    expect(label.textContent).toBe('29d');
+    vi.useRealTimers();
+  });
+
+  it('shows the unset fallback when there is no due date yet (mid-switch-to-countdown)', () => {
+    const el = mount({ id: 'g1', title: 'Wedding', tracking: { type: 'countdown', startDate: '2026-01-01' } });
+    const label = el.shadowRoot.querySelector('.pct-label');
+    expect(label.hidden).toBe(false);
+    expect(label.textContent).toBe('–');
+  });
+
+  it('aria-label reports percent complete and days remaining, distinct from the frequency/decreasing phrasing', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 1)); // 2026-06-01 — within a month of the 06-30 due date, so the base
+    // due-date prefix ("due this month") is expected to precede the countdown-specific suffix, same as any
+    // other type with an active dueDate — see _buildAriaLabel's urgency-prefix layering.
+    const el = mount(countdownGoal('2026-01-01', '2026-06-30'));
+    expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-label')).toContain('84% complete, 29 days remaining');
+    vi.useRealTimers();
+  });
+});
+
+describe('goal-item — countdown: locked (self-advancing, no manual override)', () => {
+  it('role stays "slider" (a continuous value, like percentage) — not the button/toggle role entry-based types use', () => {
+    const el = mount(countdownGoal('2026-01-01', '2026-12-31'));
+    const bar = el.shadowRoot.querySelector('.bar');
+    expect(bar.getAttribute('role')).toBe('slider');
+    expect(bar.getAttribute('aria-valuemin')).toBe('0');
+    expect(bar.getAttribute('aria-valuemax')).toBe('100');
+  });
+
+  it('sets aria-readonly="true" — a slider role that is displayed but not user-adjustable, unlike percentage', () => {
+    const countdownEl = mount(countdownGoal('2026-01-01', '2026-12-31'));
+    expect(countdownEl.shadowRoot.querySelector('.bar').getAttribute('aria-readonly')).toBe('true');
+    const percentageEl = mount({ id: 'g1', title: 'Run', tracking: { type: 'percentage', value: 40 } });
+    expect(percentageEl.shadowRoot.querySelector('.bar').hasAttribute('aria-readonly')).toBe(false);
+  });
+
+  it('ArrowRight/ArrowLeft do nothing — no manual percent nudging', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 2));
+    const el = mount(countdownGoal('2026-01-01', '2026-12-31'));
+    const widthBefore = el.shadowRoot.querySelector('.fill').style.width;
+    el.shadowRoot.querySelector('.bar').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    expect(el.shadowRoot.querySelector('.fill').style.width).toBe(widthBefore);
+    vi.useRealTimers();
+  });
+
+  it('a hold-drag never enters hold-active and emits no goal-progress/goal-log-toggle', async () => {
+    const el = mount(countdownGoal('2026-01-01', '2026-12-31'));
+    el.shadowRoot.querySelector('.bar').getBoundingClientRect = () => ({ left: 0, width: 200, top: 0, height: 40 });
+
+    const progressEvents = [];
+    const toggleEvents = [];
+    el.addEventListener('goal-progress', e => progressEvents.push(e));
+    el.addEventListener('goal-log-toggle', e => toggleEvents.push(e));
+
+    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
+    await new Promise(resolve => setTimeout(resolve, 600)); // past the hold-drag dwell, long enough for either path to have fired
+    el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 100, clientY: 20, pointerId: 1 }));
+    el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 100, clientY: 20, pointerId: 1, button: 0 }));
+
+    expect(progressEvents).toHaveLength(0);
+    expect(toggleEvents).toHaveLength(0);
+    expect(el.classList.contains('hold-active')).toBe(false);
+  });
+});
+
 describe('goal-item — decreasing: role, aria', () => {
   it('uses role=button with aria-pressed, same as frequency types', () => {
     const el = mount(decreasingGoal());

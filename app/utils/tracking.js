@@ -1,7 +1,7 @@
 // The `tracking` shape (replaces flat `percentage`, migrated once at boot;
 // see app/utils/migrate-goals.js). Not a strict discriminated union — every
 // goal always carries all four fields:
-//   { type: 'percentage' | 'weekly' | 'monthly' | 'decreasing', value: number, target: number, entries: string[] }
+//   { type: 'percentage' | 'weekly' | 'monthly' | 'decreasing' | 'countdown', value: number, target: number, entries: string[] }
 // `type` is a pure discriminant: it tells consumers which fields are "live"
 // (percentValue reads `value` for percentage, `target`/`entries` for
 // weekly/monthly/decreasing), but doesn't gate which fields *exist*.
@@ -26,6 +26,25 @@
 //
 // percentValue() works identically for every type — nothing outside this
 // module should read `.tracking` directly.
+//
+// `countdown` is a self-advancing type — it has no manual value and no
+// entries; its percentage is purely derived from elapsed calendar days
+// between `tracking.startDate` and the goal's own `dueDate` (its end date —
+// deliberately reused rather than a second date field, see CLAUDE.md). Two
+// more fields ride along, meaningful only for this type (same "always
+// present once ever set, inert otherwise" convention as `allowancePeriod`):
+//   startMode: 'yearStart' | 'custom' — which pill is selected in the
+//     dialog; UI memory only, not read by the math below.
+//   startDate: string (ISO YYYY-MM-DD) — the actual concrete date every
+//     calculation reads, exactly like dueDate. When startMode is
+//     'yearStart' this is eagerly resolved to Jan 1 of the year the goal
+//     was in at the moment countdown was picked, rather than recomputed
+//     live — Goal objects don't carry their own `year` (it's the outer key
+//     in the store), so freezing a concrete date here avoids threading year
+//     context through percentValue and every consumer (export-markdown,
+//     upcoming.js, sw-extensions.js, ...). Known tradeoff: moving a
+//     countdown goal to a different year does not shift a 'yearStart'
+//     startDate to the new year — re-picking the Year-start pill does.
 //
 // `reminderDays` (weekly goals only, set via goal-dialog's own reminder-day
 // chip row) is a separate, independently-optional field on the same object:
@@ -142,6 +161,8 @@ export function isFrequency(goal) {
   return type === 'weekly' || type === 'monthly';
 }
 
+export function isCountdown(goal) { return goal?.tracking?.type === 'countdown'; }
+
 // weekly | monthly | decreasing — every type whose progress lives in
 // `entries` rather than a stored `value`. This, not isFrequency, is what
 // gates the *interaction model* (tap/hold toggles a day, no drag-scrub) and
@@ -229,10 +250,46 @@ function decreasingWeightedAverage(tracking, todayIso) {
   return weightSum ? weightedSum / weightSum : 0;
 }
 
+// Whole calendar days from `fromIso` to `toIso` (negative if `toIso` is
+// earlier) — parses date parts manually, same reasoning as daysUntil in
+// urgency.js: `new Date('2026-07-28')` is UTC midnight and can land on the
+// wrong local day.
+function daysBetween(fromIso, toIso) {
+  return Math.round((localDate(toIso) - localDate(fromIso)) / 86400000);
+}
+
+// Countdown's own math — doesn't fit the period/entries machinery above (no
+// target, no entries), so like decreasingWeightedAverage it's a wholly
+// separate function percentValue special-cases directly. Undefined
+// start/due dates (goal switched into countdown but not fully configured
+// yet) read as 0% rather than throwing — the dialog force-opens the
+// due-date field the moment countdown is picked, but a goal can still be
+// briefly in this state mid-edit.
+export function countdownValue(goal, todayIso = todayISO()) {
+  const { startDate } = goal?.tracking ?? {};
+  const dueDate = goal?.dueDate;
+  if (!startDate || !dueDate) return 0;
+  const total = daysBetween(startDate, dueDate);
+  if (total <= 0) return todayIso >= dueDate ? 100 : 0;
+  const elapsed = Math.max(0, Math.min(total, daysBetween(startDate, todayIso)));
+  return Math.round((elapsed / total) * 100);
+}
+
+// Days left until the due date, floored at 0 (never negative — an overdue
+// countdown just reads 0, same as its percentage capping at 100). `null`
+// when there's no due date at all yet, distinct from 0 (due today) — the
+// row's label reads that as "not yet configured" rather than "due today".
+export function countdownDaysRemaining(goal, todayIso = todayISO()) {
+  const dueDate = goal?.dueDate;
+  if (!dueDate) return null;
+  return Math.max(0, daysBetween(todayIso, dueDate));
+}
+
 export function percentValue(goal, todayIso = todayISO()) {
   const tr = goal?.tracking;
   if (!tr) return 0;
   if (tr.type === 'percentage') return tr.value ?? 0;
+  if (tr.type === 'countdown') return countdownValue(goal, todayIso);
   if (tr.type === 'decreasing') return Math.round(decreasingWeightedAverage(tr, todayIso) * 100);
   return Math.round(weightedAverage(tr, todayIso) * 100);
 }

@@ -7,7 +7,7 @@ import '../tag-input/tag-input.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
-import { FIX_DAY_SPAN, DEFAULT_TARGET, DEFAULT_ALLOWANCE_PERIOD, WEEKDAYS, targetLimitsFor, isEntryType, isDecreasing, percentValue, currentPeriodCount, currentAllowanceSpent } from '../../utils/tracking.js';
+import { FIX_DAY_SPAN, DEFAULT_TARGET, DEFAULT_ALLOWANCE_PERIOD, WEEKDAYS, targetLimitsFor, isEntryType, isDecreasing, percentValue, currentPeriodCount, currentAllowanceSpent, countdownDaysRemaining } from '../../utils/tracking.js';
 import { scheduledDayStates } from '../../utils/frequency-urgency.js';
 import { buildDayStrip, dayStripStyles } from '../../utils/day-strip.js';
 import { todayISO } from '../../utils/today-iso.js';
@@ -15,7 +15,7 @@ import { swatches } from '../../utils/color-palette.js';
 
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
-const TYPES = ['percentage', 'weekly', 'monthly', 'decreasing'];
+const TYPES = ['percentage', 'weekly', 'monthly', 'decreasing', 'countdown'];
 const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 class GoalDialog extends AppElement {
@@ -89,6 +89,14 @@ class GoalDialog extends AppElement {
     // recovers its last-chosen period, same "never drops the inactive side"
     // spirit as value/entries above — see _commitTrackingChange.
     this._draftAllowancePeriod = goal?.tracking?.allowancePeriod ?? DEFAULT_ALLOWANCE_PERIOD;
+    // Countdown-only; kept even when the current type isn't countdown, same
+    // "never drops the inactive side" spirit as allowancePeriod above. A
+    // goal that's never touched countdown defaults to yearStart resolved
+    // against the year it's being opened in (_fromYear, set by open() just
+    // before this runs) — see tracking.js's countdown doc comment for why
+    // startDate is a frozen concrete date rather than recomputed live.
+    this._draftStartMode = goal?.tracking?.startMode ?? 'yearStart';
+    this._draftStartDate = goal?.tracking?.startDate ?? `${this._fromYear}-01-01`;
     // Weekly-only (see tracking.js) — stays undefined until the chip row is
     // actually touched, matching "opt-in per goal, default not configured".
     this._draftReminderDays = goal?.tracking?.reminderDays;
@@ -377,7 +385,12 @@ class GoalDialog extends AppElement {
           padding: var(--space-1);
         }
 
-        .type-pill {
+        /* .start-mode-pill (countdown's own radiogroup) shares this styling
+           exactly — same idiom, different data attribute, kept as a
+           separate class (not also .type-pill) so .type-pill's own
+           querySelectorAll('.type-pill') in JS never picks these up. */
+        .type-pill,
+        .start-mode-pill {
           flex: 1;
           min-inline-size: 0;
           min-block-size: var(--touch-target);
@@ -395,9 +408,23 @@ class GoalDialog extends AppElement {
           text-overflow: ellipsis;
         }
 
-        .type-pill[aria-checked="true"] {
+        .type-pill[aria-checked="true"],
+        .start-mode-pill[aria-checked="true"] {
           background: var(--color-accent);
           color: var(--color-text-inverse);
+        }
+
+        /* Five pills (percentage/weekly/monthly/decreasing/countdown) leaves
+           less room per pill than the four-pill layout this exact group
+           rendered before countdown existed — "Countdown" (9 chars) was
+           confirmed truncating under ellipsis at a typical phone width
+           where "Monthly" (7 chars) still fit fine. Scoped via :has() (an
+           existing pattern in this file, see .section-option above) so it
+           only shrinks this specific 5-pill group, never the 2-pill
+           start-mode group or any future 4-pill usage elsewhere. */
+        .type-pill-group:has(.type-pill:nth-child(5)) .type-pill {
+          font-size: var(--font-size-micro);
+          padding-inline: var(--space-1);
         }
 
         .target-block {
@@ -405,6 +432,35 @@ class GoalDialog extends AppElement {
           padding-block-start: var(--space-3);
           border-block-start: 0.5px solid var(--color-border);
         }
+
+        /* Countdown's own start-mode picker — same border-top-separator
+           treatment as target-block, since it occupies the same slot
+           (mutually exclusive: isEntryType('countdown') is false, so
+           target-block never shows for this type — see tracking.js). Reuses
+           .type-pill-group/.type-pill's styling directly (same look, just a
+           second radiogroup) rather than a parallel set of rules. */
+        .countdown-block {
+          margin-block-start: var(--space-3);
+          padding-block-start: var(--space-3);
+          border-block-start: 0.5px solid var(--color-border);
+        }
+
+        .countdown-start-input {
+          display: block;
+          inline-size: 100%;
+          margin-block-start: var(--space-3);
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding: var(--space-3);
+          font-size: var(--font-size-body);
+          font-family: var(--font-family);
+          color: var(--color-text-primary);
+          outline: none;
+          box-sizing: border-box;
+        }
+
+        .countdown-start-input:focus { border-color: var(--color-accent); }
 
         /* Fix-a-day's chip strip: no border-top separator like target-block's
            — that line made sense only when the strip sat directly beneath the
@@ -1008,6 +1064,13 @@ class GoalDialog extends AppElement {
                 </div>
               </div>
             </div>
+            <div class="countdown-block" id="countdown-block" hidden>
+              <div class="type-pill-group" id="start-mode-pills" role="radiogroup" aria-label="${t('goal-dialog.start-mode-label')}">
+                <button type="button" class="start-mode-pill" data-mode="yearStart" role="radio" aria-checked="false">${t('goal-dialog.start-mode-yearstart')}</button>
+                <button type="button" class="start-mode-pill" data-mode="custom" role="radio" aria-checked="false">${t('goal-dialog.start-mode-custom')}</button>
+              </div>
+              <input type="date" id="countdown-start-input" class="countdown-start-input" hidden aria-label="${t('goal-dialog.start-mode-custom')}" />
+            </div>
             <div class="fixday-block" id="fixday-inline" hidden>
               <div class="day-chips" id="fixday-chips"></div>
             </div>
@@ -1132,6 +1195,10 @@ class GoalDialog extends AppElement {
     this._targetTrailingText = this.shadowRoot.querySelector('#target-trailing-text');
     this._targetColon    = this.shadowRoot.querySelector('#target-colon');
     this._allowancePeriodChip = this.shadowRoot.querySelector('#allowance-period-chip');
+    this._countdownBlock     = this.shadowRoot.querySelector('#countdown-block');
+    this._startModePills     = [...this.shadowRoot.querySelectorAll('.start-mode-pill')];
+    this._startModePillGroup = this.shadowRoot.querySelector('#start-mode-pills');
+    this._countdownStartInput = this.shadowRoot.querySelector('#countdown-start-input');
     this._reminderDaysBlock = this.shadowRoot.querySelector('#reminder-days-block');
     this._reminderDayGroup  = this.shadowRoot.querySelector('#reminder-day-group');
     this._reminderAnyChip   = this.shadowRoot.querySelector('#reminder-any-chip');
@@ -1491,8 +1558,26 @@ class GoalDialog extends AppElement {
       // (1–7 vs 1–31) that carrying over a stale number from the other type
       // wouldn't be meaningful. This only resets `target`; `value` and
       // `entries` (the fields that actually hold history) are untouched —
-      // see _commitTrackingChange.
-      if (this._draftType !== 'percentage') this._draftTarget = DEFAULT_TARGET[this._draftType];
+      // see _commitTrackingChange. Countdown has no target concept at all
+      // (isEntryType('countdown') is false), so it's excluded here too —
+      // resetting it would inject DEFAULT_TARGET['countdown'] (undefined)
+      // into the tracking object for no reason.
+      if (this._draftType !== 'percentage' && this._draftType !== 'countdown') this._draftTarget = DEFAULT_TARGET[this._draftType];
+      if (this._draftType === 'countdown') {
+        // Re-resolve yearStart against this goal's own year every time it's
+        // (re-)picked, same as the start-mode pill's own handler.
+        if (this._draftStartMode === 'yearStart') this._draftStartDate = `${this._fromYear}-01-01`;
+        // Countdown is non-functional without an end date — surface the
+        // due-date field rather than leaving it silently collapsed. Mirrors
+        // _onDueDateToggle's own reveal+flash timing exactly.
+        if (this._dueDateRow.hidden) {
+          this._showDueDateField(true);
+          requestAnimationFrame(() => {
+            this._syncDescHeight();
+            this._flashField(this._dueDateRow);
+          });
+        }
+      }
       this._renderTypeSection();
       if (!this._isNew) this._commitTrackingChange();
     };
@@ -1527,6 +1612,38 @@ class GoalDialog extends AppElement {
       if (!this._isNew) this._commitTrackingChange();
     };
     this._allowancePeriodChip.addEventListener('click', this._onAllowancePeriodChipClick);
+
+    // Countdown-only start-mode picker — same "mutate draft → re-render →
+    // commit if existing" shape as every other pill/stepper handler above.
+    this._onStartModePillClick = e => {
+      const pill = e.target.closest('.start-mode-pill');
+      if (!pill || pill.dataset.mode === this._draftStartMode) return;
+      this._draftStartMode = pill.dataset.mode;
+      // Switching back to yearStart always re-resolves to this goal's own
+      // year — same reasoning as the initial seed in _resetForm. Switching
+      // to custom seeds today's date only if nothing was ever picked, so a
+      // goal that's toggled back and forth keeps its last custom date.
+      if (this._draftStartMode === 'yearStart') this._draftStartDate = `${this._fromYear}-01-01`;
+      else if (!this._draftStartDate) this._draftStartDate = todayISO();
+      this._renderTypeSection();
+      if (!this._isNew) this._commitTrackingChange();
+    };
+    this._startModePillGroup.addEventListener('click', this._onStartModePillClick);
+
+    this._onStartDateInput = () => {
+      // A countdown always needs a concrete start date once in custom mode
+      // (unlike dueDate, clearing isn't a meaningful state here) — a
+      // cleared/invalid native input reverts to the last valid draft value
+      // rather than committing nothing, and resets the field's own display
+      // to match so it never shows blank while the goal keeps its old date.
+      if (!this._countdownStartInput.value) {
+        this._countdownStartInput.value = this._draftStartDate ?? '';
+        return;
+      }
+      this._draftStartDate = this._countdownStartInput.value;
+      if (!this._isNew) this._commitTrackingChange();
+    };
+    this._countdownStartInput.addEventListener('change', this._onStartDateInput);
 
     // Tapping a day toggles it in/out of the multi-select array, clearing
     // 'any' if it was active; tapping Any toggles the whole thing to/from
@@ -1653,6 +1770,8 @@ class GoalDialog extends AppElement {
     this._targetDownBtn?.removeEventListener('click', this._onTargetDown);
     this._targetUpBtn?.removeEventListener('click', this._onTargetUp);
     this._allowancePeriodChip?.removeEventListener('click', this._onAllowancePeriodChipClick);
+    this._startModePillGroup?.removeEventListener('click', this._onStartModePillClick);
+    this._countdownStartInput?.removeEventListener('change', this._onStartDateInput);
     this._reminderDayGroup?.removeEventListener('click', this._onReminderDayGroupClick);
   }
 
@@ -1691,7 +1810,11 @@ class GoalDialog extends AppElement {
   // inert everywhere else, and keeping it present means a later switch into
   // decreasing sees whatever was last chosen rather than a missing field.
   _draftTracking() {
-    const tracking = { type: this._draftType, value: 0, target: this._draftTarget, entries: [], allowancePeriod: this._draftAllowancePeriod };
+    const tracking = {
+      type: this._draftType, value: 0, target: this._draftTarget, entries: [],
+      allowancePeriod: this._draftAllowancePeriod,
+      startMode: this._draftStartMode, startDate: this._draftStartDate,
+    };
     // Same "omit unless actually touched" contract as _commitTrackingChange —
     // a new goal can already have reminder days set if the chips were tapped
     // before the title blur that creates it.
@@ -1747,6 +1870,12 @@ class GoalDialog extends AppElement {
         });
       return;
     }
+    if (tr.type === 'countdown') {
+      const days = countdownDaysRemaining(goal) ?? 0;
+      this._trackingSummary.textContent = t('goal-dialog.tracking-summary-prefix-countdown')
+        + t('goal-dialog.tracking-summary-countdown', { days, percent });
+      return;
+    }
     // weekly: a specific-days schedule gets the visual day strip (the same
     // one the Upcoming dialog uses, see day-strip.js) instead of a plain
     // count — Any/unconfigured weekly has no per-day granularity to show,
@@ -1785,6 +1914,7 @@ class GoalDialog extends AppElement {
     if (!showTypeEditor) {
       this._targetBlock.hidden = true;
       this._reminderDaysBlock.hidden = true;
+      this._countdownBlock.hidden = true;
       return;
     }
 
@@ -1798,6 +1928,19 @@ class GoalDialog extends AppElement {
     const showReminderDays = this._draftType === 'weekly';
     this._reminderDaysBlock.hidden = !showReminderDays;
     if (showReminderDays) this._renderReminderDayChips();
+
+    // Countdown's own block — occupies the same conceptual slot as the
+    // target stepper below, but rendered ahead of it (and unconditionally,
+    // not behind showTarget/showStepper) since isEntryType('countdown') is
+    // false, meaning execution below returns early before ever reaching a
+    // countdown-specific branch there.
+    const isCountdownType = this._draftType === 'countdown';
+    this._countdownBlock.hidden = !isCountdownType;
+    if (isCountdownType) {
+      this._startModePills.forEach(p => p.setAttribute('aria-checked', String(p.dataset.mode === this._draftStartMode)));
+      this._countdownStartInput.hidden = this._draftStartMode !== 'custom';
+      if (this._draftStartMode === 'custom') this._countdownStartInput.value = this._draftStartDate ?? '';
+    }
 
     const showTarget = isEntryType(this._draftType);
     // Weekly's count now lives entirely inside the day-chip row — the "x"
@@ -1904,6 +2047,8 @@ class GoalDialog extends AppElement {
       target: this._draftTarget,
       entries: this._goal?.tracking?.entries ?? [],
       allowancePeriod: this._draftAllowancePeriod,
+      startMode: this._draftStartMode,
+      startDate: this._draftStartDate,
     };
     // Omitted entirely while never touched (undefined) — matches the
     // "default not configured" contract in tracking.js; a value of 'any' or

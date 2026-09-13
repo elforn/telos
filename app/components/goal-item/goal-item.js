@@ -9,8 +9,8 @@ import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badg
 import { rowChromeStyles } from '../../utils/row-chrome.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 import {
-  percentValue, isFrequency, isEntryBased, isDecreasing, recentDots, recentWeekStates,
-  isLoggedOn, currentPeriodCount,
+  percentValue, isFrequency, isEntryBased, isDecreasing, isCountdown, countdownDaysRemaining,
+  recentDots, recentWeekStates, isLoggedOn, currentPeriodCount,
 } from '../../utils/tracking.js';
 
 const REVEAL_WIDTH = 60;
@@ -973,6 +973,7 @@ class GoalItem extends Gestures(AppElement) {
   onHoldDragStart() {
     this._closeReveal();
     if (isEntryBased(this._goal)) { this._toggleLog(); return; }
+    if (isCountdown(this._goal)) return; // self-advancing, not manually adjustable
     this.classList.add('hold-active');
     this._bar.style.transition = 'none';
     this._setDragMode(true);
@@ -986,6 +987,7 @@ class GoalItem extends Gestures(AppElement) {
 
   onHoldDragKey(dir) {
     if (isEntryBased(this._goal)) { this._toggleLog(); return; } // either arrow — it's a toggle, not a scrub
+    if (isCountdown(this._goal)) return; // self-advancing, not manually adjustable
     this._setPct(dir === 'right' ? Math.min(100, this._pct + 5) : Math.max(0, this._pct - 5));
     if (this._pct === 100) this._celebrate();
     this._emitProgress();
@@ -993,6 +995,7 @@ class GoalItem extends Gestures(AppElement) {
 
   onHoldDrag(e) {
     if (isEntryBased(this._goal)) return;
+    if (isCountdown(this._goal)) return;
     const rect = this._bar.getBoundingClientRect();
     if (!rect.width) return;
 
@@ -1016,6 +1019,7 @@ class GoalItem extends Gestures(AppElement) {
 
   onHoldDragEnd() {
     if (isEntryBased(this._goal)) return;
+    if (isCountdown(this._goal)) return;
     this.classList.remove('hold-active');
     this._bar.style.transition = '';
     this._setDragMode(false);
@@ -1089,7 +1093,21 @@ class GoalItem extends Gestures(AppElement) {
     this._pct = Math.max(0, Math.min(100, pct));
     this._fill.style.width = `${this._pct}%`;
     if (!isEntryBased(this._goal)) this._bar.setAttribute('aria-valuenow', String(this._pct));
-    if (this._pctLabel) this._pctLabel.textContent = `${this._pct}%`;
+    if (!this._pctLabel) return;
+    if (isCountdown(this._goal)) {
+      // Always visible (not drag-gated like percentage's own label above) —
+      // there's no drag mode to enter for a self-advancing type, see
+      // onHoldDragStart. Shows days remaining, not the percent itself — see
+      // CLAUDE.md's countdown section for why the number counts down while
+      // the bar fills up.
+      this._pctLabel.hidden = false;
+      const days = countdownDaysRemaining(this._goal);
+      this._pctLabel.textContent = days === null
+        ? t('goal-item.countdown-days-unset')
+        : t('goal-item.countdown-days', { count: days });
+    } else {
+      this._pctLabel.textContent = `${this._pct}%`;
+    }
   }
 
   _setDragMode(active) {
@@ -1205,7 +1223,7 @@ class GoalItem extends Gestures(AppElement) {
   // The base label is just the title, or title+urgency if a deadline is
   // active; frequency and decreasing goals each layer their own count/target
   // (and a "logged"/"slipped today" suffix) on top of that same base.
-  _buildAriaLabel({ isFreq, isDecr, title, urgency, failed }) {
+  _buildAriaLabel({ isFreq, isDecr, isCntdn, title, urgency, failed }) {
     let label = urgency === 'none' ? title : t('goal-item.duedate-aria', { title, when: t(`urgency.${urgency}`) });
     if (isFreq) {
       const { type, target } = this._goal.tracking;
@@ -1217,6 +1235,9 @@ class GoalItem extends Gestures(AppElement) {
       const count = currentPeriodCount(this._goal.tracking);
       label = t('goal-item.decr-aria', { title: label, pct: this._pct, count, target });
       if (isLoggedOn(this._goal)) label += t('goal-item.decr-logged-suffix');
+    } else if (isCntdn) {
+      const days = countdownDaysRemaining(this._goal) ?? 0;
+      label = t('goal-item.countdown-aria', { title: label, pct: this._pct, days });
     }
     // data-failed (full-row-red) is a separate mechanism from the icon's own
     // urgency and can be true while urgency reads something milder (e.g. a
@@ -1235,6 +1256,7 @@ class GoalItem extends Gestures(AppElement) {
     const isFreq = isFrequency(this._goal);
     const isEntry = isEntryBased(this._goal);
     const isDecr = isDecreasing(this._goal);
+    const isCntdn = isCountdown(this._goal);
     const pct = percentValue(this._goal);
     const prevPct = this._pct;
     this._pct = Math.max(0, pct);
@@ -1281,7 +1303,7 @@ class GoalItem extends Gestures(AppElement) {
       && mostUrgent([urgencyOf(dueDate, active), frequencyRowUrgencyOf(this._goal, active)]) === 'overdue';
     this._title.textContent = title;
 
-    this._bar.setAttribute('aria-label', this._buildAriaLabel({ isFreq, isDecr, title, urgency: iconUrgency, failed }));
+    this._bar.setAttribute('aria-label', this._buildAriaLabel({ isFreq, isDecr, isCntdn, title, urgency: iconUrgency, failed }));
 
     this._bar.dataset.hasDesc = String(!!this._goal?.notes);
     this.dataset.archived = String(!!this._goal?.archived);
@@ -1316,6 +1338,15 @@ class GoalItem extends Gestures(AppElement) {
       this._bar.setAttribute('aria-valuemin', '0');
       this._bar.setAttribute('aria-valuemax', '100');
       this._bar.removeAttribute('aria-pressed');
+      // Countdown keeps role="slider" (still a continuous 0-100 value, same
+      // as percentage) but is deliberately not adjustable via drag/arrow
+      // keys — see onHoldDragStart et al. A plain slider role implies
+      // keyboard/drag operability, so leaving this unset would mislead
+      // assistive tech into expecting arrow keys to work. aria-readonly is
+      // the correct ARIA affordance for exactly this case: a slider whose
+      // value is displayed but not user-editable.
+      if (isCntdn) this._bar.setAttribute('aria-readonly', 'true');
+      else this._bar.removeAttribute('aria-readonly');
     }
 
     this._bar.dataset.freq = String(isFreq);

@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  isFrequency, isEntryType, isEntryBased, isDecreasing,
+  isFrequency, isEntryType, isEntryBased, isDecreasing, isCountdown,
   percentValue, setPercent, logEntry, unlogEntry, isLoggedOn,
   isoWeekKey, monthKey, recentPeriods, periodFractions, recentDots, currentPeriodCount,
   weekDayStates, recentWeekStates, isOverAllowance, currentAllowanceSpent,
+  countdownValue, countdownDaysRemaining,
   PERIOD_WINDOW, DOT_WINDOW, TARGET_LIMITS, DEFAULT_TARGET, FIX_DAY_SPAN,
   DEFAULT_ALLOWANCE_PERIOD, ALLOWANCE_PERIOD_WEEKS, targetLimitsFor,
 } from '../../app/utils/tracking.js';
@@ -12,6 +13,7 @@ function pct(value) { return { tracking: { type: 'percentage', value } }; }
 function weekly(target, entries) { return { tracking: { type: 'weekly', target, entries } }; }
 function monthly(target, entries) { return { tracking: { type: 'monthly', target, entries } }; }
 function decreasing(target, entries) { return { tracking: { type: 'decreasing', target, entries } }; }
+function countdown(startDate, dueDate) { return { dueDate, tracking: { type: 'countdown', startDate } }; }
 
 describe('tracking — isFrequency', () => {
   it('is true only for weekly/monthly', () => {
@@ -47,6 +49,15 @@ describe('tracking — isEntryType / isEntryBased / isDecreasing', () => {
     expect(isDecreasing(weekly(3, []))).toBe(false);
     expect(isDecreasing(pct(50))).toBe(false);
     expect(isDecreasing(null)).toBe(false);
+  });
+
+  it('isCountdown is true only for the countdown type; countdown is not entry-based (no target/entries concept)', () => {
+    expect(isCountdown(countdown('2026-01-01', '2026-12-31'))).toBe(true);
+    expect(isCountdown(decreasing(0, []))).toBe(false);
+    expect(isCountdown(pct(50))).toBe(false);
+    expect(isCountdown(null)).toBe(false);
+    expect(isEntryType('countdown')).toBe(false);
+    expect(isEntryBased(countdown('2026-01-01', '2026-12-31'))).toBe(false);
   });
 });
 
@@ -472,6 +483,67 @@ describe('tracking — percentValue (decreasing): current-week elapsed-day corre
     const wedScore = percentValue(decreasing(0, base), DAYS[2]); // clean through Wednesday
     const thuScore = percentValue(decreasing(0, [...base, DAYS[3]]), DAYS[3]); // slips Thursday
     expect(thuScore).toBeLessThan(wedScore);
+  });
+});
+
+describe('tracking — percentValue / countdownValue (countdown), pinned to a fixed "today"', () => {
+  it('no startDate and/or no dueDate reads as 0% — a goal mid-switch-to-countdown, not yet fully configured', () => {
+    expect(percentValue({ dueDate: '2026-12-31', tracking: { type: 'countdown' } }, '2026-06-01')).toBe(0);
+    expect(percentValue({ tracking: { type: 'countdown', startDate: '2026-01-01' } }, '2026-06-01')).toBe(0);
+    expect(percentValue(countdown(undefined, undefined), '2026-06-01')).toBe(0);
+  });
+
+  it('halfway between start and due reads 50%, routed through percentValue exactly like countdownValue itself', () => {
+    const goal = countdown('2026-01-01', '2026-12-31'); // 364 days apart
+    const half = '2026-07-02'; // 182 days after start — exactly half of 364
+    expect(countdownValue(goal, half)).toBe(50);
+    expect(percentValue(goal, half)).toBe(50);
+  });
+
+  it('today before the start date clamps to 0%, never negative', () => {
+    const goal = countdown('2026-06-01', '2026-12-31');
+    expect(countdownValue(goal, '2026-01-01')).toBe(0);
+  });
+
+  it('today at or after the due date clamps to 100%, never over', () => {
+    const goal = countdown('2026-01-01', '2026-06-30');
+    expect(countdownValue(goal, '2026-06-30')).toBe(100);
+    expect(countdownValue(goal, '2026-12-31')).toBe(100); // well past due — still just 100, not >100
+  });
+
+  it('start date on or after the due date (misconfigured) never divides by zero — resolves by whether today has reached the due date', () => {
+    const sameDay = countdown('2026-06-30', '2026-06-30');
+    expect(countdownValue(sameDay, '2026-01-01')).toBe(0);
+    expect(countdownValue(sameDay, '2026-06-30')).toBe(100);
+    const inverted = countdown('2026-12-31', '2026-01-01'); // start after due
+    expect(countdownValue(inverted, '2025-06-01')).toBe(0);  // today before the (already-passed) due date
+    expect(countdownValue(inverted, '2026-06-01')).toBe(100); // today after due — reads complete regardless of the nonsensical start
+  });
+
+  it('today exactly on the start date reads 0%, not a rounding artifact above 0', () => {
+    const goal = countdown('2026-01-01', '2026-12-31');
+    expect(countdownValue(goal, '2026-01-01')).toBe(0);
+  });
+});
+
+describe('tracking — countdownDaysRemaining', () => {
+  it('no dueDate returns null, distinct from 0 — "not yet configured" vs. "due today"', () => {
+    expect(countdownDaysRemaining({ tracking: { type: 'countdown' } }, '2026-06-01')).toBeNull();
+  });
+
+  it('counts whole days remaining until the due date', () => {
+    const goal = countdown('2026-01-01', '2026-06-30');
+    expect(countdownDaysRemaining(goal, '2026-06-01')).toBe(29);
+  });
+
+  it('due today reads 0', () => {
+    const goal = countdown('2026-01-01', '2026-06-30');
+    expect(countdownDaysRemaining(goal, '2026-06-30')).toBe(0);
+  });
+
+  it('overdue (due date in the past) floors at 0, never negative', () => {
+    const goal = countdown('2026-01-01', '2026-06-30');
+    expect(countdownDaysRemaining(goal, '2026-12-31')).toBe(0);
   });
 });
 

@@ -1462,7 +1462,7 @@ describe('goal-dialog — type selector (new goal)', () => {
   it('goal-created carries a full percentage tracking object by default (value/target/entries all present)', () => {
     const el = mount();
     const events = create(el);
-    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 0, target: 3, entries: [], allowancePeriod: 'week' });
+    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 0, target: 3, entries: [], allowancePeriod: 'week', startMode: 'yearStart', startDate: '2026-01-01' });
   });
 
   it('goal-created carries the selected weekly type/target, with a dormant value alongside empty entries', () => {
@@ -1474,7 +1474,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'Move my body';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: [], allowancePeriod: 'week' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: [], allowancePeriod: 'week', startMode: 'yearStart', startDate: '2026-01-01' });
   });
 
   it('stepper increments/decrements and clamps to TARGET_LIMITS.monthly (1–31)', () => {
@@ -1500,7 +1500,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'Call parents';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'monthly', value: 0, target: 5, entries: [], allowancePeriod: 'week' });
+    expect(events[0].detail.tracking).toEqual({ type: 'monthly', value: 0, target: 5, entries: [], allowancePeriod: 'week', startMode: 'yearStart', startDate: '2026-01-01' });
   });
 
   it('resets to percentage default after a quick-add commit (Enter) starts the next entry', () => {
@@ -1582,7 +1582,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'No ice cream';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 1, entries: [], allowancePeriod: 'week' });
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 1, entries: [], allowancePeriod: 'week', startMode: 'yearStart', startDate: '2026-01-01' });
   });
 
   it('the allowance-period toggle chip is hidden for every type except Avoid', () => {
@@ -1637,12 +1637,123 @@ describe('goal-dialog — type selector (new goal)', () => {
   });
 });
 
+describe('goal-dialog — type selector (new goal): countdown', () => {
+  function pill(el, type) {
+    return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
+  }
+  function startModePill(el, mode) {
+    return el.shadowRoot.querySelector(`.start-mode-pill[data-mode="${mode}"]`);
+  }
+
+  it('selecting countdown reveals the countdown block (not the target block), defaulting to Year start', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'countdown').click();
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#countdown-block').hidden).toBe(false);
+    expect(startModePill(el, 'yearStart').getAttribute('aria-checked')).toBe('true');
+    expect(startModePill(el, 'custom').getAttribute('aria-checked')).toBe('false');
+    expect(el.shadowRoot.querySelector('#countdown-start-input').hidden).toBe(true);
+  });
+
+  it('selecting countdown force-opens the due-date field — the type is non-functional without an end date', async () => {
+    const el = mount();
+    el.open(null);
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(true);
+    pill(el, 'countdown').click();
+    await nextFrame();
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#duedate-chip').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('does not re-flash/reopen the due-date field if it is already open when countdown is picked', () => {
+    const el = mount();
+    el.open(null);
+    el.shadowRoot.querySelector('#duedate-chip').click(); // already open
+    pill(el, 'countdown').click();
+    expect(el.shadowRoot.querySelector('.duedate-field').hidden).toBe(false);
+  });
+
+  it('switching to the Custom date pill reveals the date input', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'countdown').click();
+    startModePill(el, 'custom').click();
+    expect(startModePill(el, 'custom').getAttribute('aria-checked')).toBe('true');
+    expect(startModePill(el, 'yearStart').getAttribute('aria-checked')).toBe('false');
+    expect(el.shadowRoot.querySelector('#countdown-start-input').hidden).toBe(false);
+  });
+
+  it('goal-created carries a countdown tracking object with startMode/startDate resolved to this year\'s Jan 1 by default', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open(null);
+    pill(el, 'countdown').click();
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Wedding countdown';
+    el.shadowRoot.querySelector('#duedate-input').value = '2026-12-31';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.tracking.type).toBe('countdown');
+    expect(events[0].detail.tracking.startMode).toBe('yearStart');
+    expect(events[0].detail.tracking.startDate).toBe('2026-01-01');
+    expect(events[0].detail.dueDate).toBe('2026-12-31');
+  });
+
+  it('goal-created carries a custom startDate once picked', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'countdown').click();
+    startModePill(el, 'custom').click();
+    const dateInput = el.shadowRoot.querySelector('#countdown-start-input');
+    dateInput.value = '2026-03-15';
+    dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Custom start';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.tracking.startMode).toBe('custom');
+    expect(events[0].detail.tracking.startDate).toBe('2026-03-15');
+  });
+
+  it('clearing the custom start-date input reverts its own displayed value rather than committing an empty date', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'countdown').click();
+    startModePill(el, 'custom').click();
+    const dateInput = el.shadowRoot.querySelector('#countdown-start-input');
+    dateInput.value = '2026-03-15';
+    dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    dateInput.value = '';
+    dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(dateInput.value).toBe('2026-03-15'); // reverted, not left blank
+
+    const events = [];
+    el.addEventListener('goal-created', e => events.push(e));
+    el.shadowRoot.querySelector('#input').value = 'Still has a start date';
+    el.shadowRoot.querySelector('#modal').close();
+    expect(events[0].detail.tracking.startDate).toBe('2026-03-15');
+  });
+
+  it('switching from countdown back to percentage hides the countdown block', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'countdown').click();
+    pill(el, 'percentage').click();
+    expect(el.shadowRoot.querySelector('#countdown-block').hidden).toBe(true);
+  });
+});
+
 describe('goal-dialog — type/target: no main-view presence for an existing goal, changed via the ⋮ menu', () => {
   function pill(el, type) {
     return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
   }
   function allowancePeriodChip(el) {
     return el.shadowRoot.querySelector('#allowance-period-chip');
+  }
+  function startModePill(el, mode) {
+    return el.shadowRoot.querySelector(`.start-mode-pill[data-mode="${mode}"]`);
   }
   // "Change type" lives in the action sheet — nothing on the main view to tap.
   function expand(el) {
@@ -1696,7 +1807,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'weekly').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 62, target: 3, entries: [], allowancePeriod: 'week' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 62, target: 3, entries: [], allowancePeriod: 'week', startMode: 'yearStart', startDate: '2026-01-01' });
   });
 
   it('switching a frequency goal to percentage preserves entries dormant and surfaces the last value', () => {
@@ -1707,7 +1818,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'percentage').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 62, target: 5, entries: ['2026-08-01'], allowancePeriod: 'week' });
+    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 62, target: 5, entries: ['2026-08-01'], allowancePeriod: 'week', startMode: 'yearStart', startDate: '2026-01-01' });
   });
 
   it('switching back and forth (weekly → percentage → weekly) recovers the original entries — nothing is destroyed', () => {
@@ -1738,7 +1849,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'weekly').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 3, entries: ['2026-07-01', '2026-08-01'], allowancePeriod: 'week' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 3, entries: ['2026-07-01', '2026-08-01'], allowancePeriod: 'week', startMode: 'yearStart', startDate: '2026-01-01' });
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true); // weekly never shows the standalone stepper
   });
 
@@ -1750,7 +1861,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     el.shadowRoot.querySelector('#reminder-mini-up').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: ['2026-08-01'], allowancePeriod: 'week', reminderDays: 'any' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: ['2026-08-01'], allowancePeriod: 'week', startMode: 'yearStart', startDate: '2026-01-01', reminderDays: 'any' });
     expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('4x');
   });
 
@@ -1836,7 +1947,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     allowancePeriodChip(el).click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 2, entries: ['2026-08-01'], allowancePeriod: '4weeks' });
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 2, entries: ['2026-08-01'], allowancePeriod: '4weeks', startMode: 'yearStart', startDate: '2026-01-01' });
   });
 
   it('switching an existing goal to Avoid preserves entries dormant and defaults the allowance to 0', () => {
@@ -1847,7 +1958,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'decreasing').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 0, entries: ['2026-08-01'], allowancePeriod: 'week' });
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 0, entries: ['2026-08-01'], allowancePeriod: 'week', startMode: 'yearStart', startDate: '2026-01-01' });
   });
 
   it('switching back and forth (weekly → Avoid → weekly) recovers the original entries — nothing is destroyed', () => {
@@ -1868,6 +1979,31 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(true);
     pill(el, 'decreasing').click();
     expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
+  });
+
+  it('switching an existing goal to countdown commits immediately, resolving startDate to this goal\'s year, and never reveals Fix-a-day (not entry-based)', () => {
+    const el = mount();
+    el.currentYear = 2026;
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 62, target: 3, entries: [] } });
+    expand(el);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e));
+    pill(el, 'countdown').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].detail.tracking.type).toBe('countdown');
+    expect(events[0].detail.tracking.startMode).toBe('yearStart');
+    expect(events[0].detail.tracking.startDate).toBe('2026-01-01');
+    expect(events[0].detail.tracking.value).toBe(62); // dormant, preserved like every other switch
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(true);
+  });
+
+  it('the countdown block only shows once "Change type" is tapped — same reveal-once idiom as target/reminder blocks', () => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'countdown', value: 0, target: 3, entries: [], startMode: 'yearStart', startDate: '2026-01-01' }, dueDate: '2026-12-31' });
+    expect(el.shadowRoot.querySelector('#countdown-block').hidden).toBe(true);
+    expand(el);
+    expect(el.shadowRoot.querySelector('#countdown-block').hidden).toBe(false);
+    expect(startModePill(el, 'yearStart').getAttribute('aria-checked')).toBe('true');
   });
 });
 
