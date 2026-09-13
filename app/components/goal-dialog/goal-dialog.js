@@ -1062,9 +1062,6 @@ class GoalDialog extends AppElement {
                 <input type="date" id="countdown-start-input" class="countdown-start-input" aria-label="${t('goal-dialog.start-date-label')}" />
               </div>
             </div>
-            <div class="fixday-block" id="fixday-inline" hidden>
-              <div class="day-chips" id="fixday-chips"></div>
-            </div>
           </div>
           <!-- Below the type section (not above it) for every type, not just
                countdown — countdown's own start-date row sits right above
@@ -1078,6 +1075,13 @@ class GoalDialog extends AppElement {
                    type="date"
                    aria-label="${t('goal-dialog.duedate-toggle')}" />
             <button type="button" id="duedate-clear" aria-label="${t('goal-dialog.duedate-clear')}">${icons.xMark}</button>
+          </div>
+          <!-- Fix-a-day last, after the due date — it's a backfill tool for
+               the type/target picker above it, and reads as a trailing
+               "correct history" action rather than something that belongs
+               ahead of the goal's own deadline. -->
+          <div class="fixday-block" id="fixday-inline" hidden>
+            <div class="day-chips" id="fixday-chips"></div>
           </div>
         </div>
 
