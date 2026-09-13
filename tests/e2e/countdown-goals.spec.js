@@ -27,13 +27,13 @@ async function selectType(page, type) {
   }, type);
 }
 
-async function clickStartModePill(page, mode) {
-  await page.evaluate(m => {
+async function clickYearStart(page) {
+  await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
       .querySelector('goal-dialog').shadowRoot
-      .querySelector(`.start-mode-pill[data-mode="${m}"]`).click();
-  }, mode);
+      .querySelector('#countdown-yearstart-btn').click();
+  });
 }
 
 async function setDueDate(page, iso) {
@@ -139,7 +139,7 @@ test.describe('Countdown goals', () => {
     await waitForPage(page);
   });
 
-  test('creating a To date goal auto-opens the due-date field and defaults to Year start', async ({ page }) => {
+  test('creating a To date goal auto-opens the due-date field and pre-fills the start date to this year\'s Jan 1', async ({ page }) => {
     await openDialog(page, '#add-capstone');
     await selectType(page, 'countdown');
 
@@ -155,13 +155,13 @@ test.describe('Countdown goals', () => {
     expect(dueDateRowBox).not.toBeNull();
     expect(dueDateRowBox.height).toBeGreaterThan(0);
 
-    const startModeChecked = await page.evaluate(() =>
+    const startDateValue = await page.evaluate(() =>
       document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('goal-dialog').shadowRoot
-        .querySelector('.start-mode-pill[aria-checked="true"]').dataset.mode
+        .querySelector('#countdown-start-input').value
     );
-    expect(startModeChecked).toBe('yearStart');
+    expect(startDateValue).toBe(`${currentYear}-01-01`);
 
     await setDueDate(page, farFutureIso(200));
     await saveDialog(page, 'Wedding countdown');
@@ -174,9 +174,57 @@ test.describe('Countdown goals', () => {
 
     const goal = await goalItem(page);
     expect(goal.tracking.type).toBe('countdown');
-    expect(goal.tracking.startMode).toBe('yearStart');
     expect(goal.tracking.startDate).toBe(`${currentYear}-01-01`);
     expect(goal.dueDate).toBe(farFutureIso(200));
+  });
+
+  test('"Year start" is a one-shot quick-fill button — it overwrites a manually-typed date, real click included', async ({ page }) => {
+    await openDialog(page, '#add-capstone');
+    await selectType(page, 'countdown');
+    await setCountdownStartDate(page, `${currentYear}-06-15`);
+    let startDateValue = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#countdown-start-input').value
+    );
+    expect(startDateValue).toBe(`${currentYear}-06-15`);
+
+    await clickYearStart(page);
+    startDateValue = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot
+        .querySelector('#countdown-start-input').value
+    );
+    expect(startDateValue).toBe(`${currentYear}-01-01`);
+  });
+
+  // happy-dom (the unit-test environment) doesn't compute real layout, so
+  // text truncation under ellipsis can only be caught with a real layout
+  // engine — this regression-guards a bug found and fixed during review:
+  // the 5th pill ("To date") originally truncated other pills' text at
+  // phone widths.
+  test('no type pill truncates its own label at a phone-width viewport', async ({ page }) => {
+    // The default Playwright viewport is desktop-sized (plenty of room) —
+    // this bug only reproduces at the narrow widths the app actually runs
+    // at 95% of the time (see CLAUDE.md), so the viewport must be set
+    // explicitly, same as lists.spec.js/filter-hidden-create.spec.js do
+    // for their own narrow-width assertions.
+    await page.setViewportSize({ width: 390, height: 800 });
+    await openDialog(page, '#add-capstone');
+    await selectType(page, 'countdown');
+
+    const overflowing = await page.evaluate(() => {
+      const root = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('goal-dialog').shadowRoot;
+      const pills = [...root.querySelectorAll('.type-pill')];
+      return pills
+        .filter(p => p.scrollWidth > p.clientWidth)
+        .map(p => p.textContent.trim());
+    });
+    expect(overflowing).toEqual([]);
   });
 
   test('the row renders a real, non-zero fill and an always-visible "Nd" label (not drag-gated)', async ({ page }) => {
@@ -292,13 +340,12 @@ test.describe('Countdown goals', () => {
     });
     const goal = await goalItem(page);
     expect(goal.tracking.type).toBe('countdown');
-    expect(goal.tracking.startMode).toBe('yearStart');
+    expect(goal.tracking.startDate).toBe(`${currentYear}-01-01`);
   });
 
-  test('a custom start date persists through IDB and a full page reload', async ({ page }) => {
+  test('a manually-typed start date persists through IDB and a full page reload', async ({ page }) => {
     await openDialog(page, '#add-capstone');
     await selectType(page, 'countdown');
-    await clickStartModePill(page, 'custom');
     await setCountdownStartDate(page, `${currentYear}-03-15`);
     await setDueDate(page, farFutureIso(120));
     await saveDialog(page, 'Custom start countdown');
@@ -309,7 +356,6 @@ test.describe('Countdown goals', () => {
     });
 
     let goal = await goalItem(page);
-    expect(goal.tracking.startMode).toBe('custom');
     expect(goal.tracking.startDate).toBe(`${currentYear}-03-15`);
 
     await waitForIDBFlush(page);
@@ -324,7 +370,6 @@ test.describe('Countdown goals', () => {
 
     goal = await goalItem(page);
     expect(goal.tracking.type).toBe('countdown');
-    expect(goal.tracking.startMode).toBe('custom');
     expect(goal.tracking.startDate).toBe(`${currentYear}-03-15`);
   });
 });

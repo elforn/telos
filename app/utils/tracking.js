@@ -30,21 +30,22 @@
 // `countdown` is a self-advancing type — it has no manual value and no
 // entries; its percentage is purely derived from elapsed calendar days
 // between `tracking.startDate` and the goal's own `dueDate` (its end date —
-// deliberately reused rather than a second date field, see CLAUDE.md). Two
-// more fields ride along, meaningful only for this type (same "always
+// deliberately reused rather than a second date field, see CLAUDE.md). One
+// more field rides along, meaningful only for this type (same "always
 // present once ever set, inert otherwise" convention as `allowancePeriod`):
-//   startMode: 'yearStart' | 'custom' — which pill is selected in the
-//     dialog; UI memory only, not read by the math below.
 //   startDate: string (ISO YYYY-MM-DD) — the actual concrete date every
-//     calculation reads, exactly like dueDate. When startMode is
-//     'yearStart' this is eagerly resolved to Jan 1 of the year the goal
-//     was in at the moment countdown was picked, rather than recomputed
-//     live — Goal objects don't carry their own `year` (it's the outer key
-//     in the store), so freezing a concrete date here avoids threading year
-//     context through percentValue and every consumer (export-markdown,
-//     upcoming.js, sw-extensions.js, ...). Known tradeoff: moving a
-//     countdown goal to a different year does not shift a 'yearStart'
-//     startDate to the new year — re-picking the Year-start pill does.
+//     calculation reads, exactly like dueDate. Goal-dialog's "Year start"
+//     button is a one-shot quick-fill (sets this field to Jan 1 of the
+//     goal's own year and nothing more) rather than a stored mode — there's
+//     no memory of how a given startDate was set, it's just a plain editable
+//     date like any other. Goal objects don't carry their own `year` (it's
+//     the outer key in the store), so "Year start" resolves against
+//     goal-dialog's own `_fromYear` at the moment it's clicked rather than
+//     something recomputed live — avoids threading year context through
+//     percentValue and every consumer (export-markdown, upcoming.js,
+//     sw-extensions.js, ...). Known tradeoff: moving a countdown goal to a
+//     different year never shifts a startDate that happened to be set via
+//     "Year start" — re-clicking the button after the move does.
 //
 // `reminderDays` (weekly goals only, set via goal-dialog's own reminder-day
 // chip row) is a separate, independently-optional field on the same object:

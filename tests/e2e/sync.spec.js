@@ -724,6 +724,18 @@ test.describe('Sync — share target', () => {
       document.querySelector('bottom-nav').shadowRoot.querySelector('#pill-lists').click()
     );
     await waitForListsPage(page);
+    // waitForListsPage only confirms the page component is mounted, not that
+    // its store subscription has already rendered lists-page-item children —
+    // reading listNames immediately after can race that render and see an
+    // empty list. Wait for the specific item to actually exist first (this
+    // was the real cause of an intermittent failure seen in the full suite
+    // run, never reproducing in isolation — a render-timing race, not flake
+    // in the "ignore and retry" sense).
+    await page.waitForFunction(() =>
+      [...document.querySelector('app-router').shadowRoot
+        .querySelector('lists-page').shadowRoot
+        .querySelectorAll('lists-page-item')].some(el => el._list?.name === 'From share')
+    );
     const listNames = await page.evaluate(() =>
       [...document.querySelector('app-router').shadowRoot
         .querySelector('lists-page').shadowRoot
