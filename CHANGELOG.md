@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.22.1] — 2026-09-13
+
+### Fixed
+- **The install/splash-screen theme colour no longer flashes the accent blue.** `manifest.json`'s static `theme_color` was set to the app's accent (#5BADE0), but it's only ever visible for the brief moment before the page's own theme-aware `<meta name="theme-color">` tags take over — it now matches `background_color` (#F5F2EE) instead, so that moment is consistent rather than a colour that gets immediately overridden.
+
 ## [2.22.0] — 2026-09-13
 
 ### Changed
