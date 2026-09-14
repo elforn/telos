@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.22.3] — 2026-09-14
+
+### Changed
+- **The notification digest Settings toggle now only shows up on browsers that actually support it** (Chrome and other Chromium-based browsers) — previously it appeared on every browser, including Firefox and Safari, where turning it on silently did nothing. A short note under the toggle also clarifies that Telos needs to be open to receive notifications.
+
 ## [2.22.2] — 2026-09-13
 
 ### Changed
