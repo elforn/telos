@@ -16,10 +16,17 @@
 // check (see refresh(), which bottom-nav.js calls immediately after the
 // toggle flips) rather than requiring a reload.
 //
-// This is the reliable, universal half. app/sw-extensions.js adds a
-// Chrome-only, best-effort periodicSync layer on top that can fire even
-// while the app isn't open at all — this component's job is just "don't
-// miss it on the very next open," which works on every browser.
+// Gated to browsers that support the Periodic Background Sync API
+// (isPeriodicSyncSupported(), app/utils/periodic-sync.js) — Chrome and other
+// Chromium-based browsers, never Firefox or Safari. This is a deliberate
+// product choice, not a technical requirement of this foreground half alone
+// (it only needs the Notification API and would work fine on Firefox) —
+// bottom-nav.js hides the Settings toggle entirely on unsupported browsers
+// using the same check, so this is defense-in-depth for that same decision.
+// app/sw-extensions.js adds a periodicSync layer on top of this that can
+// fire even while the app isn't open at all, best-effort — this component's
+// job is "don't miss it on the very next open," for whichever browsers both
+// layers now run on.
 import { AppElement } from '../../../_lib/core/app-element.js';
 import { getState } from '../../../_lib/core/store/store.js';
 import { todayISO } from '../../utils/today-iso.js';
@@ -27,6 +34,7 @@ import { notificationsEnabled, notifyAfterHour } from '../../utils/notification-
 import { lastNotifiedDate, markNotifiedToday } from '../../utils/notification-dedup.js';
 import { collectUpcoming, collectHiddenUrgent } from '../../utils/upcoming.js';
 import { buildDigest } from '../../utils/notification-digest.js';
+import { isPeriodicSyncSupported } from '../../utils/periodic-sync.js';
 
 class DueDateNotifier extends AppElement {
   template() {
@@ -34,7 +42,7 @@ class DueDateNotifier extends AppElement {
   }
 
   subscribe() {
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !isPeriodicSyncSupported()) return;
     this._checkAndNotify();
     this.listen(document, 'visibilitychange', () => {
       if (document.visibilityState === 'visible') this._checkAndNotify();

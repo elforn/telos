@@ -11,6 +11,7 @@ vi.mock('../../app/utils/backup-before-repair.js', () => ({
 vi.mock('../../app/utils/periodic-sync.js', () => ({
   registerPeriodicSync: vi.fn().mockResolvedValue(undefined),
   unregisterPeriodicSync: vi.fn().mockResolvedValue(undefined),
+  isPeriodicSyncSupported: vi.fn(() => true),
 }));
 
 import '../../app/components/bottom-nav/bottom-nav.js';
@@ -20,7 +21,7 @@ import { repairInstallation } from '../../_lib/core/sw-manager/sw-repair.js';
 import { backupBeforeRepair } from '../../app/utils/backup-before-repair.js';
 import * as syncModule from '../../_lib/modules/sync/sync.js';
 import { _resetToast } from '../../_lib/modules/toast/toast.js';
-import { registerPeriodicSync, unregisterPeriodicSync } from '../../app/utils/periodic-sync.js';
+import { registerPeriodicSync, unregisterPeriodicSync, isPeriodicSyncSupported } from '../../app/utils/periodic-sync.js';
 
 // happy-dom does not implement ResizeObserver
 globalThis.ResizeObserver = class {
@@ -453,6 +454,32 @@ describe('bottom-nav — export reminder: pill group', () => {
     const offPill = el.shadowRoot.querySelector('[data-reminder="off"]');
     expect(onPill.classList.contains('active')).toBe(false);
     expect(offPill.classList.contains('active')).toBe(true);
+  });
+});
+
+describe('bottom-nav — notifications: browser gating', () => {
+  beforeEach(() => { localStorage.clear(); _resetToast(); });
+  afterEach(() => { localStorage.clear(); vi.unstubAllGlobals(); vi.mocked(isPeriodicSyncSupported).mockReturnValue(true); });
+
+  it('hides the whole notifications section on a browser without Periodic Background Sync', () => {
+    vi.mocked(isPeriodicSyncSupported).mockReturnValue(false);
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    expect(el.shadowRoot.querySelector('#notifications-section').hidden).toBe(true);
+  });
+
+  it('shows the notifications section on a browser with Periodic Background Sync', () => {
+    vi.mocked(isPeriodicSyncSupported).mockReturnValue(true);
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    expect(el.shadowRoot.querySelector('#notifications-section').hidden).toBe(false);
+  });
+
+  it('renders a hint that the app must be open to receive notifications', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#gear-btn').click();
+    expect(el.shadowRoot.querySelector('#notifications-section .settings-hint').textContent)
+      .toBe('Notifications require the app to be open.');
   });
 });
 

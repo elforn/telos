@@ -6,6 +6,17 @@
 const TAG = 'telos-due-date-check';
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12h — a hint, not a promise
 
+// Synchronous capability check — `PeriodicSyncManager` is a global
+// constructor that only exists on Chromium-based browsers (Chrome, Edge,
+// Opera, Samsung Internet, etc.), never Firefox or Safari. Used to gate the
+// entire notification-digest Settings toggle (bottom-nav.js) and the
+// foreground notifier (due-date-notifier.js), not just this module's own
+// registration — deliberately feature-detected rather than UA-sniffed, same
+// convention as the rest of the app.
+export function isPeriodicSyncSupported() {
+  return 'serviceWorker' in navigator && 'PeriodicSyncManager' in window;
+}
+
 export async function registerPeriodicSync() {
   if (!('serviceWorker' in navigator)) return;
   const registration = await navigator.serviceWorker.ready;

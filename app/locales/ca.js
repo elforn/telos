@@ -459,6 +459,7 @@ defineStrings({
   'settings.notifications-denied': 'Les notificacions estan bloquejades per a aquest lloc — activa-les als ajustos del navegador per activar-ho aquí.',
   'settings.notify-after':      'Notifica després de',
   'settings.notify-anytime':   'En qualsevol moment',
+  'settings.notifications-hint': 'Les notificacions requereixen que l’aplicació estigui oberta.',
 
   'notifications.digest-title':    '{count} elements necessiten atenció',
   'notifications.digest-overdue':  'Vençuts ({count})',

@@ -94,3 +94,41 @@ test.describe('Notifications — settings toggle', () => {
     expect(value).toBe('9');
   });
 });
+
+// The whole notifications Settings section (and the OS-level digest it
+// controls) is gated to browsers that implement the Periodic Background
+// Sync API (isPeriodicSyncSupported(), app/utils/periodic-sync.js) — real
+// Chromium (headless or not) has this, Firefox/Safari don't. This spec
+// verifies both sides of that gate for real: the section shows in this
+// project's actual (Chromium) browser, and disappears — genuinely
+// `display: none`, not just `[hidden]` in the DOM, per the same
+// [hidden]-vs-author-CSS pitfall the hour-row test above guards against —
+// once `PeriodicSyncManager` is removed before the page's own scripts run.
+test.describe('Notifications — browser gating', () => {
+  async function sectionDisplay(page) {
+    return page.evaluate(() =>
+      getComputedStyle(
+        document.querySelector('bottom-nav').shadowRoot.querySelector('#notifications-section')
+      ).display
+    );
+  }
+
+  test('the notifications section is shown on a browser with Periodic Background Sync support', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    await openSettings(page);
+    expect(await page.evaluate(() => 'PeriodicSyncManager' in window)).toBe(true);
+    expect(await sectionDisplay(page)).not.toBe('none');
+  });
+
+  test('the notifications section is hidden on a browser without Periodic Background Sync support', async ({ page }) => {
+    await page.addInitScript(() => { delete window.PeriodicSyncManager; });
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    await openSettings(page);
+    expect(await page.evaluate(() => 'PeriodicSyncManager' in window)).toBe(false);
+    expect(await sectionDisplay(page)).toBe('none');
+  });
+});

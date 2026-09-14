@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { registerPeriodicSync, unregisterPeriodicSync } from '../../app/utils/periodic-sync.js';
+import { registerPeriodicSync, unregisterPeriodicSync, isPeriodicSyncSupported } from '../../app/utils/periodic-sync.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -14,6 +14,24 @@ function stubServiceWorker(registration) {
     configurable: true,
   });
 }
+
+describe('isPeriodicSyncSupported', () => {
+  it('is false when serviceWorker is unsupported, even with PeriodicSyncManager present', () => {
+    vi.stubGlobal('PeriodicSyncManager', class {});
+    expect(isPeriodicSyncSupported()).toBe(false);
+  });
+
+  it('is false when PeriodicSyncManager is absent — Firefox/Safari', () => {
+    stubServiceWorker({});
+    expect(isPeriodicSyncSupported()).toBe(false);
+  });
+
+  it('is true when both serviceWorker and PeriodicSyncManager are present — Chromium', () => {
+    stubServiceWorker({});
+    vi.stubGlobal('PeriodicSyncManager', class {});
+    expect(isPeriodicSyncSupported()).toBe(true);
+  });
+});
 
 describe('registerPeriodicSync', () => {
   it('does nothing when serviceWorker is unsupported', async () => {

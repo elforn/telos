@@ -16,7 +16,7 @@ import { repairInstallation } from '../../../_lib/core/sw-manager/sw-repair.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
 import { backupBeforeRepair, LAST_EXPORT_KEY } from '../../utils/backup-before-repair.js';
 import { notificationsEnabled, setNotificationsEnabled, notifyAfterHour, setNotifyAfterHour } from '../../utils/notification-prefs.js';
-import { registerPeriodicSync, unregisterPeriodicSync } from '../../utils/periodic-sync.js';
+import { registerPeriodicSync, unregisterPeriodicSync, isPeriodicSyncSupported } from '../../utils/periodic-sync.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
 import '../import-text-dialog/import-text-dialog.js';
@@ -339,6 +339,12 @@ class BottomNav extends AppElement {
 
         .hour-picker[hidden] { display: none; }
 
+        .settings-hint {
+          font-size: var(--font-size-caption);
+          color: var(--color-text-muted);
+          margin-block-start: var(--space-2);
+        }
+
         .hour-picker label {
           font-size: var(--font-size-body);
           color: var(--color-text-primary);
@@ -564,7 +570,7 @@ class BottomNav extends AppElement {
           </div>
         </div>
 
-        <div class="section">
+        <div class="section" id="notifications-section">
           <h3 class="section-label">${t('settings.notifications')}</h3>
           <div class="pill-group" id="notifications-group" role="group" aria-label="${t('settings.notifications')}">
             <button class="option-pill" data-notifications="on">${t('settings.notifications-on')}</button>
@@ -577,6 +583,7 @@ class BottomNav extends AppElement {
               ${NOTIFY_HOURS.map(h => `<option value="${h}">${_formatHour(h)}</option>`).join('')}
             </select>
           </div>
+          <p class="settings-hint">${t('settings.notifications-hint')}</p>
         </div>
 
         <div class="section">
@@ -1450,21 +1457,32 @@ class BottomNav extends AppElement {
       btn.classList.toggle('active', active);
       btn.setAttribute('aria-pressed', String(active));
     });
-    // "On" only ever reflects actually-effective state — enabled *and*
-    // permission granted — not just the stored preference, so a
-    // browser-level permission revoke (outside the app) shows up here too
-    // next time Settings opens, rather than claiming "On" with nothing
-    // actually able to fire.
-    const notifsOn = notificationsEnabled() && 'Notification' in window && Notification.permission === 'granted';
-    this.shadowRoot.querySelectorAll('[data-notifications]').forEach(btn => {
-      const active = (btn.dataset.notifications === 'on') === notifsOn;
-      btn.classList.toggle('active', active);
-      btn.setAttribute('aria-pressed', String(active));
-    });
-    // Meaningless while notifications are off — hidden rather than just disabled.
-    this.shadowRoot.querySelector('#notify-hour-row').hidden = !notifsOn;
-    const hour = notifyAfterHour();
-    this._notifyHourSelect.value = hour === null ? '' : String(hour);
+    // The notification digest is gated to browsers that support the
+    // Periodic Background Sync API (Chrome and other Chromium-based
+    // browsers) — a deliberate product choice, not a technical requirement
+    // of the foreground half alone. Hidden entirely rather than shown-but-
+    // nonfunctional on unsupported browsers (Firefox, Safari). Scoped to an
+    // `if` rather than an early-return so a settings block added below this
+    // one still updates regardless of support.
+    const notificationsSupported = isPeriodicSyncSupported();
+    this.shadowRoot.querySelector('#notifications-section').hidden = !notificationsSupported;
+    if (notificationsSupported) {
+      // "On" only ever reflects actually-effective state — enabled *and*
+      // permission granted — not just the stored preference, so a
+      // browser-level permission revoke (outside the app) shows up here too
+      // next time Settings opens, rather than claiming "On" with nothing
+      // actually able to fire.
+      const notifsOn = notificationsEnabled() && 'Notification' in window && Notification.permission === 'granted';
+      this.shadowRoot.querySelectorAll('[data-notifications]').forEach(btn => {
+        const active = (btn.dataset.notifications === 'on') === notifsOn;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-pressed', String(active));
+      });
+      // Meaningless while notifications are off — hidden rather than just disabled.
+      this.shadowRoot.querySelector('#notify-hour-row').hidden = !notifsOn;
+      const hour = notifyAfterHour();
+      this._notifyHourSelect.value = hour === null ? '' : String(hour);
+    }
   }
 }
 

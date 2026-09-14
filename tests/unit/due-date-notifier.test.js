@@ -27,12 +27,18 @@ function mount() {
   return el;
 }
 
-beforeEach(() => new Promise((resolve, reject) => {
-  const req = indexedDB.deleteDatabase('telos-notifications');
-  req.onsuccess = resolve;
-  req.onerror = () => reject(req.error);
-  req.onblocked = resolve;
-}));
+beforeEach(() => {
+  // Periodic Background Sync is a Chromium-only global — stub it present so
+  // existing behavioral tests reflect a supported browser by default; the
+  // dedicated gating test below removes it to cover the unsupported case.
+  vi.stubGlobal('PeriodicSyncManager', class {});
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.deleteDatabase('telos-notifications');
+    req.onsuccess = resolve;
+    req.onerror = () => reject(req.error);
+    req.onblocked = resolve;
+  });
+});
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -51,6 +57,24 @@ describe('due-date-notifier', () => {
     mount();
     await vi.waitFor(() => expect(showNotification).not.toHaveBeenCalled());
     expect(await lastNotifiedDate()).toBeNull();
+  });
+
+  it('does nothing on a browser without Periodic Background Sync, even when enabled and granted', async () => {
+    vi.unstubAllGlobals(); // remove the beforeEach's PeriodicSyncManager stub — simulates Firefox/Safari
+    const yesterday = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+    await boot({
+      dbName: freshName(),
+      initialState: {
+        goals: { '2026': { capstone: [{ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 }, dueDate: yesterday }], milestones: [], wow: [] } },
+        lists: [],
+      },
+    });
+    setNotificationsEnabled(true);
+    const showNotification = stubServiceWorker();
+    stubNotification('granted');
+    mount();
+    await new Promise(r => setTimeout(r, 50));
+    expect(showNotification).not.toHaveBeenCalled();
   });
 
   it('does nothing when enabled but permission was never granted', async () => {

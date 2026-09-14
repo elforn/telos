@@ -463,6 +463,7 @@ defineStrings({
   'settings.notifications-denied':   'Notifications are blocked for this site — enable them in your browser settings to turn this on.',
   'settings.notify-after':           'Notify after',
   'settings.notify-anytime':         'Any time',
+  'settings.notifications-hint':     'Notifications require the app to be open.',
 
   'notifications.digest-title':      '{count} items need attention',
   'notifications.digest-overdue':    'Overdue ({count})',
