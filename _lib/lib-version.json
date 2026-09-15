@@ -1,5 +1,5 @@
 {
-  "version": "0.16.1",
+  "version": "1.0.0",
   "modules": [
     "core",
     "gestures",
@@ -9,7 +9,8 @@
     "modal-dialog",
     "toast",
     "reorder",
-    "filter-state"
+    "filter-state",
+    "notifications"
   ],
   "store": "simple",
   "scaffolded": "2026-06-06"
