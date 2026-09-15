@@ -8,10 +8,14 @@ vi.mock('../../app/utils/backup-before-repair.js', () => ({
   backupBeforeRepair: vi.fn(),
   LAST_EXPORT_KEY: 'telos:lastExportedAt',
 }));
-vi.mock('../../app/utils/periodic-sync.js', () => ({
-  registerPeriodicSync: vi.fn().mockResolvedValue(undefined),
-  unregisterPeriodicSync: vi.fn().mockResolvedValue(undefined),
-  isPeriodicSyncSupported: vi.fn(() => true),
+const { mockRegister, mockUnregister, mockIsSupported } = vi.hoisted(() => ({
+  mockRegister: vi.fn().mockResolvedValue(undefined),
+  mockUnregister: vi.fn().mockResolvedValue(undefined),
+  mockIsSupported: vi.fn(() => true),
+}));
+vi.mock('../../_lib/modules/notifications/periodic-sync.js', () => ({
+  PeriodicSync: () => ({ register: mockRegister, unregister: mockUnregister }),
+  isPeriodicSyncSupported: mockIsSupported,
 }));
 
 import '../../app/components/bottom-nav/bottom-nav.js';
@@ -21,7 +25,9 @@ import { repairInstallation } from '../../_lib/core/sw-manager/sw-repair.js';
 import { backupBeforeRepair } from '../../app/utils/backup-before-repair.js';
 import * as syncModule from '../../_lib/modules/sync/sync.js';
 import { _resetToast } from '../../_lib/modules/toast/toast.js';
-import { registerPeriodicSync, unregisterPeriodicSync, isPeriodicSyncSupported } from '../../app/utils/periodic-sync.js';
+import { isPeriodicSyncSupported } from '../../_lib/modules/notifications/periodic-sync.js';
+const registerPeriodicSync = mockRegister;
+const unregisterPeriodicSync = mockUnregister;
 
 // happy-dom does not implement ResizeObserver
 globalThis.ResizeObserver = class {

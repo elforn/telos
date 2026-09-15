@@ -11,9 +11,10 @@
 // overdue notification digest — periodicSync only exists on Chromium
 // (installed PWAs), and even there the *browser* decides actual firing
 // cadence, not this code; there is no guaranteed timing. The foreground
-// half (app/components/due-date-notifier/) is the reliable, universal
-// mechanism that works on every browser; this is purely an enhancement on
-// top for "maybe get notified without opening the app at all."
+// half (<digest-notifier>, Socle's _lib/modules/notifications/, wired up in
+// app/main.js) is the reliable, universal mechanism that works on every
+// browser; this is purely an enhancement on top for "maybe get notified
+// without opening the app at all."
 //
 // Deliberately dueDate-only, NOT the fuller frequency-pace-aware urgency
 // app/utils/frequency-urgency.js computes in the page — being a classic
@@ -124,8 +125,9 @@ function collectDueDateUpcoming(state, todayIso) {
   return { overdue, today, tomorrow };
 }
 
-// Same shape/contract as app/utils/notification-dedup.js's own open() —
-// kept in sync manually since this file can't import that module. Handles
+// Same shape/contract as _lib/modules/notifications/notification-dedup.js's
+// own open() — kept in sync manually since this file can't import that
+// module. Handles
 // onupgradeneeded itself (unlike a plain read) so whichever side — this
 // background check or the foreground page — happens to open this database
 // first still creates the store correctly for the other.

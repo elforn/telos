@@ -18,7 +18,12 @@ import './pages/not-found-page.js';
 import './pages/lists-page.js';
 import './pages/list-detail-page.js';
 import './components/bottom-nav/bottom-nav.js';
-import './components/due-date-notifier/due-date-notifier.js';
+import '../_lib/modules/notifications/digest-notifier.js';
+import { NotificationPrefs } from '../_lib/modules/notifications/notification-prefs.js';
+import { NotificationDedup } from '../_lib/modules/notifications/notification-dedup.js';
+import { isPeriodicSyncSupported } from '../_lib/modules/notifications/periodic-sync.js';
+import { consumeColdLaunchParam, onColdLaunchMessage } from '../_lib/modules/notifications/cold-launch.js';
+import { buildDigest } from './utils/build-telos-digest.js';
 
 initTheme();
 
@@ -34,21 +39,13 @@ document.querySelector('bottom-nav')?.refreshUpcoming?.();
 // app/sw-extensions.js's notificationclick handler): a brand-new window
 // opens with this query param when no existing tab could just be focused
 // instead. Stripped from the URL immediately so a later reload/share of
-// this same URL doesn't re-open the dialog unprompted.
-if (new URLSearchParams(location.search).get('upcoming')) {
-  document.querySelector('bottom-nav')?.openUpcoming?.();
-  const url = new URL(location.href);
-  url.searchParams.delete('upcoming');
-  history.replaceState(null, '', url);
-}
+// this same URL doesn't re-open the dialog unprompted. Same param/message
+// names as before, so nothing about the SW side needs to change.
+if (consumeColdLaunchParam('upcoming')) document.querySelector('bottom-nav')?.openUpcoming?.();
 
 // Same signal, for the case notificationclick found an already-open tab to
 // focus instead of opening a new one — see app/sw-extensions.js.
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('message', event => {
-    if (event.data?.type === 'telos-open-upcoming') document.querySelector('bottom-nav')?.openUpcoming?.();
-  });
-}
+onColdLaunchMessage('telos-open-upcoming', () => document.querySelector('bottom-nav')?.openUpcoming?.());
 
 console.log('Telos', __APP_VERSION__);
 
@@ -90,7 +87,18 @@ swm.setAttribute('app-version', __APP_VERSION__);
 swm.onBackup = backupBeforeRepair;
 document.body.prepend(swm);
 
-document.body.prepend(document.createElement('due-date-notifier'));
+// Gated to browsers that support the Periodic Background Sync API — a
+// deliberate product choice (bottom-nav.js hides the whole Settings section
+// the same way), not a technical requirement of digest-notifier itself,
+// which would work fine on Firefox too.
+if (isPeriodicSyncSupported()) {
+  const notifier = document.createElement('digest-notifier');
+  notifier.prefs = NotificationPrefs('telos:notificationsEnabled');
+  notifier.dedup = NotificationDedup('telos-notifications');
+  notifier.buildDigest = buildDigest;
+  notifier.tag = 'telos-digest';
+  document.body.prepend(notifier);
+}
 
 const router = document.querySelector('app-router');
 router.routes = [

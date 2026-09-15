@@ -15,8 +15,12 @@ import { percentValue } from '../../utils/tracking.js';
 import { repairInstallation } from '../../../_lib/core/sw-manager/sw-repair.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
 import { backupBeforeRepair, LAST_EXPORT_KEY } from '../../utils/backup-before-repair.js';
-import { notificationsEnabled, setNotificationsEnabled, notifyAfterHour, setNotifyAfterHour } from '../../utils/notification-prefs.js';
-import { registerPeriodicSync, unregisterPeriodicSync, isPeriodicSyncSupported } from '../../utils/periodic-sync.js';
+import { notifyAfterHour, setNotifyAfterHour } from '../../utils/notification-prefs.js';
+import { NotificationPrefs } from '../../../_lib/modules/notifications/notification-prefs.js';
+import { PeriodicSync, isPeriodicSyncSupported } from '../../../_lib/modules/notifications/periodic-sync.js';
+
+const notificationPrefs = NotificationPrefs('telos:notificationsEnabled');
+const periodicSync = PeriodicSync('telos-due-date-check');
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
 import '../import-text-dialog/import-text-dialog.js';
@@ -690,16 +694,17 @@ class BottomNav extends AppElement {
     // Turning notifications on requires an explicit permission prompt, and
     // that prompt only works fired synchronously from this real user
     // gesture — never called anywhere else in the app (see
-    // due-date-notifier.js's own note). A previously-denied permission
-    // can't be re-prompted by the page at all (the browser silently
-    // resolves to 'denied' again with no dialog) — that case, and an
-    // explicit new denial, both just explain where to fix it instead.
+    // digest-notifier.js's own note, _lib/modules/notifications/). A
+    // previously-denied permission can't be re-prompted by the page at all
+    // (the browser silently resolves to 'denied' again with no dialog) —
+    // that case, and an explicit new denial, both just explain where to fix
+    // it instead.
     this._onNotificationsGroup = async e => {
       const btn = e.target.closest('[data-notifications]');
       if (!btn) return;
       if (btn.dataset.notifications === 'off') {
-        setNotificationsEnabled(false);
-        unregisterPeriodicSync();
+        notificationPrefs.setEnabled(false);
+        periodicSync.unregister();
         this._updateSettingsPills();
         return;
       }
@@ -712,11 +717,11 @@ class BottomNav extends AppElement {
         toast(t('settings.notifications-denied'));
         return;
       }
-      setNotificationsEnabled(true);
-      registerPeriodicSync(); // Chrome-only, best-effort — silently no-ops elsewhere
+      notificationPrefs.setEnabled(true);
+      periodicSync.register(); // Chrome-only, best-effort — silently no-ops elsewhere
       // Check right away rather than waiting for the next natural resume —
       // immediate feedback that turning it on actually did something.
-      document.querySelector('due-date-notifier')?.refresh();
+      document.querySelector('digest-notifier')?.refresh();
       this._updateSettingsPills();
     };
     this.shadowRoot.querySelector('#notifications-group').addEventListener('click', this._onNotificationsGroup);
@@ -1472,7 +1477,7 @@ class BottomNav extends AppElement {
       // browser-level permission revoke (outside the app) shows up here too
       // next time Settings opens, rather than claiming "On" with nothing
       // actually able to fire.
-      const notifsOn = notificationsEnabled() && 'Notification' in window && Notification.permission === 'granted';
+      const notifsOn = notificationPrefs.enabled() && 'Notification' in window && Notification.permission === 'granted';
       this.shadowRoot.querySelectorAll('[data-notifications]').forEach(btn => {
         const active = (btn.dataset.notifications === 'on') === notifsOn;
         btn.classList.toggle('active', active);
