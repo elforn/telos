@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.0.0] — 2026-09-16
+
+### Fixed
+- **Swiping a toast to dismiss it now works reliably on fast swipes.** A quick swipe that carried your finger past the toast's own edge could previously leave it stuck on screen. Dismissing now also gives live feedback — the toast follows your finger and fades as it goes, springing back if you don't swipe far enough (Socle 1.0.0).
+
 ## [2.22.3] — 2026-09-14
 
 ### Changed
