@@ -267,8 +267,8 @@ describe('toast', () => {
     toast('Swipe me');
     const el = document.querySelector('.socle-toast');
     el.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, bubbles: true }));
-    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 80, bubbles: true }));
-    el.dispatchEvent(new PointerEvent('pointerup', { clientX: 80, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 150, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointerup', { clientX: 150, bubbles: true }));
     vi.advanceTimersByTime(200);
     expect(document.querySelector('.socle-toast')).toBeNull();
     vi.useRealTimers();
@@ -287,7 +287,7 @@ describe('toast', () => {
     vi.useFakeTimers();
     toast('Left swipe');
     const el = document.querySelector('.socle-toast');
-    el.dispatchEvent(new PointerEvent('pointerdown', { clientX: 100, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointerdown', { clientX: 200, bubbles: true }));
     el.dispatchEvent(new PointerEvent('pointermove', { clientX: 20, bubbles: true }));
     el.dispatchEvent(new PointerEvent('pointerup', { clientX: 20, bubbles: true }));
     vi.advanceTimersByTime(200);
@@ -344,8 +344,8 @@ describe('toast', () => {
     toast('Swipe out');
     const el = document.querySelector('.socle-toast');
     el.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, bubbles: true }));
-    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 80, bubbles: true }));
-    el.dispatchEvent(new PointerEvent('pointerup', { clientX: 80, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 150, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointerup', { clientX: 150, bubbles: true }));
     expect(el.style.transform).toBe('translateX(120%)');
     expect(el.classList.contains('socle-toast-out')).toBe(false);
     vi.advanceTimersByTime(200);
@@ -360,12 +360,37 @@ describe('toast', () => {
       toast('Reduced motion');
       const el = document.querySelector('.socle-toast');
       el.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, bubbles: true }));
-      el.dispatchEvent(new PointerEvent('pointermove', { clientX: 80, bubbles: true }));
-      el.dispatchEvent(new PointerEvent('pointerup', { clientX: 80, bubbles: true }));
+      el.dispatchEvent(new PointerEvent('pointermove', { clientX: 150, bubbles: true }));
+      el.dispatchEvent(new PointerEvent('pointerup', { clientX: 150, bubbles: true }));
       expect(document.querySelector('.socle-toast')).toBeNull();
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('a vertical-dominant move does not engage the horizontal drag (direction lock)', () => {
+    // dx=20 alone would have engaged the old dx-only logic — dy=50 dominating
+    // is what must suppress it here, proving direction is actually checked.
+    toast('Scroll past me');
+    const el = document.querySelector('.socle-toast');
+    el.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, clientY: 0, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 20, clientY: 50, bubbles: true }));
+    expect(el.style.transform).toBe('');
+    el.dispatchEvent(new PointerEvent('pointerup', { clientX: 20, clientY: 50, bubbles: true }));
+    expect(document.querySelector('.socle-toast')).toBeTruthy();
+  });
+
+  it('sets touch-action: none, not manipulation — required for reliable swipe on Chrome for Android', () => {
+    // Regression: 'manipulation' looks equally reasonable in isolation and
+    // was the previous value, but Chrome for Android's compositor-thread
+    // gesture arbitration can commit to native panning under 'manipulation'
+    // before (or independent of) setPointerCapture(), firing pointercancel
+    // mid-drag or swallowing the gesture outright — only reproducible
+    // on-device, not in this (happy-dom) test environment. 'none' is the
+    // documented fix; this test only guards against silently reverting it.
+    toast('Check touch-action');
+    const el = document.querySelector('.socle-toast');
+    expect(getComputedStyle(el).touchAction).toBe('none');
   });
 
   it('does not treat a near-zero-movement press as a drag', () => {
@@ -418,8 +443,8 @@ describe('toast', () => {
     const el = document.querySelector('.socle-toast');
     const msg = document.querySelector('.socle-toast-msg');
     msg.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, bubbles: true }));
-    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 80, bubbles: true }));
-    el.dispatchEvent(new PointerEvent('pointerup', { clientX: 80, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 150, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointerup', { clientX: 150, bubbles: true }));
     vi.advanceTimersByTime(200);
     expect(document.querySelector('.socle-toast')).toBeNull();
     vi.useRealTimers();

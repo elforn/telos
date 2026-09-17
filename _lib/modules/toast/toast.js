@@ -1,6 +1,7 @@
 import { t } from '../../core/strings.js';
 
-const SWIPE_THRESHOLD = 60;
+const SWIPE_THRESHOLD = 120; // calibrated on-device — 60 dismissed too easily on a real swipe
+const TAP_THRESHOLD = 18; // matches modules/gestures/gestures.js's own constant
 const DISMISS_DURATION = 200; // fallback when transitionend doesn't fire
 const DRAG_TRANSITION = 'transform var(--duration-fast, 120ms) ease, opacity var(--duration-fast, 120ms) ease';
 
@@ -47,7 +48,17 @@ function ensureStyles() {
       box-shadow: var(--shadow-sheet);
       pointer-events: auto;
       white-space: nowrap;
-      touch-action: manipulation;
+      /* Must be 'none', not 'manipulation' — on Chrome for Android, the
+         compositor's own scroll-gesture arbitration can commit to native
+         panning before (or independent of) a JS setPointerCapture() call
+         under 'manipulation', firing pointercancel mid-drag or swallowing
+         the gesture outright. 'none' keeps this element out of that
+         arbitration entirely, which is the documented fix (see
+         https://github.com/mdn/content/issues/38468 and
+         https://alexii.uk/blog/touch-action-chrome-36-unpredictable-scrolling/).
+         Confirmed on-device: swipe-to-dismiss did not work at all with
+         'manipulation', reliably works with 'none'. */
+      touch-action: none;
       animation: socle-toast-in var(--duration-normal, 220ms) var(--ease-out, ease);
     }
     .socle-toast-out {
@@ -225,22 +236,34 @@ export function toast(message, type = 'info', { duration, action } = {}) {
   // nothing. Follows the finger live (no transition while dragging) and
   // either continues the motion out (past SWIPE_THRESHOLD) or springs back.
   //
-  // Capture is deferred until movement crosses DRAG_CONFIRM_THRESHOLD — same
-  // reasoning as the gesture mixin (modules/gestures/gestures.js): capturing
-  // immediately on pointerdown redirects the resulting click to `el`, which
-  // would silently break the action/close button (a child of `el`) on a
-  // plain press-and-release. Deferring means a tap on that button never
-  // triggers capture at all, regardless of what's nested inside the toast —
-  // no need to enumerate "interactive" elements to exclude.
-  const DRAG_CONFIRM_THRESHOLD = 10;
+  // Direction-lock mirrors modules/gestures/gestures.js's own _gestureMove:
+  // track dx AND dy from pointerdown, wait for the euclidean distance to
+  // cross TAP_THRESHOLD before deciding anything (so a plain tap never
+  // engages the gesture at all), then classify by whichever axis moved more.
+  // A vertical-dominant move is 'cancelled' — never becomes a drag — so a
+  // vertical swipe on the toast does nothing, rather than a confused partial
+  // horizontal drag.
+  //
+  // Capture (and 'swipe' phase) only starts for a confirmed horizontal move.
+  // This is also what keeps a plain press-and-release on the action/close
+  // button from ever capturing the pointer: same reasoning as the gesture
+  // mixin's own comment — capturing on pointerdown would redirect the
+  // resulting click to `el`, breaking the button.
   let dragStartX = null;
-  let dragConfirmed = false;
+  let dragStartY = null;
+  let dragPhase = 'idle'; // 'idle' | 'tracking' | 'swipe' | 'cancelled'
 
   const onDragMove = e => {
+    if (dragPhase === 'cancelled') return;
     const dx = e.clientX - dragStartX;
-    if (!dragConfirmed) {
-      if (Math.abs(dx) <= DRAG_CONFIRM_THRESHOLD) return;
-      dragConfirmed = true;
+    if (dragPhase === 'tracking') {
+      const dy = e.clientY - dragStartY;
+      if (Math.sqrt(dx * dx + dy * dy) <= TAP_THRESHOLD) return;
+      if (Math.abs(dy) >= Math.abs(dx)) {
+        dragPhase = 'cancelled';
+        return;
+      }
+      dragPhase = 'swipe';
       el.setPointerCapture(e.pointerId);
       el.style.transition = 'none';
     }
@@ -270,26 +293,29 @@ export function toast(message, type = 'info', { duration, action } = {}) {
   function onDragEnd(e) {
     removeDragListeners();
     const dx = e.clientX - dragStartX;
-    const wasConfirmed = dragConfirmed;
+    const wasSwipe = dragPhase === 'swipe';
     dragStartX = null;
-    dragConfirmed = false;
-    if (!wasConfirmed) return; // plain tap/click — never captured, let it reach its real target
+    dragStartY = null;
+    dragPhase = 'idle';
+    if (!wasSwipe) return; // plain tap, or a vertical/cancelled move — never captured
     if (Math.abs(dx) > SWIPE_THRESHOLD) dismiss({ swipeDx: dx });
     else springBack();
   }
 
   function onDragCancel() {
-    const wasConfirmed = dragConfirmed;
+    const wasSwipe = dragPhase === 'swipe';
     removeDragListeners();
     dragStartX = null;
-    dragConfirmed = false;
-    if (wasConfirmed) springBack();
+    dragStartY = null;
+    dragPhase = 'idle';
+    if (wasSwipe) springBack();
   }
 
   el.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
     dragStartX = e.clientX;
-    dragConfirmed = false;
+    dragStartY = e.clientY;
+    dragPhase = 'tracking';
     el.addEventListener('pointermove', onDragMove);
     el.addEventListener('pointerup', onDragEnd);
     el.addEventListener('pointercancel', onDragCancel);
