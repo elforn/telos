@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.0.1] — 2026-09-18
+
+### Fixed
+- **Swiping a toast away now actually works reliably on a real phone.** The 3.0.0 fix addressed a related but different bug — the swipe gesture itself still failed on real Android touchscreens (it would visually start but almost always snap back without dismissing). It now takes a real, deliberate swipe to dismiss, with a clear spring-back if you don't swipe far enough.
+
 ## [3.0.0] — 2026-09-16
 
 ### Fixed
