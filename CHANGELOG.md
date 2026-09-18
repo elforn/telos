@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.0.2] — 2026-09-19
+
+### Changed
+- **The notification Settings hint now reads "Notifications fire only when the app is in view."** — clearer than the previous "require the app to be open," which suggested notifications needed a foreground window rather than the tab simply being visible. Translated to French and Catalan as well.
+
 ## [3.0.1] — 2026-09-18
 
 ### Fixed

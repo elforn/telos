@@ -459,7 +459,7 @@ defineStrings({
   'settings.notifications-denied': 'Les notifications sont bloquées pour ce site — activez-les dans les réglages de votre navigateur pour les activer ici.',
   'settings.notify-after':      'Notifier après',
   'settings.notify-anytime':    'À tout moment',
-  'settings.notifications-hint': 'Les notifications nécessitent que l’application soit ouverte.',
+  'settings.notifications-hint': 'Les notifications ne se déclenchent que lorsque l’application est visible.',
 
   'notifications.digest-title':    '{count} éléments nécessitent votre attention',
   'notifications.digest-overdue':  'En retard ({count})',
