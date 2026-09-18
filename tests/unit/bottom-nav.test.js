@@ -481,11 +481,11 @@ describe('bottom-nav — notifications: browser gating', () => {
     expect(el.shadowRoot.querySelector('#notifications-section').hidden).toBe(false);
   });
 
-  it('renders a hint that the app must be open to receive notifications', () => {
+  it('renders a hint that the app must be visible to receive notifications', () => {
     const el = mount();
     el.shadowRoot.querySelector('#gear-btn').click();
     expect(el.shadowRoot.querySelector('#notifications-section .settings-hint').textContent)
-      .toBe('Notifications require the app to be open.');
+      .toBe('Notifications fire only when the app is in view.');
   });
 });
 
