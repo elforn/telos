@@ -124,6 +124,16 @@
         --color-overdue-bg: var(--color-text-primary);
       }
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      /* Suppresses Chrome for Android's edge-swipe back/forward navigation,
+         which is a separate mechanism from touch-action (a descendant's
+         touch-action: none does not stop it — only overscroll-behavior-x on
+         the document root does). Defensive hygiene for an app with
+         horizontal swipe gestures throughout (goal/list row colour cycling,
+         year-header paging, modal tab paging), all of which can start near a
+         screen edge. Added while chasing a pointercancel bug it turned out
+         not to cause — kept because suppressing edge-nav is correct here on
+         its own merits, not because it fixed that. */
+      html, body { overscroll-behavior-x: none; }
       body {
         background-color: var(--color-bg);
         background-image: radial-gradient(ellipse 80% 40% at 50% 0%, rgba(91,173,224,0.08) 0%, transparent 70%);

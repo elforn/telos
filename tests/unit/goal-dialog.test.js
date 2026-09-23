@@ -2689,3 +2689,88 @@ describe('goal-dialog — tracking summary (existing goals only)', () => {
     expect(summary(el).textContent).toBe('A: 1 of 2 allowed/4 weeks at 100%');
   });
 });
+
+describe('goal-dialog — analytics tabs', () => {
+  it('a new/unsaved draft gets tabCount 0 — no data yet for any analytics page', () => {
+    const el = mount();
+    el.open(null);
+    expect(el._modal.tabCount).toBe(0);
+  });
+
+  it('an existing weekly goal gets 1 (edit) + 4 analytics pages = 5', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Run', tracking: { type: 'weekly', target: 3, value: 0, entries: [] } });
+    expect(el._modal.tabCount).toBe(5); // edit, overview, score, activity, streaks
+  });
+
+  it('an existing percentage goal gets 1 + 3 — no score page for this type', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Ship it', tracking: { type: 'percentage', value: 50 } });
+    expect(el._modal.tabCount).toBe(4); // edit, overview, activity, streaks
+  });
+
+  it('an existing countdown goal gets 1 + 1 — analytics has only its own overview page', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Wedding', dueDate: '2026-12-31', tracking: { type: 'countdown', startDate: '2026-01-01' } });
+    expect(el._modal.tabCount).toBe(2);
+  });
+
+  it('always opens on tab 0 (the edit form), regardless of type', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Run', tracking: { type: 'weekly', target: 3, value: 0, entries: [] } });
+    expect(el._modal.activeTab).toBe(0);
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#view-analytics').hidden).toBe(true);
+  });
+
+  it('a modal-tab-change to index 0 shows the edit form', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Run', tracking: { type: 'weekly', target: 3, value: 0, entries: [] } });
+    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 1 } }));
+    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 0 } }));
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#view-analytics').hidden).toBe(true);
+  });
+
+  it('a modal-tab-change to index >= 1 shows analytics with the right goal and page', () => {
+    const el = mount();
+    const goal = { id: '1', title: 'Run', tracking: { type: 'weekly', target: 3, value: 0, entries: [] } };
+    el.open(goal);
+    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 2 } })); // overview(1), score(2)
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#view-analytics').hidden).toBe(false);
+    const analytics = el.shadowRoot.querySelector('#analytics');
+    expect(analytics.goal).toBe(el._goal);
+    expect(analytics.activePage).toBe(1); // index 2 - 1
+  });
+
+  it('the analytics footer\'s Edit button returns to tab 0 and the edit form', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Run', tracking: { type: 'weekly', target: 3, value: 0, entries: [] } });
+    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 1 } }));
+    expect(el.shadowRoot.querySelector('#view-analytics').hidden).toBe(false);
+
+    el.shadowRoot.querySelector('#analytics-edit-btn').click();
+    expect(el._modal.activeTab).toBe(0);
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#view-analytics').hidden).toBe(true);
+  });
+
+  it('the analytics footer\'s Close button closes the dialog', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Run', tracking: { type: 'weekly', target: 3, value: 0, entries: [] } });
+    const modal = el.shadowRoot.querySelector('#modal');
+    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 1 } }));
+    el.shadowRoot.querySelector('#analytics-close').click();
+    expect(modal.close).toHaveBeenCalled();
+  });
+
+  it('re-opening resets to tab 0 even if a prior session left it on an analytics tab', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Run', tracking: { type: 'weekly', target: 3, value: 0, entries: [] } });
+    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 2 } }));
+    el.open({ id: '2', title: 'Read', tracking: { type: 'monthly', target: 2, value: 0, entries: [] } });
+    expect(el._modal.activeTab).toBe(0);
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
+  });
+});

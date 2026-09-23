@@ -461,4 +461,47 @@ test.describe('Data persistence', () => {
     );
     expect(offActive).toBe(true);
   });
+
+  test('a percentage goal\'s progress-history snapshots survive a cold reload from IDB', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForHomePage(page);
+    await createCapstoneGoal(page, 'History persistence');
+
+    // Nudge the value with the bar's own ArrowRight handler rather than writing
+    // tracking.history directly — history is only ever appended by setPercent,
+    // so going through the real interaction is what actually proves the wiring.
+    await page.evaluate(() => {
+      const bar = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item').shadowRoot.querySelector('.bar');
+      bar.focus();
+      bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item')._goal.tracking.history ?? []).length > 0);
+    await waitForIDBFlush(page);
+
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForHomePage(page);
+    await page.waitForFunction(() =>
+      !!document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot
+        ?.querySelector('#capstone-list goal-item'));
+
+    const tracking = await page.evaluate(() =>
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot
+        .querySelector('#capstone-list goal-item')._goal.tracking);
+
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    expect(Array.isArray(tracking.history)).toBe(true);
+    expect(tracking.history.length).toBeGreaterThan(0);
+    expect(tracking.history.at(-1).date).toBe(iso);
+    expect(tracking.history.at(-1).value).toBe(tracking.value);
+  });
 });

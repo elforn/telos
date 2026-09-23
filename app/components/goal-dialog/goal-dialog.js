@@ -4,6 +4,8 @@ import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
 import '../tag-input/tag-input.js';
+import '../goal-analytics/goal-analytics.js';
+import { pagesFor } from '../../utils/goal-analytics.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
@@ -131,6 +133,17 @@ class GoalDialog extends AppElement {
       undoLabel:  this._isNew ? t('goal-dialog.draft-undo')  : t('goal-dialog.draft-restore'),
     });
 
+    // Analytics tabs: 0 is always Edit. A new/unsaved draft has no data for
+    // any analytics page to show, so it stays a plain single-pill dialog —
+    // tabCount 0 and 1 render identically in modal-dialog (see its docs),
+    // this just makes the "no data yet" reasoning explicit at the call site.
+    this._modal.tabCount = this._isNew ? 0 : 1 + pagesFor(goal).length;
+    this._modal.activeTab = 0;
+    // Keep the sheet pinned at its max height whenever tabs are actually shown, so
+    // paging from the tall Edit form to a shorter analytics page doesn't visibly
+    // resize the sheet and shift its top edge. A new/unsaved draft has only the
+    // single Edit pill (tabCount 0) and keeps the default fit-content sizing.
+    this._modal.fixedHeight = this._modal.tabCount > 1;
     this._showView('main');
   }
 
@@ -210,6 +223,18 @@ class GoalDialog extends AppElement {
         }
         @media (prefers-reduced-motion: reduce) {
           .duedate-field.flash-reveal, .textarea-wrap.flash-reveal { animation: none; }
+        }
+
+        /* Edit <-> Analytics view swap — entrance-only, same idea as
+           goal-analytics.js's own page-to-page transition: the tab that's
+           tab 0 (Edit) is always "backward" relative to any analytics page,
+           so direction here is fixed rather than computed. */
+        @keyframes view-enter-fwd  { from { opacity: 0; transform: translateX(14px);  } to { opacity: 1; transform: translateX(0); } }
+        @keyframes view-enter-back { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: translateX(0); } }
+        #view-main.enter-back  { animation: view-enter-back 0.22s ease-out; }
+        #view-analytics.enter-fwd { animation: view-enter-fwd 0.22s ease-out; }
+        @media (prefers-reduced-motion: reduce) {
+          #view-main.enter-back, #view-analytics.enter-fwd { animation: none; }
         }
 
         #duedate-input {
@@ -947,7 +972,12 @@ class GoalDialog extends AppElement {
         #menu-btn { background: none; color: var(--color-text-secondary); padding-inline: var(--space-2); display: flex; align-items: center; }
         #delete { background: none; color: var(--color-danger); }
         #archive { background: none; color: var(--color-text-secondary); }
-        #close, #move-back { background: none; color: var(--color-text-secondary); }
+        #close, #move-back, #analytics-close { background: none; color: var(--color-text-secondary); }
+        #analytics-edit-btn {
+          background: none; color: var(--color-text-secondary);
+          display: flex; align-items: center; gap: var(--space-1);
+        }
+        #analytics-edit-btn svg { inline-size: var(--icon-size-sm, 14px); block-size: var(--icon-size-sm, 14px); }
         #draft-toggle-btn { background: none; color: var(--color-text-secondary); }
         /* A draft the user hasn't looked at yet — louder than the plain-text
            footer buttons around it so it isn't missed (see draft-toggle.js). */
@@ -1101,6 +1131,11 @@ class GoalDialog extends AppElement {
           </div>
         </div>
 
+        <!-- ── View: analytics ──────────────────────────────────────────── -->
+        <div id="view-analytics" hidden>
+          <goal-analytics id="analytics"></goal-analytics>
+        </div>
+
         <!-- ── Footer: main ─────────────────────────────────────────────── -->
         <div slot="footer" class="actions footer-main">
           <button type="button" id="menu-btn" hidden aria-label="${t('goal-dialog.more-actions')}">${icons.dotsVertical}</button>
@@ -1120,6 +1155,16 @@ class GoalDialog extends AppElement {
           <div class="actions-end">
             <button type="button" id="move-btn" disabled>${t('goal-dialog.move-cta')}</button>
             <button type="button" id="copy-btn" disabled>${t('goal-dialog.copy-cta')}</button>
+          </div>
+        </div>
+
+        <!-- ── Footer: analytics ────────────────────────────────────────── -->
+        <div slot="footer" class="actions footer-analytics" hidden>
+          <button type="button" id="analytics-edit-btn">
+            ${icons.chevronLeft}${t('goal-dialog.back-to-edit')}
+          </button>
+          <div class="actions-end">
+            <button type="button" id="analytics-close" aria-label="${t('goal-dialog.close')}">${t('goal-dialog.close')}</button>
           </div>
         </div>
 
@@ -1182,8 +1227,11 @@ class GoalDialog extends AppElement {
     this._saveStatus    = this.shadowRoot.querySelector('#save-status');
     this._viewMain      = this.shadowRoot.querySelector('#view-main');
     this._viewMove      = this.shadowRoot.querySelector('#view-move');
+    this._viewAnalytics = this.shadowRoot.querySelector('#view-analytics');
     this._footerMain    = this.shadowRoot.querySelector('.footer-main');
     this._footerMove    = this.shadowRoot.querySelector('.footer-move');
+    this._footerAnalytics = this.shadowRoot.querySelector('.footer-analytics');
+    this._analyticsEl   = this.shadowRoot.querySelector('#analytics');
     this._moveYearSel   = this.shadowRoot.querySelector('#move-year-select');
     this._moveSectionGrp = this.shadowRoot.querySelector('#move-section-group');
     this._moveMoveBtn   = this.shadowRoot.querySelector('#move-btn');
@@ -1428,6 +1476,23 @@ class GoalDialog extends AppElement {
     this._dueDateToggle.addEventListener('click', this._onDueDateToggle);
     this._deleteBtn.addEventListener('click', this._onDelete);
     this._closeBtn.addEventListener('click', this._onClose);
+
+    // ── Analytics tabs ───────────────────────────────────────────────────────
+    // Tab 0 is always the edit form; tabs 1..N (when tabCount > 1, i.e. an
+    // existing, non-draft goal) are goal-analytics' own pages in order — see
+    // _resetForm for where tabCount itself gets set.
+    this._onModalTabChange = e => {
+      const index = e.detail.index;
+      if (index === 0) { this._showView('main'); this._animateViewEnter(this._viewMain, 'enter-back'); return; }
+      this._analyticsEl.goal = this._goal;
+      this._analyticsEl.activePage = index - 1;
+      this._showView('analytics');
+      this._animateViewEnter(this._viewAnalytics, 'enter-fwd');
+    };
+    this._modal.addEventListener('modal-tab-change', this._onModalTabChange);
+    this._onAnalyticsEditBtn = () => { this._modal.activeTab = 0; this._showView('main'); this._animateViewEnter(this._viewMain, 'enter-back'); };
+    this.shadowRoot.querySelector('#analytics-edit-btn').addEventListener('click', this._onAnalyticsEditBtn);
+    this.shadowRoot.querySelector('#analytics-close').addEventListener('click', this._onClose);
     this._draftToggle = installDraftToggle(this, {
       button: this._draftToggleBtn,
       applyValues: data => {
@@ -1750,6 +1815,9 @@ class GoalDialog extends AppElement {
     this._deleteBtn?.removeEventListener('click', this._onDelete);
     this._closeBtn?.removeEventListener('click', this._onClose);
     this._modal?.removeEventListener('modal-close', this._onModalClose);
+    this._modal?.removeEventListener('modal-tab-change', this._onModalTabChange);
+    this.shadowRoot.querySelector('#analytics-edit-btn')?.removeEventListener('click', this._onAnalyticsEditBtn);
+    this.shadowRoot.querySelector('#analytics-close')?.removeEventListener('click', this._onClose);
     (window.visualViewport ?? window).removeEventListener('resize', this._onResize);
     this._menuBtn?.removeEventListener('click', this._onMenuBtn);
     this._archiveBtn?.removeEventListener('pointerdown', this._onArchivePD);
@@ -2164,11 +2232,23 @@ class GoalDialog extends AppElement {
   }
 
   _showView(name) {
-    this._viewMain.hidden    = name !== 'main';
-    this._viewMove.hidden    = name !== 'move';
-    this._footerMain.hidden  = name !== 'main';
-    this._footerMove.hidden  = name !== 'move';
+    this._viewMain.hidden      = name !== 'main';
+    this._viewMove.hidden      = name !== 'move';
+    this._viewAnalytics.hidden = name !== 'analytics';
+    this._footerMain.hidden      = name !== 'main';
+    this._footerMove.hidden      = name !== 'move';
+    this._footerAnalytics.hidden = name !== 'analytics';
     if (name === 'move') this._renderMoveView();
+  }
+
+  // Re-triggerable on every call (unlike a class that's simply left in place,
+  // which wouldn't replay the animation on a second switch back to the same
+  // view) — remove, force a reflow, then re-add. Only called for the
+  // Edit<->Analytics swap, never for 'move', which has no matching CSS.
+  _animateViewEnter(el, cls) {
+    el.classList.remove('enter-fwd', 'enter-back');
+    void el.offsetWidth;
+    el.classList.add(cls);
   }
 
   _renderMoveView() {

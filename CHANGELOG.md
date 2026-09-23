@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.1.0] — 2026-09-24
+
+### Added
+- **Goal analytics.** Open any saved goal and swipe (or tap the dots at the top, or use the arrow keys) to page through up to four new views alongside the edit form:
+  - **Overview** — current percentage with a recent-progress sparkline, how much you've moved versus a month/quarter/year ago, your entry count, and a completion-versus-expected-pace chart. When there's enough momentum to read a trend, it also projects roughly when you'd finish, and says whether that lands before or after your deadline.
+  - **Score** — for weekly, monthly, and Avoid goals, a period-by-period breakdown of exactly which weeks or months feed your current score, with the counted window highlighted.
+  - **Activity** — a count-per-timebox histogram (week/month/quarter/year), a year-long calendar of logged days, and, for frequency goals, a frequency-by-weekday grid.
+  - **Streaks** — your ten longest streaks, most recent first.
+  Which views appear depends on the goal type: percentage goals have no Score view, and countdown goals show Overview only. Avoid goals count real slip days rather than clean ones throughout.
+- **Percentage goals now keep a history of your progress.** Each time you change a percentage goal's value, Telos records a snapshot for that day, which is what the Overview trend and comparison figures read from. History starts accumulating from this release — existing goals have no back-history, so their trend fills in over time.
+
+### Changed
+- **The goal dialog keeps a steady height while you page between tabs**, instead of resizing to fit whichever view you're on.
+- Charts that are wider than the screen scroll horizontally on their own; ones that fit don't, so you can swipe across them to change tabs.
+
+### Fixed
+- Analytics text and month names follow your chosen language — previously month and quarter labels would have stayed English in French and Catalan.
+
 ## [3.0.2] — 2026-09-19
 
 ### Changed

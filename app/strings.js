@@ -5,6 +5,12 @@ defineStrings({
   'update-banner.reload':     'Reload',
   'update-banner.dismiss':    'Dismiss',
 
+  // Required by _lib/modules/modal-dialog/modal-dialog.js's tabs feature
+  // (v1.1.0+) — the module itself never hardcodes user-visible strings, so
+  // every consumer must supply this key or a tab segment's aria-label falls
+  // back to the raw key name.
+  'modal-dialog.tab-label': 'Page {index} of {count}',
+
   'home-page.capstone-section':     'Capstone',
   'home-page.milestone-section':    '3-Month Milestones',
   'home-page.wow-section':          '8-Week Wow',
@@ -120,6 +126,7 @@ defineStrings({
   'goal-dialog.move-cta':               'Move',
   'goal-dialog.copy-cta':               'Copy',
   'goal-dialog.picker-back':            'Back',
+  'goal-dialog.back-to-edit':            'Edit',
 
   'goal-dialog.type-label':             'Type',
   'goal-dialog.type-percentage':        'Percent',
@@ -496,4 +503,66 @@ defineStrings({
   'color-picker.teal':   'Teal',
   'color-picker.blue':   'Blue',
   'color-picker.purple': 'Purple',
+
+  // Goal analytics — the swipeable Overview/Score/Activity/Streaks pages
+  // inside the goal-edit dialog (app/components/goal-analytics/).
+  'goal-analytics.unit-week':          'week',
+  'goal-analytics.unit-week-plural':   'weeks',
+  'goal-analytics.unit-month':         'month',
+  'goal-analytics.unit-month-plural':  'months',
+
+  'goal-analytics.stat-slips':    'slips',
+  'goal-analytics.stat-updates':  'updates',
+  'goal-analytics.stat-entries':  'entries',
+
+  'goal-analytics.vs-month':   'vs month',
+  'goal-analytics.vs-quarter': 'vs quarter',
+  'goal-analytics.vs-year':    'vs year',
+  'goal-analytics.not-enough-history': 'not enough history',
+  'goal-analytics.pts': 'pts',
+
+  'goal-analytics.change-over-time':     'Change over time',
+  'goal-analytics.progress-chart-title': 'Completion vs. expected pace',
+  'goal-analytics.legend-achieved':      'Achieved',
+  'goal-analytics.legend-expected':      'Expected pace',
+  'goal-analytics.last-n-periods':       'last {n} periods',
+
+  'goal-analytics.pace-insufficient': 'Not enough recent momentum to project a finish date.',
+  'goal-analytics.pace-on-track':     'On pace — projected to finish right around your {deadline} deadline.',
+  'goal-analytics.pace-behind':       '≈{monthsLabel} behind pace — projected {projected} vs a {deadline} deadline.',
+  'goal-analytics.pace-ahead':        '≈{monthsLabel} ahead of pace — projected {projected}.',
+  'goal-analytics.pace-projected':    'At the current rate of improvement, ~100% around {projected}.',
+  'goal-analytics.month-singular':    '1 month',
+  'goal-analytics.month-plural':      '{n} months',
+
+  'goal-analytics.score-contribute': '{label} contribute to',
+  'goal-analytics.now':              'now',
+  'goal-analytics.older-periods-note': 'Older weeks will appear here',
+
+  // Screen-reader descriptions for the chart graphics, which convey their
+  // data purely visually (SVG wedges, sized dots, shaded cells).
+  'goal-analytics.a11y-sparkline':      'Sparkline of recent progress',
+  'goal-analytics.a11y-progress-chart': 'Line chart of completion against expected pace',
+  'goal-analytics.a11y-histogram':      'Bar chart of entry counts per period',
+  'goal-analytics.a11y-calendar':       'Calendar heatmap of logged days over the past year',
+  'goal-analytics.a11y-freqgrid':       'Grid of entry frequency by weekday and month',
+  'goal-analytics.a11y-score-grid':     'Grid of per-period results contributing to the score',
+
+  'goal-analytics.quarter-prefix':    'Q',
+  'goal-analytics.timeframe-label':   'Timeframe',
+  'goal-analytics.timeframe-week':    'Week',
+  'goal-analytics.timeframe-month':   'Month',
+  'goal-analytics.timeframe-quarter': 'Quarter',
+  'goal-analytics.timeframe-year':    'Year',
+
+  'goal-analytics.page-title-score':    'Score',
+  'goal-analytics.page-title-activity': 'Activity',
+  'goal-analytics.page-title-streaks':  'Streaks',
+
+  'goal-analytics.count-per-timebox': 'Count per timebox',
+  'goal-analytics.calendar-title':    'Calendar',
+  'goal-analytics.frequency-title':   'Frequency by weekday',
+  'goal-analytics.best-streaks':      'Best streaks',
+  'goal-analytics.no-streaks-yet':    'No streaks yet — check back once there’s more history.',
+  'goal-analytics.days-abbrev':       'd',
 });

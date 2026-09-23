@@ -75,15 +75,36 @@ describe('tracking — percentValue / setPercent (percentage type)', () => {
 
   it('setPercent clamps 0–100 and preserves other fields', () => {
     const goal = { id: 'g1', title: 'X', ...pct(10) };
-    expect(setPercent(goal, 150).tracking).toEqual({ type: 'percentage', value: 100 });
-    expect(setPercent(goal, -20).tracking).toEqual({ type: 'percentage', value: 0 });
-    expect(setPercent(goal, 55).id).toBe('g1');
-    expect(setPercent(goal, 55).title).toBe('X');
+    const today = '2026-09-20';
+    expect(setPercent(goal, 150, today).tracking).toEqual({ type: 'percentage', value: 100, history: [{ date: today, value: 100 }] });
+    expect(setPercent(goal, -20, today).tracking).toEqual({ type: 'percentage', value: 0, history: [{ date: today, value: 0 }] });
+    expect(setPercent(goal, 55, today).id).toBe('g1');
+    expect(setPercent(goal, 55, today).title).toBe('X');
   });
 
   it('setPercent preserves a dormant target/entries from a goal that has previously been weekly/monthly', () => {
     const goal = { id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: ['2026-08-01'] } };
-    expect(setPercent(goal, 75).tracking).toEqual({ type: 'percentage', value: 75, target: 5, entries: ['2026-08-01'] });
+    const today = '2026-09-20';
+    expect(setPercent(goal, 75, today).tracking).toEqual({
+      type: 'percentage', value: 75, target: 5, entries: ['2026-08-01'], history: [{ date: today, value: 75 }],
+    });
+  });
+
+  it('setPercent upserts today\'s snapshot — a same-day re-edit overwrites, not appends', () => {
+    const goal = pct(10);
+    const today = '2026-09-20';
+    const once = setPercent(goal, 40, today);
+    const again = setPercent(once, 60, today);
+    expect(again.tracking.history).toEqual([{ date: today, value: 60 }]);
+  });
+
+  it('setPercent keeps prior days\' snapshots and stays ascending-sorted', () => {
+    const goal = setPercent(pct(10), 20, '2026-09-01');
+    const updated = setPercent(goal, 50, '2026-09-15');
+    expect(updated.tracking.history).toEqual([
+      { date: '2026-09-01', value: 20 },
+      { date: '2026-09-15', value: 50 },
+    ]);
   });
 });
 

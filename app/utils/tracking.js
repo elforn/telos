@@ -255,7 +255,7 @@ function decreasingWeightedAverage(tracking, todayIso) {
 // earlier) — parses date parts manually, same reasoning as daysUntil in
 // urgency.js: `new Date('2026-07-28')` is UTC midnight and can land on the
 // wrong local day.
-function daysBetween(fromIso, toIso) {
+export function daysBetween(fromIso, toIso) {
   return Math.round((localDate(toIso) - localDate(fromIso)) / 86400000);
 }
 
@@ -295,11 +295,39 @@ export function percentValue(goal, todayIso = todayISO()) {
   return Math.round(weightedAverage(tr, todayIso) * 100);
 }
 
-export function setPercent(goal, pct) {
+// `history` is percentage-type's own analytics log — a snapshot of `value`
+// per calendar day, one entry per day max (upsert, overwriting same-day),
+// mirroring the "one entry per day max" convention `entries` already uses
+// for frequency/decreasing types. It's the only way "percentage over time"
+// or "vs last month/quarter/year" can exist for this type at all: unlike
+// weekly/monthly/decreasing (whose percentValue is already date-aware via
+// entries), a percentage goal's value has no history without this. No
+// backfill — a goal's history starts accumulating from whichever day this
+// first runs on, same as every other lazily-introduced optional field here.
+export function percentHistory(goal) { return goal?.tracking?.history ?? []; }
+
+// Carry-forward lookup — the last snapshot with date <= iso, since a
+// percentage doesn't reset each period the way a frequency score does.
+// `history` must be ascending-sorted (setPercent maintains this).
+// Returns undefined — not 0 — when no snapshot predates `iso` at all, so
+// callers can distinguish "not enough history yet" from a real 0%.
+export function historyValueAt(history, iso) {
+  let result;
+  for (const entry of history) {
+    if (entry.date > iso) break;
+    result = entry.value;
+  }
+  return result;
+}
+
+export function setPercent(goal, pct, todayIso = todayISO()) {
   // Spreads the existing tracking first so a dormant target/entries (from a
   // goal that's previously been weekly/monthly) survives untouched — only
-  // type and value are actually being set here.
-  return { ...goal, tracking: { ...goal.tracking, type: 'percentage', value: Math.max(0, Math.min(100, pct)) } };
+  // type, value, and today's history snapshot are actually being touched here.
+  const value = Math.max(0, Math.min(100, pct));
+  const history = [...percentHistory(goal).filter(h => h.date !== todayIso), { date: todayIso, value }]
+    .sort((a, b) => a.date.localeCompare(b.date));
+  return { ...goal, tracking: { ...goal.tracking, type: 'percentage', value, history } };
 }
 
 export function logEntry(goal, iso = todayISO()) {
@@ -383,7 +411,7 @@ function countByPeriod(entries, type) {
 // Shared by periodFractions (always PERIOD_WINDOW[type], feeds the score)
 // and recentDots (DOT_WINDOW[type], feeds the row — can show more than the
 // score counts, see DOT_WINDOW above).
-function fractionsForWindow(tracking, count, todayIso) {
+export function fractionsForWindow(tracking, count, todayIso) {
   const { type, target, entries } = tracking;
   const counts = countByPeriod(entries, type);
   const fraction = PERIOD_FRACTION[type];

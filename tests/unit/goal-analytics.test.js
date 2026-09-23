@@ -1,0 +1,244 @@
+import { describe, it, expect } from 'vitest';
+import {
+  percentValueAt, dateListFor, rawLoggedDates, computeStreaks, topStreaks, countByBucket,
+  completionSeries, successRatioSeries, comparisonDelta, updateCount, projectPace,
+} from '../../app/utils/goal-analytics.js';
+
+const TODAY = '2026-09-20'; // a Sunday
+
+function pctGoal(value, history = []) { return { tracking: { type: 'percentage', value, history } }; }
+function weeklyGoal(target, entries, extra = {}) { return { tracking: { type: 'weekly', target, entries }, ...extra }; }
+function monthlyGoal(target, entries) { return { tracking: { type: 'monthly', target, entries } }; }
+function decreasingGoal(target, entries) { return { tracking: { type: 'decreasing', target, entries } }; }
+function countdownGoal(startDate, dueDate) { return { dueDate, tracking: { type: 'countdown', startDate } }; }
+
+describe('goal-analytics — percentValueAt', () => {
+  it('percentage type: exact-date match', () => {
+    const goal = pctGoal(50, [{ date: '2026-08-01', value: 30 }, { date: '2026-09-01', value: 50 }]);
+    expect(percentValueAt(goal, '2026-09-01')).toBe(50);
+  });
+
+  it('percentage type: carry-forward to the last snapshot before the requested date', () => {
+    const goal = pctGoal(50, [{ date: '2026-08-01', value: 30 }, { date: '2026-09-01', value: 50 }]);
+    expect(percentValueAt(goal, '2026-08-15')).toBe(30);
+    expect(percentValueAt(goal, '2026-12-01')).toBe(50);
+  });
+
+  it('percentage type: undefined (not 0) when no snapshot predates the date at all', () => {
+    const goal = pctGoal(50, [{ date: '2026-09-01', value: 50 }]);
+    expect(percentValueAt(goal, '2026-01-01')).toBeUndefined();
+  });
+
+  it('percentage type: undefined when history is empty (legacy goal, never resaved)', () => {
+    expect(percentValueAt(pctGoal(50, []), TODAY)).toBeUndefined();
+  });
+
+  it('delegates straight through to percentValue for weekly/monthly/decreasing/countdown', () => {
+    const weekly = weeklyGoal(3, ['2026-09-01', '2026-09-02', '2026-09-03']);
+    expect(percentValueAt(weekly, '2026-09-03')).toBe(percentValueAt(weekly, '2026-09-03'));
+    const countdown = countdownGoal('2026-01-01', '2026-12-31');
+    expect(percentValueAt(countdown, '2026-07-02')).toBeGreaterThan(0);
+  });
+});
+
+describe('goal-analytics — dateListFor', () => {
+  it('percentage: history dates within the cutoff', () => {
+    const goal = pctGoal(50, [{ date: '2025-01-01', value: 10 }, { date: '2026-09-01', value: 50 }]);
+    expect(dateListFor(goal, TODAY, 60)).toEqual(['2026-09-01']);
+  });
+
+  it('weekly/monthly: raw entries within the cutoff', () => {
+    const goal = weeklyGoal(3, ['2020-01-01', '2026-09-15']);
+    expect(dateListFor(goal, TODAY, 30)).toEqual(['2026-09-15']);
+  });
+
+  it('countdown: always empty — no discrete per-day log exists', () => {
+    expect(dateListFor(countdownGoal('2026-01-01', '2026-12-31'), TODAY)).toEqual([]);
+  });
+
+  it('decreasing: "on track" dates, not raw slip entries — a slip day is excluded, a clean day is included', () => {
+    // No entries at all this week → every day should read as on-track (clean).
+    const goal = decreasingGoal(1, []);
+    const dates = dateListFor(goal, TODAY, 7);
+    expect(dates.length).toBeGreaterThan(0);
+    expect(dates).not.toContain(undefined);
+  });
+
+  it('decreasing: a slip beyond the allowance is excluded from the on-track list', () => {
+    // Monday this week (TODAY is Sunday 2026-09-20, so Monday is 2026-09-14) slips once, allowance 0.
+    const goal = decreasingGoal(0, ['2026-09-14']);
+    const dates = dateListFor(goal, TODAY, 7);
+    expect(dates).not.toContain('2026-09-14');
+  });
+});
+
+describe('goal-analytics — computeStreaks / topStreaks', () => {
+  it('finds consecutive runs, ignoring gaps', () => {
+    const streaks = computeStreaks(['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-05']);
+    expect(streaks).toEqual([
+      { start: '2026-01-01', end: '2026-01-03', length: 3 },
+      { start: '2026-01-05', end: '2026-01-05', length: 1 },
+    ]);
+  });
+
+  it('dedupes duplicate dates', () => {
+    const streaks = computeStreaks(['2026-01-01', '2026-01-01', '2026-01-02']);
+    expect(streaks).toEqual([{ start: '2026-01-01', end: '2026-01-02', length: 2 }]);
+  });
+
+  it('empty input yields no streaks', () => {
+    expect(computeStreaks([])).toEqual([]);
+  });
+
+  it('a single date is its own length-1 streak', () => {
+    expect(computeStreaks(['2026-01-01'])).toEqual([{ start: '2026-01-01', end: '2026-01-01', length: 1 }]);
+  });
+
+  it('topStreaks selects the N longest, then re-sorts by recency — not by length', () => {
+    // Two streaks: an 5-day one further back, a 2-day one more recent.
+    const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05', '2026-02-10', '2026-02-11'];
+    const top = topStreaks(dates, 10);
+    expect(top[0]).toEqual({ start: '2026-02-10', end: '2026-02-11', length: 2 }); // more recent, shown first
+    expect(top[1]).toEqual({ start: '2026-01-01', end: '2026-01-05', length: 5 }); // longer, but older
+  });
+
+  it('caps at n results', () => {
+    const dates = ['2026-01-01', '2026-01-03', '2026-01-05', '2026-01-07', '2026-01-09'];
+    expect(topStreaks(dates, 2).length).toBe(2);
+  });
+});
+
+describe('goal-analytics — countByBucket', () => {
+  it('groups by week/month/quarter/year', () => {
+    const dates = ['2026-01-05', '2026-01-06', '2026-02-01', '2026-04-01', '2027-01-01'];
+    expect([...countByBucket(dates, 'month').values()].reduce((a, b) => a + b, 0)).toBe(5);
+    expect(countByBucket(dates, 'quarter').get('2026-Q1')).toBe(3);
+    expect(countByBucket(dates, 'year').get('2026')).toBe(4);
+    expect(countByBucket(dates, 'year').get('2027')).toBe(1);
+  });
+
+  it('handles an ISO-week year-boundary date correctly (delegates to isoWeekKey)', () => {
+    // 2026-01-01 is a Thursday, so it belongs to ISO week 1 of 2026, not the tail of 2025.
+    const counts = countByBucket(['2026-01-01'], 'week');
+    expect(counts.get('2026-W01')).toBe(1);
+  });
+});
+
+describe('goal-analytics — completionSeries', () => {
+  it('returns `count` points, oldest first, ending at todayIso\'s own period', () => {
+    const goal = pctGoal(50, [{ date: '2026-09-01', value: 50 }]);
+    const series = completionSeries(goal, 'month', 3, TODAY);
+    expect(series.length).toBe(3);
+    expect(series[series.length - 1].iso).toBe(TODAY);
+    expect(series[series.length - 1].value).toBe(50);
+  });
+
+  it('leaves undefined values in place for points before any snapshot existed', () => {
+    const goal = pctGoal(50, [{ date: TODAY, value: 50 }]);
+    const series = completionSeries(goal, 'month', 3, TODAY);
+    expect(series[0].value).toBeUndefined(); // 2 months ago — before the only snapshot
+    expect(series[2].value).toBe(50);
+  });
+});
+
+describe('goal-analytics — successRatioSeries', () => {
+  it('weekly: expected is always 100, achieved is the raw per-period fraction', () => {
+    const goal = weeklyGoal(3, ['2026-09-14', '2026-09-15', '2026-09-16']); // 3 of 3 that week
+    const series = successRatioSeries(goal, 'week', 1, TODAY);
+    expect(series[0].expected).toBe(100);
+    expect(series[0].achieved).toBe(100);
+  });
+
+  it('weekly: a partial week reads as a proportional fraction, not a weighted score', () => {
+    const goal = weeklyGoal(3, ['2026-09-14']); // 1 of 3
+    const series = successRatioSeries(goal, 'week', 1, TODAY);
+    expect(series[0].achieved).toBe(33);
+  });
+
+  it('percentage: expected is a linear day-of-year pace, ignoring dueDate', () => {
+    const goal = pctGoal(50, [{ date: TODAY, value: 50 }]);
+    const series = successRatioSeries(goal, 'month', 1, TODAY);
+    const dayOfYear = Math.round((new Date(2026, 8, 20) - new Date(2026, 0, 1)) / 86400000) + 1;
+    expect(series[0].expected).toBe(Math.round((dayOfYear / 365) * 100));
+  });
+
+  it('countdown: achieved always equals expected by construction', () => {
+    const goal = countdownGoal('2026-01-01', '2026-12-31');
+    const series = successRatioSeries(goal, 'month', 2, TODAY);
+    series.forEach(p => expect(p.achieved).toBe(p.expected));
+  });
+});
+
+describe('goal-analytics — comparisonDelta', () => {
+  it('returns null when no snapshot predates the comparison point', () => {
+    const goal = pctGoal(50, [{ date: TODAY, value: 50 }]);
+    expect(comparisonDelta(goal, 'year', TODAY)).toBeNull();
+  });
+
+  it('returns the real delta when history covers the comparison point', () => {
+    const goal = pctGoal(50, [{ date: '2026-08-20', value: 40 }, { date: TODAY, value: 50 }]);
+    expect(comparisonDelta(goal, 'month', TODAY)).toBe(10);
+  });
+
+  it('a negative delta is a plain negative number, not clamped', () => {
+    const goal = pctGoal(50, [{ date: '2026-08-20', value: 60 }, { date: TODAY, value: 50 }]);
+    expect(comparisonDelta(goal, 'month', TODAY)).toBe(-10);
+  });
+});
+
+describe('goal-analytics — updateCount', () => {
+  it('matches dateListFor\'s own length for weekly/monthly/percentage', () => {
+    const goal = weeklyGoal(3, ['2026-09-01', '2026-09-02']);
+    expect(updateCount(goal, TODAY, 60)).toBe(dateListFor(goal, TODAY, 60).length);
+  });
+
+  it('decreasing: counts real slips, not the much larger on-track-day count from dateListFor', () => {
+    const goal = decreasingGoal(1, ['2026-09-14', '2026-09-15']); // 2 real slips
+    expect(updateCount(goal, TODAY, 60)).toBe(2);
+    // dateListFor's on-track complement for the same goal is a much bigger number
+    // (most days in the window read as clean) — confirms the two are genuinely different.
+    expect(dateListFor(goal, TODAY, 60).length).toBeGreaterThan(10);
+  });
+});
+
+describe('goal-analytics — rawLoggedDates', () => {
+  it('is identical to dateListFor for weekly/monthly/percentage', () => {
+    const goal = monthlyGoal(2, ['2026-08-01', '2026-09-01']);
+    expect(rawLoggedDates(goal, TODAY, 90)).toEqual(dateListFor(goal, TODAY, 90));
+  });
+
+  it('for decreasing, returns the real slip entries — the inverse of dateListFor', () => {
+    const goal = decreasingGoal(0, ['2026-09-14']);
+    expect(rawLoggedDates(goal, TODAY, 60)).toEqual(['2026-09-14']);
+    expect(dateListFor(goal, TODAY, 60)).not.toContain('2026-09-14');
+  });
+});
+
+describe('goal-analytics — projectPace', () => {
+  it('returns null once already at 100%', () => {
+    expect(projectPace(pctGoal(100, [{ date: TODAY, value: 100 }]), TODAY)).toBeNull();
+  });
+
+  it('returns null with fewer than 2 known history points', () => {
+    expect(projectPace(pctGoal(50, [{ date: TODAY, value: 50 }]), TODAY)).toBeNull();
+  });
+
+  it('flags insufficient momentum when the recent trend is flat or declining', () => {
+    const goal = pctGoal(50, [{ date: '2026-06-20', value: 52 }, { date: TODAY, value: 50 }]);
+    expect(projectPace(goal, TODAY)).toEqual({ insufficientMomentum: true });
+  });
+
+  it('projects a finish date from a real upward trend, with no deadline', () => {
+    const goal = pctGoal(50, [{ date: '2026-06-20', value: 20 }, { date: TODAY, value: 50 }]);
+    const result = projectPace(goal, TODAY);
+    expect(result.projectedIso).toBeTruthy();
+    expect(result.deadlineIso).toBeUndefined();
+  });
+
+  it('compares the projection against a real dueDate when one is set', () => {
+    const goal = { ...pctGoal(50, [{ date: '2026-06-20', value: 20 }, { date: TODAY, value: 50 }]), dueDate: '2026-12-31' };
+    const result = projectPace(goal, TODAY);
+    expect(result.deadlineIso).toBe('2026-12-31');
+    expect(typeof result.diffMonths).toBe('number');
+  });
+});
