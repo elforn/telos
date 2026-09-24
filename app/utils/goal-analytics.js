@@ -8,6 +8,7 @@ import { todayISO } from './today-iso.js';
 import {
   percentValue, percentHistory, historyValueAt, isoWeekKey, monthKey,
   isEntryBased, isDecreasing, isFrequency, weekDayStates, daysBetween,
+  PERIOD_WINDOW,
 } from './tracking.js';
 
 // ── Page list ────────────────────────────────────────────────────────────
@@ -164,7 +165,7 @@ export function completionSeries(goal, unit, count, todayIso = todayISO()) {
 // recency-weighted score across several weeks. Only meaningful for
 // weekly/monthly/decreasing; percentage/countdown are handled directly in
 // successRatioSeries below since they have no per-period target at all.
-function singlePeriodFraction(goal, iso, todayIso) {
+function singlePeriodFraction(goal, iso, todayIso, cap = true) {
   const tr = goal.tracking;
   if (tr.type === 'decreasing') {
     const weeksAgo = Math.round(daysBetween(iso, todayIso) / 7);
@@ -175,7 +176,8 @@ function singlePeriodFraction(goal, iso, todayIso) {
   const keyFn = tr.type === 'monthly' ? monthKey : isoWeekKey;
   const key = keyFn(iso);
   const count = (tr.entries ?? []).filter(e => keyFn(e) === key).length;
-  return Math.min(count / (tr.target || 1), 1);
+  const frac = count / (tr.target || 1);
+  return cap ? Math.min(frac, 1) : frac;
 }
 
 // ── Success-ratio series (Progress chart, "expected pace" line) ─────────
@@ -188,6 +190,134 @@ function singlePeriodFraction(goal, iso, todayIso) {
 // achieved always equals expected by construction (percentValue already
 // is elapsed ÷ total) — a flat, low-signal line, kept for page-shape
 // consistency rather than special-cased away.
+// ── Per-period performance (Overview's bar chart) ──────────────────────
+// How each individual period actually went — deliberately NOT the score.
+// completionSeries samples percentValueAt, a point-in-time reading of the
+// rolling recency-weighted score; this instead measures each period on its
+// own. That difference is why this one has to aggregate and that one doesn't:
+// sampling a continuously-running value at any date is always valid, whereas
+// a per-period figure is only meaningful for the periods it actually covers.
+//
+// The goal's natural period (ISO week, or calendar month for monthly goals)
+// is what gets measured. When the chosen timeframe IS that period, the raw
+// uncapped value is reported, so an over-target week reads above 100% — that
+// is real and worth seeing. At any coarser timeframe each natural period is
+// capped at 100% before averaging, so a 200% week cannot paper over a 0%
+// week: the bar answers "how many of my weeks did I hold", a consistency
+// figure, not a volume one. (Volume is already the Activity tab's histogram.)
+// Note that an uncapped average would be arithmetically identical to
+// total-achieved/total-expected, since target is constant across periods —
+// capping is the only thing that distinguishes them.
+function naturalUnitFor(goal) {
+  return goal?.tracking?.type === 'monthly' ? 'month' : 'week';
+}
+
+// Inclusive [start, end] calendar bounds of one sampled timebox.
+function timeboxBounds(unit, todayIso, periodsAgo) {
+  const d = localDate(todayIso);
+  if (unit === 'week') {
+    const dow = (d.getDay() + 6) % 7; // Monday-based, matching isoWeekKey
+    const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow - periodsAgo * 7);
+    return [mon, new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6)];
+  }
+  if (unit === 'month') {
+    const s = new Date(d.getFullYear(), d.getMonth() - periodsAgo, 1);
+    return [s, new Date(s.getFullYear(), s.getMonth() + 1, 0)];
+  }
+  if (unit === 'quarter') {
+    const a = new Date(d.getFullYear(), d.getMonth() - periodsAgo * 3, 1);
+    const qs = new Date(a.getFullYear(), Math.floor(a.getMonth() / 3) * 3, 1);
+    return [qs, new Date(qs.getFullYear(), qs.getMonth() + 3, 0)];
+  }
+  const y = d.getFullYear() - periodsAgo;
+  return [new Date(y, 0, 1), new Date(y, 11, 31)];
+}
+
+// Every natural period belonging to a timebox, keyed by a date inside it.
+// A week belongs to the timebox containing its Monday, so weeks straddling a
+// month/quarter boundary are counted once, never double-counted. Periods that
+// haven't happened yet are excluded so an in-progress timebox isn't dragged
+// down by its own future.
+function naturalPeriodsIn(goal, bounds, todayIso) {
+  const [start, end] = bounds;
+  const today = localDate(todayIso);
+  const stop = end < today ? end : today;
+  const out = [];
+  if (naturalUnitFor(goal) === 'month') {
+    let c = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (c <= stop) { out.push(toIso(c)); c = new Date(c.getFullYear(), c.getMonth() + 1, 1); }
+  } else {
+    const dow = (start.getDay() + 6) % 7;
+    let c = new Date(start.getFullYear(), start.getMonth(), start.getDate() - dow);
+    if (c < start) c = new Date(c.getFullYear(), c.getMonth(), c.getDate() + 7);
+    while (c <= stop) { out.push(toIso(c)); c = new Date(c.getFullYear(), c.getMonth(), c.getDate() + 7); }
+  }
+  return out;
+}
+
+export function periodPerformanceSeries(goal, unit, count, todayIso = todayISO()) {
+  const aggregated = unit !== naturalUnitFor(goal);
+  const points = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const bounds = timeboxBounds(unit, todayIso, i);
+    const periods = naturalPeriodsIn(goal, bounds, todayIso);
+    const iso = toIso(bounds[0]);
+    if (periods.length === 0) { points.push({ iso, value: undefined, aggregated }); continue; }
+    const value = aggregated
+      ? periods.reduce((a, p) => a + singlePeriodFraction(goal, p, todayIso, true), 0) / periods.length
+      : singlePeriodFraction(goal, periods[0], todayIso, false);
+    points.push({ iso, value: Math.round(value * 100), aggregated });
+  }
+  return points;
+}
+
+// ── Recovery curve (Overview's "expected pace" line, frequency types) ───
+// What the score would read at each point if every period from the start of
+// the current window onward had been played perfectly. Before that window it
+// simply follows reality, so the line reads "here is where I was, and here is
+// the best I could possibly be today."
+//
+// Deliberately computed rather than drawn as a straight ramp: the score
+// weights the window's periods 6,5,4,3,2,1, so a newly-perfect period enters
+// at the highest weight and decays as it ages. Recovery is therefore strongly
+// front-loaded — from empty, one perfect week is worth 29 points and the
+// sixth only 5 — and a straight line understates the achievable path by up to
+// 21 points at the midpoint. It can also sit flat where a period was already
+// at target, since making it "perfect" changes nothing.
+export function recoveryCurve(goal, unit, count, todayIso = todayISO()) {
+  const type = goal?.tracking?.type;
+  const window = PERIOD_WINDOW[type];
+  if (!window) return null;
+
+  const nat = naturalUnitFor(goal);
+  const [cutoffStart] = timeboxBounds(nat, todayIso, window - 1);
+  const cutoffIso = toIso(cutoffStart);
+
+  // A goal playing perfectly from the cutoff on: for entry-based types that
+  // means target entries every period; for Avoid it means simply no further
+  // slips, so the kept entries are the whole story.
+  const kept = (goal.tracking.entries ?? []).filter(e => e < cutoffIso);
+  const perfect = [...kept];
+  if (!isDecreasing(goal)) {
+    const target = goal.tracking.target || 1;
+    for (let p = 0; p < window; p++) {
+      const [s] = timeboxBounds(nat, todayIso, p);
+      for (let n = 0; n < target; n++) {
+        const d = new Date(s.getFullYear(), s.getMonth(), s.getDate() + n);
+        if (toIso(d) <= todayIso) perfect.push(toIso(d));
+      }
+    }
+  }
+  const ideal = { ...goal, tracking: { ...goal.tracking, entries: [...new Set(perfect)].sort() } };
+
+  const out = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const iso = toIso(stepDate(unit, todayIso, i));
+    out.push(iso < cutoffIso ? percentValue(goal, iso) : percentValue(ideal, iso));
+  }
+  return out;
+}
+
 export function successRatioSeries(goal, unit, count, todayIso = todayISO()) {
   const type = goal?.tracking?.type;
   const points = [];
@@ -197,6 +327,28 @@ export function successRatioSeries(goal, unit, count, todayIso = todayISO()) {
     if (type === 'percentage') {
       achieved = percentValueAt(goal, iso);
       const d = localDate(iso);
+      // KNOWN ISSUE (deliberately deferred, not yet fixed): dayOfYear resets
+      // every 1 January, so any chart window crossing a year boundary draws a
+      // sawtooth — one cliff at month timeframe, repeating "mountains" at
+      // quarter, and a useless flat line at year (every point lands on the
+      // same day-of-year). Whatever replaces it, the ramp should run between
+      // a real start and a real end rather than restarting annually. Options,
+      // still to be decided — including which applies when, and whether they
+      // combine (e.g. start at creation but end at a due date when one is set):
+      //
+      //   a) start of the goal's year  → end of that year
+      //   b) goal creation date        → due date
+      //
+      // Constraints either way. (a) needs the goal's own year, which this
+      // module is never given — a Telos goal belongs to exactly one year, so
+      // that means threading it in from goal-dialog rather than inferring it
+      // from the sampled date. (b) is harder: there is no createdAt anywhere
+      // in the goal schema (see this file's HISTORY_DAYS_BACK note), so a
+      // creation date would have to be added to the schema or proxied from
+      // the first history snapshot — and a proxy is unreliable for goals that
+      // predate tracking.history. dueDate is optional, so (b) also needs a
+      // fallback for goals without one. Outside either range the line should
+      // be undefined before the start and 100 after the end, never a restart.
       const dayOfYear = Math.round((d - new Date(d.getFullYear(), 0, 1)) / 86400000) + 1;
       expected = Math.min(100, Math.round((dayOfYear / 365) * 100));
     } else if (type === 'countdown') {

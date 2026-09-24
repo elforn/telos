@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.2.0] — 2026-09-25
+
+### Added
+- **A Consistency chart at the end of Overview.** Where the existing chart tracks your *score* over time, this one shows how each individual period actually went. At your goal's own period (a week, or a month for monthly goals) it shows the true figure — go past target and the bar reads above 100% and turns green, with a dashed line marking where 100% sits. At coarser timeframes each period is capped at 100% before averaging, so one big week can't paper over a missed one — the bar answers "how many of my weeks did I hold", not "how much did I do in total". Monthly goals don't offer the weekly timeframe, since no month fits inside a week.
+- **Each analytics tab now names itself and the goal it belongs to** — the view name (Overview, Score, Activity, Streaks) on the left, the goal's own name on the right — so it's clear what you're looking at after swiping between tabs.
+- **Date labels along the bottom of the completion chart**, and the starting percentage shown above the first point, so you can see where the line began as well as where it is now.
+
+### Changed
+- **The "expected pace" line now shows what's still reachable, for weekly, monthly, and Avoid goals.** It used to sit flat at 100%. It now follows your real history up to the start of the scoring window, then traces the score you'd reach by playing perfectly from there — ending at 100% today. That curve is deliberately not a straight line: the score weights recent periods far more heavily, so the first good week is worth about six times the last one.
+
 ## [3.1.0] — 2026-09-24
 
 ### Added

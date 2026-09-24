@@ -270,7 +270,7 @@ describe('goal-analytics — localisation', () => {
 describe('goal-analytics — accessibility', () => {
   it('gives each analytics page an h2 heading so card h3s are not orphaned', () => {
     const el = mount(weeklyGoal(3, []));
-    for (const [page, title] of [[1, 'Score'], [2, 'Activity'], [3, 'Streaks']]) {
+    for (const [page, title] of [[0, 'Overview'], [1, 'Score'], [2, 'Activity'], [3, 'Streaks']]) {
       el.activePage = page;
       const h2 = el.shadowRoot.querySelector('h2.page-title');
       expect(h2, `page ${page} should have an h2`).toBeTruthy();
@@ -278,12 +278,42 @@ describe('goal-analytics — accessibility', () => {
     }
   });
 
-  it('labels every chart graphic so it is not silent to assistive tech', () => {
-    const el = mount(weeklyGoal(3, ['2026-09-14', '2026-09-15']));
-    el.activePage = 2;
-    const charts = [...el.shadowRoot.querySelectorAll('[role="img"]')];
-    expect(charts.length).toBeGreaterThan(0);
-    charts.forEach(c => expect(c.getAttribute('aria-label')?.trim()).toBeTruthy());
+  it('names the goal on every analytics page, so a swiped-to tab says which goal it is', () => {
+    const el = mount(weeklyGoal(3, ['2026-09-14']));
+    for (const page of [0, 1, 2, 3]) {
+      el.activePage = page;
+      expect(el.shadowRoot.querySelector('.page-goal')?.textContent, `page ${page}`).toBe('Run');
+    }
+  });
+
+  it('escapes the goal title rather than injecting it as markup', () => {
+    const goal = weeklyGoal(3, []);
+    goal.title = '<img src=x onerror=1> & "quoted"';
+    const el = mount(goal);
+    const node = el.shadowRoot.querySelector('.page-goal');
+    expect(node.querySelector('img')).toBeNull();      // rendered as text, not an element
+    expect(node.textContent).toBe('<img src=x onerror=1> & "quoted"');
+  });
+
+  it('labels every chart graphic on every page so none is silent to assistive tech', () => {
+    // Asserts named containers rather than querying [role="img"]: that
+    // selector only matches elements that already carry the role, so a chart
+    // missing it is simply absent from the result and the check passes
+    // vacuously. That is exactly how an unlabelled chart slipped through once.
+    const CHARTS = {
+      0: ['.perf', '.line-wrap svg', '.spark-wrap svg'],
+      2: ['#hist-scroll', '#cal-scroll', '#freq-scroll'],
+    };
+    const el = mount(weeklyGoal(3, [...Array(6)].map((_, i) => `2026-09-${14 + i}`)));
+    for (const [page, selectors] of Object.entries(CHARTS)) {
+      el.activePage = Number(page);
+      for (const sel of selectors) {
+        const node = el.shadowRoot.querySelector(sel);
+        if (!node) continue; // not every chart exists for every goal shape
+        expect(node.getAttribute('role'), `${sel} on page ${page} needs role=img`).toBe('img');
+        expect(node.getAttribute('aria-label')?.trim(), `${sel} on page ${page} needs a label`).toBeTruthy();
+      }
+    }
   });
 
   it('gives the timeframe select an accessible name', () => {

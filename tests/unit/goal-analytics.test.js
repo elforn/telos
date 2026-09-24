@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   percentValueAt, dateListFor, rawLoggedDates, computeStreaks, topStreaks, countByBucket,
-  completionSeries, successRatioSeries, comparisonDelta, updateCount, projectPace,
+  completionSeries, successRatioSeries, periodPerformanceSeries, recoveryCurve,
+  comparisonDelta, updateCount, projectPace,
 } from '../../app/utils/goal-analytics.js';
 
 const TODAY = '2026-09-20'; // a Sunday
@@ -240,5 +241,93 @@ describe('goal-analytics — projectPace', () => {
     const result = projectPace(goal, TODAY);
     expect(result.deadlineIso).toBe('2026-12-31');
     expect(typeof result.diffMonths).toBe('number');
+  });
+});
+
+// Entries placed inside the ISO week N weeks before TODAY. Naively adding N
+// days to a week-offset spills across the Monday boundary, which silently
+// mis-attributes counts — worth keeping explicit.
+function weekEntries(weeksAgo, count, today = TODAY) {
+  const [y, m, d] = today.split('-').map(Number);
+  const t = new Date(y, m - 1, d);
+  const mon = new Date(y, m - 1, d - ((t.getDay() + 6) % 7) - weeksAgo * 7);
+  const pad = n => String(n).padStart(2, '0');
+  return Array.from({ length: count }, (_, i) => {
+    const x = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i);
+    return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+  });
+}
+
+describe('goal-analytics — periodPerformanceSeries', () => {
+  it('reports the raw uncapped value when the timeframe is the goal\'s own period', () => {
+    const goal = weeklyGoal(3, weekEntries(0, 6)); // 6 of 3 this week
+    const [point] = periodPerformanceSeries(goal, 'week', 1, TODAY);
+    expect(point.value).toBe(200);
+    expect(point.aggregated).toBe(false);
+  });
+
+  it('caps each period at 100% before averaging a coarser timeframe', () => {
+    // One 200% week and one 0% week: uncapped they average to 100, capped to 50.
+    const goal = weeklyGoal(3, [...weekEntries(0, 6), ...weekEntries(1, 0)]);
+    const [point] = periodPerformanceSeries(goal, 'quarter', 1, TODAY);
+    expect(point.aggregated).toBe(true);
+    expect(point.value).toBeLessThan(100);
+  });
+
+  it('never lets an over-target period mask a missed one in an aggregate', () => {
+    const lumpy  = weeklyGoal(3, [...weekEntries(0, 6), ...weekEntries(1, 0)]);
+    const steady = weeklyGoal(3, [...weekEntries(0, 3), ...weekEntries(1, 3)]);
+    const lumpyVal  = periodPerformanceSeries(lumpy,  'quarter', 1, TODAY)[0].value;
+    const steadyVal = periodPerformanceSeries(steady, 'quarter', 1, TODAY)[0].value;
+    // Same total effort, but consistency differs — that is the whole point of
+    // capping, and is what distinguishes this from total-over-total.
+    expect(steadyVal).toBeGreaterThan(lumpyVal);
+  });
+
+  it('aggregates every period in the timebox rather than point-sampling one', () => {
+    // The bug this replaced sampled a single week per quarter, so a quarter
+    // containing plenty of activity could read 0.
+    const goal = weeklyGoal(3, [0,1,2,3,4,5,6,7].flatMap(w => weekEntries(w, 3)));
+    const [point] = periodPerformanceSeries(goal, 'quarter', 1, TODAY);
+    expect(point.value).toBeGreaterThan(0);
+  });
+
+  it('excludes future periods so an in-progress timebox is not dragged down', () => {
+    const goal = weeklyGoal(3, weekEntries(0, 3));
+    const [point] = periodPerformanceSeries(goal, 'year', 1, TODAY);
+    expect(point.value).toBeGreaterThan(0);
+  });
+});
+
+describe('goal-analytics — recoveryCurve', () => {
+  it('reaches exactly 100 at today, since a full window of perfect play is the score', () => {
+    const goal = weeklyGoal(3, weekEntries(4, 1));
+    const curve = recoveryCurve(goal, 'week', 8, TODAY);
+    expect(curve.at(-1)).toBe(100);
+  });
+
+  it('is front-loaded, not linear — early perfect periods carry the most weight', () => {
+    const goal = weeklyGoal(3, []);
+    const curve = recoveryCurve(goal, 'week', 7, TODAY);
+    const gains = curve.slice(1).map((v, i) => v - curve[i]);
+    // Each later gain is no larger than the one before it; a straight line
+    // would make them all equal.
+    gains.slice(1).forEach((g, i) => expect(g).toBeLessThanOrEqual(gains[i] + 1));
+    expect(gains[0]).toBeGreaterThan(gains.at(-1));
+  });
+
+  it('follows real history before the window rather than projecting over it', () => {
+    const goal = weeklyGoal(3, [6, 7, 8].flatMap(w => weekEntries(w, 3)));
+    const curve = recoveryCurve(goal, 'week', 10, TODAY);
+    // Points older than the 6-period window must equal the goal's actual past
+    // score — the projection only applies from the window's start onward.
+    const older = curve.slice(0, 4);
+    expect(older.some(v => v > 0)).toBe(true); // real history is reflected, not flattened
+    expect(curve.at(-1)).toBe(100);
+  });
+
+  it('returns null for types with no rolling window, leaving their own expected line alone', () => {
+    expect(recoveryCurve(pctGoal(50, []), 'month', 6, TODAY)).toBeNull();
+    expect(recoveryCurve(countdownGoal('2026-01-01', '2026-12-31'), 'month', 6, TODAY)).toBeNull();
   });
 });

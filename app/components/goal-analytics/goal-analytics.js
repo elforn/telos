@@ -6,7 +6,8 @@ import {
 } from '../../utils/tracking.js';
 import {
   pagesFor, percentValueAt, dateListFor, rawLoggedDates, topStreaks, countByBucket,
-  completionSeries, successRatioSeries, comparisonDelta, updateCount, projectPace,
+  completionSeries, successRatioSeries, periodPerformanceSeries, recoveryCurve,
+  comparisonDelta, updateCount, projectPace,
 } from '../../utils/goal-analytics.js';
 import { septagonWedgePath, septagonWedgeState } from '../goal-item/goal-item.js';
 
@@ -24,6 +25,13 @@ const HISTORY_DAYS_BACK = 365; // fixed cap — see the module doc comment below
 // empty result for a period that really has none.
 
 function pad(n) { return String(n).padStart(2, '0'); }
+
+// goal.title is free user text and this component renders via innerHTML
+// (goal-item can use textContent because it updates a node directly).
+function esc(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 function localDate(iso) { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); }
 function toIso(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 // Reuses goal-dialog's already-translated month keys rather than defining a
@@ -106,16 +114,34 @@ function squareFillGlyph(frac, size) {
   return `<div style="width:${size}px;height:${size}px;border-radius:5px;background:linear-gradient(to top, var(--color-accent) 0 ${pct}%, var(--color-border) ${pct}% 100%);flex-shrink:0;"></div>`;
 }
 
+function naturalUnitOf(goal) { return goal?.tracking?.type === 'monthly' ? 'month' : 'week'; }
+function naturalUnitIsMonth(goal) { return naturalUnitOf(goal) === 'month'; }
+
 function unitFor(goal) { return isDecreasing(goal) ? 'week' : goal?.tracking?.type === 'monthly' ? 'month' : 'week'; }
 function unitWord(unit, n) { return n === 1 ? t(`goal-analytics.unit-${unit}`) : t(`goal-analytics.unit-${unit}-plural`); }
 
 class GoalAnalytics extends AppElement {
+  // Every analytics page leads with which goal it belongs to — the edit form
+  // shows the title in its own input, but the analytics pages otherwise give
+  // no clue which goal you swiped into.
+  _pageHead(goal, titleKey) {
+    return `<div class="page-head">
+      <h2 class="page-title">${t(titleKey)}</h2>
+      <p class="page-goal" title="${esc(goal?.title)}">${esc(goal?.title)}</p>
+    </div>`;
+  }
+
   template() {
     return `
       <style>
         :host { display: block; font-family: var(--font-family); color: var(--color-text-primary); }
         .page { display: flex; flex-direction: column; gap: calc(var(--space-5) + 3px); }
-        .page-title { margin: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+        /* One line: heading at the start, goal name at the end. The heading
+           never shrinks, so a long goal name ellipsises rather than squeezing
+           the label that identifies the page. */
+        .page-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+        .page-goal { margin: 0; min-inline-size: 0; flex: 1; text-align: end; font-size: var(--font-size-micro); color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .page-title { margin: 0; flex-shrink: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
 
         /* Entrance-only transition on page change (swipe, dot tap, or arrow key) —
            direction follows whether the new page index is higher or lower than the
@@ -181,6 +207,29 @@ class GoalAnalytics extends AppElement {
            and the already theme-correct surface/text tokens instead. */
         .pace-callout { display: flex; align-items: flex-start; gap: var(--space-2); background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface-raised)); border-radius: var(--radius-md); padding: var(--space-3); font-size: var(--font-size-caption); color: var(--color-text-primary); line-height: 1.5; }
         .pace-callout svg { inline-size: 16px; block-size: 16px; flex-shrink: 0; margin-block-start: 1px; color: var(--color-accent); }
+
+        /* Per-period result (Overview bar chart) */
+        .perf { display: flex; flex-direction: column; inline-size: max-content; margin-inline-start: auto; }
+        .perf-vals, .perf-tracks, .perf-axis { display: flex; gap: var(--space-1); }
+        .perf-tracks { block-size: 82px; position: relative; align-items: stretch; }
+        .perf-vals { min-block-size: 11px; }
+        .perf-axis { margin-block-start: var(--space-1); min-block-size: 11px; }
+        .perf-col { flex: 0 0 18px; display: flex; align-items: flex-end; }
+        .perf-bar { inline-size: 100%; background: var(--color-accent); border-radius: 3px 3px 0 0; min-block-size: 3px; }
+        /* Over-target reads as a distinct colour rather than just a taller bar —
+           at the week timeframe the value is uncapped, so a 200% week would
+           otherwise just look like "a tall bar" with no cue that it crossed the
+           line. Paired with the dashed 100% rule below, which only appears when
+           the scale actually exceeds 100 (otherwise 100% is the top edge). */
+        .perf-bar.over { background: var(--color-success); }
+        .perf-100 { position: absolute; inline-size: 100%; inset-inline-start: 0; border-block-start: 1px dashed var(--color-text-secondary); pointer-events: none; }
+        .perf-val { flex: 0 0 18px; font-size: 8px; color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); text-align: center; white-space: nowrap; }
+        .perf-ax { flex: 0 0 18px; font-size: 8px; color: var(--color-text-muted); text-align: center; white-space: nowrap; }
+
+        .line-wrap { position: relative; }
+        .line-start-val { position: absolute; font-size: 8px; font-weight: var(--font-weight-semibold); color: var(--color-text-secondary); white-space: nowrap; pointer-events: none; }
+        .line-axis { display: flex; justify-content: space-between; margin-block-start: var(--space-1); }
+        .line-axis span { font-size: 8px; color: var(--color-text-muted); white-space: nowrap; }
 
         /* Score */
         .calc-header { display: flex; justify-content: space-between; align-items: center; margin-block-end: var(--space-3); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
@@ -296,6 +345,7 @@ class GoalAnalytics extends AppElement {
     this._activePage = 0;
     this._tfProgress = 'month';
     this._tfActivity = 'month';
+    this._tfPerf = 'week';
   }
 
   set goal(g) { this._goal = g; this._render(); }
@@ -325,6 +375,10 @@ class GoalAnalytics extends AppElement {
     if (kind === 'overview') {
       const sel = this.shadowRoot.querySelector('#tf-progress');
       sel?.addEventListener('change', () => { this._tfProgress = sel.value; this._render(); });
+    }
+    if (kind === 'overview') {
+      const perf = this.shadowRoot.querySelector('#tf-perf');
+      perf?.addEventListener('change', () => { this._tfPerf = perf.value; this._render(); });
     }
     if (kind === 'activity') {
       const sel = this.shadowRoot.querySelector('#tf-activity');
@@ -360,10 +414,35 @@ class GoalAnalytics extends AppElement {
     });
   }
 
-  _timeframeSelect(id, current) {
-    const opts = ['week', 'month', 'quarter', 'year'].map(v =>
+  _timeframeSelect(id, current, exclude = []) {
+    const opts = ['week', 'month', 'quarter', 'year'].filter(v => !exclude.includes(v)).map(v =>
       `<option value="${v}" ${v === current ? 'selected' : ''}>${t('goal-analytics.timeframe-' + v)}</option>`).join('');
     return `<select id="${id}" aria-label="${t('goal-analytics.timeframe-label')}">${opts}</select>`;
+  }
+
+  // Bars are the per-period result: uncapped at the goal's own natural period
+  // (an over-target week genuinely reads above 100%), capped-then-averaged at
+  // any coarser timeframe. The scale stretches past 100 only when some bar
+  // actually exceeds it, and the dashed rule marks where 100% sits once it is
+  // no longer the top edge.
+  _perfChart(points) {
+    const vals = points.map(p => p.value).filter(v => v !== undefined);
+    if (vals.length === 0) return '';
+    const scale = Math.max(100, ...vals);
+    let valsHtml = '', tracks = '', axis = '';
+    points.forEach((p, i) => {
+      const v = p.value;
+      const over = v !== undefined && v > 100;
+      valsHtml += `<div class="perf-val tabular">${over ? v + '%' : ''}</div>`;
+      tracks += `<div class="perf-col">${v === undefined ? '' :
+        `<div class="perf-bar${over ? ' over' : ''}" style="block-size:${Math.max(v > 0 ? 4 : 0, (v / scale) * 100)}%"></div>`}</div>`;
+      const showLabel = i === 0 || i === points.length - 1 || i === Math.floor((points.length - 1) / 2);
+      axis += `<div class="perf-ax">${showLabel ? p.label : ''}</div>`;
+    });
+    const rule = scale > 100
+      ? `<div class="perf-100" style="inset-block-end:${((100 / scale) * 100).toFixed(1)}%"></div>` : '';
+    return `<div class="perf" role="img" aria-label="${t('goal-analytics.a11y-consistency')}"><div class="perf-vals">${valsHtml}</div>
+      <div class="perf-tracks">${rule}${tracks}</div><div class="perf-axis">${axis}</div></div>`;
   }
 
   _sparkline(values) {
@@ -383,7 +462,7 @@ class GoalAnalytics extends AppElement {
     </svg>`;
   }
 
-  _lineChart(seriesA, seriesB) {
+  _lineChart(seriesA, seriesB, axisLabels = []) {
     const w = 268, h = 92, padTop = 8, padBottom = 4;
     const path = series => series.map((v, i) => {
       const x = series.length === 1 ? w / 2 : (i / (series.length - 1)) * w;
@@ -398,10 +477,25 @@ class GoalAnalytics extends AppElement {
     const lastVal = known[known.length - 1] ?? 0;
     const lastX = w, lastY = padTop + (1 - lastVal / 100) * (h - padTop - padBottom);
     const dashed = seriesB ? `<path d="${path(seriesB)}" fill="none" stroke="var(--color-text-secondary)" stroke-width="1.5" stroke-dasharray="4 3" />` : '';
-    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" role="img" aria-label="${t('goal-analytics.a11y-progress-chart')}">${grid}${dashed}
+    // Only the first point is labelled: the last one is already the hero
+    // number at the top of the page, so repeating it is noise. Rendered as
+    // positioned HTML rather than an SVG <text>, because the chart uses
+    // preserveAspectRatio="none" — any text inside it would be stretched
+    // horizontally along with the plot.
+    const firstIdx = seriesA.findIndex(v => v !== undefined);
+    const startLabel = firstIdx === -1 ? '' : (() => {
+      const v = seriesA[firstIdx];
+      const y = padTop + (1 - v / 100) * (h - padTop - padBottom);
+      const leftPct = (seriesA.length === 1 ? 0.5 : firstIdx / (seriesA.length - 1)) * 100;
+      return `<span class="line-start-val tabular" style="inset-block-start:${(y - 16).toFixed(1)}px; inset-inline-start:${leftPct.toFixed(1)}%">${v}%</span>`;
+    })();
+    const axis = axisLabels.length
+      ? `<div class="line-axis">${axisLabels.map(l => `<span>${l}</span>`).join('')}</div>` : '';
+    return `<div class="line-wrap">
+      <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" role="img" aria-label="${t('goal-analytics.a11y-progress-chart')}">${grid}${dashed}
       <path d="${path(seriesA)}" fill="none" stroke="var(--color-accent)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" />
       <circle cx="${lastX}" cy="${lastY.toFixed(1)}" r="4" fill="var(--color-accent)" />
-    </svg>`;
+      </svg>${startLabel}</div>${axis}`;
   }
 
   // ── Overview ─────────────────────────────────────────────────────────────
@@ -437,13 +531,31 @@ class GoalAnalytics extends AppElement {
     const tf = this._tfProgress;
     const points = completionSeries(goal, tf, 12, todayIso);
     const achieved = points.map(p => p.value);
-    const ratioPoints = successRatioSeries(goal, tf, 12, todayIso);
-    const expected = ratioPoints.map(p => p.expected);
+    // Frequency types get the recovery curve rather than successRatioSeries'
+    // flat 100: their score is a rolling window, so "expected" is better read
+    // as the best score still reachable from here, not a constant ceiling.
+    // Percentage keeps its linear day-of-year pace and countdown its own
+    // self-advancing value, both of which are already meaningful.
+    const expected = recoveryCurve(goal, tf, 12, todayIso)
+      ?? successRatioSeries(goal, tf, 12, todayIso).map(p => p.expected);
+    // Three labels — oldest, midpoint, newest — matching the Consistency
+    // chart's own axis so the two read the same way.
+    const progressAxis = [11, 5, 0].map(i => periodLabel(tf, i, todayIso));
+
+    // A monthly goal has no month inside a week, so that timeframe is dropped
+    // rather than shown returning a repeated or empty figure.
+    const perfExclude = naturalUnitIsMonth(goal) ? ['week'] : [];
+    const perfTf = perfExclude.includes(this._tfPerf) ? 'month' : this._tfPerf;
+    const perfCount = { week: 12, month: 12, quarter: 8, year: 5 }[perfTf];
+    const perfPoints = periodPerformanceSeries(goal, perfTf, perfCount, todayIso)
+      .map((p, i) => ({ ...p, label: periodLabel(perfTf, perfCount - 1 - i, todayIso) }));
+    const perfHtml = this._perfChart(perfPoints);
 
     const pace = projectPace(goal, todayIso);
     const paceHtml = this._renderPaceCallout(pace);
 
     return `<div class="page">
+      ${this._pageHead(goal, 'goal-analytics.page-title-overview')}
       <div class="hero-number"><div class="big tabular">${current}<span class="pct-unit">%</span></div>
         ${spark ? `<div class="spark-wrap">${spark}<span class="spark-label">${t('goal-analytics.last-n-periods', { n: recent.length })}</span></div>` : ''}
       </div>
@@ -453,10 +565,14 @@ class GoalAnalytics extends AppElement {
       </div>
       <div><p class="section-label">${t('goal-analytics.change-over-time')}</p><div class="stat-row">${compareRow}</div></div>
       <div class="card"><div class="card-head"><h3>${t('goal-analytics.progress-chart-title')}</h3>${this._timeframeSelect('tf-progress', tf)}</div>
-        ${this._lineChart(achieved, expected)}
+        ${this._lineChart(achieved, expected, progressAxis)}
         <div class="legend"><span><i class="swatch-line"></i>${t('goal-analytics.legend-achieved')}</span><span><i class="swatch-line dashed"></i>${t('goal-analytics.legend-expected')}</span></div>
       </div>
       ${paceHtml}
+      ${perfHtml ? `<div class="card"><div class="card-head"><h3>${t('goal-analytics.consistency-title')}</h3>${this._timeframeSelect('tf-perf', perfTf, perfExclude)}</div>
+        ${perfHtml}
+        ${perfTf === naturalUnitOf(goal) ? '' : `<p class="footnote">${t('goal-analytics.consistency-note-avg')}</p>`}
+      </div>` : ''}
     </div>`;
   }
 
@@ -554,7 +670,7 @@ class GoalAnalytics extends AppElement {
       ? `<p class="calc-older-note">${t('goal-analytics.older-periods-note')}</p>` : '';
 
     return `<div class="page">
-      <h2 class="page-title">${t('goal-analytics.page-title-score')}</h2>
+      ${this._pageHead(goal, 'goal-analytics.page-title-score')}
       <div class="card">
         <div class="calc-header"><span>${t('goal-analytics.score-contribute', { label })}</span><span class="calc-header-pct tabular">${current}%</span></div>
         <div class="calc-scroll-outer" id="calc-scroll" role="img" aria-label="${t('goal-analytics.a11y-score-grid')}">${olderNote}<div class="calc-grid">${groupsHtml}</div></div>
@@ -631,7 +747,7 @@ class GoalAnalytics extends AppElement {
     }
 
     return `<div class="page">
-      <h2 class="page-title">${t('goal-analytics.page-title-activity')}</h2>
+      ${this._pageHead(goal, 'goal-analytics.page-title-activity')}
       <div class="card"><div class="card-head"><h3>${t('goal-analytics.count-per-timebox')}</h3>${this._timeframeSelect('tf-activity', tf)}</div>
         <div class="histogram-scroll" id="hist-scroll" role="img" aria-label="${t('goal-analytics.a11y-histogram')}"><div class="histogram">${bars}</div><div class="histogram-axis">${axis}</div></div>
       </div>
@@ -652,7 +768,7 @@ class GoalAnalytics extends AppElement {
     const todayIso = todayISO();
     const dates = dateListFor(goal, todayIso, HISTORY_DAYS_BACK);
     const streaks = topStreaks(dates, 10);
-    const title = `<h2 class="page-title">${t('goal-analytics.page-title-streaks')}</h2>`;
+    const title = this._pageHead(goal, 'goal-analytics.page-title-streaks');
     if (streaks.length === 0) return `<div class="page">${title}<div class="empty-note">${t('goal-analytics.no-streaks-yet')}</div></div>`;
 
     const max = Math.max(...streaks.map(s => s.length));

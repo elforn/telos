@@ -543,11 +543,15 @@ defineStrings({
   // data purely visually (SVG wedges, sized dots, shaded cells).
   'goal-analytics.a11y-sparkline':      'Sparkline of recent progress',
   'goal-analytics.a11y-progress-chart': 'Line chart of completion against expected pace',
+  'goal-analytics.a11y-consistency': 'Bar chart of how each period went against target',
   'goal-analytics.a11y-histogram':      'Bar chart of entry counts per period',
   'goal-analytics.a11y-calendar':       'Calendar heatmap of logged days over the past year',
   'goal-analytics.a11y-freqgrid':       'Grid of entry frequency by weekday and month',
   'goal-analytics.a11y-score-grid':     'Grid of per-period results contributing to the score',
 
+  'goal-analytics.page-title-overview': 'Overview',
+  'goal-analytics.consistency-title': 'Consistency',
+  'goal-analytics.consistency-note-avg': 'Each bar averages the periods inside it, each capped at 100%.',
   'goal-analytics.quarter-prefix':    'Q',
   'goal-analytics.timeframe-label':   'Timeframe',
   'goal-analytics.timeframe-week':    'Week',
