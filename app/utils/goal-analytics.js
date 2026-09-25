@@ -164,7 +164,7 @@ export function completionSeries(goal, unit, count, todayIso = todayISO()) {
 // weighted-average score — e.g. "3 of 3 runs that specific week", not the
 // recency-weighted score across several weeks. Only meaningful for
 // weekly/monthly/decreasing; percentage/countdown are handled directly in
-// successRatioSeries below since they have no per-period target at all.
+// the ramp/recovery curves below, since they have no per-period target.
 function singlePeriodFraction(goal, iso, todayIso, cap = true) {
   const tr = goal.tracking;
   if (tr.type === 'decreasing') {
@@ -271,6 +271,48 @@ export function periodPerformanceSeries(goal, unit, count, todayIso = todayISO()
   return points;
 }
 
+// ── Expected ramp (Overview's expected-pace line, percentage goals) ─────
+// A straight line from the goal's first recorded percentage to 100% at its
+// end date. Nothing is drawn before that first snapshot, and nothing at all
+// if none exists yet — an expectation needs a real starting point, and
+// inventing one is what made the old day-of-year formula wrong (it assumed
+// every goal had been running since 1 January, so a goal started in
+// February looked behind from the moment it was created, and the line
+// sawtoothed whenever the chart window crossed a year boundary).
+//
+// Anchoring on the first snapshot rather than a creation date is deliberate:
+// there is no createdAt in the goal schema, and the first recorded value is
+// a real event the user performed — "I was at X% on this date" — rather than
+// a proxy for one. It also fixes the start value for free: the ramp begins at
+// whatever was actually recorded, not an assumed 0%.
+//
+// End date is the goal's dueDate when it falls earlier, else 31 December of
+// the year the goal was being worked in (inferred from that first snapshot —
+// goals are year-scoped, and this module is never told which year it is
+// looking at). Past the end date the line holds at 100 rather than running on.
+function rampEndIso(goal, firstIso) {
+  const yearEnd = `${firstIso.slice(0, 4)}-12-31`;
+  const due = goal?.dueDate;
+  return due && due < yearEnd ? due : yearEnd;
+}
+
+export function expectedRampSeries(goal, unit, count, todayIso = todayISO()) {
+  const history = percentHistory(goal);
+  if (history.length === 0) return null; // nothing set yet — draw no line at all
+  const first = history[0];
+  const endIso = rampEndIso(goal, first.date);
+  const span = daysBetween(first.date, endIso);
+  if (span <= 0) return null; // end already reached/passed at the first snapshot
+  const out = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const iso = toIso(stepDate(unit, todayIso, i));
+    if (iso < first.date) { out.push(undefined); continue; }
+    const elapsed = Math.min(span, daysBetween(first.date, iso));
+    out.push(Math.round(first.value + (100 - first.value) * (elapsed / span)));
+  }
+  return out;
+}
+
 // ── Recovery curve (Overview's "expected pace" line, frequency types) ───
 // What the score would read at each point if every period from the start of
 // the current window onward had been played perfectly. Before that window it
@@ -316,51 +358,6 @@ export function recoveryCurve(goal, unit, count, todayIso = todayISO()) {
     out.push(iso < cutoffIso ? percentValue(goal, iso) : percentValue(ideal, iso));
   }
   return out;
-}
-
-export function successRatioSeries(goal, unit, count, todayIso = todayISO()) {
-  const type = goal?.tracking?.type;
-  const points = [];
-  for (let i = count - 1; i >= 0; i--) {
-    const iso = toIso(stepDate(unit, todayIso, i));
-    let achieved, expected;
-    if (type === 'percentage') {
-      achieved = percentValueAt(goal, iso);
-      const d = localDate(iso);
-      // KNOWN ISSUE (deliberately deferred, not yet fixed): dayOfYear resets
-      // every 1 January, so any chart window crossing a year boundary draws a
-      // sawtooth — one cliff at month timeframe, repeating "mountains" at
-      // quarter, and a useless flat line at year (every point lands on the
-      // same day-of-year). Whatever replaces it, the ramp should run between
-      // a real start and a real end rather than restarting annually. Options,
-      // still to be decided — including which applies when, and whether they
-      // combine (e.g. start at creation but end at a due date when one is set):
-      //
-      //   a) start of the goal's year  → end of that year
-      //   b) goal creation date        → due date
-      //
-      // Constraints either way. (a) needs the goal's own year, which this
-      // module is never given — a Telos goal belongs to exactly one year, so
-      // that means threading it in from goal-dialog rather than inferring it
-      // from the sampled date. (b) is harder: there is no createdAt anywhere
-      // in the goal schema (see this file's HISTORY_DAYS_BACK note), so a
-      // creation date would have to be added to the schema or proxied from
-      // the first history snapshot — and a proxy is unreliable for goals that
-      // predate tracking.history. dueDate is optional, so (b) also needs a
-      // fallback for goals without one. Outside either range the line should
-      // be undefined before the start and 100 after the end, never a restart.
-      const dayOfYear = Math.round((d - new Date(d.getFullYear(), 0, 1)) / 86400000) + 1;
-      expected = Math.min(100, Math.round((dayOfYear / 365) * 100));
-    } else if (type === 'countdown') {
-      achieved = percentValueAt(goal, iso);
-      expected = achieved;
-    } else {
-      expected = 100;
-      achieved = Math.round(singlePeriodFraction(goal, iso, todayIso) * 100);
-    }
-    points.push({ iso, achieved, expected });
-  }
-  return points;
 }
 
 // ── Comparison delta (Overview "vs month/quarter/year") ─────────────────

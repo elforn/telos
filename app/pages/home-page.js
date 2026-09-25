@@ -19,7 +19,7 @@ import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
 import { matchesDateBucket } from '../utils/urgency.js';
 import { yearDeadlinesLevel } from '../utils/deadline-visibility.js';
-import { percentValue, setPercent, logEntry, unlogEntry, isLoggedOn } from '../utils/tracking.js';
+import { percentValue, setPercent, clearPercentAt, logEntry, unlogEntry, isLoggedOn } from '../utils/tracking.js';
 import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
 import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
 import { shareMarkdown } from '../utils/share-markdown.js';
@@ -869,6 +869,25 @@ class HomePage extends AppElement {
       this._toggleEntryOn(this._editingSection, this._editingGoal.id, e.detail.iso);
     };
     this.listen(this.shadowRoot, 'goal-entry-toggle', this._onGoalEntryToggle);
+
+    // Percentage fix-a-day: the same shape as goal-entry-toggle above, but a
+    // value rather than a toggle. setPercent/clearPercentAt keep tracking.value
+    // pinned to the newest snapshot, so editing a past day never drags the
+    // goal's current percentage with it.
+    this._onGoalPercentSet = e => {
+      if (!this._editingGoal) return;
+      const { iso, percent } = e.detail;
+      this._mutateSection(this._editingSection, list =>
+        list.map(g => g.id === this._editingGoal.id ? setPercent(g, percent, iso) : g));
+    };
+    this.listen(this.shadowRoot, 'goal-percent-set', this._onGoalPercentSet);
+
+    this._onGoalPercentClear = e => {
+      if (!this._editingGoal) return;
+      this._mutateSection(this._editingSection, list =>
+        list.map(g => g.id === this._editingGoal.id ? clearPercentAt(g, e.detail.iso) : g));
+    };
+    this.listen(this.shadowRoot, 'goal-percent-clear', this._onGoalPercentClear);
 
     this._onGoalTrackingChanged = e => {
       if (!this._editingGoal) return;

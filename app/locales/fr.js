@@ -153,6 +153,12 @@ defineStrings({
   'goal-dialog.tracking-summary-decreasing-week':    '{count} sur {target} autorisé(s)/semaine à {percent} %',
   'goal-dialog.tracking-summary-decreasing-4weeks':  '{count} sur {target} autorisé(s)/4 semaines à {percent} %',
   'goal-dialog.tracking-summary-countdown':          '{days}j restants à {percent} %',
+  'goal-dialog.fixpct-date-label': 'Date',
+  'goal-dialog.fixpct-value-label': 'Pourcentage à cette date',
+  'goal-dialog.fixpct-clear': 'Supprimer cet enregistrement',
+  'goal-dialog.fixpct-recorded': 'Enregistré ce jour-là.',
+  'goal-dialog.fixpct-carried': 'Aucun enregistrement — repris du {date}.',
+  'goal-dialog.fixpct-none': 'Aucun enregistrement à cette date ou avant.',
   'goal-dialog.fixday-toggle':            'Corriger un jour',
   'goal-dialog.fixday-logged':            'enregistré',
   'goal-dialog.fixday-slipped':           'écart',
@@ -509,7 +515,6 @@ defineStrings({
 
   'goal-analytics.vs-month':             'vs mois',
   'goal-analytics.vs-quarter':           'vs trimestre',
-  'goal-analytics.vs-year':              'vs année',
   'goal-analytics.not-enough-history':   'historique insuffisant',
   'goal-analytics.pts':                  'pts',
 
@@ -546,7 +551,6 @@ defineStrings({
   'goal-analytics.timeframe-week':    'Semaine',
   'goal-analytics.timeframe-month':   'Mois',
   'goal-analytics.timeframe-quarter': 'Trimestre',
-  'goal-analytics.timeframe-year':    'Année',
 
   'goal-analytics.count-per-timebox': 'Nombre par période',
   'goal-analytics.calendar-title':    'Calendrier',

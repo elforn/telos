@@ -320,13 +320,27 @@ export function historyValueAt(history, iso) {
   return result;
 }
 
-export function setPercent(goal, pct, todayIso = todayISO()) {
+export function setPercent(goal, pct, dateIso = todayISO()) {
   // Spreads the existing tracking first so a dormant target/entries (from a
   // goal that's previously been weekly/monthly) survives untouched — only
-  // type, value, and today's history snapshot are actually being touched here.
-  const value = Math.max(0, Math.min(100, pct));
-  const history = [...percentHistory(goal).filter(h => h.date !== todayIso), { date: todayIso, value }]
+  // type, value, and this date's history snapshot are actually being touched.
+  const v = Math.max(0, Math.min(100, pct));
+  const history = [...percentHistory(goal).filter(h => h.date !== dateIso), { date: dateIso, value: v }]
     .sort((a, b) => a.date.localeCompare(b.date));
+  // value mirrors the LATEST snapshot, not the one just written — editing a
+  // past day must not drag the goal's current percentage backwards with it.
+  // For an edit dated today the two are the same, so this is a no-op there.
+  return { ...goal, tracking: { ...goal.tracking, type: 'percentage', value: history[history.length - 1].value, history } };
+}
+
+// Removes a single day's snapshot. The surgical fix for a mistyped value —
+// notably the first one, which anchors the whole expected-pace ramp and
+// otherwise can only ever be overwritten, never removed. Emptying the history
+// entirely drops the goal back to 0: value always tracks the newest snapshot,
+// so with none left there is nothing recorded to report.
+export function clearPercentAt(goal, dateIso) {
+  const history = percentHistory(goal).filter(h => h.date !== dateIso);
+  const value = history.length ? history[history.length - 1].value : 0;
   return { ...goal, tracking: { ...goal.tracking, type: 'percentage', value, history } };
 }
 

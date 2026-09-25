@@ -161,6 +161,12 @@ defineStrings({
   'goal-dialog.tracking-summary-decreasing-week':    '{count} of {target} allowed/week at {percent}%',
   'goal-dialog.tracking-summary-decreasing-4weeks':  '{count} of {target} allowed/4 weeks at {percent}%',
   'goal-dialog.tracking-summary-countdown':          '{days}d left at {percent}%',
+  'goal-dialog.fixpct-date-label': 'Date',
+  'goal-dialog.fixpct-value-label': 'Percentage on that date',
+  'goal-dialog.fixpct-clear': 'Remove this record',
+  'goal-dialog.fixpct-recorded': 'Recorded on this day.',
+  'goal-dialog.fixpct-carried': 'No record — carried over from {date}.',
+  'goal-dialog.fixpct-none': 'No record yet on or before this day.',
   'goal-dialog.fixday-toggle':          'Fix a day',
   'goal-dialog.fixday-logged':          'logged',
   'goal-dialog.fixday-slipped':         'slipped',
@@ -517,7 +523,6 @@ defineStrings({
 
   'goal-analytics.vs-month':   'vs month',
   'goal-analytics.vs-quarter': 'vs quarter',
-  'goal-analytics.vs-year':    'vs year',
   'goal-analytics.not-enough-history': 'not enough history',
   'goal-analytics.pts': 'pts',
 
@@ -557,7 +562,6 @@ defineStrings({
   'goal-analytics.timeframe-week':    'Week',
   'goal-analytics.timeframe-month':   'Month',
   'goal-analytics.timeframe-quarter': 'Quarter',
-  'goal-analytics.timeframe-year':    'Year',
 
   'goal-analytics.page-title-score':    'Score',
   'goal-analytics.page-title-activity': 'Activity',

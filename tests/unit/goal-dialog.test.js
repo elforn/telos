@@ -1905,22 +1905,31 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     expect(trackingEvents[0].detail.tracking.type).toBe('percentage');
   });
 
-  it('switching an existing frequency goal to percentage hides the Fix-a-day toggle live', () => {
+  it('switching an existing frequency goal to percentage swaps the chip strip for the percentage row', () => {
+    // Percentage keeps the Fix-a-day toggle — a percentage day carries a value
+    // rather than a logged/not-logged state, so the inline content differs
+    // while the footer affordance stays the same.
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 3, entries: [] } });
     expand(el);
     expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
     pill(el, 'percentage').click();
-    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
+    el.shadowRoot.querySelector('#fixday-chip').click();
+    expect(el.shadowRoot.querySelector('#fixpct-row').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-chips').hidden).toBe(true);
   });
 
-  it('switching an existing percentage goal to weekly reveals the Fix-a-day toggle live', () => {
+  it('switching an existing percentage goal to weekly swaps the percentage row back for chips', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0, target: 3, entries: [] } });
     expand(el);
-    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(true);
+    el.shadowRoot.querySelector('#fixday-chip').click();
+    expect(el.shadowRoot.querySelector('#fixpct-row').hidden).toBe(false);
     pill(el, 'weekly').click();
     expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-chips').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixpct-row').hidden).toBe(true);
   });
 
   it('the change-type summary string is correct for an existing Avoid goal, not the old "Percentage" mis-render', () => {
@@ -1984,13 +1993,16 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     expect(events[0].detail.tracking.entries).toEqual(['2026-08-01', '2026-08-08']);
   });
 
-  it('switching an existing goal to Avoid reveals the Fix-a-day toggle live', () => {
+  it('switching an existing goal to Avoid swaps the percentage row for the chip strip', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0, target: 3, entries: [] } });
     expand(el);
-    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(true);
+    el.shadowRoot.querySelector('#fixday-chip').click();
+    expect(el.shadowRoot.querySelector('#fixpct-row').hidden).toBe(false);
     pill(el, 'decreasing').click();
     expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-chips').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixpct-row').hidden).toBe(true);
   });
 
   it('switching an existing goal to countdown commits immediately, resolving startDate to this goal\'s year, and never reveals Fix-a-day (not entry-based)', () => {
@@ -2023,10 +2035,13 @@ describe('goal-dialog — Fix a day (frequency goals only, icon-only footer togg
     el.shadowRoot.querySelector('#fixday-chip').click();
   }
 
-  it('the Fix-a-day toggle is hidden for a percentage goal', () => {
+  it('the Fix-a-day toggle is offered for a percentage goal, showing the value row', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value: 0 } });
-    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
+    el.shadowRoot.querySelector('#fixday-chip').click();
+    expect(el.shadowRoot.querySelector('#fixpct-row').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixday-chips').hidden).toBe(true);
   });
 
   it('the Fix-a-day toggle is hidden for a brand-new (unsaved) goal', () => {
@@ -2772,5 +2787,72 @@ describe('goal-dialog — analytics tabs', () => {
     el.open({ id: '2', title: 'Read', tracking: { type: 'monthly', target: 2, value: 0, entries: [] } });
     expect(el._modal.activeTab).toBe(0);
     expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
+  });
+});
+
+describe('goal-dialog — Fix a day for percentage goals', () => {
+  const open = (history = [], value = 0) => {
+    const el = mount();
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'percentage', value, history } });
+    el.shadowRoot.querySelector('#fixday-chip').click();
+    return el;
+  };
+
+  it('shows the value recorded on that day, and offers to remove it', () => {
+    const el = open([{ date: '2026-05-10', value: 45 }]);
+    el.shadowRoot.querySelector('#fixpct-date').value = '2026-05-10';
+    el.shadowRoot.querySelector('#fixpct-date').dispatchEvent(new Event('change'));
+    expect(el.shadowRoot.querySelector('#fixpct-value').value).toBe('45');
+    expect(el.shadowRoot.querySelector('#fixpct-clear').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#fixpct-hint').textContent).toMatch(/Recorded/i);
+  });
+
+  it('carries the last earlier value forward for a day with no record, and says so', () => {
+    const el = open([{ date: '2026-04-12', value: 30 }]);
+    el.shadowRoot.querySelector('#fixpct-date').value = '2026-05-10';
+    el.shadowRoot.querySelector('#fixpct-date').dispatchEvent(new Event('change'));
+    expect(el.shadowRoot.querySelector('#fixpct-value').value).toBe('30');
+    // Clearing is offered only for a day that owns a record — otherwise there
+    // is nothing to remove and the button would be a no-op.
+    expect(el.shadowRoot.querySelector('#fixpct-clear').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#fixpct-hint').textContent).toMatch(/carried over/i);
+  });
+
+  it('emits a dated percentage when the value is committed', () => {
+    const el = open([{ date: '2026-04-12', value: 30 }]);
+    const events = [];
+    el.addEventListener('goal-percent-set', e => events.push(e.detail));
+    el.shadowRoot.querySelector('#fixpct-date').value = '2026-05-10';
+    el.shadowRoot.querySelector('#fixpct-date').dispatchEvent(new Event('change'));
+    el.shadowRoot.querySelector('#fixpct-value').value = '55';
+    el.shadowRoot.querySelector('#fixpct-value').dispatchEvent(new Event('change'));
+    expect(events).toHaveLength(1);
+    expect(events[0].iso).toBe('2026-05-10');
+    expect(events[0].percent).toBe(55);
+  });
+
+  it('emits a clear for the selected day', () => {
+    const el = open([{ date: '2026-05-10', value: 45 }]);
+    const events = [];
+    el.addEventListener('goal-percent-clear', e => events.push(e.detail));
+    el.shadowRoot.querySelector('#fixpct-date').value = '2026-05-10';
+    el.shadowRoot.querySelector('#fixpct-date').dispatchEvent(new Event('change'));
+    el.shadowRoot.querySelector('#fixpct-clear').click();
+    expect(events).toHaveLength(1);
+    expect(events[0].iso).toBe('2026-05-10');
+  });
+
+  it('clamps an out-of-range value rather than storing it', () => {
+    const el = open([]);
+    const events = [];
+    el.addEventListener('goal-percent-set', e => events.push(e.detail));
+    el.shadowRoot.querySelector('#fixpct-value').value = '999';
+    el.shadowRoot.querySelector('#fixpct-value').dispatchEvent(new Event('change'));
+    expect(events[0].percent).toBe(100);
+  });
+
+  it('reaches back to 1 January rather than a rolling window, since the first record anchors the ramp', () => {
+    const el = open([{ date: '2026-05-10', value: 45 }]);
+    expect(el.shadowRoot.querySelector('#fixpct-date').min).toMatch(/-01-01$/);
   });
 });

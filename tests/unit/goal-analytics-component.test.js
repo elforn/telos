@@ -55,8 +55,10 @@ describe('goal-analytics — Overview page', () => {
   it('shows "not enough history" for a comparison with no snapshot old enough', () => {
     const el = mount(pctGoal(50, [{ date: TODAY, value: 50 }]));
     const stats = el.shadowRoot.querySelectorAll('.stat-row .stat');
-    const yearStat = [...stats].find(s => s.querySelector('.stat-label')?.textContent.includes('year'));
-    expect(yearStat.querySelector('.stat-value').textContent.trim()).toBe('—');
+    // Quarter, not year — a goal lives inside one year, so "vs year" could
+    // never have history behind it and was dropped.
+    const quarterStat = [...stats].find(s => s.querySelector('.stat-label')?.textContent.includes('quarter'));
+    expect(quarterStat.querySelector('.stat-value').textContent.trim()).toBe('—');
   });
 
   it('shows a real delta once history covers the comparison point', () => {

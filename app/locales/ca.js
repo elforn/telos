@@ -153,6 +153,12 @@ defineStrings({
   'goal-dialog.tracking-summary-decreasing-week':    '{count} de {target} permeses/setmana al {percent}%',
   'goal-dialog.tracking-summary-decreasing-4weeks':  '{count} de {target} permeses/4 setmanes al {percent}%',
   'goal-dialog.tracking-summary-countdown':          '{days}d restants al {percent}%',
+  'goal-dialog.fixpct-date-label': 'Data',
+  'goal-dialog.fixpct-value-label': 'Percentatge en aquesta data',
+  'goal-dialog.fixpct-clear': 'Elimina aquest registre',
+  'goal-dialog.fixpct-recorded': 'Registrat aquest dia.',
+  'goal-dialog.fixpct-carried': 'Cap registre — heretat del {date}.',
+  'goal-dialog.fixpct-none': 'Encara no hi ha cap registre en aquesta data o abans.',
   'goal-dialog.fixday-toggle':            'Corregeix un dia',
   'goal-dialog.fixday-logged':            'registrat',
   'goal-dialog.fixday-slipped':           'falta',
@@ -509,7 +515,6 @@ defineStrings({
 
   'goal-analytics.vs-month':             'vs mes',
   'goal-analytics.vs-quarter':           'vs trimestre',
-  'goal-analytics.vs-year':              'vs any',
   'goal-analytics.not-enough-history':   'historial insuficient',
   'goal-analytics.pts':                  'pts',
 
@@ -546,7 +551,6 @@ defineStrings({
   'goal-analytics.timeframe-week':    'Setmana',
   'goal-analytics.timeframe-month':   'Mes',
   'goal-analytics.timeframe-quarter': 'Trimestre',
-  'goal-analytics.timeframe-year':    'Any',
 
   'goal-analytics.count-per-timebox': 'Recompte per període',
   'goal-analytics.calendar-title':    'Calendari',

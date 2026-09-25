@@ -9,7 +9,7 @@ import { pagesFor } from '../../utils/goal-analytics.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
-import { FIX_DAY_SPAN, DEFAULT_TARGET, DEFAULT_ALLOWANCE_PERIOD, WEEKDAYS, targetLimitsFor, isEntryType, isDecreasing, percentValue, currentPeriodCount, currentAllowanceSpent, countdownDaysRemaining } from '../../utils/tracking.js';
+import { percentHistory, historyValueAt, setPercent, clearPercentAt, FIX_DAY_SPAN, DEFAULT_TARGET, DEFAULT_ALLOWANCE_PERIOD, WEEKDAYS, targetLimitsFor, isEntryType, isDecreasing, percentValue, currentPeriodCount, currentAllowanceSpent, countdownDaysRemaining } from '../../utils/tracking.js';
 import { scheduledDayStates } from '../../utils/frequency-urgency.js';
 import { buildDayStrip, dayStripStyles } from '../../utils/day-strip.js';
 import { todayISO } from '../../utils/today-iso.js';
@@ -18,6 +18,13 @@ import { swatches } from '../../utils/color-palette.js';
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
 const TYPES = ['percentage', 'weekly', 'monthly', 'decreasing', 'countdown'];
+// "12 Apr" for the carried-over hint — localised month, no year, since the
+// picker is already constrained to the goal's own year.
+function formatShortDate(iso) {
+  const [, m, d] = iso.split('-');
+  return `${Number(d)} ${t(`goal-dialog.month-${MONTH_KEYS[Number(m) - 1]}`)}`;
+}
+
 const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 class GoalDialog extends AppElement {
@@ -493,6 +500,38 @@ class GoalDialog extends AppElement {
            it with nothing to separate from just reads as stray. */
         .fixday-block {
           margin-block-start: var(--space-3);
+        }
+
+        .fixpct-row { display: flex; align-items: center; gap: var(--space-2); }
+        .fixpct-row #fixpct-date { flex: 1; min-inline-size: 0; }
+        .fixpct-value {
+          display: flex; align-items: center; gap: 2px;
+          background: var(--color-surface-raised);
+          border: 0.5px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          padding-inline: var(--space-2);
+          min-block-size: var(--touch-target);
+        }
+        .fixpct-value:focus-within { border-color: var(--color-accent); }
+        #fixpct-value {
+          inline-size: 3.5ch; background: none; border: none; outline: none; padding: 0;
+          text-align: end; font-family: var(--font-family); font-size: var(--font-size-body);
+          color: var(--color-text-primary); font-variant-numeric: tabular-nums;
+        }
+        #fixpct-value::-webkit-outer-spin-button,
+        #fixpct-value::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .fixpct-pct { font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+        #fixpct-clear {
+          display: flex; align-items: center; justify-content: center;
+          min-inline-size: var(--touch-target); min-block-size: var(--touch-target);
+          background: none; border: none; padding: 0;
+          color: var(--color-text-secondary); cursor: pointer;
+        }
+        #fixpct-clear svg { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); }
+        .fixpct-hint {
+          margin-block-start: var(--space-1);
+          font-size: var(--font-size-micro);
+          color: var(--color-text-secondary);
         }
 
         .target-row {
@@ -1112,6 +1151,18 @@ class GoalDialog extends AppElement {
                ahead of the goal's own deadline. -->
           <div class="fixday-block" id="fixday-inline" hidden>
             <div class="day-chips" id="fixday-chips"></div>
+            <!-- Percentage's counterpart to the chip strip. A frequency day is
+                 a toggle (logged or not), but a percentage day carries a
+                 value, so this is a date + number pair rather than chips. -->
+            <div class="fixpct-row" id="fixpct-row" hidden>
+              <input type="date" id="fixpct-date" class="countdown-start-input" aria-label="${t('goal-dialog.fixpct-date-label')}" />
+              <div class="fixpct-value">
+                <input type="number" id="fixpct-value" min="0" max="100" inputmode="numeric" aria-label="${t('goal-dialog.fixpct-value-label')}" />
+                <span class="fixpct-pct">%</span>
+              </div>
+              <button type="button" id="fixpct-clear" hidden aria-label="${t('goal-dialog.fixpct-clear')}" title="${t('goal-dialog.fixpct-clear')}">${icons.xMark}</button>
+            </div>
+            <p class="fixpct-hint" id="fixpct-hint"></p>
           </div>
         </div>
 
@@ -1265,6 +1316,11 @@ class GoalDialog extends AppElement {
     this._fixDayToggle   = this.shadowRoot.querySelector('#fixday-chip');
     this._fixDayInline   = this.shadowRoot.querySelector('#fixday-inline');
     this._fixDayChips    = this.shadowRoot.querySelector('#fixday-chips');
+    this._fixPctRow      = this.shadowRoot.querySelector('#fixpct-row');
+    this._fixPctDate     = this.shadowRoot.querySelector('#fixpct-date');
+    this._fixPctValue    = this.shadowRoot.querySelector('#fixpct-value');
+    this._fixPctClear    = this.shadowRoot.querySelector('#fixpct-clear');
+    this._fixPctHint     = this.shadowRoot.querySelector('#fixpct-hint');
 
     this._isNew           = false;
     this._lastValidTitle   = '';
@@ -1607,6 +1663,36 @@ class GoalDialog extends AppElement {
     };
     this._fixDayChips.addEventListener('click', this._onFixDayChipClick);
 
+    this._onFixPctDate = () => this._renderFixPct();
+    this._onFixPctCommit = () => {
+      if (!this._goal) return;
+      const iso = this._fixPctDate.value;
+      const raw = this._fixPctValue.value.trim();
+      if (!iso || raw === '') return;
+      const pct = Math.max(0, Math.min(100, Math.round(Number(raw))));
+      if (!Number.isFinite(pct)) return;
+      this.dispatchEvent(new CustomEvent('goal-percent-set', {
+        bubbles: true, composed: true, detail: { goal: this._goal, iso, percent: pct },
+      }));
+      this._goal = setPercent(this._goal, pct, iso);
+      this._renderFixPct();
+      this._renderTrackingSummary();
+    };
+    this._onFixPctClear = () => {
+      if (!this._goal) return;
+      const iso = this._fixPctDate.value;
+      if (!iso) return;
+      this.dispatchEvent(new CustomEvent('goal-percent-clear', {
+        bubbles: true, composed: true, detail: { goal: this._goal, iso },
+      }));
+      this._goal = clearPercentAt(this._goal, iso);
+      this._renderFixPct();
+      this._renderTrackingSummary();
+    };
+    this._fixPctDate.addEventListener('change', this._onFixPctDate);
+    this._fixPctValue.addEventListener('change', this._onFixPctCommit);
+    this._fixPctClear.addEventListener('click', this._onFixPctClear);
+
     // ── Type selector + target stepper (editable for new AND existing goals) ────
 
     // Reached via "Change type" in the ⋮ menu for an existing goal (not a
@@ -1834,6 +1920,9 @@ class GoalDialog extends AppElement {
     this._listPickerDialog?.removeEventListener('list-pick', this._onListPick);
     this._fixDayToggle?.removeEventListener('click', this._onFixDayToggleClick);
     this._fixDayChips?.removeEventListener('click', this._onFixDayChipClick);
+    this._fixPctDate?.removeEventListener('change', this._onFixPctDate);
+    this._fixPctValue?.removeEventListener('change', this._onFixPctCommit);
+    this._fixPctClear?.removeEventListener('click', this._onFixPctClear);
     this._changeTypeBtn?.removeEventListener('click', this._onActionChangeType);
     this._typePills?.forEach(p => p.removeEventListener('click', this._onTypePillClick));
     this._targetDownBtn?.removeEventListener('click', this._onTargetDown);
@@ -2087,12 +2176,18 @@ class GoalDialog extends AppElement {
   // has updated this._goal, so this._goal.tracking.type would still read
   // the stale, pre-switch value here.
   _renderFixDayToggle() {
-    const canFixDay = !this._isNew && isEntryType(this._draftType);
+    const isPct = this._draftType === 'percentage';
+    const canFixDay = !this._isNew && (isEntryType(this._draftType) || isPct);
     if (!canFixDay && this._fixDayExpanded) this._fixDayExpanded = false;
     this._fixDayToggle.hidden = !canFixDay;
     this._fixDayToggle.setAttribute('aria-pressed', String(this._fixDayExpanded));
     this._fixDayInline.hidden = !this._fixDayExpanded;
-    if (this._fixDayExpanded) this._renderFixDayChips();
+    this._fixDayChips.hidden = isPct;
+    this._fixPctRow.hidden = !isPct;
+    this._fixPctHint.hidden = !isPct;
+    if (!this._fixDayExpanded) return;
+    if (isPct) this._renderFixPct();
+    else this._renderFixDayChips();
   }
 
   // Persists a type or target edit for an existing goal immediately (unlike
@@ -2141,6 +2236,39 @@ class GoalDialog extends AppElement {
   // that's exactly how far back a backfill can still move the score (see
   // FIX_DAY_SPAN). A month-label divider is inserted wherever the strip
   // crosses into a new calendar month — plain landmarks, not chips.
+  // Percentage fix-a-day. The date box defaults to today; the value box shows
+  // whatever applies on that date — the snapshot recorded that day if there is
+  // one, otherwise the carried-forward value from the most recent earlier
+  // snapshot (historyValueAt's own rule, reused so the chart and this field can
+  // never disagree). The hint says which of the two you are looking at, since
+  // the field itself looks identical either way and otherwise people would
+  // think they had already logged days they hadn't. Clear is offered only for a
+  // day that genuinely has its own record.
+  _renderFixPct() {
+    if (!this._goal) return;
+    const iso = this._fixPctDate.value || todayISO();
+    if (!this._fixPctDate.value) this._fixPctDate.value = iso;
+    // The first snapshot anchors the expected-pace ramp for the whole year, so
+    // unlike frequency's rolling FIX_DAY_SPAN this reaches back to 1 January.
+    this._fixPctDate.min = `${iso.slice(0, 4)}-01-01`;
+    this._fixPctDate.max = todayISO();
+
+    const history = percentHistory(this._goal);
+    const own = history.find(h => h.date === iso);
+    const shown = own ? own.value : (historyValueAt(history, iso) ?? 0);
+    this._fixPctValue.value = String(shown);
+    this._fixPctClear.hidden = !own;
+
+    if (own) {
+      this._fixPctHint.textContent = t('goal-dialog.fixpct-recorded');
+    } else {
+      const prior = [...history].reverse().find(h => h.date < iso);
+      this._fixPctHint.textContent = prior
+        ? t('goal-dialog.fixpct-carried', { date: formatShortDate(prior.date) })
+        : t('goal-dialog.fixpct-none');
+    }
+  }
+
   _renderFixDayChips() {
     if (!this._goal) return;
     const type = this._goal.tracking.type;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isFrequency, isEntryType, isEntryBased, isDecreasing, isCountdown,
-  percentValue, setPercent, logEntry, unlogEntry, isLoggedOn,
+  percentValue, setPercent, clearPercentAt, logEntry, unlogEntry, isLoggedOn,
   isoWeekKey, monthKey, recentPeriods, periodFractions, recentDots, currentPeriodCount,
   weekDayStates, recentWeekStates, isOverAllowance, currentAllowanceSpent,
   countdownValue, countdownDaysRemaining,
@@ -853,5 +853,48 @@ describe('tracking — decreasing constants', () => {
     expect(FIX_DAY_SPAN.monthly).toBe(180);
     expect(FIX_DAY_SPAN.monthly).toBeGreaterThan(30 * PERIOD_WINDOW.monthly); // reaches further than what's still scored
     expect(FIX_DAY_SPAN.monthly).toBeGreaterThan(30 * DOT_WINDOW.monthly); // reaches further than what's currently shown
+  });
+});
+
+describe('tracking — dated percentage edits', () => {
+  it('editing a past day leaves the goal\'s current value alone', () => {
+    let g = { tracking: { type: 'percentage', value: 0, history: [] } };
+    g = setPercent(g, 60, '2026-05-01');
+    g = setPercent(g, 42, '2026-09-24');
+    const edited = setPercent(g, 5, '2026-03-01');
+    // value tracks the NEWEST snapshot, so backfilling history can't drag the
+    // goal's present percentage backwards.
+    expect(edited.tracking.value).toBe(42);
+    expect(edited.tracking.history[0]).toEqual({ date: '2026-03-01', value: 5 });
+  });
+
+  it('a second edit on the same day replaces the first', () => {
+    let g = { tracking: { type: 'percentage', value: 0, history: [] } };
+    g = setPercent(g, 55, '2026-08-25');
+    g = setPercent(g, 5, '2026-08-25');
+    expect(g.tracking.history).toEqual([{ date: '2026-08-25', value: 5 }]);
+  });
+
+  it('clearing a day removes only that record', () => {
+    let g = { tracking: { type: 'percentage', value: 0, history: [] } };
+    g = setPercent(g, 60, '2026-05-01');
+    g = setPercent(g, 42, '2026-09-24');
+    const cleared = clearPercentAt(g, '2026-05-01');
+    expect(cleared.tracking.history).toEqual([{ date: '2026-09-24', value: 42 }]);
+    expect(cleared.tracking.value).toBe(42);
+  });
+
+  it('clearing the newest record drops the value back to the previous one', () => {
+    let g = { tracking: { type: 'percentage', value: 0, history: [] } };
+    g = setPercent(g, 60, '2026-05-01');
+    g = setPercent(g, 42, '2026-09-24');
+    expect(clearPercentAt(g, '2026-09-24').tracking.value).toBe(60);
+  });
+
+  it('clearing the last remaining record leaves nothing recorded', () => {
+    let g = setPercent({ tracking: { type: 'percentage', value: 0, history: [] } }, 60, '2026-05-01');
+    const empty = clearPercentAt(g, '2026-05-01');
+    expect(empty.tracking.history).toEqual([]);
+    expect(empty.tracking.value).toBe(0);
   });
 });

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   percentValueAt, dateListFor, rawLoggedDates, computeStreaks, topStreaks, countByBucket,
-  completionSeries, successRatioSeries, periodPerformanceSeries, recoveryCurve,
+  completionSeries, periodPerformanceSeries, recoveryCurve,
+  expectedRampSeries,
   comparisonDelta, updateCount, projectPace,
 } from '../../app/utils/goal-analytics.js';
 
@@ -139,34 +140,6 @@ describe('goal-analytics — completionSeries', () => {
     const series = completionSeries(goal, 'month', 3, TODAY);
     expect(series[0].value).toBeUndefined(); // 2 months ago — before the only snapshot
     expect(series[2].value).toBe(50);
-  });
-});
-
-describe('goal-analytics — successRatioSeries', () => {
-  it('weekly: expected is always 100, achieved is the raw per-period fraction', () => {
-    const goal = weeklyGoal(3, ['2026-09-14', '2026-09-15', '2026-09-16']); // 3 of 3 that week
-    const series = successRatioSeries(goal, 'week', 1, TODAY);
-    expect(series[0].expected).toBe(100);
-    expect(series[0].achieved).toBe(100);
-  });
-
-  it('weekly: a partial week reads as a proportional fraction, not a weighted score', () => {
-    const goal = weeklyGoal(3, ['2026-09-14']); // 1 of 3
-    const series = successRatioSeries(goal, 'week', 1, TODAY);
-    expect(series[0].achieved).toBe(33);
-  });
-
-  it('percentage: expected is a linear day-of-year pace, ignoring dueDate', () => {
-    const goal = pctGoal(50, [{ date: TODAY, value: 50 }]);
-    const series = successRatioSeries(goal, 'month', 1, TODAY);
-    const dayOfYear = Math.round((new Date(2026, 8, 20) - new Date(2026, 0, 1)) / 86400000) + 1;
-    expect(series[0].expected).toBe(Math.round((dayOfYear / 365) * 100));
-  });
-
-  it('countdown: achieved always equals expected by construction', () => {
-    const goal = countdownGoal('2026-01-01', '2026-12-31');
-    const series = successRatioSeries(goal, 'month', 2, TODAY);
-    series.forEach(p => expect(p.achieved).toBe(p.expected));
   });
 });
 
@@ -329,5 +302,48 @@ describe('goal-analytics — recoveryCurve', () => {
   it('returns null for types with no rolling window, leaving their own expected line alone', () => {
     expect(recoveryCurve(pctGoal(50, []), 'month', 6, TODAY)).toBeNull();
     expect(recoveryCurve(countdownGoal('2026-01-01', '2026-12-31'), 'month', 6, TODAY)).toBeNull();
+  });
+});
+
+describe('goal-analytics — expectedRampSeries (percentage)', () => {
+  const hist = (d, v) => ({ date: d, value: v });
+
+  it('draws nothing at all until a percentage has actually been recorded', () => {
+    expect(expectedRampSeries(pctGoal(0, []), 'month', 6, TODAY)).toBeNull();
+  });
+
+  it('starts at the first recorded value, not an assumed zero', () => {
+    const goal = pctGoal(40, [hist('2026-02-10', 25)]);
+    const s = expectedRampSeries(goal, 'month', 12, TODAY);
+    const firstDrawn = s.find(v => v !== undefined);
+    expect(firstDrawn).toBeGreaterThanOrEqual(25);
+  });
+
+  it('leaves points before the first snapshot undrawn rather than plotting zero', () => {
+    const goal = pctGoal(40, [hist('2026-08-01', 30)]);
+    const s = expectedRampSeries(goal, 'month', 12, TODAY);
+    expect(s.slice(0, 5).every(v => v === undefined)).toBe(true);
+  });
+
+  it('rises monotonically — never the old year-boundary sawtooth', () => {
+    const goal = pctGoal(40, [hist('2025-11-01', 10)]);
+    const drawn = expectedRampSeries(goal, 'month', 12, TODAY).filter(v => v !== undefined);
+    drawn.slice(1).forEach((v, i) => expect(v).toBeGreaterThanOrEqual(drawn[i]));
+  });
+
+  it('aims at the due date when it lands before year end, so the ramp is steeper', () => {
+    const base = [hist('2026-02-01', 0)];
+    const toYearEnd = expectedRampSeries(pctGoal(40, base), 'month', 12, TODAY);
+    const early = { ...pctGoal(40, base), dueDate: '2026-06-30' };
+    const toDueDate = expectedRampSeries(early, 'month', 12, TODAY);
+    const at = s => s.filter(v => v !== undefined).at(-1);
+    expect(at(toDueDate)).toBeGreaterThan(at(toYearEnd));
+  });
+
+  it('holds at 100 past the end date instead of running beyond it', () => {
+    const goal = { ...pctGoal(40, [hist('2026-01-10', 0)]), dueDate: '2026-05-31' };
+    const drawn = expectedRampSeries(goal, 'month', 12, TODAY).filter(v => v !== undefined);
+    expect(Math.max(...drawn)).toBe(100);
+    expect(drawn.at(-1)).toBe(100);
   });
 });

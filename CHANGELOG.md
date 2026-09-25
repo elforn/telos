@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.3.0] — 2026-09-25
+
+### Added
+- **You can now set a percentage for a past date.** The same calendar button frequency goals use for "fix a day" now appears on percentage goals: pick a date and enter the value. If nothing was recorded that day it shows the last value carried forward and says so, and a day with its own record can be removed outright — useful if the first value you ever entered was wrong, since that one anchors the whole expected-pace line. It reaches back to 1 January, so goals that predate progress history can have theirs filled in.
+
+### Changed
+- **The "expected pace" line for percentage goals now starts where your progress actually did.** It used to assume every goal had been running since 1 January, so a goal started in February looked behind from the day you made it — and the line reset each New Year, which drew a cliff mid-chart. It now runs straight from your first recorded percentage to 100% at the deadline (or 31 December if there isn't one), and shows nothing at all until you've set a percentage for the first time.
+- **Countdown goals no longer draw an expected-pace line.** A countdown's progress is driven entirely by the calendar, so the expected line was identical to the achieved one — two lines drawn exactly on top of each other.
+- **Charts no longer offer a "Year" timeframe.** A goal lives inside a single year, so yearly buckets could only ever show one meaningful column. Quarter is now the widest view.
+- **The Overview comparison row now shows "vs month" and "vs quarter" only.** "vs year" reached back to before the goal existed, so it permanently read "not enough history".
+
+### Fixed
+- **Charts no longer draw a flat line along the bottom for periods with no data.** A percentage goal's progress line used to sit at zero for every month before its first recorded value, which read as "you were at 0%" rather than "nothing recorded yet". Both lines now simply start where your data starts.
+- **Editing a past percentage no longer changes where the goal stands today.** Recording a value for an earlier date now leaves the goal's current percentage alone, instead of overwriting it with the older figure.
+
 ## [3.2.0] — 2026-09-25
 
 ### Added

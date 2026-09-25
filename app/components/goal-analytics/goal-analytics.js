@@ -6,7 +6,8 @@ import {
 } from '../../utils/tracking.js';
 import {
   pagesFor, percentValueAt, dateListFor, rawLoggedDates, topStreaks, countByBucket,
-  completionSeries, successRatioSeries, periodPerformanceSeries, recoveryCurve,
+  completionSeries, periodPerformanceSeries, recoveryCurve,
+  expectedRampSeries,
   comparisonDelta, updateCount, projectPace,
 } from '../../utils/goal-analytics.js';
 import { septagonWedgePath, septagonWedgeState } from '../goal-item/goal-item.js';
@@ -415,7 +416,12 @@ class GoalAnalytics extends AppElement {
   }
 
   _timeframeSelect(id, current, exclude = []) {
-    const opts = ['week', 'month', 'quarter', 'year'].filter(v => !exclude.includes(v)).map(v =>
+    // No year option: a Telos goal lives inside a single year, so a yearly
+    // bucket can only ever hold one meaningful point (and HISTORY_DAYS_BACK
+    // caps the data at 365 days regardless). Quarter is the coarsest grouping
+    // that still says anything. 'year' stays valid in the utils below — the
+    // "vs year" comparison stat still uses it.
+    const opts = ['week', 'month', 'quarter'].filter(v => !exclude.includes(v)).map(v =>
       `<option value="${v}" ${v === current ? 'selected' : ''}>${t('goal-analytics.timeframe-' + v)}</option>`).join('');
     return `<select id="${id}" aria-label="${t('goal-analytics.timeframe-label')}">${opts}</select>`;
   }
@@ -464,11 +470,22 @@ class GoalAnalytics extends AppElement {
 
   _lineChart(seriesA, seriesB, axisLabels = []) {
     const w = 268, h = 92, padTop = 8, padBottom = 4;
-    const path = series => series.map((v, i) => {
-      const x = series.length === 1 ? w / 2 : (i / (series.length - 1)) * w;
-      const y = padTop + (1 - (v ?? 0) / 100) * (h - padTop - padBottom);
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
+    // Undefined points are skipped, not drawn as 0 — completionSeries leaves
+    // them in precisely so "no snapshot existed yet" stays distinguishable
+    // from a real 0%. Plotting them flattened the line along the axis and
+    // read as "you were at zero" for every period before a goal's first
+    // recorded value.
+    const path = series => {
+      let d = '', started = false;
+      series.forEach((v, i) => {
+        if (v === undefined) return;
+        const x = series.length === 1 ? w / 2 : (i / (series.length - 1)) * w;
+        const y = padTop + (1 - v / 100) * (h - padTop - padBottom);
+        d += `${started ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)} `;
+        started = true;
+      });
+      return d.trim();
+    };
     const grid = [0, 50, 100].map(v => {
       const y = padTop + (1 - v / 100) * (h - padTop - padBottom);
       return `<line x1="0" y1="${y.toFixed(1)}" x2="${w}" y2="${y.toFixed(1)}" stroke="var(--color-border)" stroke-width="1" />`;
@@ -521,7 +538,11 @@ class GoalAnalytics extends AppElement {
     const count = isCountdown(goal) ? null : updateCount(goal, todayIso, HISTORY_DAYS_BACK);
     const countLabel = isDecreasing(goal) ? 'goal-analytics.stat-slips' : goal.tracking.type === 'percentage' ? 'goal-analytics.stat-updates' : 'goal-analytics.stat-entries';
 
-    const compareRow = ['month', 'quarter', 'year'].map(unit => {
+    // Month and quarter only. A goal lives inside a single year, so "vs year"
+    // always reached back to before the goal existed and permanently read
+    // "not enough history" — a third of the row spent saying nothing. If
+    // goals ever span years, it can come back with something behind it.
+    const compareRow = ['month', 'quarter'].map(unit => {
       const delta = comparisonDelta(goal, unit, todayIso);
       const label = t(`goal-analytics.vs-${unit}`);
       if (delta === null) return `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value muted tabular">—</div><div class="stat-sub">${t('goal-analytics.not-enough-history')}</div></div>`;
@@ -531,13 +552,16 @@ class GoalAnalytics extends AppElement {
     const tf = this._tfProgress;
     const points = completionSeries(goal, tf, 12, todayIso);
     const achieved = points.map(p => p.value);
-    // Frequency types get the recovery curve rather than successRatioSeries'
-    // flat 100: their score is a rolling window, so "expected" is better read
-    // as the best score still reachable from here, not a constant ceiling.
-    // Percentage keeps its linear day-of-year pace and countdown its own
-    // self-advancing value, both of which are already meaningful.
-    const expected = recoveryCurve(goal, tf, 12, todayIso)
-      ?? successRatioSeries(goal, tf, 12, todayIso).map(p => p.expected);
+    // null means no dashed line at all. Percentage anchors its ramp on the
+    // first recorded value and draws nothing before one exists. Countdown
+    // draws nothing ever: its value is driven purely by the calendar, so an
+    // "expected" line is identical to the achieved one by construction — two
+    // lines plotted exactly on top of each other. Weekly/monthly/Avoid use
+    // the recovery curve; for Avoid that is a flat 100, kept deliberately as
+    // a reference showing that a clean run is the whole target.
+    const expected = goal.tracking.type === 'percentage' ? expectedRampSeries(goal, tf, 12, todayIso)
+      : goal.tracking.type === 'countdown' ? null
+      : recoveryCurve(goal, tf, 12, todayIso);
     // Three labels — oldest, midpoint, newest — matching the Consistency
     // chart's own axis so the two read the same way.
     const progressAxis = [11, 5, 0].map(i => periodLabel(tf, i, todayIso));
@@ -566,7 +590,7 @@ class GoalAnalytics extends AppElement {
       <div><p class="section-label">${t('goal-analytics.change-over-time')}</p><div class="stat-row">${compareRow}</div></div>
       <div class="card"><div class="card-head"><h3>${t('goal-analytics.progress-chart-title')}</h3>${this._timeframeSelect('tf-progress', tf)}</div>
         ${this._lineChart(achieved, expected, progressAxis)}
-        <div class="legend"><span><i class="swatch-line"></i>${t('goal-analytics.legend-achieved')}</span><span><i class="swatch-line dashed"></i>${t('goal-analytics.legend-expected')}</span></div>
+        <div class="legend"><span><i class="swatch-line"></i>${t('goal-analytics.legend-achieved')}</span>${expected ? `<span><i class="swatch-line dashed"></i>${t('goal-analytics.legend-expected')}</span>` : ''}</div>
       </div>
       ${paceHtml}
       ${perfHtml ? `<div class="card"><div class="card-head"><h3>${t('goal-analytics.consistency-title')}</h3>${this._timeframeSelect('tf-perf', perfTf, perfExclude)}</div>
