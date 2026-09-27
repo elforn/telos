@@ -5,6 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.5.0] — 2026-09-28
+
+### Added
+- **"To date" goals now show how many days are left**, in a card next to the type. When the date has passed it reads 0 with "date reached" underneath, so a countdown that's finished can't be mistaken for one due today.
+
+### Changed
+- **"To date" goals no longer show the change-over-time cards or the pace note.** Their percentage is just the calendar running down, so every one of those readings restated the arithmetic you'd already set up — the projected finish was always the deadline you picked.
+- **Avoid goals tell a forgiven slip from a real one by shape, not shade.** A slip inside the allowance is drawn as an outline, one that broke it is filled solid, and a bar or dot holding both is filled to the share that broke it. The two reds were too close to separate at the size the weekday dots are drawn, and no pairing of them worked: pulling them apart made the paler one vanish against the card.
+- **The Upcoming list says how much you've already done** — "2 done, 3 missing" rather than a bare "3 missing", which gave no sense of how big the commitment was.
+- **Every chart opens on the goal's own period** — week, or month for a monthly goal — instead of each chart picking a different default.
+- **Charts stop at a year.** Goals are annual, so the quarter view shows 4 quarters rather than reaching three years back into mostly-empty bars.
+- **The calendar and frequency grid now start at 1 January** of the year you're looking at, instead of a rolling window that spilled into the previous year — and a past year shows exactly that year rather than running on to today.
+- **The calendar and frequency grid keep their newest column at the right edge.** Early in the year, or on a young goal, they used to sit left with the empty space trailing after "now".
+- **Horizontal scrollbars no longer sit on top of the charts** — the calendar's Sunday row and the frequency grid's last weekday had the bar drawn across them.
+- **The dialog's own scrollbar no longer overlaps its content**, via Socle 1.2.7.
+
+### Fixed
+- **The count-per-timebox chart sat short of the right edge at the Week view, and its labels drifted off the bars they name.** A labelled slot was quietly growing wider than the bar above it, so the labels row ended up wider than the bars row and the newest bar stopped short of "now".
+- **Avoid charts drew a mark on weeks with no slips at all** — a slip mark on the best possible week.
+- **Changing a chart's timeframe no longer throws keyboard focus to the top of the page.** The whole page was being rebuilt, so the menu you'd just used was replaced by a different one; only the chart is rebuilt now.
+- **Switching between the analytics tabs rebuilt the page twice** instead of once.
+
+---
+
 ## [3.4.0] — 2026-09-27
 
 ### Added
