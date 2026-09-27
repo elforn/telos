@@ -1,8 +1,26 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/list-item/list-item.js';
 import { _resetDeleteGuard } from '../../app/utils/delete-ghost-guard.js';
+
+// These specs fake prefers-reduced-motion by replacing window.matchMedia. Two
+// things make that leak: the assignment is direct (so vitest's own stub
+// bookkeeping can't undo it), and the fake answers `matches` the same way for
+// every query — so a `matches: true` left behind reports reduced-motion ON to
+// whatever runs next in the same worker.
+//
+// It escaped this file. Vitest shares one global per worker, and the last
+// assignment here is `matches: true`, so _lib/modules/toast/toast.test.js could
+// load into that worker and take toast.js's reducedMotion() early-return —
+// removing the element without the swipe-out transform, failing on
+// translateX(150px) vs translateX(120%). That is the intermittent CI failure
+// that blocked the 3.5.0 deploy: it only fails when the scheduler happens to
+// put the two files in the same worker in that order.
+let _realMatchMedia;
+beforeEach(() => { _realMatchMedia = window.matchMedia; });
+afterEach(() => { window.matchMedia = _realMatchMedia; });
+
 
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
