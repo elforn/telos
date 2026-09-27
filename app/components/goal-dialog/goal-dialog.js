@@ -9,7 +9,7 @@ import { pagesFor } from '../../utils/goal-analytics.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
-import { percentHistory, historyValueAt, setPercent, clearPercentAt, FIX_DAY_SPAN, DEFAULT_TARGET, DEFAULT_ALLOWANCE_PERIOD, WEEKDAYS, targetLimitsFor, isEntryType, isDecreasing, percentValue, currentPeriodCount, currentAllowanceSpent, countdownDaysRemaining } from '../../utils/tracking.js';
+import { percentHistory, historyValueAt, setPercent, clearPercentAt, FIX_DAY_SPAN, DEFAULT_TARGET, WEEKDAYS, targetLimitsFor, isEntryType, isDecreasing, percentValue, currentPeriodCount, currentAllowanceSpent, countdownDaysRemaining } from '../../utils/tracking.js';
 import { scheduledDayStates } from '../../utils/frequency-urgency.js';
 import { buildDayStrip, dayStripStyles } from '../../utils/day-strip.js';
 import { todayISO } from '../../utils/today-iso.js';
@@ -47,7 +47,14 @@ class GoalDialog extends AppElement {
     this._fromYear    = year    ?? String(this.currentYear);
     this._fromSection = section ?? 'capstone';
     this._resetForm(goal);
-    this._modal.show(this._input);
+    // A saved goal opens on its Overview, not the edit form (see _resetForm):
+    // nothing there wants the caret, and focusing the title input would raise
+    // the on-screen keyboard over a page that exists to be read. A new goal
+    // still opens straight into the title field — typing one is the whole
+    // point of that state.
+    const openingOnAnalytics = this._modal.activeTab > 0;
+    this._modal.show(openingOnAnalytics ? null : this._input);
+    if (openingOnAnalytics) return;
     setTimeout(() => {
       const len = this._input.value.length;
       this._input.setSelectionRange(len, len);
@@ -94,12 +101,8 @@ class GoalDialog extends AppElement {
     // which has no entry of its own and never reads _draftTarget anyway.
     this._draftTarget = goal?.tracking?.target ?? DEFAULT_TARGET[this._draftType] ?? DEFAULT_TARGET.weekly;
     // Decreasing-only; kept even when the current type isn't decreasing so a
-    // goal that's been decreasing before (or gets switched to it later)
-    // recovers its last-chosen period, same "never drops the inactive side"
-    // spirit as value/entries above — see _commitTrackingChange.
-    this._draftAllowancePeriod = goal?.tracking?.allowancePeriod ?? DEFAULT_ALLOWANCE_PERIOD;
     // Countdown-only; kept even when the current type isn't countdown, same
-    // "never drops the inactive side" spirit as allowancePeriod above. A
+    // "never drops the inactive side" spirit as value/entries above. A
     // goal that's never touched countdown defaults to Jan 1 of the year
     // it's being opened in (_fromYear, set by open() just before this
     // runs) — "Year start" is a one-shot quick-fill button, not a stored
@@ -145,13 +148,29 @@ class GoalDialog extends AppElement {
     // tabCount 0 and 1 render identically in modal-dialog (see its docs),
     // this just makes the "no data yet" reasoning explicit at the call site.
     this._modal.tabCount = this._isNew ? 0 : 1 + pagesFor(goal).length;
-    this._modal.activeTab = 0;
+    // Saved goals land on Overview (tab 1), not the edit form. Once a goal is
+    // set up there is little left to change in the form — today's entry is
+    // logged on the row itself — so opening a goal is far more often "how am
+    // I doing" than "edit this". A new/unsaved draft has no analytics at all
+    // and opens on the form, which is also where its title field lives.
+    const openOnOverview = !this._isNew && this._modal.tabCount > 1;
+    this._modal.activeTab = openOnOverview ? 1 : 0;
     // Keep the sheet pinned at its max height whenever tabs are actually shown, so
     // paging from the tall Edit form to a shorter analytics page doesn't visibly
     // resize the sheet and shift its top edge. A new/unsaved draft has only the
     // single Edit pill (tabCount 0) and keeps the default fit-content sizing.
     this._modal.fixedHeight = this._modal.tabCount > 1;
-    this._showView('main');
+    // activeTab's setter deliberately doesn't emit modal-tab-change (it is the
+    // programmatic path), so the matching view swap is done here by hand —
+    // same two lines the tab-change handler runs, minus its entrance
+    // animation, which would read as a slide the user never initiated.
+    if (openOnOverview) {
+      this._analyticsEl.goal = goal;
+      this._analyticsEl.activePage = 0;
+      this._showView('analytics');
+    } else {
+      this._showView('main');
+    }
   }
 
   template() {
@@ -1114,7 +1133,6 @@ class GoalDialog extends AppElement {
                    chip + colon precede them). -->
               <div class="target-row">
                 <span class="target-trailing-text" id="target-trailing-text" hidden></span>
-                <button type="button" class="preset-chip" id="allowance-period-chip" hidden></button>
                 <span class="target-colon" id="target-colon" hidden>:</span>
                 <div class="count-chip-cluster">
                   <span class="count-chip" id="target-value"></span>
@@ -1301,7 +1319,6 @@ class GoalDialog extends AppElement {
     this._targetUpBtn    = this.shadowRoot.querySelector('#target-up');
     this._targetTrailingText = this.shadowRoot.querySelector('#target-trailing-text');
     this._targetColon    = this.shadowRoot.querySelector('#target-colon');
-    this._allowancePeriodChip = this.shadowRoot.querySelector('#allowance-period-chip');
     this._countdownBlock     = this.shadowRoot.querySelector('#countdown-block');
     this._yearStartBtn       = this.shadowRoot.querySelector('#countdown-yearstart-btn');
     this._countdownStartInput = this.shadowRoot.querySelector('#countdown-start-input');
@@ -1355,6 +1372,7 @@ class GoalDialog extends AppElement {
       if (!v) { this._input.value = this._lastValidTitle; return; }
       if (v === this._lastValidTitle) return;
       this._lastValidTitle = v;
+      this._patchGoal({ title: v });
       this.dispatchEvent(new CustomEvent('goal-title-changed', {
         bubbles: true, composed: true, detail: { title: v },
       }));
@@ -1370,6 +1388,7 @@ class GoalDialog extends AppElement {
       const v = this._descInput.value.trim();
       if (v === this._lastValidNotes) return;
       this._lastValidNotes = v;
+      this._patchGoal({ notes: v || undefined });
       this.dispatchEvent(new CustomEvent('goal-notes-changed', {
         bubbles: true, composed: true, detail: { notes: v || undefined },
       }));
@@ -1395,6 +1414,7 @@ class GoalDialog extends AppElement {
       const v = this._dueDateInput.value;
       if (v === this._lastValidDueDate) return;
       this._lastValidDueDate = v;
+      this._patchGoal({ dueDate: v || undefined });
       this.dispatchEvent(new CustomEvent('goal-duedate-changed', {
         bubbles: true, composed: true, detail: { dueDate: v || undefined },
       }));
@@ -1539,14 +1559,27 @@ class GoalDialog extends AppElement {
     // _resetForm for where tabCount itself gets set.
     this._onModalTabChange = e => {
       const index = e.detail.index;
-      if (index === 0) { this._showView('main'); this._animateViewEnter(this._viewMain, 'enter-back'); return; }
+      if (index === 0) {
+        this._showView('main');
+        this._animateViewEnter(this._viewMain, 'enter-back');
+        // The notes field sizes itself from scrollHeight, which reads 0 while
+        // the view is hidden — so a dialog that opened on Overview has never
+        // had a chance to measure it until now.
+        requestAnimationFrame(() => this._syncDescHeight());
+        return;
+      }
       this._analyticsEl.goal = this._goal;
       this._analyticsEl.activePage = index - 1;
       this._showView('analytics');
       this._animateViewEnter(this._viewAnalytics, 'enter-fwd');
     };
     this._modal.addEventListener('modal-tab-change', this._onModalTabChange);
-    this._onAnalyticsEditBtn = () => { this._modal.activeTab = 0; this._showView('main'); this._animateViewEnter(this._viewMain, 'enter-back'); };
+    this._onAnalyticsEditBtn = () => {
+      this._modal.activeTab = 0;
+      this._showView('main');
+      this._animateViewEnter(this._viewMain, 'enter-back');
+      requestAnimationFrame(() => this._syncDescHeight()); // see the tab-change handler above
+    };
     this.shadowRoot.querySelector('#analytics-edit-btn').addEventListener('click', this._onAnalyticsEditBtn);
     this.shadowRoot.querySelector('#analytics-close').addEventListener('click', this._onClose);
     this._draftToggle = installDraftToggle(this, {
@@ -1568,7 +1601,7 @@ class GoalDialog extends AppElement {
     this._archiveBtn.addEventListener('pointerdown', this._onArchivePD);
     this._onActionArchive = () => {
       const archived = !this._goal?.archived;
-      if (this._goal) this._goal = { ...this._goal, archived };
+      this._patchGoal({ archived });
       this._archiveBtn.textContent = archived ? t('goal-dialog.unarchive') : t('goal-dialog.archive');
       this._archiveBtn.setAttribute('aria-pressed', String(archived));
       this.dispatchEvent(new CustomEvent('goal-archived-changed', {
@@ -1740,7 +1773,7 @@ class GoalDialog extends AppElement {
     this._typePills.forEach(p => p.addEventListener('click', this._onTypePillClick));
 
     this._onTargetDown = () => {
-      const [min] = targetLimitsFor(this._draftType, this._draftAllowancePeriod);
+      const [min] = targetLimitsFor(this._draftType);
       this._draftTarget = Math.max(min, this._draftTarget - 1);
       this._renderTypeSection();
       if (!this._isNew) this._commitTrackingChange();
@@ -1748,30 +1781,16 @@ class GoalDialog extends AppElement {
     this._targetDownBtn.addEventListener('click', this._onTargetDown);
 
     this._onTargetUp = () => {
-      const [, max] = targetLimitsFor(this._draftType, this._draftAllowancePeriod);
+      const [, max] = targetLimitsFor(this._draftType);
       this._draftTarget = Math.min(max, this._draftTarget + 1);
       this._renderTypeSection();
       if (!this._isNew) this._commitTrackingChange();
     };
     this._targetUpBtn.addEventListener('click', this._onTargetUp);
 
-    // Exactly two states and no separate control (like the stepper) can
-    // land on either independently, so this chip has to be a real toggle.
-    this._onAllowancePeriodChipClick = () => {
-      this._draftAllowancePeriod = this._draftAllowancePeriod === '4weeks' ? 'week' : '4weeks';
-      // week's max (6) is far below 4weeks' (27) — clamp down rather than
-      // reset, since unlike a type switch (different kind of value entirely)
-      // this is still "how many slips", just a narrower ceiling.
-      const [, max] = targetLimitsFor(this._draftType, this._draftAllowancePeriod);
-      this._draftTarget = Math.min(this._draftTarget, max);
-      this._renderTypeSection();
-      if (!this._isNew) this._commitTrackingChange();
-    };
-    this._allowancePeriodChip.addEventListener('click', this._onAllowancePeriodChipClick);
-
     // "Year start" is a one-shot quick-fill, not a toggle/mode — a plain
-    // action button (no aria-pressed, same idiom the allowance-period chip
-    // uses for the same "not a two-state toggle" reason) that overwrites
+    // action button (no aria-pressed — it is not a two-state toggle) that
+    // overwrites
     // the date field with Jan 1 of this goal's own year. The field stays a
     // perfectly normal, always-editable date input afterward — nothing
     // remembers that this button was ever pressed.
@@ -1801,7 +1820,7 @@ class GoalDialog extends AppElement {
     // 'any' if it was active; tapping Any toggles the whole thing to/from
     // 'any', clearing whatever days were selected — the two modes are
     // mutually exclusive, but each is independently a plain toggle, same
-    // "real toggle, not a one-way jump" idiom as allowance-period above.
+    // "real toggle, not a one-way jump" idiom.
     this._onReminderDayGroupClick = e => {
       const miniBtn = e.target.closest('.reminder-mini-btn');
       if (miniBtn) {
@@ -1927,7 +1946,6 @@ class GoalDialog extends AppElement {
     this._typePills?.forEach(p => p.removeEventListener('click', this._onTypePillClick));
     this._targetDownBtn?.removeEventListener('click', this._onTargetDown);
     this._targetUpBtn?.removeEventListener('click', this._onTargetUp);
-    this._allowancePeriodChip?.removeEventListener('click', this._onAllowancePeriodChipClick);
     this._yearStartBtn?.removeEventListener('click', this._onYearStartClick);
     this._countdownStartInput?.removeEventListener('change', this._onStartDateInput);
     this._reminderDayGroup?.removeEventListener('click', this._onReminderDayGroupClick);
@@ -1964,13 +1982,9 @@ class GoalDialog extends AppElement {
   // Full widened shape from the start (see tracking.js) — value/target/
   // entries all present regardless of which type is picked, so a brand-new
   // goal already conforms to the same shape a switched-type goal would.
-  // allowancePeriod rides along too, even for non-decreasing goals — it's
-  // inert everywhere else, and keeping it present means a later switch into
-  // decreasing sees whatever was last chosen rather than a missing field.
   _draftTracking() {
     const tracking = {
       type: this._draftType, value: 0, target: this._draftTarget, entries: [],
-      allowancePeriod: this._draftAllowancePeriod,
       startDate: this._draftStartDate,
     };
     // Same "omit unless actually touched" contract as _commitTrackingChange —
@@ -2021,9 +2035,8 @@ class GoalDialog extends AppElement {
       return;
     }
     if (tr.type === 'decreasing') {
-      const period = tr.allowancePeriod ?? DEFAULT_ALLOWANCE_PERIOD;
       this._trackingSummary.textContent = t('goal-dialog.tracking-summary-prefix-decreasing')
-        + t(`goal-dialog.tracking-summary-decreasing-${period}`, {
+        + t('goal-dialog.tracking-summary-decreasing', {
           count: currentAllowanceSpent(goal), target: tr.target, percent,
         });
       return;
@@ -2054,6 +2067,17 @@ class GoalDialog extends AppElement {
       });
   }
 
+  // The dialog owns a copy of the record it is editing, and the analytics
+  // tabs render straight off it — so anything emitted upward has to land here
+  // too, or switching to a tab shows the value as it was when the dialog
+  // opened. (The store round-trip does not come back while the dialog is
+  // open.) Tracking edits and the archive toggle already did this inline;
+  // due date, title and notes did not, which is why a freshly edited
+  // deadline still read as the old one on the Overview page.
+  _patchGoal(patch) {
+    if (this._goal) this._goal = { ...this._goal, ...patch };
+  }
+
   _renderTypeSection() {
     this._renderTrackingSummary();
     const showTypeEditor = this._isNew || this._typeExpanded;
@@ -2063,11 +2087,10 @@ class GoalDialog extends AppElement {
     // 'percentage' is the one type with no target concept at all — every
     // other type (including any future one) uses its own type-summary-*
     // string rather than silently falling back to "Percentage" here.
-    // Decreasing additionally forks on allowancePeriod, since "N slips
-    // allowed" means something different per week vs. per 4 weeks.
+
     this._changeTypeValue.textContent = this._draftType === 'percentage'
       ? t('goal-dialog.type-percentage')
-      : t(`goal-dialog.type-summary-${this._draftType}${this._draftType === 'decreasing' ? '-' + this._draftAllowancePeriod : ''}`, { target: this._draftTarget });
+      : t(`goal-dialog.type-summary-${this._draftType}`, { target: this._draftTarget });
 
     if (!showTypeEditor) {
       this._targetBlock.hidden = true;
@@ -2105,7 +2128,7 @@ class GoalDialog extends AppElement {
     this._targetBlock.hidden = !showStepper;
     if (!showStepper) return;
 
-    const [min, max] = targetLimitsFor(this._draftType, this._draftAllowancePeriod);
+    const [min, max] = targetLimitsFor(this._draftType);
     const isDecreasingType = this._draftType === 'decreasing';
     this._targetValueEl.textContent = `${this._draftTarget}x`;
     // Always screen-reader-only now — Avoid's own copy ("Slip-ups allowed")
@@ -2121,16 +2144,6 @@ class GoalDialog extends AppElement {
     this._targetDownBtn.disabled = this._draftTarget <= min;
     this._targetUpBtn.disabled = this._draftTarget >= max;
 
-    // No aria-pressed here — this isn't an on/off toggle, it's a two-valued
-    // setting, and its own visible text ("per week" / "per 4 weeks") already
-    // names the current value. Neither value is more "active" than the
-    // other, so it stays a plain neutral chip regardless of which one is
-    // showing — same idiom as the "Change type" menu item's trailing value
-    // text elsewhere in this file.
-    this._allowancePeriodChip.hidden = !isDecreasingType;
-    if (isDecreasingType) {
-      this._allowancePeriodChip.textContent = t(`goal-dialog.allowance-period-${this._draftAllowancePeriod}`);
-    }
   }
 
   _renderReminderDayChips() {
@@ -2206,7 +2219,6 @@ class GoalDialog extends AppElement {
       value: this._goal?.tracking?.value ?? 0,
       target: this._draftTarget,
       entries: this._goal?.tracking?.entries ?? [],
-      allowancePeriod: this._draftAllowancePeriod,
       startDate: this._draftStartDate,
     };
     // Omitted entirely while never touched (undefined) — matches the
@@ -2215,7 +2227,7 @@ class GoalDialog extends AppElement {
     // always included once it exists, the same "never drops the inactive
     // side" spirit as value/entries above.
     if (this._draftReminderDays !== undefined) tracking.reminderDays = this._draftReminderDays;
-    if (this._goal) this._goal = { ...this._goal, tracking };
+    this._patchGoal({ tracking });
     // _renderTypeSection() (every caller) already ran _renderTrackingSummary()
     // once before this, but that pass read the pre-switch this._goal.tracking —
     // this._goal only becomes fresh on the line above. Re-render now so the

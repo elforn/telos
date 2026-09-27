@@ -1399,9 +1399,6 @@ describe('goal-dialog — type selector (new goal)', () => {
   function pill(el, type) {
     return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
   }
-  function allowancePeriodChip(el) {
-    return el.shadowRoot.querySelector('#allowance-period-chip');
-  }
   function create(el, detail = {}) {
     el.open(null);
     const events = [];
@@ -1462,7 +1459,7 @@ describe('goal-dialog — type selector (new goal)', () => {
   it('goal-created carries a full percentage tracking object by default (value/target/entries all present)', () => {
     const el = mount();
     const events = create(el);
-    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 0, target: 3, entries: [], allowancePeriod: 'week', startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 0, target: 3, entries: [], startDate: '2026-01-01' });
   });
 
   it('goal-created carries the selected weekly type/target, with a dormant value alongside empty entries', () => {
@@ -1474,7 +1471,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'Move my body';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: [], allowancePeriod: 'week', startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: [], startDate: '2026-01-01' });
   });
 
   it('stepper increments/decrements and clamps to TARGET_LIMITS.monthly (1–31)', () => {
@@ -1500,7 +1497,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'Call parents';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'monthly', value: 0, target: 5, entries: [], allowancePeriod: 'week', startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'monthly', value: 0, target: 5, entries: [], startDate: '2026-01-01' });
   });
 
   it('resets to percentage default after a quick-add commit (Enter) starts the next entry', () => {
@@ -1537,29 +1534,6 @@ describe('goal-dialog — type selector (new goal)', () => {
     expect(up.disabled).toBe(true);
   });
 
-  it('switching to the 4-week allowance raises the stepper\'s ceiling to 27, not 6', () => {
-    const el = mount();
-    el.open(null);
-    pill(el, 'decreasing').click();
-    allowancePeriodChip(el).click(); // week -> 4weeks
-    const up = el.shadowRoot.querySelector('#target-up');
-    for (let i = 0; i < 40; i++) up.click(); // would clamp at 6 in "week" mode
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('27x');
-    expect(up.disabled).toBe(true);
-  });
-
-  it('switching back from 4-week to week clamps a now-out-of-range target down to 6, rather than leaving it invalid', () => {
-    const el = mount();
-    el.open(null);
-    pill(el, 'decreasing').click();
-    allowancePeriodChip(el).click(); // week -> 4weeks
-    const up = el.shadowRoot.querySelector('#target-up');
-    for (let i = 0; i < 20; i++) up.click(); // well above 6, valid for 4weeks (up to 27)
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('20x');
-    allowancePeriodChip(el).click(); // 4weeks -> week
-    expect(el.shadowRoot.querySelector('#target-value').textContent).toBe('6x');
-  });
-
   it('the target label stays screen-reader-only for every type — Avoid\'s own copy shows as trailing text instead', () => {
     const el = mount();
     el.open(null);
@@ -1582,59 +1556,9 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'No ice cream';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 1, entries: [], allowancePeriod: 'week', startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 1, entries: [], startDate: '2026-01-01' });
   });
 
-  it('the allowance-period toggle chip is hidden for every type except Avoid', () => {
-    const el = mount();
-    el.open(null);
-    expect(allowancePeriodChip(el).hidden).toBe(true);
-    pill(el, 'weekly').click();
-    expect(allowancePeriodChip(el).hidden).toBe(true);
-    pill(el, 'monthly').click();
-    expect(allowancePeriodChip(el).hidden).toBe(true);
-    pill(el, 'decreasing').click();
-    expect(allowancePeriodChip(el).hidden).toBe(false);
-  });
-
-  it('Avoid defaults the allowance period to "week" — the chip reads "per week"', () => {
-    const el = mount();
-    el.open(null);
-    pill(el, 'decreasing').click();
-    expect(allowancePeriodChip(el).textContent).toBe('per week');
-  });
-
-  it('tapping the chip flips its own text between "per week" and "per 4 weeks"', () => {
-    const el = mount();
-    el.open(null);
-    pill(el, 'decreasing').click();
-    allowancePeriodChip(el).click();
-    expect(allowancePeriodChip(el).textContent).toBe('per 4 weeks');
-    allowancePeriodChip(el).click();
-    expect(allowancePeriodChip(el).textContent).toBe('per week');
-  });
-
-  it('goal-created carries the selected allowance period', () => {
-    const el = mount();
-    el.open(null);
-    pill(el, 'decreasing').click();
-    allowancePeriodChip(el).click();
-    const events = [];
-    el.addEventListener('goal-created', e => events.push(e));
-    el.shadowRoot.querySelector('#input').value = 'No takeout';
-    el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking.allowancePeriod).toBe('4weeks');
-  });
-
-  it('switching away from Avoid and back preserves the previously chosen allowance period, mirroring how value/entries survive a type switch', () => {
-    const el = mount();
-    el.open(null);
-    pill(el, 'decreasing').click();
-    allowancePeriodChip(el).click();
-    pill(el, 'weekly').click(); // switch away
-    pill(el, 'decreasing').click(); // switch back
-    expect(allowancePeriodChip(el).textContent).toBe('per 4 weeks');
-  });
 });
 
 describe('goal-dialog — type selector (new goal): countdown', () => {
@@ -1761,9 +1685,6 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
   function pill(el, type) {
     return el.shadowRoot.querySelector(`.type-pill[data-type="${type}"]`);
   }
-  function allowancePeriodChip(el) {
-    return el.shadowRoot.querySelector('#allowance-period-chip');
-  }
   function startInput(el) {
     return el.shadowRoot.querySelector('#countdown-start-input');
   }
@@ -1819,7 +1740,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'weekly').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 62, target: 3, entries: [], allowancePeriod: 'week', startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 62, target: 3, entries: [], startDate: '2026-01-01' });
   });
 
   it('switching a frequency goal to percentage preserves entries dormant and surfaces the last value', () => {
@@ -1830,7 +1751,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'percentage').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 62, target: 5, entries: ['2026-08-01'], allowancePeriod: 'week', startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 62, target: 5, entries: ['2026-08-01'], startDate: '2026-01-01' });
   });
 
   it('switching back and forth (weekly → percentage → weekly) recovers the original entries — nothing is destroyed', () => {
@@ -1861,7 +1782,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'weekly').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 3, entries: ['2026-07-01', '2026-08-01'], allowancePeriod: 'week', startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 3, entries: ['2026-07-01', '2026-08-01'], startDate: '2026-01-01' });
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true); // weekly never shows the standalone stepper
   });
 
@@ -1873,7 +1794,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     el.shadowRoot.querySelector('#reminder-mini-up').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: ['2026-08-01'], allowancePeriod: 'week', startDate: '2026-01-01', reminderDays: 'any' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: ['2026-08-01'], startDate: '2026-01-01', reminderDays: 'any' });
     expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('4x');
   });
 
@@ -1938,39 +1859,6 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('Avoid, 2 slip/wk allowed');
   });
 
-  it('the change-type summary string switches to the 4-week wording once that allowance period is picked', () => {
-    const el = mount();
-    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', value: 0, target: 2, entries: [], allowancePeriod: '4weeks' } });
-    expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('Avoid, 2 slip/4wks allowed');
-  });
-
-  it('the allowance-period chip is hidden until "Change type" is expanded, then reflects the goal\'s current period', () => {
-    const el = mount();
-    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', value: 0, target: 2, entries: [], allowancePeriod: '4weeks' } });
-    expect(allowancePeriodChip(el).hidden).toBe(true);
-    expand(el);
-    expect(allowancePeriodChip(el).hidden).toBe(false);
-    expect(allowancePeriodChip(el).textContent).toBe('per 4 weeks');
-  });
-
-  it('a goal saved before this setting existed (no allowancePeriod) defaults its chip to "per week"', () => {
-    const el = mount();
-    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', value: 0, target: 2, entries: [] } });
-    expand(el);
-    expect(allowancePeriodChip(el).textContent).toBe('per week');
-  });
-
-  it('tapping the chip on an existing goal commits immediately via goal-tracking-changed', () => {
-    const el = mount();
-    el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', value: 0, target: 2, entries: ['2026-08-01'] } });
-    expand(el);
-    const events = [];
-    el.addEventListener('goal-tracking-changed', e => events.push(e));
-    allowancePeriodChip(el).click();
-    expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 2, entries: ['2026-08-01'], allowancePeriod: '4weeks', startDate: '2026-01-01' });
-  });
-
   it('switching an existing goal to Avoid preserves entries dormant and defaults the allowance to 0', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', value: 0, target: 5, entries: ['2026-08-01'] } });
@@ -1979,7 +1867,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'decreasing').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 0, entries: ['2026-08-01'], allowancePeriod: 'week', startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 0, entries: ['2026-08-01'], startDate: '2026-01-01' });
   });
 
   it('switching back and forth (weekly → Avoid → weekly) recovers the original entries — nothing is destroyed', () => {
@@ -2060,6 +1948,9 @@ describe('goal-dialog — Fix a day (frequency goals only, icon-only footer togg
   it('tapping the toggle unfolds the strip inline — no separate view, main view stays put, the trigger itself stays visible', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
+    // A saved goal opens on Overview now, so step onto the edit tab first —
+    // exactly what a user does to reach this control.
+    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 0 } }));
     expandFixDay(el);
     expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#fixday-inline').hidden).toBe(false);
@@ -2623,14 +2514,8 @@ describe('goal-dialog — tracking summary (existing goals only)', () => {
 
   it('decreasing, "week" allowance: "A: N of target allowed/week at P%"', () => {
     const el = mount();
-    el.open({ id: '1', title: 'No soda', tracking: { type: 'decreasing', target: 2, value: 100, entries: [], allowancePeriod: 'week' } });
+    el.open({ id: '1', title: 'No soda', tracking: { type: 'decreasing', target: 2, value: 100, entries: [] } });
     expect(summary(el).textContent).toBe('A: 0 of 2 allowed/week at 100%');
-  });
-
-  it('decreasing, "4weeks" allowance: "A: N of target allowed/4 weeks at P%"', () => {
-    const el = mount();
-    el.open({ id: '1', title: 'No soda', tracking: { type: 'decreasing', target: 4, value: 100, entries: [], allowancePeriod: '4weeks' } });
-    expect(summary(el).textContent).toBe('A: 0 of 4 allowed/4 weeks at 100%');
   });
 
   it('weekly with specific reminderDays: renders "D: " plus the day strip plus "at P%", not a plain count', () => {
@@ -2694,14 +2579,40 @@ describe('goal-dialog — tracking summary (existing goals only)', () => {
     expect(summary(el).textContent).toBe('W: 2 of 15/month at 5%');
   });
 
-  it('refreshes live when the allowance-period chip is flipped on an existing Avoid goal (same regression as the target-stepper case above)', () => {
-    const el = mount();
-    el.open({ id: '1', title: 'No soda', tracking: { type: 'decreasing', target: 2, value: 100, entries: ['2026-08-10'], allowancePeriod: 'week' } });
-    expect(summary(el).textContent).toBe('A: 1 of 2 allowed/week at 100%');
+});
 
-    el.shadowRoot.querySelector('#action-change-type-btn').click();
-    el.shadowRoot.querySelector('#allowance-period-chip').click(); // week -> 4weeks
-    expect(summary(el).textContent).toBe('A: 1 of 2 allowed/4 weeks at 100%');
+describe('goal-dialog — edits reach the analytics tabs', () => {
+  // The dialog keeps its own copy of the record and the analytics pages
+  // render straight off it; the store round-trip does not come back while
+  // the dialog is open. Anything emitted upward has to land on that copy too.
+  const goal = () => ({ id: 'g1', title: 'Run', dueDate: '2026-11-01', tracking: { type: 'weekly', target: 3, entries: [] } });
+
+  it('a new deadline is what the analytics tab sees, not the one it opened with', () => {
+    const el = mount();
+    el.open(goal());
+    const input = el.shadowRoot.querySelector('#duedate-input');
+    input.value = '2026-12-24';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 1 } }));
+    expect(el.shadowRoot.querySelector('#analytics').goal.dueDate).toBe('2026-12-24');
+  });
+
+  it('clearing the deadline propagates too', () => {
+    const el = mount();
+    el.open(goal());
+    el.shadowRoot.querySelector('#duedate-clear').click();
+    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 1 } }));
+    expect(el.shadowRoot.querySelector('#analytics').goal.dueDate).toBeUndefined();
+  });
+
+  it('a renamed goal shows its new title on the analytics pages', () => {
+    const el = mount();
+    el.open(goal());
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = 'Run a marathon';
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 1 } }));
+    expect(el.shadowRoot.querySelector('#analytics').goal.title).toBe('Run a marathon');
   });
 });
 
@@ -2730,12 +2641,33 @@ describe('goal-dialog — analytics tabs', () => {
     expect(el._modal.tabCount).toBe(2);
   });
 
-  it('always opens on tab 0 (the edit form), regardless of type', () => {
+  it('a saved goal opens on Overview (tab 1), not the edit form', () => {
+    // Once a goal is set up there is little left to change in the form, and
+    // today's entry is logged on the row — so opening a goal is far more
+    // often "how am I doing" than "edit this".
     const el = mount();
     el.open({ id: '1', title: 'Run', tracking: { type: 'weekly', target: 3, value: 0, entries: [] } });
+    expect(el._modal.activeTab).toBe(1);
+    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#view-analytics').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#analytics').activePage).toBe(0);
+  });
+
+  it('a new goal still opens on the edit form — it has no analytics at all', () => {
+    const el = mount();
+    el.open(null);
     expect(el._modal.activeTab).toBe(0);
+    expect(el._modal.tabCount).toBe(0);
     expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#view-analytics').hidden).toBe(true);
+  });
+
+  it('does not put the caret in the title field when opening on Overview', () => {
+    // Focusing it would raise the on-screen keyboard over a page that exists
+    // to be read.
+    const el = mount();
+    el.open({ id: '1', title: 'Run', tracking: { type: 'weekly', target: 3, value: 0, entries: [] } });
+    expect(el.shadowRoot.activeElement).not.toBe(el.shadowRoot.querySelector('#input'));
   });
 
   it('a modal-tab-change to index 0 shows the edit form', () => {
@@ -2780,13 +2712,13 @@ describe('goal-dialog — analytics tabs', () => {
     expect(modal.close).toHaveBeenCalled();
   });
 
-  it('re-opening resets to tab 0 even if a prior session left it on an analytics tab', () => {
+  it('re-opening resets to Overview even if a prior session left it on another tab', () => {
     const el = mount();
     el.open({ id: '1', title: 'Run', tracking: { type: 'weekly', target: 3, value: 0, entries: [] } });
-    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 2 } }));
+    el._modal.dispatchEvent(new CustomEvent('modal-tab-change', { detail: { index: 3 } }));
     el.open({ id: '2', title: 'Read', tracking: { type: 'monthly', target: 2, value: 0, entries: [] } });
-    expect(el._modal.activeTab).toBe(0);
-    expect(el.shadowRoot.querySelector('#view-main').hidden).toBe(false);
+    expect(el._modal.activeTab).toBe(1);
+    expect(el.shadowRoot.querySelector('#analytics').activePage).toBe(0);
   });
 });
 

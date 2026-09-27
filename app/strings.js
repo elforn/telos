@@ -136,8 +136,7 @@ defineStrings({
   'goal-dialog.type-countdown':         'To date',
   'goal-dialog.type-summary-weekly':             '{target}×/week',
   'goal-dialog.type-summary-monthly':            '{target}×/month',
-  'goal-dialog.type-summary-decreasing-week':    'Avoid, {target} slip/wk allowed',
-  'goal-dialog.type-summary-decreasing-4weeks':  'Avoid, {target} slip/4wks allowed',
+  'goal-dialog.type-summary-decreasing':         'Avoid, {target} slip/wk allowed',
   'goal-dialog.type-summary-countdown':          'To date',
   'goal-dialog.change-type-menu':       'Change type',
   'goal-dialog.target-decrease':        'Decrease target',
@@ -145,8 +144,6 @@ defineStrings({
   'goal-dialog.target-label-weekly':    'Times per week',
   'goal-dialog.target-label-monthly':   'Times per month',
   'goal-dialog.target-label-decreasing': 'Slip-ups allowed',
-  'goal-dialog.allowance-period-week':   'per week',
-  'goal-dialog.allowance-period-4weeks': 'per 4 weeks',
   'goal-dialog.start-mode-yearstart':    'Year start',
   'goal-dialog.start-date-label':        'Start date',
   'goal-dialog.tracking-summary-prefix-percentage':  'P: ',
@@ -158,8 +155,7 @@ defineStrings({
   'goal-dialog.tracking-summary-weekly':             '{count} of {target}/week at {percent}%',
   'goal-dialog.tracking-summary-monthly':            '{count} of {target}/month at {percent}%',
   'goal-dialog.tracking-summary-days-suffix':        'at {percent}%',
-  'goal-dialog.tracking-summary-decreasing-week':    '{count} of {target} allowed/week at {percent}%',
-  'goal-dialog.tracking-summary-decreasing-4weeks':  '{count} of {target} allowed/4 weeks at {percent}%',
+  'goal-dialog.tracking-summary-decreasing':         '{count} of {target} allowed/week at {percent}%',
   'goal-dialog.tracking-summary-countdown':          '{days}d left at {percent}%',
   'goal-dialog.fixpct-date-label': 'Date',
   'goal-dialog.fixpct-value-label': 'Percentage on that date',
@@ -517,10 +513,13 @@ defineStrings({
   'goal-analytics.unit-month':         'month',
   'goal-analytics.unit-month-plural':  'months',
 
+  'goal-analytics.stat-deadline': 'Deadline',
   'goal-analytics.stat-slips':    'slips',
+  'goal-analytics.stat-slips-over': '{n} over allowance',
   'goal-analytics.stat-updates':  'updates',
   'goal-analytics.stat-entries':  'entries',
 
+  'goal-analytics.vs-week':    'vs week',
   'goal-analytics.vs-month':   'vs month',
   'goal-analytics.vs-quarter': 'vs quarter',
   'goal-analytics.not-enough-history': 'not enough history',
@@ -530,6 +529,8 @@ defineStrings({
   'goal-analytics.progress-chart-title': 'Completion vs. expected pace',
   'goal-analytics.legend-achieved':      'Achieved',
   'goal-analytics.legend-expected':      'Expected pace',
+  'goal-analytics.legend-allowed':       'Within allowance',
+  'goal-analytics.legend-over':          'Over allowance',
   'goal-analytics.last-n-periods':       'last {n} periods',
 
   'goal-analytics.pace-insufficient': 'Not enough recent momentum to project a finish date.',
@@ -542,7 +543,8 @@ defineStrings({
 
   'goal-analytics.score-contribute': '{label} contribute to',
   'goal-analytics.now':              'now',
-  'goal-analytics.older-periods-note': 'Older weeks will appear here',
+  'goal-analytics.older-periods-note-week':  'Older weeks will appear here',
+  'goal-analytics.older-periods-note-month': 'Older months will appear here',
 
   // Screen-reader descriptions for the chart graphics, which convey their
   // data purely visually (SVG wedges, sized dots, shaded cells).
@@ -550,9 +552,12 @@ defineStrings({
   'goal-analytics.a11y-progress-chart': 'Line chart of completion against expected pace',
   'goal-analytics.a11y-consistency': 'Bar chart of how each period went against target',
   'goal-analytics.a11y-histogram':      'Bar chart of entry counts per period',
+  'goal-analytics.a11y-histogram-slips': 'Bar chart of slips per period, split into within-allowance and over-allowance',
   'goal-analytics.a11y-calendar':       'Calendar heatmap of logged days over the past year',
   'goal-analytics.a11y-freqgrid':       'Grid of entry frequency by weekday and month',
+  'goal-analytics.a11y-freqgrid-slips': 'Grid of slip frequency by weekday and month, coloured by whether the slips were within or over allowance',
   'goal-analytics.a11y-score-grid':     'Grid of per-period results contributing to the score',
+  'goal-analytics.a11y-scheduled-days': 'Scheduled days: {days}',
 
   'goal-analytics.page-title-overview': 'Overview',
   'goal-analytics.consistency-title': 'Consistency',

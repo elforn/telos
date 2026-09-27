@@ -80,12 +80,33 @@ async function tapBar(page) {
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.up();
+  // A saved goal opens on its Overview tab, so step onto the edit form — what
+  // every test using this helper is actually exercising. Done here rather
+  // than per test because a JS .click() still reaches a hidden control:
+  // without it these specs would keep "passing" against an unrendered form,
+  // and only the layout-dependent assertions (scroll offsets, sizes) would
+  // ever notice.
+  //
+  // Waiting on `dialog.open` is not enough on its own — the creation dialog
+  // can still be open when the row is tapped, so a tab click issued then
+  // lands on that earlier, tabless state and is wiped by the reopen that
+  // follows. Waiting for the analytics view means the saved goal's own
+  // open() has definitely run.
   await page.waitForFunction(() => {
-    const d = document.querySelector('app-router')?.shadowRoot
-      ?.querySelector('home-page')?.shadowRoot
-      ?.querySelector('goal-dialog')?.shadowRoot
-      ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
-    return d?.open;
+    const sr = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('home-page')?.shadowRoot?.querySelector('goal-dialog')?.shadowRoot;
+    return sr?.querySelector('#view-analytics')?.hidden === false;
+  });
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot
+      .querySelector('goal-dialog').shadowRoot
+      .querySelector('#modal').shadowRoot.querySelectorAll('.tab-seg')[0].click();
+  });
+  await page.waitForFunction(() => {
+    const sr = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('home-page')?.shadowRoot?.querySelector('goal-dialog')?.shadowRoot;
+    return sr?.querySelector('#view-main')?.hidden === false;
   });
 }
 

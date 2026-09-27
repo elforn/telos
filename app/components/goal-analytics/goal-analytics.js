@@ -3,14 +3,24 @@ import { t } from '../../../_lib/core/strings.js';
 import { todayISO } from '../../utils/today-iso.js';
 import {
   isFrequency, isDecreasing, isCountdown, isoWeekKey, monthKey, PERIOD_WINDOW, weekDayStates, daysBetween,
+  WEEKDAYS,
 } from '../../utils/tracking.js';
 import {
   pagesFor, percentValueAt, dateListFor, rawLoggedDates, topStreaks, countByBucket,
-  completionSeries, periodPerformanceSeries, recoveryCurve,
-  expectedRampSeries,
+  completionSeries, periodPerformanceSeries,
+  denseSamples, completionSeriesAt, expectedRampSeriesAt, recoveryCurveAt,
   comparisonDelta, updateCount, projectPace,
+  slipStates, slipDatesByState, firstRecordIso,
 } from '../../utils/goal-analytics.js';
-import { septagonWedgePath, septagonWedgeState } from '../goal-item/goal-item.js';
+import { urgencyOf } from '../../utils/urgency.js';
+import { septagonWedgePath, septagonWedgeState, septagonWedgeCentroid } from '../goal-item/goal-item.js';
+
+// Knockout dot marking a forgiven slip, the same mark the row's septagon
+// uses. currentColor, not a fixed token: every surface it can land on — the
+// plain card, the tinted counted group, a failed week's solid red — sets its
+// own colour on the cell, so one value covers all three rather than three
+// hardcoded background guesses that would drift the moment a surface changes.
+const SEPTAGON_DOT_FILL = 'currentColor';
 
 // A generous safety cap, not the normal driver — real context group count is
 // computed per-goal in _renderScore from how much history actually exists.
@@ -43,6 +53,22 @@ function toIso(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.
 // must follow the locale.
 const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 function monthAbbr(monthIndex) { return t(`goal-dialog.month-${MONTH_KEYS[monthIndex]}`); }
+// "Dec 31, 2026" — the one full-date spelling this view uses, shared by the
+// countdown type card and the pace callout's own deadline mention so the two
+// can't drift. Month name follows the locale (see MONTH_KEYS above).
+function fullDate(iso) {
+  const d = localDate(iso);
+  return `${monthAbbr(d.getMonth())} ${d.getDate()}, ${d.getFullYear()}`;
+}
+// Year dropped when it matches the year being viewed — a goal lives inside
+// one year, so repeating it is noise in a narrow card. When it does differ,
+// the short 'YY form keeps the value on one line (a wrapped "Jan 25, 2027"
+// reads as two values); same abbreviation the charts' own axes use.
+function shortDate(iso, todayIso) {
+  const d = localDate(iso);
+  const label = `${monthAbbr(d.getMonth())} ${d.getDate()}`;
+  return iso.slice(0, 4) === todayIso.slice(0, 4) ? label : `${label} '${iso.slice(2, 4)}`;
+}
 
 function monthOnOrBefore(monthsAgo, todayIso) {
   const d = localDate(todayIso);
@@ -82,16 +108,34 @@ function resampleSumFromDates(dates, unit, count, todayIso) {
   return out;
 }
 
+// A failed period is marked the way the year view marks a failed goal: the
+// whole cell goes solid --color-danger and the glyph inside re-themes onto
+// --color-text-inverse, keeping its own filled/empty contrast rather than
+// turning the mark itself red. That's deliberately the same treatment (and
+// the same token pair) as goal-item's :host([data-failed]) row, so a week
+// that reads failed on the row reads failed here too — the Score page is the
+// per-week breakdown of exactly that state.
+const FILL_ON = { normal: 'var(--color-accent)', failed: 'var(--color-text-inverse)' };
+const FILL_OFF = {
+  normal: 'var(--color-border)',
+  failed: 'color-mix(in srgb, var(--color-text-inverse) 30%, transparent)',
+};
+function fillsFor(failed) {
+  const k = failed ? 'failed' : 'normal';
+  return { on: FILL_ON[k], off: FILL_OFF[k] };
+}
+
 // ── generic N-wedge pie (weekly's Score page: N = target) ────────────────
-function wedgeGlyph(states, size) {
+function wedgeGlyph(states, size, failed = false) {
   const n = states.length, r = size / 2, cx = r, cy = r;
+  const { on, off } = fillsFor(failed);
   let paths = '';
   for (let i = 0; i < n; i++) {
     const a0 = (-90 + i * 360 / n) * Math.PI / 180;
     const a1 = (-90 + (i + 1) * 360 / n) * Math.PI / 180;
     const x1 = (cx + r * Math.cos(a0)).toFixed(1), y1 = (cy + r * Math.sin(a0)).toFixed(1);
     const x2 = (cx + r * Math.cos(a1)).toFixed(1), y2 = (cy + r * Math.sin(a1)).toFixed(1);
-    const fill = states[i] === 'on' ? 'var(--color-accent)' : 'var(--color-border)';
+    const fill = states[i] === 'on' ? on : off;
     paths += `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2} Z" fill="${fill}" />`;
   }
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${paths}</svg>`;
@@ -101,19 +145,48 @@ function wedgeGlyph(states, size) {
 // exported pure helpers), simplified for this smaller secondary view: no
 // clock-line/today-boundary marker, no "within" knockout dot — just the
 // plain accent/border fill per wedge.
-function septagonGlyph(weekStates, size) {
-  const paths = weekStates.map((day, i) => {
+// The same four states the row's septagon draws, read through the shared
+// on/off pair above so a failed week re-themes with everything else: a clean
+// day is a solid wedge, a forgiven (within-allowance) slip the same wedge
+// plus the row's own knockout dot at its centre, an over-allowance slip is
+// drained to the cell's background (transparent — red inside a failed week,
+// which by definition is the only kind of week an over day can occur in),
+// and a future day is the neutral empty fill.
+function septagonGlyph(weekStates, size, failed = false) {
+  const { on, off } = fillsFor(failed);
+  const marks = weekStates.map((day, i) => {
     const state = septagonWedgeState(day);
-    const fill = (state === 'clean' || state === 'within') ? 'var(--color-accent)' : 'var(--color-border)';
-    return `<path d="${septagonWedgePath(i)}" fill="${fill}" />`;
+    const fill = state === 'clean' || state === 'within' ? on
+      : state === 'over' ? 'transparent'
+      : off;
+    const wedge = `<path d="${septagonWedgePath(i)}" fill="${fill}" />`;
+    if (state !== 'within') return wedge;
+    const [cx, cy] = septagonWedgeCentroid(i);
+    return `${wedge}<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6" fill="${SEPTAGON_DOT_FILL}" />`;
   }).join('');
-  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100">${paths}</svg>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100">${marks}</svg>`;
 }
 
-function squareFillGlyph(frac, size) {
+// Monthly's Score cell. A conic sweep around the box, not a bottom-up
+// linear fill — deliberately the same mechanic (and the same soft-square
+// 5px radius) as the goal-item row's own monthly dot, .freq-dot.partial, so
+// a month reads identically in both places. Monthly can't use weekly's
+// discrete wedges: target runs to 31, and 31 hairline wedges at 22px is
+// noise, so the sweep is the continuous stand-in for the same idea.
+function squareSweepGlyph(frac, size, failed = false) {
   const pct = Math.round(Math.min(Math.max(frac, 0), 1) * 100);
-  return `<div style="width:${size}px;height:${size}px;border-radius:5px;background:linear-gradient(to top, var(--color-accent) 0 ${pct}%, var(--color-border) ${pct}% 100%);flex-shrink:0;"></div>`;
+  const { on, off } = fillsFor(failed);
+  return `<div style="width:${size}px;height:${size}px;border-radius:5px;background:conic-gradient(${on} 0 ${pct}%, ${off} ${pct}% 100%);flex-shrink:0;"></div>`;
 }
+
+// Avoid's forgiven slips, in the two charts that count slips as events (the
+// timebox histogram and the weekday grid). Deliberately NOT the year accent:
+// that colour means "good" everywhere else in the app, and a slip inside the
+// allowance is not good — it is a slip that happened to cost nothing. A
+// muted red keeps it in the same family as the fails it sits next to, one
+// step down in weight. Mixed toward the card rather than a fixed pale red so
+// it stays legible in both themes.
+const SLIP_ALLOWED_FILL = 'color-mix(in srgb, var(--color-danger) 38%, var(--color-surface-raised))';
 
 function naturalUnitOf(goal) { return goal?.tracking?.type === 'monthly' ? 'month' : 'week'; }
 function naturalUnitIsMonth(goal) { return naturalUnitOf(goal) === 'month'; }
@@ -140,7 +213,17 @@ class GoalAnalytics extends AppElement {
         /* One line: heading at the start, goal name at the end. The heading
            never shrinks, so a long goal name ellipsises rather than squeezing
            the label that identifies the page. */
-        .page-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+        /* Pinned to the top of modal-dialog's own scrolling .body: which page
+           you are on and which goal it belongs to are the two things that
+           must never scroll out of reach, since the charts below repeat the
+           same shapes from page to page. Padded and given the dialog's own
+           surface so content passing underneath is covered. Block padding
+           only — an earlier version also bled the cover outward with a
+           negative inline margin, which made this element wider than the
+           dialog body and gave every analytics page its own horizontal
+           scrollbar. The cards below span exactly the content box anyway, so
+           there is nothing out there to cover. */
+        .page-head { position: sticky; inset-block-start: 0; z-index: 2; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); background: var(--color-surface); padding-block: var(--space-2); margin-block-start: calc(-1 * var(--space-2)); }
         .page-goal { margin: 0; min-inline-size: 0; flex: 1; text-align: end; font-size: var(--font-size-micro); color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .page-title { margin: 0; flex-shrink: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
 
@@ -188,17 +271,37 @@ class GoalAnalytics extends AppElement {
         .stat-value { font-size: var(--font-size-subheading); font-weight: var(--font-weight-bold); color: var(--color-text-primary); display: flex; align-items: baseline; gap: 3px; }
         .stat-value .unit { font-size: var(--font-size-micro); font-weight: var(--font-weight-medium); color: var(--color-text-secondary); }
         .stat.delta-up .stat-value { color: var(--color-success); }
+        .stat.delta-down .stat-value { color: var(--color-danger); }
+        .stat-value.overdue { color: var(--color-danger); }
         .stat-value.muted { color: var(--color-text-muted); font-weight: var(--font-weight-medium); }
         .stat-value.big-num { font-size: var(--font-size-title); }
         .stat-sub { font-size: 10px; color: var(--color-text-muted); margin-block-start: 2px; }
+        /* The slips breakdown sits opposite the type stack in the same row,
+           so it matches that stack's own second line rather than the smaller
+           footnote size the comparison cards use. */
+        .stat-sub.stat-sub-lg { font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); color: var(--color-text-secondary); margin-block-start: 3px; }
         .type-stack { display: flex; flex-direction: column; gap: 3px; }
         .type-stack .type-primary { font-size: var(--font-size-subheading); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
         .type-stack .type-secondary { font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); color: var(--color-text-secondary); }
+        /* Scheduled-days strip (weekly goals on specific days). Fixed slot
+           width so the 7 letters keep their Mon-Sun positions whatever the
+           locale's day initials are — position is what tells Tue from Thu.
+           Colour-only distinction is deliberate and matches day-strip.js;
+           the strip carries its own aria-label naming the scheduled days, so
+           the letters themselves stay purely visual. */
+        .sched-strip { display: inline-flex; gap: 2px; margin-block-start: 2px; }
+        .sched-slot { min-inline-size: 12px; text-align: center; font-size: var(--font-size-micro); font-weight: var(--font-weight-semibold); color: var(--color-border); }
+        .sched-slot.on { color: var(--color-accent); }
         .section-label { font-size: var(--font-size-micro); font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin: 0 0 var(--space-2); }
         .legend { display: flex; gap: var(--space-4); font-size: var(--font-size-micro); color: var(--color-text-secondary); margin-block-start: var(--space-2); }
         .legend span { display: inline-flex; align-items: center; gap: 5px; }
         .legend .swatch-line { inline-size: 12px; block-size: 2px; border-radius: 2px; background: var(--color-accent); display: inline-block; }
         .legend .swatch-line.dashed { background: none; border-top: 1.5px dashed var(--color-text-secondary); }
+        /* Avoid's allowed/over-allowance key, shared by the count histogram
+           and the weekday grid — a filled block rather than the line swatch
+           above, matching the solid marks those two charts actually draw. */
+        .legend .swatch-dot { inline-size: 9px; block-size: 9px; border-radius: 2px; background: ${SLIP_ALLOWED_FILL}; display: inline-block; }
+        .legend .swatch-dot.danger { background: var(--color-danger); }
         /* Deliberately never --color-accent-light/-dark/-subtle anywhere in
            this file: Telos's own blue override (index.html) only sets bare
            :root, and tokens.css's own [data-theme="dark"] block redefines
@@ -270,9 +373,32 @@ class GoalAnalytics extends AppElement {
         .calc-group { display: flex; flex-direction: column; gap: 9px; padding: 8px 9px; flex-shrink: 0; }
         .calc-group.counted { background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-raised)); border-radius: var(--radius-md); margin-inline-start: var(--space-2); padding-inline-start: var(--space-3); padding-inline-end: 10px; }
         .calc-group-label { font-size: 8px; color: var(--color-text-muted); text-align: center; margin-block-end: 2px; }
-        .calc-cell { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
+        /* The cell's own text colour is what the septagon's knockout dot
+           punches through to
+           (SEPTAGON_DOT_FILL is currentColor), so every cell carries its own
+           background as its text colour — plain card here, the tinted counted
+           group below, solid danger on a failed week. */
+        .calc-cell { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); color: var(--color-surface-raised); }
+        .calc-group.counted .calc-cell { color: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-raised)); }
         .calc-shape-wrap { position: relative; display: flex; align-items: center; justify-content: center; }
         .calc-cell.current .calc-shape-wrap { background: color-mix(in srgb, var(--color-text-primary) 12%, transparent); border-radius: var(--radius-sm); padding: 3px; margin: -3px; }
+        /* A failed period gets the year view's own failed-row treatment — the
+           whole cell solid --color-danger, the glyph re-themed onto
+           --color-text-inverse (see fillsFor) rather than the mark itself
+           turning red. Same geometry as the .current chip above so the two
+           line up in the column. */
+        /* Both selectors, deliberately: .calc-group.counted .calc-cell above
+           is more specific than a bare .calc-cell.failed, so the counted
+           group would otherwise keep painting its own tint as the knockout
+           colour inside a failed cell — a pale dot on a white wedge, i.e.
+           invisible. */
+        .calc-cell.failed,
+        .calc-group.counted .calc-cell.failed { color: var(--color-danger); }
+        .calc-cell.failed .calc-shape-wrap { background: var(--color-danger); border-radius: var(--radius-sm); padding: 3px; margin: -3px; }
+        /* Reserved space for a period the goal did not exist for yet:
+           invisible, but still occupying its slot so the counted group keeps
+           the full height of everything it will eventually count. */
+        .calc-cell.placeholder { visibility: hidden; }
         .calc-badge { position: absolute; top: -5px; right: -7px; background: var(--color-accent); color: var(--color-text-on-accent); font-size: 7px; font-weight: var(--font-weight-bold); padding: 1px 3px; border-radius: var(--radius-full); line-height: 1.3; }
         .calc-label-slot { block-size: 9px; font-size: 7px; font-weight: var(--font-weight-semibold); color: var(--color-accent); white-space: nowrap; }
 
@@ -296,6 +422,12 @@ class GoalAnalytics extends AppElement {
         .bar-val { font-size: 8px; color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); white-space: nowrap; }
         .bar-track { flex: 1; inline-size: 100%; display: flex; align-items: flex-end; min-height: 0; }
         .bar { inline-size: 100%; background: var(--color-accent); border-radius: 3px 3px 0 0; min-height: 3px; }
+        /* Avoid's split bar: one rounded, clipped column holding the
+           over-allowance segment above the forgiven one, so the pair reads as
+           a single bar with a red cap rather than two bars stacked. */
+        .bar-stack { inline-size: 100%; display: flex; flex-direction: column; border-radius: 3px 3px 0 0; overflow: hidden; min-height: 3px; }
+        .bar-seg.within { background: ${SLIP_ALLOWED_FILL}; }
+        .bar-seg.over { background: var(--color-danger); }
         .histogram-axis { display: flex; gap: var(--space-1); inline-size: max-content; margin-block-start: var(--space-1); margin-inline-start: auto; min-height: 11px; }
         .ax { flex: 0 0 18px; font-size: 8px; color: var(--color-text-muted); text-align: center; white-space: nowrap; overflow: visible; }
         .heatmap-outer { display: flex; gap: var(--space-2); align-items: flex-start; }
@@ -306,6 +438,13 @@ class GoalAnalytics extends AppElement {
         .heatmap { display: grid; grid-auto-flow: column; grid-auto-columns: 11px; grid-template-rows: repeat(7, 11px); gap: 3px; }
         .heatmap .cell { inline-size: 11px; block-size: 11px; border-radius: 3px; background: var(--color-border); }
         .heatmap .cell.on { background: var(--color-accent); }
+        /* Avoid only: a day shaded because the slip on it was forgiven, not
+           because it was clean. Without this the calendar showed allowed
+           slips as ordinary on-track days and only over-allowance ones
+           registered at all (as gaps). The mark is the septagon's own
+           knockout dot, punched through to the card behind it. */
+        .heatmap .cell.on.within { display: flex; align-items: center; justify-content: center; }
+        .heatmap .cell.on.within::after { content: ''; inline-size: 5px; block-size: 5px; border-radius: 50%; background: var(--color-surface-raised); }
         .heatmap-daylabels { flex-shrink: 0; display: flex; flex-direction: column; }
         .heatmap-daylabels .spacer { block-size: 12px; margin-block-end: 3px; }
         .daylabel-grid { display: grid; grid-template-rows: repeat(7, 11px); gap: 3px; }
@@ -516,42 +655,125 @@ class GoalAnalytics extends AppElement {
   }
 
   // ── Overview ─────────────────────────────────────────────────────────────
+  // Four cards, each built by its own method below. This one owns only the
+  // hero number and the page's assembly order.
   _renderOverview(goal) {
     const todayIso = todayISO();
     const current = percentValueAt(goal, todayIso) ?? 0;
     const recent = completionSeries(goal, 'month', 8, todayIso).map(p => p.value);
     const spark = this._sparkline(recent);
 
-    const typeLabel = t(`goal-dialog.type-${goal.tracking.type}`);
-    // Only weekly/monthly/decreasing/countdown have a target/allowance worth
+    return `<div class="page">
+      ${this._pageHead(goal, 'goal-analytics.page-title-overview')}
+      <div class="hero-number"><div class="big tabular">${current}<span class="pct-unit">%</span></div>
+        ${spark ? `<div class="spark-wrap">${spark}<span class="spark-label">${t('goal-analytics.last-n-periods', { n: recent.length })}</span></div>` : ''}
+      </div>
+      <div class="stat-row centered">${this._typeCard(goal, todayIso)}${this._deadlineCard(goal, todayIso)}</div>
+      <div><p class="section-label">${t('goal-analytics.change-over-time')}</p><div class="stat-row">${this._comparisonRow(goal, todayIso)}</div></div>
+      ${this._progressCard(goal, todayIso)}
+      ${this._renderPaceCallout(projectPace(goal, todayIso))}
+      ${this._consistencyCard(goal, todayIso)}
+    </div>`;
+  }
+
+  // What kind of goal this is, and how much has been logged — the two stats
+  // sitting side by side under the hero number.
+  _typeCard(goal, todayIso) {
+    // Every read here goes through `tr` rather than goal.tracking directly: a
+    // goal whose tracking was never migrated (or a caller passing a bare
+    // {id,title}) must render a quiet, empty Overview rather than throwing
+    // two shadow roots deep and blanking the whole dialog.
+    const tr = goal?.tracking ?? {};
+    const typeLabel = tr.type ? t(`goal-dialog.type-${tr.type}`) : null;
+    // Only weekly/monthly/decreasing have a target/allowance worth
     // summarising on a second line — percentage has no per-period target at
     // all, so it stays a single-line stack. Mirrors goal-dialog.js's own
-    // type-summary key construction exactly (including decreasing's
-    // allowance-period suffix) so the two never drift apart.
-    const summaryKey = goal.tracking.type === 'percentage' ? null
-      : `goal-dialog.type-summary-${goal.tracking.type}${goal.tracking.type === 'decreasing' ? '-' + (goal.tracking.allowancePeriod ?? 'week') : ''}`;
-    const summary = summaryKey ? t(summaryKey, { target: goal.tracking.target }) : null;
-    const typeStack = summary
-      ? `<div class="type-stack"><span class="type-primary">${typeLabel}</span><span class="type-secondary">${summary}</span></div>`
-      : `<div class="type-stack"><span class="type-primary">${typeLabel}</span></div>`;
+    // type-summary key construction exactly so the two never drift apart.
+    // Countdown is the one type whose summary isn't a target — its own
+    // type-summary string is the words "To date" again, which just repeats
+    // the label above it. The date it counts down *to* is the thing worth
+    // saying, and it lives on the goal's dueDate rather than in tracking.
+    const summaryKey = !tr.type || tr.type === 'percentage' || tr.type === 'countdown' ? null
+      : `goal-dialog.type-summary-${tr.type}`;
+    const summary = tr.type === 'countdown'
+      ? (goal.dueDate ? fullDate(goal.dueDate) : null) // no deadline set yet — nothing to count down to
+      : summaryKey ? t(summaryKey, { target: tr.target }) : null;
+    // A weekly goal on a specific-days schedule says which days right here,
+    // under its own "N×/week" line — that schedule *is* the goal ("Mon/Wed/
+    // Fri", not just "3 times somewhere in the week"), and it was otherwise
+    // visible nowhere outside the edit form's own tracking summary. Times-
+    // per-week ('any') goals have no days to name and keep the two-line
+    // stack unchanged.
+    const scheduledDays = tr.type === 'weekly' && Array.isArray(tr.reminderDays) && tr.reminderDays.length > 0
+      ? tr.reminderDays : null;
+    const typeStack = typeLabel
+      ? `<div class="type-stack"><span class="type-primary">${typeLabel}</span>${
+          summary ? `<span class="type-secondary">${summary}</span>` : ''}${
+          scheduledDays ? this._scheduleStrip(scheduledDays) : ''}</div>`
+      : null;
 
     const count = isCountdown(goal) ? null : updateCount(goal, todayIso, HISTORY_DAYS_BACK);
-    const countLabel = isDecreasing(goal) ? 'goal-analytics.stat-slips' : goal.tracking.type === 'percentage' ? 'goal-analytics.stat-updates' : 'goal-analytics.stat-entries';
+    const countLabel = isDecreasing(goal) ? 'goal-analytics.stat-slips' : tr.type === 'percentage' ? 'goal-analytics.stat-updates' : 'goal-analytics.stat-entries';
+    // The Avoid count is every slip logged, forgiven ones included — that's
+    // what "slips" means, and hiding the allowed ones would make the number
+    // disagree with the histogram and the calendar. The split is what's
+    // actually interesting, so how many of them actually broke the allowance
+    // reads underneath it.
+    const overCount = isDecreasing(goal)
+      ? [...slipStates(goal, todayIso, HISTORY_DAYS_BACK).values()].filter(st => st === 'over').length : 0;
+    const countSub = isDecreasing(goal) && count > 0
+      ? `<div class="stat-sub stat-sub-lg">${t('goal-analytics.stat-slips-over', { n: overCount })}</div>` : '';
 
-    // Month and quarter only. A goal lives inside a single year, so "vs year"
-    // always reached back to before the goal existed and permanently read
-    // "not enough history" — a third of the row spent saying nothing. If
-    // goals ever span years, it can come back with something behind it.
-    const compareRow = ['month', 'quarter'].map(unit => {
+    return `${typeStack ? `<div class="stat">${typeStack}</div>` : ''}
+      ${count !== null ? `<div class="stat"><div class="stat-label">${t(countLabel)}</div><div class="stat-value big-num tabular">${count}</div>${countSub}</div>` : ''}`;
+  }
+
+  // A goal with a deadline says so here rather than only on its row — this
+  // page is where you come to ask "how am I doing", and against what date is
+  // half of that answer. Countdown is excluded: its whole percentage is
+  // derived from this date, which its own type card already names, so a
+  // second card would say the same thing twice. The relative phrase reuses
+  // the app's own urgency vocabulary (t('urgency.*'), the same wording the
+  // rows' aria-labels use) rather than inventing a second way to say "due
+  // this week". Only overdue takes a colour, matching the rule everywhere
+  // else that overdue is the one loud state — and the phrase underneath
+  // carries the same meaning in text, so colour is never the only cue.
+  _deadlineCard(goal, todayIso) {
+    if (!goal?.dueDate || isCountdown(goal)) return '';
+    const active = (percentValueAt(goal, todayIso) ?? 0) < 100 && !goal.archived;
+    const bucket = urgencyOf(goal.dueDate, active);
+    return `<div class="stat">
+      <div class="stat-label">${t('goal-analytics.stat-deadline')}</div>
+      <div class="stat-value${bucket === 'overdue' ? ' overdue' : ''}">${shortDate(goal.dueDate, todayIso)}</div>
+      ${bucket === 'none' ? '' : `<div class="stat-sub">${t(`urgency.${bucket}`)}</div>`}
+    </div>`;
+  }
+
+  // Week, month and quarter. No "vs year": a goal lives inside a single year,
+  // so that one always reached back to before the goal existed and
+  // permanently read "not enough history" — a third of the row spent saying
+  // nothing. If goals ever span years, it can come back.
+  _comparisonRow(goal, todayIso) {
+    return ['week', 'month', 'quarter'].map(unit => {
       const delta = comparisonDelta(goal, unit, todayIso);
       const label = t(`goal-analytics.vs-${unit}`);
       if (delta === null) return `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value muted tabular">—</div><div class="stat-sub">${t('goal-analytics.not-enough-history')}</div></div>`;
-      return `<div class="stat${delta >= 0 ? ' delta-up' : ''}"><div class="stat-label">${label}</div><div class="stat-value tabular">${delta}<span class="unit">${t('goal-analytics.pts')}</span></div></div>`;
+      // Zero is neither gain nor loss and stays the default text colour —
+      // only a real move in either direction gets coloured.
+      const dir = delta > 0 ? ' delta-up' : delta < 0 ? ' delta-down' : '';
+      return `<div class="stat${dir}"><div class="stat-label">${label}</div><div class="stat-value tabular">${delta}<span class="unit">${t('goal-analytics.pts')}</span></div></div>`;
     }).join('');
+  }
 
+  // Achieved score over time against the pace that was available.
+  _progressCard(goal, todayIso) {
     const tf = this._tfProgress;
-    const points = completionSeries(goal, tf, 12, todayIso);
-    const achieved = points.map(p => p.value);
+    // Sampled by day, not by period — see denseSamples for why (a percentage
+    // goal's shorter-lived values fell through the gaps between period
+    // boundaries entirely). Both lines read the same sample dates, so they
+    // stay aligned on the x-axis.
+    const samples = denseSamples(tf, 12, todayIso);
+    const achieved = completionSeriesAt(goal, samples).map(p => p.value);
     // null means no dashed line at all. Percentage anchors its ramp on the
     // first recorded value and draws nothing before one exists. Countdown
     // draws nothing ever: its value is driven purely by the calendar, so an
@@ -559,45 +781,57 @@ class GoalAnalytics extends AppElement {
     // lines plotted exactly on top of each other. Weekly/monthly/Avoid use
     // the recovery curve; for Avoid that is a flat 100, kept deliberately as
     // a reference showing that a clean run is the whole target.
-    const expected = goal.tracking.type === 'percentage' ? expectedRampSeries(goal, tf, 12, todayIso)
-      : goal.tracking.type === 'countdown' ? null
-      : recoveryCurve(goal, tf, 12, todayIso);
+    const type = goal?.tracking?.type;
+    const expected = type === 'percentage' ? expectedRampSeriesAt(goal, samples)
+      : type === 'countdown' ? null
+      : recoveryCurveAt(goal, samples, todayIso);
     // Three labels — oldest, midpoint, newest — matching the Consistency
     // chart's own axis so the two read the same way.
-    const progressAxis = [11, 5, 0].map(i => periodLabel(tf, i, todayIso));
+    const axis = [11, 5, 0].map(i => periodLabel(tf, i, todayIso));
 
+    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.progress-chart-title')}</h3>${this._timeframeSelect('tf-progress', tf)}</div>
+      ${this._lineChart(achieved, expected, axis)}
+      <div class="legend"><span><i class="swatch-line"></i>${t('goal-analytics.legend-achieved')}</span>${expected ? `<span><i class="swatch-line dashed"></i>${t('goal-analytics.legend-expected')}</span>` : ''}</div>
+    </div>`;
+  }
+
+  // How each individual period went against its own target. Countdown ("To
+  // date") has no per-period target and no entries to measure a period
+  // against — every bar came back 0%, a chart saying nothing — so it gets no
+  // card at all. Its progress is the calendar running down, which the hero
+  // number and the Progress chart already show in full.
+  _consistencyCard(goal, todayIso) {
+    if (isCountdown(goal)) return '';
     // A monthly goal has no month inside a week, so that timeframe is dropped
     // rather than shown returning a repeated or empty figure.
-    const perfExclude = naturalUnitIsMonth(goal) ? ['week'] : [];
-    const perfTf = perfExclude.includes(this._tfPerf) ? 'month' : this._tfPerf;
-    const perfCount = { week: 12, month: 12, quarter: 8, year: 5 }[perfTf];
-    const perfPoints = periodPerformanceSeries(goal, perfTf, perfCount, todayIso)
-      .map((p, i) => ({ ...p, label: periodLabel(perfTf, perfCount - 1 - i, todayIso) }));
-    const perfHtml = this._perfChart(perfPoints);
+    const exclude = naturalUnitIsMonth(goal) ? ['week'] : [];
+    const tf = exclude.includes(this._tfPerf) ? 'month' : this._tfPerf;
+    const count = { week: 12, month: 12, quarter: 8, year: 5 }[tf];
+    const points = periodPerformanceSeries(goal, tf, count, todayIso)
+      .map((p, i) => ({ ...p, label: periodLabel(tf, count - 1 - i, todayIso) }));
+    const chart = this._perfChart(points);
+    if (!chart) return '';
 
-    const pace = projectPace(goal, todayIso);
-    const paceHtml = this._renderPaceCallout(pace);
-
-    return `<div class="page">
-      ${this._pageHead(goal, 'goal-analytics.page-title-overview')}
-      <div class="hero-number"><div class="big tabular">${current}<span class="pct-unit">%</span></div>
-        ${spark ? `<div class="spark-wrap">${spark}<span class="spark-label">${t('goal-analytics.last-n-periods', { n: recent.length })}</span></div>` : ''}
-      </div>
-      <div class="stat-row centered">
-        ${typeStack ? `<div class="stat">${typeStack}</div>` : ''}
-        ${count !== null ? `<div class="stat"><div class="stat-label">${t(countLabel)}</div><div class="stat-value big-num tabular">${count}</div></div>` : ''}
-      </div>
-      <div><p class="section-label">${t('goal-analytics.change-over-time')}</p><div class="stat-row">${compareRow}</div></div>
-      <div class="card"><div class="card-head"><h3>${t('goal-analytics.progress-chart-title')}</h3>${this._timeframeSelect('tf-progress', tf)}</div>
-        ${this._lineChart(achieved, expected, progressAxis)}
-        <div class="legend"><span><i class="swatch-line"></i>${t('goal-analytics.legend-achieved')}</span>${expected ? `<span><i class="swatch-line dashed"></i>${t('goal-analytics.legend-expected')}</span>` : ''}</div>
-      </div>
-      ${paceHtml}
-      ${perfHtml ? `<div class="card"><div class="card-head"><h3>${t('goal-analytics.consistency-title')}</h3>${this._timeframeSelect('tf-perf', perfTf, perfExclude)}</div>
-        ${perfHtml}
-        ${perfTf === naturalUnitOf(goal) ? '' : `<p class="footnote">${t('goal-analytics.consistency-note-avg')}</p>`}
-      </div>` : ''}
+    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.consistency-title')}</h3>${this._timeframeSelect('tf-perf', tf, exclude)}</div>
+      ${chart}
+      ${tf === naturalUnitOf(goal) ? '' : `<p class="footnote">${t('goal-analytics.consistency-note-avg')}</p>`}
     </div>`;
+  }
+
+  // Fixed 7-slot Mon-Sun strip, scheduled days lit — the same "position
+  // disambiguates the day, one letter per slot" idiom as day-strip.js (the
+  // edit form's and Upcoming dialog's shared widget). Not that component
+  // itself: its five states are all *live* progress states (missed/logged/
+  // pending/...) and carry a colour assumption about sitting on
+  // --color-surface, where this says only which days the goal is set for —
+  // a static property of the goal, not this week's outcome, which the
+  // Score/Activity pages already cover in full.
+  _scheduleStrip(days) {
+    const named = WEEKDAYS.filter(d => days.includes(d)).map(d => t(`goal-dialog.dow-${d}`)).join(', ');
+    const slots = WEEKDAYS
+      .map(d => `<span class="sched-slot${days.includes(d) ? ' on' : ''}">${t(`goal-dialog.reminder-day-${d}`)}</span>`)
+      .join('');
+    return `<span class="sched-strip" role="img" aria-label="${esc(t('goal-analytics.a11y-scheduled-days', { days: named }))}">${slots}</span>`;
   }
 
   _renderPaceCallout(pace) {
@@ -607,7 +841,7 @@ class GoalAnalytics extends AppElement {
     if (pace.insufficientMomentum) text = t('goal-analytics.pace-insufficient');
     else if (pace.deadlineIso) {
       const label = monthAbbr(localDate(pace.projectedIso).getMonth()) + ' ' + localDate(pace.projectedIso).getFullYear();
-      const deadlineLabel = `${monthAbbr(localDate(pace.deadlineIso).getMonth())} ${localDate(pace.deadlineIso).getDate()}, ${localDate(pace.deadlineIso).getFullYear()}`;
+      const deadlineLabel = fullDate(pace.deadlineIso);
       if (Math.abs(pace.diffMonths) < 1) text = t('goal-analytics.pace-on-track', { deadline: deadlineLabel });
       else if (pace.diffMonths > 0) text = t('goal-analytics.pace-behind', { monthsLabel: monthsLabel(pace.diffMonths), projected: label, deadline: deadlineLabel });
       else text = t('goal-analytics.pace-ahead', { monthsLabel: monthsLabel(Math.abs(pace.diffMonths)), projected: label });
@@ -621,8 +855,7 @@ class GoalAnalytics extends AppElement {
   // ── Score ────────────────────────────────────────────────────────────────
   _renderScore(goal) {
     const todayIso = todayISO();
-    const type = goal.tracking.type;
-    const window = PERIOD_WINDOW[type];
+    const window = PERIOD_WINDOW[goal.tracking.type];
     const unit = unitFor(goal);
 
     // Context groups scale with how much real history actually exists — a
@@ -634,54 +867,30 @@ class GoalAnalytics extends AppElement {
     // goal that has never logged a single real entry.
     const logged = rawLoggedDates(goal, todayIso, HISTORY_DAYS_BACK);
     const extentDays = logged.length === 0 ? 0 : daysBetween(logged.reduce((a, b) => (a < b ? a : b)), todayIso);
-    const periodDays = unit === 'month' ? 30.44 : 7;
-    const extentPeriods = Math.floor(extentDays / periodDays);
+    // +1 because extentDays measures the gap between the first record and
+    // today, so a goal whose history spans N period-lengths actually touches
+    // N+1 periods — the one it started in included. Without it the oldest
+    // period of real history fell outside the grid.
+    const extentPeriods = Math.floor(extentDays / (unit === 'month' ? 30.44 : 7)) + 1;
     const availableContextPeriods = Math.max(0, extentPeriods - window);
-    const contextGroups = Math.min(SCORE_CONTEXT_GROUPS_MAX, Math.floor(availableContextPeriods / window));
+    // Rounded up, not down: flooring meant only *whole* extra groups were
+    // drawn, so up to window-1 periods of real history were silently absent
+    // — a goal with 12 weeks behind it showed 6. That made this page
+    // unusable as the reference for what a goal has actually done, which is
+    // exactly what it is for. A partial group fills its unused slots with
+    // the same reserved blanks the counted group already uses.
+    const contextGroups = Math.min(SCORE_CONTEXT_GROUPS_MAX, Math.ceil(availableContextPeriods / window));
     const totalGroups = contextGroups + 1;
     const current = percentValueAt(goal, todayIso) ?? 0;
     const label = `${window} ${unitWord(unit, window)}`;
 
     let groupsHtml = '';
     for (let g = 0; g < totalGroups; g++) {
-      const isCountedGroup = g === totalGroups - 1;
-      const groupTopPeriodsAgo = (totalGroups - 1 - g) * window;
-      const labelDate = unit === 'month' ? monthOnOrBefore(groupTopPeriodsAgo, todayIso) : mondayOfWeek(groupTopPeriodsAgo, todayIso);
-      const groupLabel = `<div class="calc-group-label">${monthAbbr(labelDate.getMonth())}</div>`;
-
-      let cellsHtml = '';
-      for (let rIdx = 0; rIdx < window; rIdx++) {
-        const periodsAgo = groupTopPeriodsAgo + rIdx;
-        const isCurrent = isCountedGroup && rIdx === 0;
-        const weight = isCountedGroup ? (window - rIdx) / window : 0;
-        const opacity = isCountedGroup ? (0.55 + weight * 0.45) : 1;
-        let shape, badge = '';
-
-        if (isDecreasing(goal)) {
-          const weekStates = weekDayStates(goal, todayIso, periodsAgo);
-          shape = septagonGlyph(weekStates, 26);
-        } else {
-          const periodIso = toIso(unit === 'month' ? monthOnOrBefore(periodsAgo, todayIso) : mondayOfWeek(periodsAgo, todayIso));
-          const keyFn = unit === 'month' ? monthKey : isoWeekKey;
-          const key = keyFn(periodIso);
-          const count = (goal.tracking.entries ?? []).filter(e => keyFn(e) === key).length;
-          const target = goal.tracking.target || 1;
-          if (type === 'weekly') {
-            const filled = Math.min(count, target);
-            const states = Array.from({ length: target }, (_, s) => s < filled ? 'on' : 'off');
-            shape = wedgeGlyph(states, 22);
-          } else {
-            shape = squareFillGlyph(count / target, 22);
-          }
-          if (count > target) badge = `<span class="calc-badge">+${count - target}</span>`;
-        }
-
-        cellsHtml += `<div class="calc-cell${isCurrent ? ' current' : ''}" style="opacity:${opacity.toFixed(2)}">
-          <div class="calc-shape-wrap">${shape}${badge}</div>
-          <div class="calc-label-slot">${isCurrent ? t('goal-analytics.now') : ''}</div>
-        </div>`;
-      }
-      groupsHtml += `<div class="calc-group${isCountedGroup ? ' counted' : ''}">${groupLabel}${cellsHtml}</div>`;
+      groupsHtml += this._scoreGroup(goal, {
+        isCountedGroup: g === totalGroups - 1,
+        topPeriodsAgo: (totalGroups - 1 - g) * window,
+        window, unit, todayIso,
+      });
     }
 
     // No real context groups to show (a new-ish goal, history not yet
@@ -691,7 +900,7 @@ class GoalAnalytics extends AppElement {
     // note fills the space where older groups will eventually appear,
     // explaining the gap instead of just leaving it silently blank.
     const olderNote = contextGroups === 0
-      ? `<p class="calc-older-note">${t('goal-analytics.older-periods-note')}</p>` : '';
+      ? `<p class="calc-older-note">${t(`goal-analytics.older-periods-note-${unit}`)}</p>` : '';
 
     return `<div class="page">
       ${this._pageHead(goal, 'goal-analytics.page-title-score')}
@@ -700,6 +909,100 @@ class GoalAnalytics extends AppElement {
         <div class="calc-scroll-outer" id="calc-scroll" role="img" aria-label="${t('goal-analytics.a11y-score-grid')}">${olderNote}<div class="calc-grid">${groupsHtml}</div></div>
       </div>
     </div>`;
+  }
+
+  // One column of the score grid: `window` periods, newest at the top. The
+  // counted group is the one the score actually reads; the rest are context.
+  _scoreGroup(goal, { isCountedGroup, topPeriodsAgo, window, unit, todayIso }) {
+    const labelDate = unit === 'month' ? monthOnOrBefore(topPeriodsAgo, todayIso) : mondayOfWeek(topPeriodsAgo, todayIso);
+
+    let cellsHtml = '', realCells = 0;
+    for (let rIdx = 0; rIdx < window; rIdx++) {
+      // Recency weighting is visible as opacity, strongest at the top where
+      // "now" is — the same 1..window ramp weightedAverage itself applies.
+      const weight = isCountedGroup ? (window - rIdx) / window : 0;
+      const cell = this._scoreCell(goal, {
+        periodsAgo: topPeriodsAgo + rIdx,
+        opacity: isCountedGroup ? (0.55 + weight * 0.45) : 1,
+        unit, todayIso,
+      });
+      if (!cell.placeholder) realCells++;
+      cellsHtml += cell.html;
+    }
+    // A group with nothing real in it at all is dropped whole — reserving
+    // space is about the counted window filling up, not about padding the
+    // grid leftward with columns that will never gain a mark.
+    if (realCells === 0) return '';
+
+    return `<div class="calc-group${isCountedGroup ? ' counted' : ''}">
+      <div class="calc-group-label">${monthAbbr(labelDate.getMonth())}</div>${cellsHtml}</div>`;
+  }
+
+  // One period's mark. Returns its `placeholder` state alongside the html so
+  // the group can tell reserved space from a period with real history.
+  _scoreCell(goal, { periodsAgo, opacity, unit, todayIso }) {
+    const isCurrent = periodsAgo === 0;
+    // Kept in the flow, just not drawn: the group has to stay the full
+    // window tall so its height reads as "this many periods are counted",
+    // with the drawn ones filling in as they happen.
+    const placeholder = !isCurrent && this._endsBeforeHistory(goal, periodsAgo, unit, todayIso);
+    let shape, badge = '', failed = false;
+
+    if (isDecreasing(goal)) {
+      const weekStates = weekDayStates(goal, todayIso, periodsAgo);
+      // A week that spent more than its allowance is a failed week — the
+      // same thing the row's own septagon shows by draining those days.
+      failed = weekStates.some(d => !d.future && d.state === 'over');
+      shape = septagonGlyph(weekStates, 26, failed);
+    } else {
+      const periodIso = toIso(unit === 'month' ? monthOnOrBefore(periodsAgo, todayIso) : mondayOfWeek(periodsAgo, todayIso));
+      const keyFn = unit === 'month' ? monthKey : isoWeekKey;
+      const key = keyFn(periodIso);
+      const count = (goal.tracking.entries ?? []).filter(e => keyFn(e) === key).length;
+      const target = goal.tracking.target || 1;
+      // The current period is still open — falling short of target is not
+      // a miss yet, so it never goes red. Every earlier one is closed and
+      // judged on its own count. Resolved here rather than inside the
+      // shape functions so weekly and monthly can't drift on what
+      // "failed" means.
+      failed = !isCurrent && !placeholder && count < target;
+      if (goal.tracking.type === 'weekly') {
+        const filled = Math.min(count, target);
+        shape = wedgeGlyph(Array.from({ length: target }, (_, s) => s < filled ? 'on' : 'off'), 22, failed);
+      } else {
+        shape = squareSweepGlyph(count / target, 22, failed);
+      }
+      if (count > target) badge = `<span class="calc-badge">+${count - target}</span>`;
+    }
+
+    const classes = `calc-cell${isCurrent ? ' current' : ''}${failed ? ' failed' : ''}${placeholder ? ' placeholder' : ''}`;
+    return {
+      placeholder,
+      html: `<div class="${classes}" style="opacity:${opacity.toFixed(2)}"${placeholder ? ' aria-hidden="true"' : ''}>
+        <div class="calc-shape-wrap">${shape}${badge}</div>
+        <div class="calc-label-slot">${isCurrent ? t('goal-analytics.now') : ''}</div>
+      </div>`,
+    };
+  }
+
+  // Whether a period ended before the goal's first record, i.e. before there
+  // was anything to log. Such periods are drawn as reserved blanks rather
+  // than empty marks: the score does count them as missed (weightedAverage
+  // always reads the full PERIOD_WINDOW), but showing a period the goal did
+  // not exist for as a miss reads as a failure the user never had — the same
+  // reasoning recentDots' own leading-miss trim applies to the row. The
+  // period *containing* the first record is kept, since part of it is real.
+  // Never for Avoid, which genuinely starts at 100% and for which a
+  // pre-history week is a legitimately clean week, not a fabricated miss.
+  _endsBeforeHistory(goal, periodsAgo, unit, todayIso) {
+    if (isDecreasing(goal)) return false;
+    const firstIso = firstRecordIso(goal);
+    if (firstIso === undefined) return true;
+    const start = unit === 'month' ? monthOnOrBefore(periodsAgo, todayIso) : mondayOfWeek(periodsAgo, todayIso);
+    const end = unit === 'month'
+      ? new Date(start.getFullYear(), start.getMonth() + 1, 0)
+      : new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+    return toIso(end) < firstIso;
   }
 
   // ── Activity ─────────────────────────────────────────────────────────────
@@ -713,25 +1016,72 @@ class GoalAnalytics extends AppElement {
     // happened on. They're identical arrays for every other type.
     const dates = dateListFor(goal, todayIso, HISTORY_DAYS_BACK);
     const loggedDates = rawLoggedDates(goal, todayIso, HISTORY_DAYS_BACK);
+    // Avoid only: which logged slips were forgiven and which broke the
+    // allowance. Computed once here because all three cards below colour by
+    // it, and each recomputation would be a full re-scan of the year.
+    const slipSplit = isDecreasing(goal) ? slipDatesByState(goal, todayIso, HISTORY_DAYS_BACK) : null;
+    // One shared legend for both slip-coloured cards — the same two colours
+    // mean the same two things in each.
+    const slipLegend = slipSplit
+      ? `<div class="legend"><span><i class="swatch-dot"></i>${t('goal-analytics.legend-allowed')}</span><span><i class="swatch-dot danger"></i>${t('goal-analytics.legend-over')}</span></div>`
+      : '';
+
+    return `<div class="page">
+      ${this._pageHead(goal, 'goal-analytics.page-title-activity')}
+      ${this._histogramCard(loggedDates, slipSplit, slipLegend, todayIso)}
+      ${this._calendarCard(dates, slipSplit, todayIso)}
+      ${this._weekdayGridCard(goal, loggedDates, slipSplit, slipLegend, todayIso)}
+    </div>`;
+  }
+
+  // How many entries landed in each timebox. Avoid's bars count slips, and a
+  // slip inside the allowance is not the same event as one past it — so its
+  // bar is split rather than painted one colour. Every other type has a
+  // single kind of entry and keeps a plain single-colour bar.
+  _histogramCard(loggedDates, slipSplit, slipLegend, todayIso) {
     const tf = this._tfActivity;
-    const countsByTf = { week: 26, month: 12, quarter: 8, year: 5 };
-    const n = countsByTf[tf];
+    const n = { week: 26, month: 12, quarter: 8, year: 5 }[tf];
     const hist = resampleSumFromDates(loggedDates, tf, n, todayIso);
     const max = Math.max(1, ...hist);
+    const overHist = slipSplit ? resampleSumFromDates(slipSplit.over, tf, n, todayIso) : null;
+    const withinHist = slipSplit ? resampleSumFromDates(slipSplit.within, tf, n, todayIso) : null;
     const labelStep = 8;
 
     let bars = '', axis = '';
     hist.forEach((v, i) => {
       const indexFromEnd = n - 1 - i;
       const isMax = v === max && v > 0;
+      const h = Math.max(v > 0 ? 6 : 0, (v / max) * 100);
+      // flex-grow ratios inside a fixed-height stack, so the two segments
+      // always divide exactly that bar's own height between them — a second
+      // percentage-of-max calculation per segment would round independently
+      // and leave a hairline gap or overshoot at small counts.
+      const barHtml = slipSplit
+        ? `<div class="bar-stack" style="height:${h}%">
+            ${overHist[i] > 0 ? `<div class="bar-seg over" style="flex:${overHist[i]}"></div>` : ''}
+            ${withinHist[i] > 0 ? `<div class="bar-seg within" style="flex:${withinHist[i]}"></div>` : ''}
+          </div>`
+        : `<div class="bar" style="height:${h}%"></div>`;
       bars += `<div class="bar-col"><div class="bar-val-slot">${isMax ? `<span class="bar-val tabular">${v}</span>` : ''}</div>
-        <div class="bar-track"><div class="bar" style="height:${Math.max(v > 0 ? 6 : 0, (v / max) * 100)}%"></div></div></div>`;
+        <div class="bar-track">${barHtml}</div></div>`;
       const showLabel = i === 0 || i === n - 1 || indexFromEnd % labelStep === 0;
       axis += `<div class="ax">${showLabel ? `<span>${periodLabel(tf, indexFromEnd, todayIso)}</span>` : ''}</div>`;
     });
 
+    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.count-per-timebox')}</h3>${this._timeframeSelect('tf-activity', tf)}</div>
+      <div class="histogram-scroll" id="hist-scroll" role="img" aria-label="${t(slipSplit ? 'goal-analytics.a11y-histogram-slips' : 'goal-analytics.a11y-histogram')}"><div class="histogram">${bars}</div><div class="histogram-axis">${axis}</div></div>
+      ${slipLegend}
+    </div>`;
+  }
+
+  // Day-by-day shading over the past year. For Avoid a shaded day can mean
+  // two different things — nothing happened, or a slip that was forgiven —
+  // so the forgiven ones carry the septagon's own knockout dot (see the
+  // .cell.on.within rule) rather than passing as clean days.
+  _calendarCard(dates, slipSplit, todayIso) {
     const weeks = Math.ceil(HISTORY_DAYS_BACK / 7);
     const dateSet = new Set(dates);
+    const withinSet = slipSplit ? new Set(slipSplit.within) : null;
     let monthCells = '', gridCells = '', prevMonth = null;
     for (let c = 0; c < weeks; c++) {
       const weeksAgo = weeks - 1 - c;
@@ -743,48 +1093,58 @@ class GoalAnalytics extends AppElement {
         const d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + r);
         const iso = toIso(d);
         const on = d <= localDate(todayIso) && dateSet.has(iso);
-        gridCells += `<div class="cell${on ? ' on' : ''}"></div>`;
+        gridCells += `<div class="cell${on ? ' on' : ''}${on && withinSet?.has(iso) ? ' within' : ''}"></div>`;
       }
     }
 
-    let freqHtml = '';
-    if (isFrequency(goal) || isDecreasing(goal)) {
-      const months = 14;
-      const rail = `<div class="weekday-rail"><span></span><span>${t('goal-dialog.dow-mon')[0]}</span><span>${t('goal-dialog.dow-tue')[0]}</span><span>${t('goal-dialog.dow-wed')[0]}</span><span>${t('goal-dialog.dow-thu')[0]}</span><span>${t('goal-dialog.dow-fri')[0]}</span><span>${t('goal-dialog.dow-sat')[0]}</span><span>${t('goal-dialog.dow-sun')[0]}</span></div>`;
-      let cols = '';
-      for (let mi = months - 1; mi >= 0; mi--) {
-        const md = monthOnOrBefore(mi, todayIso);
-        cols += `<div class="month-col"><span class="month-label">${monthAbbr(md.getMonth())}</span>`;
-        const byWeekday = [0, 0, 0, 0, 0, 0, 0];
-        for (const iso of loggedDates) {
-          const d = localDate(iso);
-          if (d.getFullYear() === md.getFullYear() && d.getMonth() === md.getMonth()) byWeekday[(d.getDay() + 6) % 7]++;
-        }
-        for (let d = 0; d < 7; d++) {
-          const count = byWeekday[d];
-          const size = count === 0 ? 4 : 6 + Math.min(count, 4) * 2.4;
-          cols += `<div class="dot-cell"><div class="freq-dot-el${count === 0 ? ' zero' : ''}" style="width:${size}px;height:${size}px;opacity:${count === 0 ? 1 : 0.45 + Math.min(count, 4) * 0.18}"></div></div>`;
-        }
-        cols += '</div>';
-      }
-      freqHtml = `<div class="card"><div class="card-head"><h3>${t('goal-analytics.frequency-title')}</h3></div><div class="freqgrid-wrap">${rail}<div class="freqgrid-scroll" id="freq-scroll" role="img" aria-label="${t('goal-analytics.a11y-freqgrid')}"><div class="freqgrid">${cols}</div></div></div></div>`;
-    }
-
-    return `<div class="page">
-      ${this._pageHead(goal, 'goal-analytics.page-title-activity')}
-      <div class="card"><div class="card-head"><h3>${t('goal-analytics.count-per-timebox')}</h3>${this._timeframeSelect('tf-activity', tf)}</div>
-        <div class="histogram-scroll" id="hist-scroll" role="img" aria-label="${t('goal-analytics.a11y-histogram')}"><div class="histogram">${bars}</div><div class="histogram-axis">${axis}</div></div>
+    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.calendar-title')}</h3></div>
+      <div class="heatmap-outer">
+      <div class="heatmap-daylabels"><div class="spacer"></div><div class="daylabel-grid"><span>${t('goal-dialog.dow-mon')[0]}</span><span></span><span></span><span>${t('goal-dialog.dow-thu')[0]}</span><span></span><span></span><span>${t('goal-dialog.dow-sun')[0]}</span></div></div>
+      <div class="heatmap-scroll" id="cal-scroll" role="img" aria-label="${t('goal-analytics.a11y-calendar')}"><div class="heatmap-inner">
+        <div class="heatmap-monthrow">${monthCells}</div><div class="heatmap">${gridCells}</div>
+      </div></div>
       </div>
-      <div class="card"><div class="card-head"><h3>${t('goal-analytics.calendar-title')}</h3></div>
-        <div class="heatmap-outer">
-        <div class="heatmap-daylabels"><div class="spacer"></div><div class="daylabel-grid"><span>${t('goal-dialog.dow-mon')[0]}</span><span></span><span></span><span>${t('goal-dialog.dow-thu')[0]}</span><span></span><span></span><span>${t('goal-dialog.dow-sun')[0]}</span></div></div>
-        <div class="heatmap-scroll" id="cal-scroll" role="img" aria-label="${t('goal-analytics.a11y-calendar')}"><div class="heatmap-inner">
-          <div class="heatmap-monthrow">${monthCells}</div><div class="heatmap">${gridCells}</div>
-        </div></div>
-        </div>
-      </div>
-      ${freqHtml}
     </div>`;
+  }
+
+  // Which weekdays a goal actually lands on, month by month. Only for types
+  // with a per-day log to have a cadence at all.
+  _weekdayGridCard(goal, loggedDates, slipSplit, slipLegend, todayIso) {
+    if (!isFrequency(goal) && !isDecreasing(goal)) return '';
+    const months = 14;
+    const rail = `<div class="weekday-rail"><span></span><span>${t('goal-dialog.dow-mon')[0]}</span><span>${t('goal-dialog.dow-tue')[0]}</span><span>${t('goal-dialog.dow-wed')[0]}</span><span>${t('goal-dialog.dow-thu')[0]}</span><span>${t('goal-dialog.dow-fri')[0]}</span><span>${t('goal-dialog.dow-sat')[0]}</span><span>${t('goal-dialog.dow-sun')[0]}</span></div>`;
+    let cols = '';
+    for (let mi = months - 1; mi >= 0; mi--) {
+      const md = monthOnOrBefore(mi, todayIso);
+      cols += `<div class="month-col"><span class="month-label">${monthAbbr(md.getMonth())}</span>`;
+      const byWeekday = [0, 0, 0, 0, 0, 0, 0];
+      const overByWeekday = [0, 0, 0, 0, 0, 0, 0];
+      for (const iso of loggedDates) {
+        const d = localDate(iso);
+        if (d.getFullYear() !== md.getFullYear() || d.getMonth() !== md.getMonth()) continue;
+        const wd = (d.getDay() + 6) % 7;
+        byWeekday[wd]++;
+        if (slipSplit?.over.includes(iso)) overByWeekday[wd]++;
+      }
+      for (let d = 0; d < 7; d++) {
+        const count = byWeekday[d];
+        const size = count === 0 ? 4 : 6 + Math.min(count, 4) * 2.4;
+        // Size still means volume; for Avoid, colour means kind. A cell
+        // holding both forgiven and over-allowance slips splits
+        // proportionally rather than picking a winner — at 8-14px a wedge
+        // still reads as "some of these were fails", where an all-or-nothing
+        // rule would either hide a real fail or overstate one among many
+        // forgiven days.
+        const overPct = count === 0 ? 0 : Math.round(overByWeekday[d] / count * 100);
+        const fill = !slipSplit || count === 0 ? '' : overByWeekday[d] === 0 ? SLIP_ALLOWED_FILL
+          : overByWeekday[d] === count ? 'var(--color-danger)'
+          : `conic-gradient(var(--color-danger) 0 ${overPct}%, ${SLIP_ALLOWED_FILL} ${overPct}% 100%)`;
+        cols += `<div class="dot-cell"><div class="freq-dot-el${count === 0 ? ' zero' : ''}" style="width:${size}px;height:${size}px;opacity:${count === 0 ? 1 : 0.45 + Math.min(count, 4) * 0.18}${fill ? `;background:${fill}` : ''}"></div></div>`;
+      }
+      cols += '</div>';
+    }
+
+    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.frequency-title')}</h3></div><div class="freqgrid-wrap">${rail}<div class="freqgrid-scroll" id="freq-scroll" role="img" aria-label="${t(slipSplit ? 'goal-analytics.a11y-freqgrid-slips' : 'goal-analytics.a11y-freqgrid')}"><div class="freqgrid">${cols}</div></div></div>${slipLegend}</div>`;
   }
 
   // ── Streaks ──────────────────────────────────────────────────────────────

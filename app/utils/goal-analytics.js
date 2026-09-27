@@ -35,17 +35,37 @@ function pad(n) { return String(n).padStart(2, '0'); }
 
 function toIso(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 
+// ── As-of ────────────────────────────────────────────────────────────────
+// The same goal with anything logged after `iso` removed. percentValue's
+// todayIso parameter moves the scoring *window* to that date but still reads
+// the whole entries array, so a period gets credited (or charged) with days
+// that had not happened yet at the date being asked about. Live callers pass
+// the real today and never notice — no entry can be in the future. Sampling
+// the past is where it shows, and where it is wrong in both directions:
+// frequency types look better than they were (later entries counted early),
+// and Avoid looks dramatically worse, because a slip charged to an earlier
+// date is divided by only the days elapsed by then. A week with one
+// over-allowance slip on Thursday read 69% on the Monday before it, when
+// nothing had happened at all and the true figure was 100%.
+//
+// Returns the goal unchanged when nothing needs dropping, so the common case
+// allocates nothing.
+function asOf(goal, iso) {
+  const entries = goal?.tracking?.entries;
+  if (!entries?.length) return goal;
+  const kept = entries.filter(e => e <= iso);
+  return kept.length === entries.length ? goal : { ...goal, tracking: { ...goal.tracking, entries: kept } };
+}
+
 // ── percentValueAt ───────────────────────────────────────────────────────
-// A goal's percentValue as of a past (or present) date. Delegates straight
-// to percentValue() for every type except 'percentage' — weekly/monthly/
-// decreasing/countdown are already date-aware (percentValue takes a
-// todayIso), so no new data is needed for them. Percentage-type is the only
-// type whose formula wasn't already date-aware — that's exactly the gap the
-// new tracking.history log closes. Returns undefined — not 0 — when no
-// snapshot predates `iso` at all, so callers can tell "not enough history
-// yet" apart from a real 0%.
+// A goal's percentValue as of a past (or present) date — a genuine
+// point-in-time reading, with no knowledge of what happened later (see
+// asOf). Percentage-type reads its own snapshot log instead, the gap
+// tracking.history closes. Returns undefined — not 0 — when no snapshot
+// predates `iso` at all, so callers can tell "not enough history yet" apart
+// from a real 0%.
 export function percentValueAt(goal, iso) {
-  if (goal?.tracking?.type !== 'percentage') return percentValue(goal, iso);
+  if (goal?.tracking?.type !== 'percentage') return percentValue(asOf(goal, iso), iso);
   return historyValueAt(percentHistory(goal), iso);
 }
 
@@ -91,6 +111,51 @@ function decreasingOnTrackDates(goal, todayIso, daysBack) {
     }
   }
   return dates.filter(iso => daysBetween(iso, todayIso) <= daysBack).sort();
+}
+
+// ── Avoid: per-slip allowance classification ─────────────────────────────
+// Which of an Avoid goal's slips were forgiven ('within' the allowance) and
+// which were real fails ('over'), as a Map iso -> state. Reuses
+// weekDayStates' own chronological, block-aware allowance accounting — the
+// same source the septagon strip and decreasingOnTrackDates already read —
+// rather than re-ranking entries here, so every Avoid visual (score
+// septagons, the count histogram, the weekday grid) agrees on which slips
+// were forgiven. Empty for every other type: only decreasing has an
+// allowance for a slip to sit inside or outside of.
+export function slipStates(goal, todayIso = todayISO(), daysBack = 180) {
+  const out = new Map();
+  if (!isDecreasing(goal)) return out;
+  const weeksNeeded = Math.ceil(daysBack / 7) + 1;
+  for (let w = weeksNeeded - 1; w >= 0; w--) {
+    for (const day of weekDayStates(goal, todayIso, w)) {
+      if (day.future || day.state === 'clean') continue;
+      if (daysBetween(day.iso, todayIso) <= daysBack) out.set(day.iso, day.state);
+    }
+  }
+  return out;
+}
+
+// Convenience split of the above into two plain date arrays, in the shape
+// the count histogram's own bucketing (countByBucket) already takes.
+export function slipDatesByState(goal, todayIso = todayISO(), daysBack = 180) {
+  const within = [], over = [];
+  for (const [iso, state] of slipStates(goal, todayIso, daysBack)) {
+    (state === 'over' ? over : within).push(iso);
+  }
+  return { within: within.sort(), over: over.sort() };
+}
+
+// ── First real entry ─────────────────────────────────────────────────────
+// The earliest date this goal has any record of — its first logged entry for
+// entry-based types, its first recorded percentage for percentage-type.
+// undefined when nothing has ever been recorded. There is no createdAt in
+// the goal schema, so this is the closest thing to "when did this start"
+// that is a real user event rather than an assumption (the same reasoning
+// expectedRampSeries already anchors on).
+export function firstRecordIso(goal) {
+  if (goal?.tracking?.type === 'percentage') return percentHistory(goal)[0]?.date;
+  const entries = goal?.tracking?.entries ?? [];
+  return entries.length === 0 ? undefined : entries.reduce((a, b) => (a < b ? a : b));
 }
 
 // ── Streaks ──────────────────────────────────────────────────────────────
@@ -147,17 +212,49 @@ function stepDate(unit, todayIso, periodsAgo) {
   return new Date(d.getFullYear(), d.getMonth() - periodsAgo, d.getDate()); // month
 }
 
-// ── Completion-% series (Progress chart, "achieved" line) ───────────────
-// `count` points, oldest first, ending at todayIso's own period. Points
-// with value === undefined (percentage-type, before any snapshot existed)
-// are left in — the chart is expected to skip drawing them, not fabricate 0.
-export function completionSeries(goal, unit, count, todayIso = todayISO()) {
-  const points = [];
-  for (let i = count - 1; i >= 0; i--) {
-    const iso = toIso(stepDate(unit, todayIso, i));
-    points.push({ iso, value: percentValueAt(goal, iso) });
+// ── Sample dates ─────────────────────────────────────────────────────────
+// The x-axis of any time series here: `count` periods of `unit`, ending at
+// todayIso. `periodSamples` puts one point at each period boundary — the
+// right resolution for a compact sparkline or a slope estimate.
+//
+// `denseSamples` covers the same span at a much finer step, and is what the
+// Progress chart plots. Period-resolution sampling silently loses any value
+// that never happened to be current on a sampling date: a percentage goal
+// set to 10% on 1 May and 100% on 14 May has no monthly sample inside that
+// window at all, so its line drew a flat 100 from May onward and the 10%
+// leg vanished entirely. Sampling by day makes the same series a real step
+// function — 10% held from 1 to 14 May, then a jump. Capped at maxPoints so
+// a multi-year span doesn't turn into thousands of path segments; the step
+// stays uniform (and anchored on today) so x position stays linear in time,
+// which is what lets a step land on the right date.
+export function periodSamples(unit, count, todayIso = todayISO()) {
+  const out = [];
+  for (let i = count - 1; i >= 0; i--) out.push(toIso(stepDate(unit, todayIso, i)));
+  return out;
+}
+
+export function denseSamples(unit, count, todayIso = todayISO(), maxPoints = 140) {
+  const startIso = toIso(stepDate(unit, todayIso, count - 1));
+  const span = daysBetween(startIso, todayIso);
+  const step = Math.max(1, Math.ceil(span / maxPoints));
+  const out = [];
+  const d = localDate(todayIso);
+  for (let back = Math.floor(span / step) * step; back >= 0; back -= step) {
+    out.push(toIso(new Date(d.getFullYear(), d.getMonth(), d.getDate() - back)));
   }
-  return points;
+  return out;
+}
+
+// ── Completion-% series (Progress chart, "achieved" line) ───────────────
+// One point per sampled date, oldest first. Points with value === undefined
+// (percentage-type, before any snapshot existed) are left in — the chart is
+// expected to skip drawing them, not fabricate 0.
+export function completionSeriesAt(goal, isos) {
+  return isos.map(iso => ({ iso, value: percentValueAt(goal, iso) }));
+}
+
+export function completionSeries(goal, unit, count, todayIso = todayISO()) {
+  return completionSeriesAt(goal, periodSamples(unit, count, todayIso));
 }
 
 // A single period's raw achieved fraction (0-1), independent of the
@@ -166,7 +263,7 @@ export function completionSeries(goal, unit, count, todayIso = todayISO()) {
 // weekly/monthly/decreasing; percentage/countdown are handled directly in
 // the ramp/recovery curves below, since they have no per-period target.
 function singlePeriodFraction(goal, iso, todayIso, cap = true) {
-  const tr = goal.tracking;
+  const tr = goal?.tracking ?? {}; // a never-migrated goal has none — see percentValue
   if (tr.type === 'decreasing') {
     const weeksAgo = Math.round(daysBetween(iso, todayIso) / 7);
     const days = weekDayStates(goal, todayIso, weeksAgo).filter(d => !d.future);
@@ -296,21 +393,22 @@ function rampEndIso(goal, firstIso) {
   return due && due < yearEnd ? due : yearEnd;
 }
 
-export function expectedRampSeries(goal, unit, count, todayIso = todayISO()) {
+export function expectedRampSeriesAt(goal, isos) {
   const history = percentHistory(goal);
   if (history.length === 0) return null; // nothing set yet — draw no line at all
   const first = history[0];
   const endIso = rampEndIso(goal, first.date);
   const span = daysBetween(first.date, endIso);
   if (span <= 0) return null; // end already reached/passed at the first snapshot
-  const out = [];
-  for (let i = count - 1; i >= 0; i--) {
-    const iso = toIso(stepDate(unit, todayIso, i));
-    if (iso < first.date) { out.push(undefined); continue; }
+  return isos.map(iso => {
+    if (iso < first.date) return undefined;
     const elapsed = Math.min(span, daysBetween(first.date, iso));
-    out.push(Math.round(first.value + (100 - first.value) * (elapsed / span)));
-  }
-  return out;
+    return Math.round(first.value + (100 - first.value) * (elapsed / span));
+  });
+}
+
+export function expectedRampSeries(goal, unit, count, todayIso = todayISO()) {
+  return expectedRampSeriesAt(goal, periodSamples(unit, count, todayIso));
 }
 
 // ── Recovery curve (Overview's "expected pace" line, frequency types) ───
@@ -326,7 +424,7 @@ export function expectedRampSeries(goal, unit, count, todayIso = todayISO()) {
 // sixth only 5 — and a straight line understates the achievable path by up to
 // 21 points at the midpoint. It can also sit flat where a period was already
 // at target, since making it "perfect" changes nothing.
-export function recoveryCurve(goal, unit, count, todayIso = todayISO()) {
+export function recoveryCurveAt(goal, isos, todayIso = todayISO()) {
   const type = goal?.tracking?.type;
   const window = PERIOD_WINDOW[type];
   if (!window) return null;
@@ -352,12 +450,21 @@ export function recoveryCurve(goal, unit, count, todayIso = todayISO()) {
   }
   const ideal = { ...goal, tracking: { ...goal.tracking, entries: [...new Set(perfect)].sort() } };
 
-  const out = [];
-  for (let i = count - 1; i >= 0; i--) {
-    const iso = toIso(stepDate(unit, todayIso, i));
-    out.push(iso < cutoffIso ? percentValue(goal, iso) : percentValue(ideal, iso));
-  }
-  return out;
+  // Only the reality half reads as-of the sampled date. The ideal half must
+  // not: its synthetic entries sit on the first `target` days of each period,
+  // so filtering them to the sampled date makes every Monday read 1-of-3 and
+  // the line saw-tooths down at each period boundary, recovering by midweek.
+  // That is a true statement about what is achievable *by Monday* — one entry
+  // per calendar day is the cap — but it is the wrong statement for this
+  // line, which answers "if you play every period perfectly, where does the
+  // score go". You cannot be behind on the Monday of a week you are going to
+  // finish, so a period that would be met counts as met from its first day
+  // and the line stays the monotonic ceiling it is meant to be.
+  return isos.map(iso => (iso < cutoffIso ? percentValue(asOf(goal, iso), iso) : percentValue(ideal, iso)));
+}
+
+export function recoveryCurve(goal, unit, count, todayIso = todayISO()) {
+  return recoveryCurveAt(goal, periodSamples(unit, count, todayIso), todayIso);
 }
 
 // ── Comparison delta (Overview "vs month/quarter/year") ─────────────────

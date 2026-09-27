@@ -36,16 +36,6 @@ async function clickTargetUp(page) {
   });
 }
 
-// Single toggle chip, not a pill group — one click flips week <-> 4weeks.
-async function toggleAllowancePeriodChip(page) {
-  await page.evaluate(() => {
-    document.querySelector('app-router').shadowRoot
-      .querySelector('home-page').shadowRoot
-      .querySelector('goal-dialog').shadowRoot
-      .querySelector('#allowance-period-chip').click();
-  });
-}
-
 async function saveDialog(page, title) {
   await page.evaluate(t => {
     const inp = document.querySelector('app-router').shadowRoot
@@ -89,6 +79,29 @@ async function tapBar(page) {
       ?.querySelector('goal-dialog')?.shadowRoot
       ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
     return d?.open;
+  });
+  // A saved goal opens on its Overview tab, so step onto the edit form — what
+  // every test using this helper is actually exercising. A JS .click() still
+  // reaches a hidden control, so without this the specs would keep "passing"
+  // against an unrendered form. Waiting for the analytics view first means
+  // the saved goal's own open() has definitely run (the creation dialog can
+  // still be open when the row is tapped, and a tab click issued then is
+  // wiped by the reopen that follows).
+  await page.waitForFunction(() => {
+    const sr = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('home-page')?.shadowRoot?.querySelector('goal-dialog')?.shadowRoot;
+    return sr?.querySelector('#view-analytics')?.hidden === false;
+  });
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot
+      .querySelector('goal-dialog').shadowRoot
+      .querySelector('#modal').shadowRoot.querySelectorAll('.tab-seg')[0].click();
+  });
+  await page.waitForFunction(() => {
+    const sr = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('home-page')?.shadowRoot?.querySelector('goal-dialog')?.shadowRoot;
+    return sr?.querySelector('#view-main')?.hidden === false;
   });
 }
 
@@ -395,37 +408,11 @@ test.describe('Avoid goals', () => {
     expect(tracking.entries).toContain(loggedIso);
   });
 
-  test('creating an Avoid goal with the 4-week allowance chip persists allowancePeriod through to IDB and a reload', async ({ page }) => {
+  test('a slip past the allowance renders as an "over" wedge — drained, not filled, and never bordered', async ({ page }) => {
+    // Allowance 0, so the very first slip is over it — no setup needed, and
+    // no dependence on which weekday the suite happens to run on.
     await openDialog(page, '#add-capstone');
     await selectType(page, 'decreasing');
-    await clickTargetUp(page); // allowance 0 -> 1
-    await toggleAllowancePeriodChip(page);
-    await saveDialog(page, 'No takeout');
-
-    await page.waitForFunction(() => {
-      const list = document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot.querySelector('#capstone-list');
-      return list?.querySelectorAll('goal-item').length === 1;
-    });
-
-    let tracking = await goalItemTracking(page);
-    expect(tracking.allowancePeriod).toBe('4weeks');
-    expect(tracking.target).toBe(1);
-
-    await waitForIDBFlush(page);
-    await page.reload();
-    await waitForPage(page);
-
-    tracking = await goalItemTracking(page);
-    expect(tracking.allowancePeriod).toBe('4weeks');
-  });
-
-  test('the septagon strip reflects the pooled 4-week allowance, not a fresh weekly one', async ({ page }) => {
-    await openDialog(page, '#add-capstone');
-    await selectType(page, 'decreasing');
-    await clickTargetUp(page); // allowance 0 -> 1
-    await clickTargetUp(page); // allowance 1 -> 2
-    await toggleAllowancePeriodChip(page);
     await saveDialog(page, 'No takeout');
     await page.waitForFunction(() => {
       const list = document.querySelector('app-router').shadowRoot
@@ -433,48 +420,12 @@ test.describe('Avoid goals', () => {
       return list?.querySelectorAll('goal-item').length === 1;
     });
 
-    // Spend the whole allowance (2) in the block-start week (3 weeks ago —
-    // still inside the same 4-week block as this week) via Fix a day.
-    await tapBar(page);
-    await openFixDay(page);
-    const blockStartIsos = await page.evaluate(() => {
-      const d = new Date();
-      d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - 21); // Monday, 3 weeks ago
-      const iso = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
-      const tue = new Date(d); tue.setDate(tue.getDate() + 1);
-      return [iso(d), iso(tue)];
-    });
-    for (const iso of blockStartIsos) {
-      await page.evaluate(i => {
-        document.querySelector('app-router').shadowRoot
-          .querySelector('home-page').shadowRoot
-          .querySelector('goal-dialog').shadowRoot
-          .querySelector(`#fixday-chips .day-chip[data-iso="${i}"]`).click();
-      }, iso);
-    }
-    await page.evaluate(() => {
-      document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('goal-dialog').shadowRoot
-        .querySelector('#close').click();
-    });
-    await page.waitForFunction(() => {
-      const item = document.querySelector('app-router').shadowRoot
-        .querySelector('home-page').shadowRoot
-        .querySelector('#capstone-list goal-item');
-      return (item?._goal?.tracking?.entries?.length ?? 0) === 2;
-    });
-
-    // Log today too — the block's allowance is already spent, so today's
-    // wedge should render as "over" (fully transparent), not "within" (a
-    // solid fill + knockout dot), even though it's the only slip in *this
-    // particular week*.
     await tapCurrentSeptagon(page);
     await page.waitForFunction(() => {
       const item = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('#capstone-list goal-item');
-      return (item?._goal?.tracking?.entries?.length ?? 0) === 3;
+      return (item?._goal?.tracking?.entries?.length ?? 0) === 1;
     });
 
     const todayWedgeState = await page.evaluate(() => {

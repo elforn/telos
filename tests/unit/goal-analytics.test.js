@@ -4,6 +4,8 @@ import {
   completionSeries, periodPerformanceSeries, recoveryCurve,
   expectedRampSeries,
   comparisonDelta, updateCount, projectPace,
+  slipStates, slipDatesByState, firstRecordIso,
+  denseSamples, periodSamples, completionSeriesAt, expectedRampSeriesAt, recoveryCurveAt,
 } from '../../app/utils/goal-analytics.js';
 
 const TODAY = '2026-09-20'; // a Sunday
@@ -40,6 +42,40 @@ describe('goal-analytics — percentValueAt', () => {
     expect(percentValueAt(weekly, '2026-09-03')).toBe(percentValueAt(weekly, '2026-09-03'));
     const countdown = countdownGoal('2026-01-01', '2026-12-31');
     expect(percentValueAt(countdown, '2026-07-02')).toBeGreaterThan(0);
+  });
+});
+
+describe('goal-analytics — percentValueAt is a point-in-time reading', () => {
+  // percentValue's todayIso moves the scoring window but still reads the
+  // whole entries array, so a period was credited (or charged) with days
+  // that had not happened yet at the date being asked about. Harmless for
+  // live callers — no entry can be in the future — and wrong in both
+  // directions when sampling the past for a chart.
+  it('Avoid: a date before any slip is unaffected by slips that came later', () => {
+    // Slips Thu/Fri/Sat against an allowance of 2 — one real fail, on the Sat.
+    const goal = decreasingGoal(2, ['2026-09-24', '2026-09-25', '2026-09-26']);
+    expect(percentValueAt(goal, '2026-09-21')).toBe(100); // Monday: nothing had happened
+    expect(percentValueAt(goal, '2026-09-23')).toBe(100);
+  });
+
+  it('Avoid: forgiven slips never deduct, and only the over-allowance one does', () => {
+    const goal = decreasingGoal(2, ['2026-09-24', '2026-09-25', '2026-09-26']);
+    expect(percentValueAt(goal, '2026-09-24')).toBe(100); // first slip, inside the allowance
+    expect(percentValueAt(goal, '2026-09-25')).toBe(100); // second, still inside
+    expect(percentValueAt(goal, '2026-09-26')).toBeLessThan(100); // third breaks it
+  });
+
+  it('Avoid: a run entirely inside the allowance is a flat 100 line', () => {
+    const goal = decreasingGoal(3, ['2026-09-24', '2026-09-25', '2026-09-26']);
+    for (const iso of ['2026-09-21', '2026-09-24', '2026-09-26', TODAY]) {
+      expect(percentValueAt(goal, iso)).toBe(100);
+    }
+  });
+
+  it('frequency: a date is not credited with entries logged after it', () => {
+    const goal = weeklyGoal(3, ['2026-09-25', '2026-09-26', '2026-09-27']);
+    expect(percentValueAt(goal, '2026-09-21')).toBe(0); // Monday: nothing logged yet
+    expect(percentValueAt(goal, '2026-09-27')).toBeGreaterThan(0);
   });
 });
 
@@ -140,6 +176,31 @@ describe('goal-analytics — completionSeries', () => {
     const series = completionSeries(goal, 'month', 3, TODAY);
     expect(series[0].value).toBeUndefined(); // 2 months ago — before the only snapshot
     expect(series[2].value).toBe(50);
+  });
+});
+
+describe('goal-analytics — recoveryCurve is a monotonic ceiling', () => {
+  // The ideal goal's synthetic entries sit on the first `target` days of each
+  // period. Filtering them to the sampled date (as the achieved line must be)
+  // made every Monday read 1-of-3, so the line saw-toothed down at each
+  // period boundary and recovered by midweek — true about what is achievable
+  // *by Monday*, wrong for a line that answers "if you play every period
+  // perfectly, where does the score go".
+  it('never dips within a week for a weekly goal', () => {
+    const goal = weeklyGoal(3, ['2026-08-18', '2026-09-01', '2026-09-22']);
+    const samples = denseSamples('week', 12, TODAY);
+    const curve = recoveryCurveAt(goal, samples, TODAY);
+    // The last 5 weeks are the ideal half (PERIOD_WINDOW.weekly - 1).
+    const tail = curve.slice(samples.findIndex(iso => iso >= '2026-08-17'));
+    for (let i = 1; i < tail.length; i++) {
+      expect(tail[i], `sample ${i} fell from ${tail[i - 1]} to ${tail[i]}`).toBeGreaterThanOrEqual(tail[i - 1]);
+    }
+  });
+
+  it('still tracks real history before the window, where a fall is legitimate', () => {
+    const goal = weeklyGoal(3, ['2026-06-01', '2026-06-02', '2026-06-03']);
+    const curve = recoveryCurveAt(goal, denseSamples('month', 12, TODAY), TODAY);
+    expect(curve.some((v, i) => i > 0 && v < curve[i - 1])).toBe(true);
   });
 });
 
@@ -347,3 +408,124 @@ describe('goal-analytics — expectedRampSeries (percentage)', () => {
     expect(drawn.at(-1)).toBe(100);
   });
 });
+
+describe('goal-analytics — slipStates / slipDatesByState (Avoid)', () => {
+  // TODAY is Sunday 2026-09-20, so 09-14..09-20 is the current ISO week.
+  it('ranks slips chronologically against the allowance: the first N are forgiven', () => {
+    const goal = decreasingGoal(1, ['2026-09-15', '2026-09-17', '2026-09-18']);
+    const states = slipStates(goal, TODAY, 180);
+    expect(states.get('2026-09-15')).toBe('within');
+    expect(states.get('2026-09-17')).toBe('over');
+    expect(states.get('2026-09-18')).toBe('over');
+  });
+
+  it('a zero allowance makes every slip a fail', () => {
+    const { within, over } = slipDatesByState(decreasingGoal(0, ['2026-09-15', '2026-09-16']), TODAY, 180);
+    expect(within).toEqual([]);
+    expect(over).toEqual(['2026-09-15', '2026-09-16']);
+  });
+
+  it('the allowance refills each week', () => {
+    // One slip in each of two weeks, allowance 1/week — both forgiven.
+    const goal = decreasingGoal(1, ['2026-09-08', '2026-09-15']);
+    const { within, over } = slipDatesByState(goal, TODAY, 180);
+    expect(within).toEqual(['2026-09-08', '2026-09-15']);
+    expect(over).toEqual([]);
+  });
+
+  it('never classifies clean days — only real entries appear at all', () => {
+    const states = slipStates(decreasingGoal(1, ['2026-09-15']), TODAY, 180);
+    expect(states.size).toBe(1);
+  });
+
+  it('is empty for every non-Avoid type (no allowance to sit inside or outside of)', () => {
+    expect(slipStates(weeklyGoal(3, ['2026-09-15']), TODAY, 180).size).toBe(0);
+    expect(slipStates(monthlyGoal(2, ['2026-09-15']), TODAY, 180).size).toBe(0);
+  });
+
+  it('drops slips older than daysBack', () => {
+    const goal = decreasingGoal(0, ['2026-01-05', '2026-09-15']);
+    expect([...slipStates(goal, TODAY, 30).keys()]).toEqual(['2026-09-15']);
+  });
+});
+
+describe('goal-analytics — firstRecordIso', () => {
+  it('entry types: the earliest entry, whatever order entries are stored in', () => {
+    expect(firstRecordIso(weeklyGoal(3, ['2026-09-15', '2026-03-02', '2026-07-01']))).toBe('2026-03-02');
+  });
+
+  it('percentage: the first history snapshot', () => {
+    expect(firstRecordIso(pctGoal(50, [{ date: '2026-04-01', value: 10 }, { date: TODAY, value: 50 }]))).toBe('2026-04-01');
+  });
+
+  it('undefined when nothing has ever been recorded', () => {
+    expect(firstRecordIso(weeklyGoal(3, []))).toBeUndefined();
+    expect(firstRecordIso(pctGoal(50, []))).toBeUndefined();
+  });
+});
+
+describe('goal-analytics — denseSamples / completionSeriesAt', () => {
+  it('covers the same span as the period samples, ending on today', () => {
+    const coarse = periodSamples('month', 12, TODAY);
+    const dense = denseSamples('month', 12, TODAY);
+    expect(dense[dense.length - 1]).toBe(TODAY);
+    expect(dense.length).toBeGreaterThan(coarse.length * 5);
+    expect(dense[0] >= coarse[0]).toBe(true);
+    expect(daysBetweenIso(dense[0], coarse[0])).toBeLessThanOrEqual(4); // within one sampling step
+  });
+
+  it('keeps a uniform step so x position stays linear in time', () => {
+    const dense = denseSamples('week', 12, TODAY);
+    const gaps = dense.slice(1).map((iso, i) => daysBetweenIso(dense[i], iso));
+    expect(new Set(gaps).size).toBe(1);
+  });
+
+  it('caps the point count on a long span', () => {
+    expect(denseSamples('quarter', 12, TODAY).length).toBeLessThanOrEqual(141);
+  });
+
+  // The bug this resolution exists for: a percentage goal set to 10% on 1 May
+  // and 100% on 14 May had no monthly sample inside that window at all, so the
+  // 10% leg vanished and the line read as a flat 100 from May onward.
+  it('percentage: plots a short-lived value as a real step instead of skipping it', () => {
+    const goal = pctGoal(100, [{ date: '2026-05-01', value: 10 }, { date: '2026-05-14', value: 100 }]);
+    const series = completionSeriesAt(goal, denseSamples('month', 12, TODAY));
+    const known = series.filter(p => p.value !== undefined);
+    expect(known[0].value).toBe(10);                       // the line starts at 10, not 100
+    expect(known.some(p => p.value === 10)).toBe(true);
+    expect(known[known.length - 1].value).toBe(100);
+    // Nothing before the first snapshot is fabricated.
+    expect(series.find(p => p.iso < '2026-05-01').value).toBeUndefined();
+    // ...and the step happens where it really happened, not at a period edge.
+    const lastTen = known.filter(p => p.value === 10).pop();
+    expect(lastTen.iso < '2026-05-14').toBe(true);
+    expect(daysBetweenIso(lastTen.iso, '2026-05-14')).toBeLessThanOrEqual(4);
+  });
+
+  it('the recovery curve returns one value per sample date, and matches its period-stepping form', () => {
+    const goal = weeklyGoal(3, ['2026-09-15', '2026-09-16']);
+    const samples = denseSamples('month', 12, TODAY);
+    expect(recoveryCurveAt(goal, samples, TODAY).length).toBe(samples.length);
+    // The wrapper is the same call over period-boundary dates.
+    expect(recoveryCurveAt(goal, periodSamples('month', 12, TODAY), TODAY))
+      .toEqual(recoveryCurve(goal, 'month', 12, TODAY));
+  });
+
+  it('a goal whose tracking was never migrated produces a series instead of throwing', () => {
+    const bare = { id: 'x', title: 'Legacy' };
+    expect(() => completionSeriesAt(bare, denseSamples('month', 12, TODAY))).not.toThrow();
+    expect(() => periodPerformanceSeries(bare, 'week', 4, TODAY)).not.toThrow();
+  });
+
+  it('the expected-pace line is sampled at the same dates, so the two align', () => {
+    const goal = pctGoal(100, [{ date: '2026-05-01', value: 10 }]);
+    const samples = denseSamples('month', 12, TODAY);
+    expect(expectedRampSeriesAt(goal, samples).length).toBe(samples.length);
+  });
+});
+
+function daysBetweenIso(a, b) {
+  const [ya, ma, da] = a.split('-').map(Number);
+  const [yb, mb, db] = b.split('-').map(Number);
+  return Math.round((new Date(yb, mb - 1, db) - new Date(ya, ma - 1, da)) / 86400000);
+}

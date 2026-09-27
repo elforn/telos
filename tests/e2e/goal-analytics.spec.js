@@ -104,6 +104,62 @@ test('a saved weekly goal exposes Edit + 4 analytics tabs and renders each one',
   expect(await page.evaluate(() => !!window.__ga().shadowRoot.querySelector('.empty-note, .streak-row'))).toBe(true);
 });
 
+test('a saved goal opens on Overview, and the edit form is one tap away', async ({ page }) => {
+  await createGoal(page, { title: 'Opens on overview', type: 'weekly' });
+  await reopenGoal(page);
+  expect(await page.evaluate(() => window.__modal().activeTab)).toBe(1);
+  expect(await page.evaluate(() => !window.__gd().shadowRoot.querySelector('#view-analytics').hidden)).toBe(true);
+  expect(await page.evaluate(() => !!window.__ga().shadowRoot.querySelector('.hero-number'))).toBe(true);
+  // Nothing takes the caret — focusing the title field would raise the
+  // on-screen keyboard over a page that exists to be read.
+  expect(await page.evaluate(() =>
+    window.__gd().shadowRoot.activeElement === window.__gd().shadowRoot.querySelector('#input'))).toBe(false);
+
+  // The footer's Edit button goes back to the form, with the notes field
+  // sized properly despite having been measured while hidden.
+  await page.evaluate(() => window.__gd().shadowRoot.querySelector('#analytics-edit-btn').click());
+  await page.waitForFunction(() => !window.__gd().shadowRoot.querySelector('#view-main').hidden);
+  const notesOk = await page.evaluate(() => {
+    const ta = window.__gd().shadowRoot.querySelector('textarea');
+    return ta.getBoundingClientRect().height > 0;
+  });
+  expect(notesOk).toBe(true);
+});
+
+// A deadline set in the edit form has to reach the analytics pages, which
+// render off the dialog's own copy of the record — the store round-trip does
+// not come back while the dialog is open.
+test('a deadline set in the edit form shows up on Overview', async ({ page }) => {
+  await createGoal(page, { title: 'Deadline flow', type: 'weekly' });
+  await reopenGoal(page);
+
+  // Opens on Overview: no deadline card yet.
+  expect(await page.evaluate(() => [...window.__ga().shadowRoot.querySelectorAll('.stat-label')]
+    .some(l => l.textContent === 'Deadline'))).toBe(false);
+
+  // Go to Edit, set a deadline through the real chip + input.
+  await gotoTab(page, 0);
+  const due = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 5);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; });
+  await page.evaluate(d => {
+    const gd = window.__gd();
+    gd.shadowRoot.querySelector('#duedate-chip').click();
+    const inp = gd.shadowRoot.querySelector('#duedate-input');
+    inp.value = d; inp.dispatchEvent(new Event('change', { bubbles: true }));
+  }, due);
+  await page.waitForTimeout(200);
+
+  // Back to Overview — the card must be there now, with the live wording.
+  await gotoTab(page, 1);
+  const card = await page.evaluate(() => {
+    const c = [...window.__ga().shadowRoot.querySelectorAll('.stat')]
+      .find(x => x.querySelector('.stat-label')?.textContent === 'Deadline');
+    return c ? { value: c.querySelector('.stat-value').textContent, sub: c.querySelector('.stat-sub')?.textContent } : null;
+  });
+  expect(card).not.toBeNull();
+  expect(card.sub).toBe('due this week');
+});
+
 test('a percentage goal has no Score tab, so Activity sits one index earlier', async ({ page }) => {
   await createGoal(page, { title: 'Percentage analytics', type: 'percentage' });
   await reopenGoal(page);
@@ -122,6 +178,41 @@ test('a countdown goal exposes Overview only', async ({ page }) => {
   expect(await page.evaluate(() => window.__modal().tabCount)).toBe(2);
   await gotoTab(page, 1);
   expect(await page.evaluate(() => !!window.__ga().shadowRoot.querySelector('.hero-number'))).toBe(true);
+});
+
+test('no analytics page scrolls the dialog sideways', async ({ page }) => {
+  // The charts own their horizontal scrolling internally; the page around
+  // them must never gain any. Caught a real bug once: the sticky page head
+  // bled outward with a negative inline margin, making every analytics page
+  // 16px wider than the dialog body. Only real layout can see this — the
+  // element's own box is fine in isolation, it is the containing scroll
+  // width that goes wrong.
+  await createGoal(page, { title: 'Sideways scroll', type: 'weekly' });
+  await reopenGoal(page);
+  for (const tab of [1, 2, 3, 4]) {
+    await gotoTab(page, tab);
+    const fits = await page.evaluate(() => {
+      const body = window.__gd().shadowRoot.querySelector('#modal').shadowRoot.querySelector('.body');
+      return body.scrollWidth <= body.clientWidth;
+    });
+    expect(fits, `tab ${tab} overflows horizontally`).toBe(true);
+  }
+});
+
+test('the page head stays pinned while the analytics body scrolls', async ({ page }) => {
+  await createGoal(page, { title: 'Pinned head', type: 'weekly' });
+  await reopenGoal(page);
+  await gotoTab(page, 1);
+  const before = await page.evaluate(() =>
+    window.__ga().shadowRoot.querySelector('.page-head').getBoundingClientRect().top);
+  await page.evaluate(() => {
+    const body = window.__gd().shadowRoot.querySelector('#modal').shadowRoot.querySelector('.body');
+    body.scrollTop = 240;
+  });
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() =>
+    window.__ga().shadowRoot.querySelector('.page-head').getBoundingClientRect().top);
+  expect(Math.abs(after - before)).toBeLessThan(2);
 });
 
 test('only charts that genuinely overflow become scrollable and keyboard-reachable', async ({ page }) => {

@@ -102,6 +102,29 @@ async function tapBar(page) {
       ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog');
     return d?.open;
   });
+  // A saved goal opens on its Overview tab, so step onto the edit form — what
+  // every test using this helper is actually exercising. A JS .click() still
+  // reaches a hidden control, so without this the specs would keep "passing"
+  // against an unrendered form. Waiting for the analytics view first means
+  // the saved goal's own open() has definitely run (the creation dialog can
+  // still be open when the row is tapped, and a tab click issued then is
+  // wiped by the reopen that follows).
+  await page.waitForFunction(() => {
+    const sr = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('home-page')?.shadowRoot?.querySelector('goal-dialog')?.shadowRoot;
+    return sr?.querySelector('#view-analytics')?.hidden === false;
+  });
+  await page.evaluate(() => {
+    document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot
+      .querySelector('goal-dialog').shadowRoot
+      .querySelector('#modal').shadowRoot.querySelectorAll('.tab-seg')[0].click();
+  });
+  await page.waitForFunction(() => {
+    const sr = document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('home-page')?.shadowRoot?.querySelector('goal-dialog')?.shadowRoot;
+    return sr?.querySelector('#view-main')?.hidden === false;
+  });
 }
 
 async function openChangeType(page) {
