@@ -514,18 +514,9 @@ export function frequencyUrgencyOf(goal, active, todayIso = todayISO()) {
 // and a bigger one: the dialog never produces anything but 'none' for
 // decreasing goals (no due-tomorrow/due-today concept applies to an
 // anti-habit at all), but the row now also carries a second, unrelated
-// signal on top of pace/deadline urgency — plain failure. Failed here is
-// evaluated per week, not per block: isOverAllowance alone answers "is the
-// block's pooled allowance currently exhausted," which for a 4-week
-// allowancePeriod can stay true for the rest of the block once a single bad
-// week blows it — that's the right answer for the dialog's own allowance
-// summary (currentAllowanceSpent), but wrong for a *day-to-day* red
-// indicator: a week with zero new slips shouldn't read as failing today
-// just because an earlier week in the same block already spent the whole
-// pool. Gating on currentPeriodCount too means Failed only lights up on a
-// week that itself added a slip while the (carried-over) allowance was
-// already used up — the exact week the overage actually happened in, not
-// every week after it. Once true, it's a static "the week is lost, do
+// signal on top of pace/deadline urgency — plain failure, i.e. this week
+// spent more than its allowance. Once true, it's a static "the week is
+// lost, do
 // better next week" consequence — deliberately invisible to the dialog/bell
 // badge/notifications, which stay about what's actionable, never about a
 // retrospective failure to note.
@@ -537,7 +528,7 @@ export function frequencyRowUrgencyOf(goal, active, todayIso = todayISO()) {
   if (tr.type === 'monthly') return nxRowBucketMonthly(goal, todayIso);
 
   if (tr.type === 'decreasing') {
-    const failedThisWeek = isOverAllowance(goal, todayIso) && currentPeriodCount(tr, todayIso) > 0;
+    const failedThisWeek = isOverAllowance(goal, todayIso);
     return failedThisWeek ? 'overdue' : 'none';
   }
 

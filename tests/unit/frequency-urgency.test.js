@@ -24,8 +24,8 @@ function monthly(target, entries = []) {
   return { tracking: { type: 'monthly', target, entries } };
 }
 
-function decreasing(target, entries = [], allowancePeriod) {
-  return { tracking: { type: 'decreasing', target, entries, allowancePeriod } };
+function decreasing(target, entries = []) {
+  return { tracking: { type: 'decreasing', target, entries } };
 }
 
 describe('frequency-urgency — gating', () => {
@@ -77,32 +77,13 @@ describe('frequency-urgency — decreasing ("Avoid") goals: row-only failure mar
     expect(frequencyRowUrgencyOf(overGoal, true, THU)).toBe('overdue'); // control — confirms the row did detect it
   });
 
-  it('respects allowancePeriod "4weeks" pooling, exactly like isOverAllowance/weekDayStates', () => {
-    const blockStartWeek = ['2026-07-20', '2026-07-21']; // Mon+Tue, 3 weeks before MON, block-start week
-    const goal = decreasing(2, [...blockStartWeek, MON], '4weeks'); // 1 more slip this week -> 3rd of the pooled block
-    expect(frequencyRowUrgencyOf(goal, true, MON)).toBe('overdue');
-    const control = decreasing(2, [...blockStartWeek, MON], 'week'); // same entries, "week" mode resets — unaffected
-    expect(frequencyRowUrgencyOf(control, true, MON)).toBe('none');
-  });
-
-  it('is Failed evaluated per week, not per block: a week with zero new slips is not Failed even though an earlier week in the same 4-week block already blew the pooled allowance', () => {
-    // Block-start week (3 weeks before MON) already has 3 slips against an
-    // allowance of 2 — the block's pooled budget is blown. This week (MON)
-    // has no new entries at all. isOverAllowance (the block-level, purely
-    // cumulative check) is still true — that's correct for e.g. the
-    // dialog's own allowance summary — but the row's Failed indicator must
-    // not carry a past week's overage forward onto a clean week.
-    const blockStartWeek = ['2026-07-20', '2026-07-21', '2026-07-22'];
-    const goal = decreasing(2, [...blockStartWeek], '4weeks');
-    expect(isOverAllowance(goal, MON)).toBe(true); // sanity check: the block really is over
+  it('does not carry an earlier week\'s overage onto a clean week — the allowance refills every Monday', () => {
+    const priorWeekOver = ['2026-08-03', '2026-08-04', '2026-08-05']; // 3 slips vs an allowance of 2
+    const goal = decreasing(2, priorWeekOver);
+    expect(isOverAllowance(goal, MON)).toBe(false); // this week starts fresh
     expect(frequencyRowUrgencyOf(goal, true, MON)).toBe('none');
   });
 
-  it('is Failed the exact week a slip pushes an already-blown block over again, even mid-week', () => {
-    const blockStartWeek = ['2026-07-20', '2026-07-21', '2026-07-22']; // already over (3 vs allowance 2)
-    const goal = decreasing(2, [...blockStartWeek, MON], '4weeks'); // one new slip this week
-    expect(frequencyRowUrgencyOf(goal, true, MON)).toBe('overdue');
-  });
 });
 
 describe('frequency-urgency — Nx (times-per-period) mode, weekly — dialog-facing', () => {

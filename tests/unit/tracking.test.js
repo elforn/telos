@@ -6,7 +6,7 @@ import {
   weekDayStates, recentWeekStates, isOverAllowance, currentAllowanceSpent,
   countdownValue, countdownDaysRemaining,
   PERIOD_WINDOW, DOT_WINDOW, TARGET_LIMITS, DEFAULT_TARGET, FIX_DAY_SPAN,
-  DEFAULT_ALLOWANCE_PERIOD, ALLOWANCE_PERIOD_WEEKS, targetLimitsFor,
+  targetLimitsFor,
 } from '../../app/utils/tracking.js';
 
 function pct(value) { return { tracking: { type: 'percentage', value } }; }
@@ -564,7 +564,7 @@ describe('tracking — countdownDaysRemaining', () => {
   });
 });
 
-describe('tracking — percentValue (decreasing): allowancePeriod', () => {
+describe('tracking — percentValue (decreasing): the allowance refills weekly', () => {
   const currentMonday = '2026-08-10'; // matches TODAY in the describe blocks above
   const SUNDAY = '2026-08-16'; // fully-elapsed current week, avoids the elapsed-day correction
 
@@ -580,42 +580,28 @@ describe('tracking — percentValue (decreasing): allowancePeriod', () => {
     const dt = new Date(y, m - 1, d - weeksAgo * 7);
     return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
   }
-  function decreasingWithPeriod(target, entries, allowancePeriod) {
-    return { tracking: { type: 'decreasing', target, entries, allowancePeriod } };
-  }
 
-  it('DEFAULT_ALLOWANCE_PERIOD is "week"; ALLOWANCE_PERIOD_WEEKS maps week/4weeks to 1/4 weeks', () => {
-    expect(DEFAULT_ALLOWANCE_PERIOD).toBe('week');
-    expect(ALLOWANCE_PERIOD_WEEKS).toEqual({ week: 1, '4weeks': 4 });
-  });
-
-  it('a goal with no allowancePeriod scores identically to one with allowancePeriod explicitly "week" — absence defaults to the original per-week behaviour', () => {
-    const entries = [0, 1, 2, 3, 4, 5].map(w => sevenDaysFrom(mondayMinusWeeks(currentMonday, w))[0]);
-    const noPeriod = percentValue(decreasing(1, entries), SUNDAY);
-    const explicitWeek = percentValue(decreasingWithPeriod(1, entries, 'week'), SUNDAY);
-    expect(noPeriod).toBe(explicitWeek);
-  });
-
-  it('"week" mode still resets the allowance every single week (unchanged behaviour): a full allowance spent one week is free again the next', () => {
-    const blockStartWeek = sevenDaysFrom(mondayMinusWeeks(currentMonday, 3));
+  it('a full allowance spent one week is free again the next', () => {
+    const earlierWeek = sevenDaysFrom(mondayMinusWeeks(currentMonday, 3));
     const currentWeek = sevenDaysFrom(currentMonday);
-    // 2 slips (the whole allowance) in an earlier week, 1 more slip in the
-    // current week — under "week" mode the allowance refills every week, so
-    // neither week goes over and the score is untouched.
-    const entries = [blockStartWeek[0], blockStartWeek[1], currentWeek[0]];
-    expect(percentValue(decreasingWithPeriod(2, entries, 'week'), SUNDAY)).toBe(100);
+    // 2 slips (the whole allowance) in an earlier week, 1 more in the current
+    // one — neither week goes over, so the score is untouched.
+    expect(percentValue(decreasing(2, [earlierWeek[0], earlierWeek[1], currentWeek[0]]), SUNDAY)).toBe(100);
   });
 
-  it('"4weeks" mode pools the same allowance across the block instead of refilling weekly — the same entries that scored 100 under "week" now cost once the shared budget is spent', () => {
-    const blockStartWeek = sevenDaysFrom(mondayMinusWeeks(currentMonday, 3)); // oldest week of the current 4-week block
-    const currentWeek = sevenDaysFrom(currentMonday); // newest week of the same block
-    const entries = [blockStartWeek[0], blockStartWeek[1], currentWeek[0]]; // allowance (2) fully spent early in the block, then one more slip later in it
-    expect(percentValue(decreasingWithPeriod(2, entries, 'week'), SUNDAY)).toBe(100); // unaffected control
-    expect(percentValue(decreasingWithPeriod(2, entries, '4weeks'), SUNDAY)).toBe(98); // the block-pooled cost of the 3rd slip
+  // A pooled multi-week allowance was removed: its blocks were tiled
+  // backwards from whatever date was being viewed, so a week's clean/over
+  // status changed depending on when you looked. A stray allowancePeriod
+  // left on an old record is simply ignored.
+  it('ignores a leftover allowancePeriod field entirely', () => {
+    const entries = [0, 1, 2].map(w => sevenDaysFrom(mondayMinusWeeks(currentMonday, w))[0]);
+    const plain = { tracking: { type: 'decreasing', target: 1, entries } };
+    const stale = { tracking: { type: 'decreasing', target: 1, entries, allowancePeriod: '4weeks' } };
+    expect(percentValue(stale, SUNDAY)).toBe(percentValue(plain, SUNDAY));
   });
 
-  it('"4weeks" mode with no slips at all still scores 100 — an empty budget has nothing to spend', () => {
-    expect(percentValue(decreasingWithPeriod(2, [], '4weeks'), SUNDAY)).toBe(100);
+  it('no slips at all still scores 100 — an empty budget has nothing to spend', () => {
+    expect(percentValue(decreasing(2, []), SUNDAY)).toBe(100);
   });
 });
 
@@ -688,52 +674,15 @@ describe('tracking — weekDayStates / recentWeekStates', () => {
     expect(DOT_WINDOW.decreasing).toBeLessThan(PERIOD_WINDOW.decreasing);
   });
 
-  describe('allowancePeriod "4weeks" — the pooled budget carries into later weeks of the same block', () => {
-    function decreasingWithPeriod(target, entries, allowancePeriod) {
-      return { tracking: { type: 'decreasing', target, entries, allowancePeriod } };
-    }
-
-    it('"week" mode (explicit) is unaffected by an earlier week — allowance resets every week, same as the default above', () => {
-      const priorWeekFullyOver = ['2026-08-03', '2026-08-04', '2026-08-05']; // 3 slips, 3 weeksAgo... no, 1 week before TODAY
-      const goal = decreasingWithPeriod(2, [...priorWeekFullyOver, '2026-08-10'], 'week'); // + 1 slip in current week
-      const days = weekDayStates(goal, TODAY, 0);
-      expect(days.find(d => d.iso === '2026-08-10').state).toBe('within'); // fresh allowance this week
-    });
-
-    it('"4weeks" mode: an allowance fully spent in the block\'s first week carries forward — the same slip that would be "within" alone is now "over"', () => {
-      // Block spans weeksAgo 0..3 (this week is the block's 4th/newest week).
-      // Spend the whole allowance (2) in the block-start week (weeksAgo 3).
-      const blockStartWeek = ['2026-07-20', '2026-07-21']; // Mon+Tue, 3 weeks before TODAY (2026-08-10)
-      const goal = decreasingWithPeriod(2, [...blockStartWeek, TODAY], '4weeks'); // 1 more slip this week
-      const currentWeekDays = weekDayStates(goal, TODAY, 0);
-      expect(currentWeekDays.find(d => d.iso === TODAY).state).toBe('over');
-
-      // Control: the identical entries under "week" mode leave the current week untouched.
-      const controlGoal = decreasingWithPeriod(2, [...blockStartWeek, TODAY], 'week');
-      expect(weekDayStates(controlGoal, TODAY, 0).find(d => d.iso === TODAY).state).toBe('within');
-    });
-
-    it('"4weeks" mode: the block-start week itself still ranks its own slips fresh (no earlier week to carry from)', () => {
-      const goal = decreasingWithPeriod(2, ['2026-07-20', '2026-07-21', '2026-07-22'], '4weeks'); // 3 slips, block-start week
-      const days = weekDayStates(goal, TODAY, 3); // weeksAgo=3 is the block-start week for TODAY's block
-      expect(days.find(d => d.iso === '2026-07-20').state).toBe('within');
-      expect(days.find(d => d.iso === '2026-07-21').state).toBe('within');
-      expect(days.find(d => d.iso === '2026-07-22').state).toBe('over');
-    });
-
-    it('"4weeks" mode: a slip in an older, different block does not leak into the current block\'s carry', () => {
-      const olderBlockSlips = ['2026-07-13', '2026-07-14']; // weeksAgo=4, the block *before* the current one
-      const goal = decreasingWithPeriod(2, [...olderBlockSlips, TODAY], '4weeks');
-      expect(weekDayStates(goal, TODAY, 0).find(d => d.iso === TODAY).state).toBe('within'); // unaffected — different block
-    });
+  it('an earlier week never affects this one — the allowance resets every Monday', () => {
+    const priorWeek = ['2026-08-03', '2026-08-04', '2026-08-05']; // 3 slips the week before
+    const goal = decreasing(2, [...priorWeek, '2026-08-10']);     // + 1 slip this week
+    expect(weekDayStates(goal, TODAY, 0).find(d => d.iso === '2026-08-10').state).toBe('within');
   });
 });
 
 describe('tracking — isOverAllowance', () => {
   const TODAY = '2026-08-10'; // Monday
-  function decreasingWithPeriod(target, entries, allowancePeriod) {
-    return { tracking: { type: 'decreasing', target, entries, allowancePeriod } };
-  }
 
   it('is false with no slips at all', () => {
     expect(isOverAllowance(decreasing(2, []), TODAY)).toBe(false);
@@ -754,25 +703,10 @@ describe('tracking — isOverAllowance', () => {
     expect(isOverAllowance(goal, '2026-08-14')).toBe(true); // Friday, no entry logged that day
   });
 
-  it('"week" mode resets every week — a fully-spent allowance in an earlier week does not carry', () => {
+  it('resets every week — a fully-spent allowance in an earlier week does not carry', () => {
     const priorWeekOver = ['2026-08-03', '2026-08-04', '2026-08-05']; // 3 slips, allowance 2, prior week
-    const goal = decreasingWithPeriod(2, priorWeekOver, 'week');
+    const goal = decreasing(2, priorWeekOver);
     expect(isOverAllowance(goal, TODAY)).toBe(false); // nothing logged this week yet
-  });
-
-  it('"4weeks" mode pools the allowance — a block-start week spending it all makes a later week\'s otherwise-fine slip tip it over', () => {
-    const blockStartWeek = ['2026-07-20', '2026-07-21']; // Mon+Tue, 3 weeks before TODAY, block-start week
-    const goal = decreasingWithPeriod(2, [...blockStartWeek, TODAY], '4weeks'); // 1 more slip this week -> 3rd of the block
-    expect(isOverAllowance(goal, TODAY)).toBe(true);
-    // Control: the identical entries under "week" mode leave the current week untouched.
-    const control = decreasingWithPeriod(2, [...blockStartWeek, TODAY], 'week');
-    expect(isOverAllowance(control, TODAY)).toBe(false);
-  });
-
-  it('"4weeks" mode: exactly at the pooled allowance across the block is still not over', () => {
-    const blockStartWeek = ['2026-07-20', '2026-07-21']; // 2 slips
-    const goal = decreasingWithPeriod(4, [...blockStartWeek, TODAY, '2026-08-11'], '4weeks'); // 2 more slips this week -> exactly 4
-    expect(isOverAllowance(goal, '2026-08-11')).toBe(false);
   });
 
   describe('currentAllowanceSpent (the plain count behind isOverAllowance)', () => {
@@ -780,18 +714,12 @@ describe('tracking — isOverAllowance', () => {
       expect(currentAllowanceSpent(decreasing(2, []), TODAY)).toBe(0);
     });
 
-    it('"week" mode: counts only the current week\'s slips', () => {
+    it('counts only the current week\'s slips', () => {
       const goal = decreasing(5, ['2026-08-10', '2026-08-11']);
       expect(currentAllowanceSpent(goal, '2026-08-12')).toBe(2);
-    });
-
-    it('"4weeks" mode: includes the block-start weeks\' carried slips, not just the current week\'s', () => {
-      const blockStartWeek = ['2026-07-20', '2026-07-21']; // 2 slips, 3 weeks before TODAY
-      const goal = decreasingWithPeriod(5, [...blockStartWeek, TODAY], '4weeks'); // + 1 this week
-      expect(currentAllowanceSpent(goal, TODAY)).toBe(3);
-      // Control: "week" mode with identical entries only counts this week's own.
-      const control = decreasingWithPeriod(5, [...blockStartWeek, TODAY], 'week');
-      expect(currentAllowanceSpent(control, TODAY)).toBe(1);
+      // An earlier week's slips are not carried in.
+      const withPrior = decreasing(5, ['2026-07-20', '2026-07-21', '2026-08-10']);
+      expect(currentAllowanceSpent(withPrior, TODAY)).toBe(1);
     });
   });
 });
@@ -815,23 +743,21 @@ describe('tracking — currentPeriodCount', () => {
 });
 
 describe('tracking — TARGET_LIMITS / targetLimitsFor', () => {
-  it('exposes the exact clamp ranges goal-dialog\'s stepper relies on — decreasing is keyed by allowancePeriod, not a flat pair', () => {
+  it('exposes the exact clamp ranges goal-dialog\'s stepper relies on', () => {
     expect(TARGET_LIMITS).toEqual({
       weekly: [1, 7],
       monthly: [1, 31],
-      decreasing: { week: [0, 6], '4weeks': [0, 27] },
+      decreasing: [0, 6],
     });
   });
 
-  it('targetLimitsFor returns weekly/monthly\'s plain pair unchanged, ignoring allowancePeriod', () => {
+  it('targetLimitsFor returns each type\'s plain pair', () => {
     expect(targetLimitsFor('weekly')).toEqual([1, 7]);
-    expect(targetLimitsFor('monthly', '4weeks')).toEqual([1, 31]); // allowancePeriod is meaningless here, ignored
+    expect(targetLimitsFor('monthly')).toEqual([1, 31]);
   });
 
-  it('targetLimitsFor("decreasing") resolves to [0, 6] for "week" (default) and [0, 27] for "4weeks"', () => {
-    expect(targetLimitsFor('decreasing')).toEqual([0, 6]); // no allowancePeriod passed -> DEFAULT_ALLOWANCE_PERIOD ("week")
-    expect(targetLimitsFor('decreasing', 'week')).toEqual([0, 6]);
-    expect(targetLimitsFor('decreasing', '4weeks')).toEqual([0, 27]); // one day below the full 28-day block
+  it('targetLimitsFor("decreasing") is [0, 6] — one day below the full week, so a day can still cost something', () => {
+    expect(targetLimitsFor('decreasing')).toEqual([0, 6]);
   });
 });
 
