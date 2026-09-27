@@ -362,6 +362,20 @@ function isoDaysAgo(n) {
   d.setDate(d.getDate() - n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+// Mon/Tue/Wed... of the LAST complete ISO week. Avoid's allowance is scored per
+// ISO week, so any fixture that needs N slips to share one week cannot build
+// them with isoDaysAgo(0,1,2): run the suite on a Monday and those three land
+// in two different weeks (Mon this week, Sun+Sat the previous one), splitting
+// the allowance and halving the over-allowance count. Anchoring to last week
+// gives days that are always in the past and always in the same week, whatever
+// day it happens to be.
+function isoLastWeek(dayIndex) {
+  const d = new Date();
+  const mondayThisWeek = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+  const target = new Date(mondayThisWeek.getFullYear(), mondayThisWeek.getMonth(), mondayThisWeek.getDate() - 7 + dayIndex);
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+}
+
 function countedCells(el) {
   return [...el.shadowRoot.querySelectorAll('.calc-group.counted .calc-cell')];
 }
@@ -397,7 +411,7 @@ describe('goal-analytics — Overview: weekly scheduled-days strip', () => {
 describe('goal-analytics — Overview: Avoid slip breakdown', () => {
   it('counts every slip, with the over-allowance share called out underneath', () => {
     // Allowance 1/week, 3 slips this week → 1 forgiven, 2 over.
-    const el = mount(decreasingGoal(1, [isoDaysAgo(0), isoDaysAgo(1), isoDaysAgo(2)]));
+    const el = mount(decreasingGoal(1, [isoLastWeek(0), isoLastWeek(1), isoLastWeek(2)]));
     const stat = [...el.shadowRoot.querySelectorAll('.stat')]
       .find(s => s.querySelector('.stat-label')?.textContent.includes('slips'));
     expect(stat.querySelector('.stat-value').textContent.trim()).toBe('3');
@@ -459,7 +473,11 @@ describe('goal-analytics — Score page: a failed week is tinted, not recoloured
   });
 
   it('Avoid: a week that overspends its allowance is a failed week', () => {
-    const el = mount(decreasingGoal(1, [isoDaysAgo(0), isoDaysAgo(1)]));
+    // Asserts on the CURRENT cell, so the overspend has to be in this week —
+    // which rules out isoLastWeek. It also can't be "two slips in a row", since
+    // on a Monday there is only one past day in the week to put them on. A zero
+    // allowance broken by a single slip today overspends on any weekday.
+    const el = mount(decreasingGoal(0, [isoDaysAgo(0)]));
     el.activePage = 1;
     const current = el.shadowRoot.querySelector('.calc-cell.current');
     expect(current.classList.contains('failed')).toBe(true);
@@ -515,7 +533,7 @@ describe('goal-analytics — Score page: periods before the first entry are blan
 
 describe('goal-analytics — Activity page: Avoid allowed/over split', () => {
   it('splits the count bars into forgiven and over-allowance segments', () => {
-    const el = mount(decreasingGoal(1, [isoDaysAgo(0), isoDaysAgo(1), isoDaysAgo(2)]));
+    const el = mount(decreasingGoal(1, [isoLastWeek(0), isoLastWeek(1), isoLastWeek(2)]));
     el.activePage = 2;
     expect(el.shadowRoot.querySelector('.bar-seg.within')).toBeTruthy();
     expect(el.shadowRoot.querySelector('.bar-seg.over')).toBeTruthy();
@@ -523,10 +541,12 @@ describe('goal-analytics — Activity page: Avoid allowed/over split', () => {
   });
 
   it('a forgiven slip is never drawn in the year accent — that colour means "good"', () => {
-    const el = mount(decreasingGoal(2, [isoDaysAgo(0), isoDaysAgo(1)])); // both inside the allowance
+    const el = mount(decreasingGoal(2, [isoLastWeek(0), isoLastWeek(1)])); // both inside the allowance
     el.activePage = 2;
     const css = el.shadowRoot.querySelector('style').textContent;
-    expect(css).toMatch(/\.bar-seg\.within\s*\{[^}]*--color-danger/);
+    // Forgiven is now an unfilled mark, not a second hue — so the assertion is
+    // that it carries no fill at all, and certainly not the accent.
+    expect(css).toMatch(/\.bar-seg\.within\s*\{[^}]*background:\s*transparent/);
     expect(css).not.toMatch(/\.bar-seg\.within\s*\{[^}]*--color-accent/);
     const dots = [...el.shadowRoot.querySelectorAll('.freq-dot-el:not(.zero)')];
     expect(dots.length).toBeGreaterThan(0);
@@ -690,5 +710,344 @@ describe('goal-analytics — page head', () => {
     const el = mount(weeklyGoal(3, []));
     const css = el.shadowRoot.querySelector('style').textContent;
     expect(css).toMatch(/\.page-head\s*\{[^}]*position:\s*sticky/);
+  });
+});
+
+// Real today, since the component always reads todayISO() — these assert
+// spans relative to the current calendar, not the fixed TODAY above.
+const THIS_YEAR = String(new Date().getFullYear());
+const LAST_YEAR = String(new Date().getFullYear() - 1);
+
+function mountFor(goal, year) {
+  const el = document.createElement('goal-analytics');
+  document.body.appendChild(el);
+  el.year = year;
+  el.goal = goal;
+  return el;
+}
+
+describe('goal-analytics — countdown Overview says only what the calendar cannot', () => {
+  it('drops the trend section and the pace callout — both restate the arithmetic', () => {
+    const el = mount(countdownGoal(`${THIS_YEAR}-01-01`, `${THIS_YEAR}-12-31`));
+    expect(el.shadowRoot.querySelector('.section-label')).toBeNull();
+    expect(el.shadowRoot.querySelector('.pace-callout')).toBeNull();
+    // Every other type still gets both.
+    const pct = mount(pctGoal(50, [{ date: isoDaysAgo(90), value: 10 }, { date: isoDaysAgo(0), value: 50 }]));
+    expect(pct.shadowRoot.querySelector('.section-label')).toBeTruthy();
+  });
+
+  it('shows a days-left card beside the type card', () => {
+    const el = mount(countdownGoal(`${THIS_YEAR}-01-01`, isoDaysAgo(-40)));
+    const stat = [...el.shadowRoot.querySelectorAll('.stat')]
+      .find(s => s.querySelector('.stat-label')?.textContent.includes('Days left'));
+    expect(stat).toBeTruthy();
+    expect(stat.querySelector('.stat-value').textContent.trim()).toBe('40');
+    expect(stat.querySelector('.stat-sub')).toBeNull();
+  });
+
+  it('disambiguates a floored 0 from "due today" once the date has passed', () => {
+    const el = mount(countdownGoal(`${LAST_YEAR}-01-01`, isoDaysAgo(5)));
+    const stat = [...el.shadowRoot.querySelectorAll('.stat')]
+      .find(s => s.querySelector('.stat-label')?.textContent.includes('Days left'));
+    expect(stat.querySelector('.stat-value').textContent.trim()).toBe('0');
+    expect(stat.querySelector('.stat-sub').textContent).toContain('reached');
+  });
+
+  it('drops the card entirely when no due date is configured yet', () => {
+    const el = mount({ id: 'c0', title: 'Unset', tracking: { type: 'countdown', startDate: `${THIS_YEAR}-01-01` } });
+    const labels = [...el.shadowRoot.querySelectorAll('.stat-label')].map(n => n.textContent);
+    expect(labels.some(l => l.includes('Days left'))).toBe(false);
+  });
+
+  it('never shows a days-left card for any other type', () => {
+    for (const goal of [pctGoal(50, []), weeklyGoal(3, []), decreasingGoal(1, [])]) {
+      const labels = [...mount(goal).shadowRoot.querySelectorAll('.stat-label')].map(n => n.textContent);
+      expect(labels.some(l => l.includes('Days left'))).toBe(false);
+    }
+  });
+});
+
+describe('goal-analytics — one year is the ceiling on every chart', () => {
+  // A Telos goal is annual, so 12 trailing quarters was three years of
+  // mostly-empty bars reaching outside the goal's own lifetime.
+  const weeklyWithYear = () => mountFor(
+    weeklyGoal(1, Array.from({ length: 30 }, (_, i) => isoDaysAgo(i * 7))), THIS_YEAR);
+
+  function pick(el, id, value) {
+    const sel = el.shadowRoot.querySelector(id);
+    sel.value = value;
+    sel.dispatchEvent(new Event('change'));
+  }
+
+  it('the Consistency chart plots 4 quarters, not 8', () => {
+    const el = weeklyWithYear();
+    pick(el, '#tf-perf', 'quarter');
+    expect(el.shadowRoot.querySelectorAll('.perf-col').length).toBe(4);
+  });
+
+  it('the Activity histogram plots 4 quarters, not 8', () => {
+    const el = weeklyWithYear();
+    el.activePage = 2;
+    pick(el, '#tf-activity', 'quarter');
+    expect(el.shadowRoot.querySelectorAll('.bar-col').length).toBe(4);
+  });
+
+  it('the Progress chart names all 4 quarters rather than a misplaced midpoint', () => {
+    const el = weeklyWithYear();
+    pick(el, '#tf-progress', 'quarter');
+    // space-between over 3 labels would render the 3rd-of-4 period at 50%.
+    expect(el.shadowRoot.querySelectorAll('.line-axis span').length).toBe(4);
+  });
+
+  it('keeps the 3-label axis for timeframes that were already inside the cap', () => {
+    const el = weeklyWithYear();
+    pick(el, '#tf-progress', 'month');
+    expect(el.shadowRoot.querySelectorAll('.line-axis span').length).toBe(3);
+  });
+});
+
+describe('goal-analytics — the Activity page spans the year, not a rolling window', () => {
+  const weeklyIn = year => mountFor(weeklyGoal(3, [`${year}-03-02`]), year);
+
+  it('the frequency grid starts at January of the year being viewed', () => {
+    const el = weeklyIn(THIS_YEAR);
+    el.activePage = 2;
+    const cols = [...el.shadowRoot.querySelectorAll('.freqgrid .month-col')];
+    expect(cols.length).toBe(new Date().getMonth() + 1);
+    expect(cols[0].querySelector('.month-label').textContent).toBe('Jan');
+  });
+
+  it('a year already over shows exactly its 12 months, not a window running into the present', () => {
+    const el = weeklyIn(LAST_YEAR);
+    el.activePage = 2;
+    const cols = [...el.shadowRoot.querySelectorAll('.freqgrid .month-col')];
+    expect(cols.length).toBe(12);
+    expect(cols[0].querySelector('.month-label').textContent).toBe('Jan');
+    expect(cols[11].querySelector('.month-label').textContent).toBe('Dec');
+  });
+
+  it('the calendar covers the whole ISO weeks from 1 January through today', () => {
+    const el = weeklyIn(THIS_YEAR);
+    el.activePage = 2;
+    const weeks = el.shadowRoot.querySelectorAll('.heatmap .cell').length / 7;
+    const jan1 = new Date(Number(THIS_YEAR), 0, 1);
+    const expected = Math.floor((Date.now() - jan1.getTime()) / 86400000 / 7) + 1;
+    // Within a week either way — the exact count depends on where 1 Jan and
+    // today sit inside their own Mon-Sun columns.
+    expect(Math.abs(weeks - expected)).toBeLessThanOrEqual(1);
+  });
+
+  it('still reaches a past year’s own data rather than rendering it empty', () => {
+    const el = weeklyIn(LAST_YEAR);
+    el.activePage = 2;
+    expect(el.shadowRoot.querySelectorAll('.heatmap .cell').length / 7).toBeGreaterThanOrEqual(52);
+    expect(el.shadowRoot.querySelectorAll('.heatmap .cell.on').length).toBe(1);
+  });
+
+  it('falls back to the current year when no year is set (isolated mount)', () => {
+    const el = mount(weeklyGoal(3, [`${THIS_YEAR}-03-02`]));
+    el.activePage = 2;
+    const cols = el.shadowRoot.querySelectorAll('.freqgrid .month-col');
+    expect(cols.length).toBe(new Date().getMonth() + 1);
+  });
+});
+
+describe('goal-analytics — Avoid: forgiven vs over is a shape, not a hue', () => {
+  it('encodes the split as stroke-vs-fill so it survives greyscale and colour blindness', () => {
+    const css = mount(decreasingGoal(1, [])).shadowRoot.querySelector('style').textContent;
+    // Both states are plain --color-danger; what separates them is whether the
+    // mark is filled. An earlier two-hue scheme (solid danger vs a pale
+    // color-mix of it) could not satisfy both "tell them apart at 8px" and
+    // "stay visible against the card" at any mix ratio — see SLIP_STROKE.
+    expect(css).not.toMatch(/color-mix\(in srgb, var\(--color-danger\)/);
+    // Outline = total.
+    expect(css).toMatch(/\.bar-stack\s*\{[^}]*border:[^;]*var\(--color-danger\)/);
+    expect(css).toMatch(/\.freq-dot-el\.slip\s*\{[^}]*border:[^;]*var\(--color-danger\)/);
+    // Fill = over-allowance only.
+    expect(css).toMatch(/\.bar-seg\.over\s*\{[^}]*background:\s*var\(--color-danger\)/);
+    expect(css).toMatch(/\.bar-seg\.within\s*\{[^}]*background:\s*transparent/);
+    // The key mirrors the marks: one hollow swatch, one filled.
+    expect(css).toMatch(/\.legend \.swatch-dot\s*\{[^}]*background:\s*transparent/);
+    expect(css).toMatch(/\.legend \.swatch-dot\.danger\s*\{[^}]*background:\s*var\(--color-danger\)/);
+  });
+
+  it('fills each weekday ring to the share of its slips that broke the allowance', () => {
+    // 3 slips inside ONE week against an allowance of 1 → the first is forgiven,
+    // the other two broke it. Spreading them a week apart instead would make
+    // every one of them forgiven, and every ring empty — hence isoLastWeek.
+    const el = mount(decreasingGoal(1, [isoLastWeek(0), isoLastWeek(1), isoLastWeek(2)]));
+    el.activePage = 2;
+    const rings = [...el.shadowRoot.querySelectorAll('.freq-dot-el.slip')];
+    expect(rings.length).toBeGreaterThan(0);
+    // Every ring is a proportional conic fill, never a flat second colour.
+    for (const r of rings) expect(r.style.background).toMatch(/^conic-gradient\(var\(--color-danger\) 0 \d+%, transparent/);
+    const pcts = rings.map(r => Number(r.style.background.match(/0 (\d+)%/)[1]));
+    expect(Math.max(...pcts)).toBeGreaterThan(0); // at least one genuinely over
+  });
+
+  it('draws nothing at all for a period with no slips', () => {
+    // The stack is stroked now, so an empty one would render as a 3px dash on
+    // the baseline — a slip mark on an Avoid goal's best possible period.
+    const el = mount(decreasingGoal(1, [isoDaysAgo(0)]));
+    el.activePage = 2;
+    const cols = [...el.shadowRoot.querySelectorAll('.bar-col')];
+    const empty = cols.filter(c => !c.querySelector('.bar-stack'));
+    expect(empty.length).toBeGreaterThan(0);          // most weeks had no slips
+    expect(cols.some(c => c.querySelector('.bar-stack'))).toBe(true); // but one did
+  });
+
+  it('never fades an Avoid cell toward the card — colour there carries meaning', () => {
+    // 3 slips on the same weekday against an allowance of 1: volume is already
+    // in the dot's size, and the opacity ramp washed forgiven and over
+    // together at exactly the size where the colour had to carry the split.
+    const el = mount(decreasingGoal(1, [isoDaysAgo(0), isoDaysAgo(7), isoDaysAgo(14)]));
+    el.activePage = 2;
+    const dots = [...el.shadowRoot.querySelectorAll('.freq-dot-el:not(.zero)')];
+    expect(dots.length).toBeGreaterThan(0);
+    for (const dot of dots) expect(dot.style.opacity).toBe('1');
+  });
+
+  it('keeps the volume ramp for types whose colour is constant', () => {
+    const el = mount(weeklyGoal(3, [isoDaysAgo(0)]));
+    el.activePage = 2;
+    const dots = [...el.shadowRoot.querySelectorAll('.freq-dot-el:not(.zero)')];
+    expect(dots.length).toBeGreaterThan(0);
+    expect(dots.some(d => Number(d.style.opacity) < 1)).toBe(true);
+  });
+});
+
+describe('goal-analytics — few bars stretch to fill the card', () => {
+  // Capping quarter at the year's 4 periods made a fixed-18px-column chart
+  // sit as a narrow right-aligned cluster with its axis labels colliding.
+  const weekly = () => mountFor(
+    weeklyGoal(1, Array.from({ length: 30 }, (_, i) => isoDaysAgo(i * 7))), THIS_YEAR);
+
+  function pick(el, id, value) {
+    const sel = el.shadowRoot.querySelector(id);
+    sel.value = value;
+    sel.dispatchEvent(new Event('change'));
+  }
+
+  it('the Consistency chart fills and names every quarter', () => {
+    const el = weekly();
+    pick(el, '#tf-perf', 'quarter');
+    expect(el.shadowRoot.querySelector('.perf').classList.contains('fill')).toBe(true);
+    expect([...el.shadowRoot.querySelectorAll('.perf-ax')].every(a => a.textContent.trim())).toBe(true);
+  });
+
+  it('the Activity histogram fills and names every quarter', () => {
+    const el = weekly();
+    el.activePage = 2;
+    pick(el, '#tf-activity', 'quarter');
+    expect(el.shadowRoot.querySelector('.histogram').classList.contains('fill')).toBe(true);
+    expect(el.shadowRoot.querySelector('.histogram-axis').classList.contains('fill')).toBe(true);
+    expect([...el.shadowRoot.querySelectorAll('.ax')].every(a => a.textContent.trim())).toBe(true);
+  });
+
+  it('keeps the fixed-width, right-anchored layout once the bars could overflow', () => {
+    const el = weekly();
+    pick(el, '#tf-perf', 'month');
+    expect(el.shadowRoot.querySelector('.perf').classList.contains('fill')).toBe(false);
+    // The sparse first/middle/last axis rule is back.
+    const labelled = [...el.shadowRoot.querySelectorAll('.perf-ax')].filter(a => a.textContent.trim());
+    expect(labelled.length).toBe(3);
+  });
+
+  it('never labels the calendar’s leading partial week with the previous month', () => {
+    // The week containing 1 January usually starts in December, one 11px
+    // column from "Jan" — both labels overflow their cells and collide.
+    const el = mountFor(weeklyGoal(3, [`${THIS_YEAR}-03-02`]), THIS_YEAR);
+    el.activePage = 2;
+    const labels = [...el.shadowRoot.querySelectorAll('.heatmap-monthrow span')]
+      .map(s => s.textContent).filter(Boolean);
+    // Either way — 1 January on a Monday, or a leading partial week — the
+    // first label the row renders is January's own.
+    expect(labels[0].startsWith('Jan')).toBe(true);
+    expect(labels.some(l => l.startsWith('Dec'))).toBe(false);
+  });
+});
+
+describe('goal-analytics — the Score grid stops at one year of periods too', () => {
+  it('a monthly goal with years of history shows exactly 12 months', () => {
+    const entries = Array.from({ length: 30 }, (_, i) => isoDaysAgo(i * 30));
+    const el = mountFor(monthlyGoal(2, entries), THIS_YEAR);
+    el.activePage = 1;
+    // 3 groups of 4 — the annual ceiling, not "as far back as data exists".
+    expect(el.shadowRoot.querySelectorAll('.calc-group').length).toBe(3);
+    expect(el.shadowRoot.querySelectorAll('.calc-cell').length).toBe(12);
+  });
+
+  it('a weekly goal stops at the whole 6-week group covering week 52', () => {
+    const entries = Array.from({ length: 90 }, (_, i) => isoDaysAgo(i * 7));
+    const el = mountFor(weeklyGoal(1, entries), THIS_YEAR);
+    el.activePage = 1;
+    // 9 groups of 6 = 54: the grid cannot be cut mid-column, so it lands on
+    // the first whole group past 52 rather than exactly on it.
+    expect(el.shadowRoot.querySelectorAll('.calc-cell').length).toBe(54);
+  });
+});
+
+describe('goal-analytics — every chart opens on the goal’s natural period', () => {
+  // The rendered markup, not select.value: happy-dom does not resolve .value
+  // from a `selected` attribute set via innerHTML (it returned the second
+  // option for a correctly-marked third one). This reads exactly what the
+  // component emits, which is what a real browser acts on.
+  function selected(el, id) {
+    return el.shadowRoot.querySelector(`${id} option[selected]`)?.value;
+  }
+
+  it('week for percentage, weekly and Avoid goals', () => {
+    for (const goal of [pctGoal(50, [{ date: isoDaysAgo(0), value: 50 }]), weeklyGoal(3, []), decreasingGoal(1, [])]) {
+      const el = mount(goal);
+      expect(selected(el, '#tf-progress')).toBe('week');
+      expect(selected(el, '#tf-perf')).toBe('week');
+      el.activePage = el.pageCount - 2; // Activity
+      expect(selected(el, '#tf-activity')).toBe('week');
+    }
+  });
+
+  it('month for a monthly goal — its weeks hold no fraction of a monthly target', () => {
+    const el = mount(monthlyGoal(2, []));
+    expect(selected(el, '#tf-progress')).toBe('month');
+    expect(selected(el, '#tf-perf')).toBe('month');
+    el.activePage = 2;
+    expect(selected(el, '#tf-activity')).toBe('month');
+  });
+
+  it('an explicit pick wins over the natural default and survives a re-render', () => {
+    const el = mount(weeklyGoal(3, []));
+    const sel = el.shadowRoot.querySelector('#tf-progress');
+    sel.value = 'quarter';
+    sel.dispatchEvent(new Event('change'));
+    // Not option[selected] here: a timeframe change now swaps only the card
+    // body, so the select is never rebuilt and its markup keeps whichever
+    // option was marked at first render. The live value is the truth, and the
+    // element staying put is the entire point — see _swapCardBody.
+    expect(el.shadowRoot.querySelector('#tf-progress')).toBe(sel); // same node
+    expect(sel.value).toBe('quarter');
+    el.activePage = 0; // full re-render — now the markup catches up
+    expect(selected(el, '#tf-progress')).toBe('quarter');
+  });
+
+  it('a monthly goal can still be shown by week where that means something', () => {
+    // Consistency excludes week outright (no month inside a week), but the
+    // histogram just counts entries, so the option stays real there.
+    const el = mount(monthlyGoal(2, []));
+    el.activePage = 2;
+    const sel = el.shadowRoot.querySelector('#tf-activity');
+    sel.value = 'week';
+    sel.dispatchEvent(new Event('change'));
+    expect(sel.value).toBe('week');            // live value, see the note above
+    expect(el._tfActivity).toBe('week');       // and it reached the component
+  });
+});
+
+describe('goal-analytics — the newest column sits at the right edge', () => {
+  it('the calendar and frequency grid push their content right, not left', () => {
+    const css = mount(weeklyGoal(3, [isoDaysAgo(0)])).shadowRoot.querySelector('style').textContent;
+    // A span narrow enough to fit used to sit left-aligned, leaving "now"
+    // stranded mid-card with empty space trailing it.
+    expect(css).toMatch(/\.heatmap-inner\s*\{[^}]*margin-inline-start:\s*auto/);
+    expect(css).toMatch(/\.freqgrid\s*\{[^}]*margin-inline-start:\s*auto/);
   });
 });

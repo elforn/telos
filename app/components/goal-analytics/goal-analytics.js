@@ -3,14 +3,14 @@ import { t } from '../../../_lib/core/strings.js';
 import { todayISO } from '../../utils/today-iso.js';
 import {
   isFrequency, isDecreasing, isCountdown, isoWeekKey, monthKey, PERIOD_WINDOW, weekDayStates, daysBetween,
-  WEEKDAYS,
+  WEEKDAYS, countdownDaysRemaining,
 } from '../../utils/tracking.js';
 import {
   pagesFor, percentValueAt, dateListFor, rawLoggedDates, topStreaks, countByBucket,
   completionSeries, periodPerformanceSeries,
   denseSamples, completionSeriesAt, expectedRampSeriesAt, recoveryCurveAt,
   comparisonDelta, updateCount, projectPace,
-  slipStates, slipDatesByState, firstRecordIso,
+  slipStates, slipDatesByState, firstRecordIso, naturalUnitFor,
 } from '../../utils/goal-analytics.js';
 import { urgencyOf } from '../../utils/urgency.js';
 import { septagonWedgePath, septagonWedgeState, septagonWedgeCentroid } from '../goal-item/goal-item.js';
@@ -25,15 +25,43 @@ const SEPTAGON_DOT_FILL = 'currentColor';
 // A generous safety cap, not the normal driver — real context group count is
 // computed per-goal in _renderScore from how much history actually exists.
 const SCORE_CONTEXT_GROUPS_MAX = 12;
-const HISTORY_DAYS_BACK = 365; // fixed cap — see the module doc comment below for why
+const HISTORY_DAYS_BACK = 365; // floor for the data window — see _daysBack
 
 // A goal has no createdAt/first-logged timestamp anywhere in its schema, so
-// "how far back does real history go" isn't reliably knowable — a fixed
-// 365-day window is used instead of trying to detect a true start. Periods
-// within that window that happen to be genuinely empty (a goal younger than
-// the window) render as real zero-count periods, which is honest, not
+// "how far back does real history go" isn't reliably knowable — a 365-day
+// floor is used instead of trying to detect a true start (_daysBack widens it
+// when the year being viewed reaches further back than that). Periods within
+// that window that happen to be genuinely empty (a goal younger than the
+// window) render as real zero-count periods, which is honest, not
 // fabricated — there is no synthetic data being invented, just an honestly
 // empty result for a period that really has none.
+
+// One year's worth of each timeframe unit — the hard ceiling on how many
+// periods any chart here plots. A Telos goal is annual (it is filed under one
+// year and nothing carries across), so a chart reaching further back than a
+// year is reaching outside the goal's own lifetime: 12 trailing quarters was
+// three years of mostly-empty bars. Each chart still picks its own count
+// below; this only caps it.
+const TIMEFRAME_MAX = { week: 52, month: 12, quarter: 4, year: 1 };
+
+// How many periods each chart asks for, per timeframe. Editorial preferences,
+// not a shared rule — the charts answer different questions, so the histogram
+// wants a longer run (26 weeks ≈ 6 months of raw volume) than Consistency does
+// (12 periods is plenty to read a pass/fail trend). clampPeriods still caps
+// every one of these at TIMEFRAME_MAX, so a number raised past a year's worth
+// quietly won't take effect — keep them at or under the ceiling.
+//
+// No 'year' key: _timeframeSelect only ever offers week/month/quarter, so a
+// year entry could never be read. There used to be one in each of these, plus
+// a quarter of 8 that the annual cap silently overrode — both read like live
+// settings while having no effect at all.
+const BARS_PROGRESS    = { week: 12, month: 12, quarter: 4 };
+const BARS_CONSISTENCY = { week: 12, month: 12, quarter: 4 };
+const BARS_HISTOGRAM   = { week: 26, month: 12, quarter: 4 };
+// At or below this many bars, a chart stretches its columns across the card
+// instead of keeping them at the fixed 18px it needs when they might overflow.
+const MAX_BARS_TO_STRETCH = 6;
+function clampPeriods(unit, count) { return Math.min(count, TIMEFRAME_MAX[unit] ?? count); }
 
 function pad(n) { return String(n).padStart(2, '0'); }
 
@@ -83,6 +111,12 @@ function mondayOfWeek(weeksAgo, todayIso) {
 }
 
 function quarterOf(d) { return Math.floor(d.getMonth() / 3) + 1; }
+
+// How many calendar months the inclusive [startIso, endIso] range touches.
+function monthSpan(startIso, endIso) {
+  const a = localDate(startIso), b = localDate(endIso);
+  return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+}
 
 function periodLabel(unit, indexFromEnd, todayIso) {
   if (unit === 'month') { const d = monthOnOrBefore(indexFromEnd, todayIso); return monthAbbr(d.getMonth()) + (d.getMonth() === 0 ? ` '${String(d.getFullYear()).slice(2)}` : ''); }
@@ -179,19 +213,32 @@ function squareSweepGlyph(frac, size, failed = false) {
   return `<div style="width:${size}px;height:${size}px;border-radius:5px;background:conic-gradient(${on} 0 ${pct}%, ${off} ${pct}% 100%);flex-shrink:0;"></div>`;
 }
 
-// Avoid's forgiven slips, in the two charts that count slips as events (the
-// timebox histogram and the weekday grid). Deliberately NOT the year accent:
-// that colour means "good" everywhere else in the app, and a slip inside the
-// allowance is not good — it is a slip that happened to cost nothing. A
-// muted red keeps it in the same family as the fails it sits next to, one
-// step down in weight. Mixed toward the card rather than a fixed pale red so
-// it stays legible in both themes.
-const SLIP_ALLOWED_FILL = 'color-mix(in srgb, var(--color-danger) 38%, var(--color-surface-raised))';
+// Avoid's forgiven-vs-over encoding, in the two charts that count slips as
+// events (the timebox histogram and the weekday grid): **outline means total,
+// fill means over-allowance**. A slip inside the allowance is drawn as a bare
+// stroke; one that broke the allowance is drawn solid; a mark holding both is
+// a stroke partly filled, in proportion.
+//
+// This replaces an earlier two-hue scheme (solid --color-danger against a pale
+// color-mix of it) that had no way to work. The two reds had to be far enough
+// apart to tell apart at the weekday grid's 8-14px dots, yet the paler one had
+// to stay visible against the card — and those pull in opposite directions, so
+// every mix ratio failed one of them: at 38% the pair was 2.13:1 against each
+// other, at 26% it reached 2.53:1 but the pale fill dropped to 1.42:1 against
+// the card. Neither end cleared the 3:1 needed for a graphical object.
+//
+// Fill-vs-stroke sidesteps the trade entirely, because it is not a colour
+// distinction at all: both states are plain --color-danger (3.58:1 light,
+// 3.33:1 dark against the card — passing), and what separates them is a
+// channel that survives greyscale, low vision and colour blindness alike. It
+// is also the only encoding here that still reads once a mark is both, since
+// "partly filled" is a spectrum where "a third hue" would be a guess.
+// The stroke weight itself is the --slip-stroke custom property on :host, set
+// the same way as --chart-scrollbar-room so the two locally-defined chart
+// dimensions in this file share one mechanism and both stay inspectable.
 
-function naturalUnitOf(goal) { return goal?.tracking?.type === 'monthly' ? 'month' : 'week'; }
-function naturalUnitIsMonth(goal) { return naturalUnitOf(goal) === 'month'; }
+function naturalUnitIsMonth(goal) { return naturalUnitFor(goal) === 'month'; }
 
-function unitFor(goal) { return isDecreasing(goal) ? 'week' : goal?.tracking?.type === 'monthly' ? 'month' : 'week'; }
 function unitWord(unit, n) { return n === 1 ? t(`goal-analytics.unit-${unit}`) : t(`goal-analytics.unit-${unit}-plural`); }
 
 class GoalAnalytics extends AppElement {
@@ -208,7 +255,15 @@ class GoalAnalytics extends AppElement {
   template() {
     return `
       <style>
-        :host { display: block; font-family: var(--font-family); color: var(--color-text-primary); }
+        :host {
+          display: block; font-family: var(--font-family); color: var(--color-text-primary);
+          /* Room a horizontal overlay scrollbar paints in — see .histogram-scroll. */
+          --chart-scrollbar-room: var(--space-2);
+          /* Stroke weight for Avoid's outline marks — see the forgiven-vs-over
+             note above the class. A local value rather than a token because
+             tokens.css defines no border width at all. */
+          --slip-stroke: 1.5px;
+        }
         .page { display: flex; flex-direction: column; gap: calc(var(--space-5) + 3px); }
         /* One line: heading at the start, goal name at the end. The heading
            never shrinks, so a long goal name ellipsises rather than squeezing
@@ -300,7 +355,9 @@ class GoalAnalytics extends AppElement {
         /* Avoid's allowed/over-allowance key, shared by the count histogram
            and the weekday grid — a filled block rather than the line swatch
            above, matching the solid marks those two charts actually draw. */
-        .legend .swatch-dot { inline-size: 9px; block-size: 9px; border-radius: 2px; background: ${SLIP_ALLOWED_FILL}; display: inline-block; }
+        /* The key mirrors the marks exactly: a bare stroke for a forgiven slip,
+           the same box filled for one that broke the allowance. */
+        .legend .swatch-dot { inline-size: 9px; block-size: 9px; border-radius: 2px; display: inline-block; box-sizing: border-box; background: transparent; border: var(--slip-stroke) solid var(--color-danger); }
         .legend .swatch-dot.danger { background: var(--color-danger); }
         /* Deliberately never --color-accent-light/-dark/-subtle anywhere in
            this file: Telos's own blue override (index.html) only sets bare
@@ -314,11 +371,29 @@ class GoalAnalytics extends AppElement {
 
         /* Per-period result (Overview bar chart) */
         .perf { display: flex; flex-direction: column; inline-size: max-content; margin-inline-start: auto; }
+        /* Few enough bars that they cannot overflow the card: stretch them to
+           fill it instead of leaving a right-aligned 80px cluster in a 300px
+           card. Capping quarter at the year's 4 periods (TIMEFRAME_MAX) is
+           what made this reachable — at 18px fixed columns those 4 bars used a
+           quarter of the width and the axis labels ran into each other. */
+        .perf.fill { inline-size: 100%; margin-inline-start: 0; }
+        .perf.fill .perf-col, .perf.fill .perf-val, .perf.fill .perf-ax { flex: 1 1 0; min-inline-size: 0; }
         .perf-vals, .perf-tracks, .perf-axis { display: flex; gap: var(--space-1); }
         .perf-tracks { block-size: 82px; position: relative; align-items: stretch; }
         .perf-vals { min-block-size: 11px; }
         .perf-axis { margin-block-start: var(--space-1); min-block-size: 11px; }
-        .perf-col { flex: 0 0 18px; display: flex; align-items: flex-end; }
+        /* min-inline-size:0 on every fixed 18px slot below (.perf-col/-val/-ax,
+           .bar-col, .ax). A flex item defaults to min-inline-size:auto, so
+           "flex: 0 0 18px" is NOT actually 18px once the slot holds text wider
+           than that — a labelled axis slot grew to its label (26.5px for
+           "Sep 21"), which had two consequences: the labels row ended up wider
+           than the bars row it annotates, so labels no longer sat over their
+           own bar; and because the scroll container takes its scrollWidth from
+           the wider row, scrolling fully right left the bars short of the edge
+           — the newest bar appearing to float mid-card instead of hanging
+           right. Labels are still free to paint outside their slot
+           (overflow: visible, below) — they just no longer push it wider. */
+        .perf-col { flex: 0 0 18px; min-inline-size: 0; display: flex; align-items: flex-end; }
         .perf-bar { inline-size: 100%; background: var(--color-accent); border-radius: 3px 3px 0 0; min-block-size: 3px; }
         /* Over-target reads as a distinct colour rather than just a taller bar —
            at the week timeframe the value is uncapped, so a 200% week would
@@ -327,8 +402,8 @@ class GoalAnalytics extends AppElement {
            the scale actually exceeds 100 (otherwise 100% is the top edge). */
         .perf-bar.over { background: var(--color-success); }
         .perf-100 { position: absolute; inline-size: 100%; inset-inline-start: 0; border-block-start: 1px dashed var(--color-text-secondary); pointer-events: none; }
-        .perf-val { flex: 0 0 18px; font-size: 8px; color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); text-align: center; white-space: nowrap; }
-        .perf-ax { flex: 0 0 18px; font-size: 8px; color: var(--color-text-muted); text-align: center; white-space: nowrap; }
+        .perf-val { flex: 0 0 18px; min-inline-size: 0; font-size: 8px; color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); text-align: center; white-space: nowrap; }
+        .perf-ax { flex: 0 0 18px; min-inline-size: 0; font-size: 8px; color: var(--color-text-muted); text-align: center; white-space: nowrap; }
 
         .line-wrap { position: relative; }
         .line-start-val { position: absolute; font-size: 8px; font-weight: var(--font-weight-semibold); color: var(--color-text-secondary); white-space: nowrap; pointer-events: none; }
@@ -415,9 +490,25 @@ class GoalAnalytics extends AppElement {
            (no visual effect) once the child is wider than its container, so
            the existing scrollLeft-to-end logic in _wireInteractive still
            anchors the "now" edge exactly as before. */
-        .histogram-scroll { padding-block-end: 2px; }
+        /* --chart-scrollbar-room: the strip a horizontal overlay scrollbar
+           paints in. It sits at the scroll container's block-end padding edge,
+           so without padding here it lands ON the chart — on the calendar's
+           Sunday row and the frequency grid's last weekday, i.e. over real
+           data rather than beside it.
+           Unconditional, deliberately not tied to .scrollable-x: that class is
+           applied in a rAF after render (see _wireInteractive), so conditional
+           padding would resize the card a frame late, every time the timeframe
+           changed. A few dead px on a chart that doesn't scroll is the cheaper
+           trade. The Score grid is exempt — .calc-scroll-outer already carries
+           --space-2 of block padding for its own reasons. */
+        .histogram-scroll { padding-block-end: var(--chart-scrollbar-room); }
         .histogram { display: flex; align-items: stretch; gap: var(--space-1); block-size: 96px; inline-size: max-content; margin-inline-start: auto; }
-        .bar-col { flex: 0 0 18px; display: flex; flex-direction: column; align-items: center; }
+        /* Same stretch-to-fill rule as .perf above, for the same reason — see
+           its comment. The axis row is a sibling, so it carries the class too
+           and its slots stay aligned with the bars. */
+        .histogram.fill, .histogram-axis.fill { inline-size: 100%; margin-inline-start: 0; }
+        .histogram.fill .bar-col, .histogram-axis.fill .ax { flex: 1 1 0; min-inline-size: 0; }
+        .bar-col { flex: 0 0 18px; min-inline-size: 0; display: flex; flex-direction: column; align-items: center; }
         .bar-val-slot { block-size: 14px; display: flex; align-items: flex-end; justify-content: center; }
         .bar-val { font-size: 8px; color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); white-space: nowrap; }
         .bar-track { flex: 1; inline-size: 100%; display: flex; align-items: flex-end; min-height: 0; }
@@ -425,14 +516,42 @@ class GoalAnalytics extends AppElement {
         /* Avoid's split bar: one rounded, clipped column holding the
            over-allowance segment above the forgiven one, so the pair reads as
            a single bar with a red cap rather than two bars stacked. */
-        .bar-stack { inline-size: 100%; display: flex; flex-direction: column; border-radius: 3px 3px 0 0; overflow: hidden; min-height: 3px; }
-        .bar-seg.within { background: ${SLIP_ALLOWED_FILL}; }
+        /* The whole stack is stroked — that outline is every slip in the period.
+           Only the over-allowance segment is filled, and it sits at the top, so
+           a bar reads "this many slips, this much of it past the line". */
+        .bar-stack { inline-size: 100%; display: flex; flex-direction: column; border-radius: 3px 3px 0 0; overflow: hidden; min-height: 3px; box-sizing: border-box; background: transparent; border: var(--slip-stroke) solid var(--color-danger); }
+        .bar-seg.within { background: transparent; }
         .bar-seg.over { background: var(--color-danger); }
         .histogram-axis { display: flex; gap: var(--space-1); inline-size: max-content; margin-block-start: var(--space-1); margin-inline-start: auto; min-height: 11px; }
-        .ax { flex: 0 0 18px; font-size: 8px; color: var(--color-text-muted); text-align: center; white-space: nowrap; overflow: visible; }
+        /* The trailing label is the one label that must not paint outside its
+           slot. Every other one bleeding symmetrically is fine — bleed past the
+           inline-start edge isn't reachable by scrolling, and mid-row bleed
+           lands over a neighbouring slot. But bleed past the inline-END edge
+           extends the scroll container's scrollWidth, so scrolling fully right
+           stopped 6px short of the newest bar. End-aligning just that slot
+           removes the overhang without touching the row's width. It has to be
+           flex justification rather than text-align: when a line box is
+           narrower than its own content, the alignment offset clamps to zero
+           and text-align does nothing at all (measured: the label still hung
+           6.2px past its slot). Flexbox's default "unsafe" justification has
+           no such clamp — flex-end genuinely pushes the overflow to the start
+           side. Only while
+           the slots are the narrow fixed 18px: .fill's slots are wide enough
+           to hold a label outright, and end-aligning one there would visibly
+           shove it off the bar it names. */
+        .histogram-axis:not(.fill) .ax:last-child { display: flex; justify-content: flex-end; }
+        .ax { flex: 0 0 18px; min-inline-size: 0; font-size: 8px; color: var(--color-text-muted); text-align: center; white-space: nowrap; overflow: visible; }
         .heatmap-outer { display: flex; gap: var(--space-2); align-items: flex-start; }
-        .heatmap-scroll { flex: 1; min-width: 0; }
-        .heatmap-inner { inline-size: max-content; }
+        .heatmap-scroll { flex: 1; min-width: 0; padding-block-end: var(--chart-scrollbar-room); }
+        /* margin-inline-start:auto pins the newest column to the right edge.
+           Without it a span narrow enough to fit (early in the year, or a
+           short frequency grid) sat left-aligned with the gap on the right,
+           i.e. "now" floating in the middle of the card while empty space
+           trailed it. Same idiom, and the same reasoning, as .histogram's own
+           auto margin — it collapses to 0 once the content is wider than the
+           container, so the scroll-to-right-edge pass in _wireInteractive
+           keeps working unchanged for the overflowing case. */
+        .heatmap-inner { inline-size: max-content; margin-inline-start: auto; }
         .heatmap-monthrow { display: grid; grid-auto-flow: column; grid-auto-columns: 11px; gap: 3px; block-size: 12px; margin-block-end: 3px; }
         .heatmap-monthrow span { font-size: 8px; color: var(--color-text-muted); white-space: nowrap; }
         .heatmap { display: grid; grid-auto-flow: column; grid-auto-columns: 11px; grid-template-rows: repeat(7, 11px); gap: 3px; }
@@ -457,13 +576,17 @@ class GoalAnalytics extends AppElement {
            broke the scrollWidth>clientWidth overflow check in
            _wireInteractive: without the constraint, both values reflect the
            same already-overflowed size, so real overflow never registered. */
-        .freqgrid-scroll { flex: 1; min-width: 0; }
-        .freqgrid { display: grid; grid-auto-flow: column; gap: 10px; inline-size: max-content; }
+        .freqgrid-scroll { flex: 1; min-width: 0; padding-block-end: var(--chart-scrollbar-room); }
+        .freqgrid { display: grid; grid-auto-flow: column; gap: 10px; inline-size: max-content; margin-inline-start: auto; }
         .month-col { display: grid; grid-template-rows: 12px repeat(7, 16px); gap: var(--space-1); text-align: center; }
         .month-label { font-size: 9px; color: var(--color-text-muted); }
         .dot-cell { display: flex; align-items: center; justify-content: center; }
         .freq-dot-el { border-radius: 50%; background: var(--color-accent); }
-        .freq-dot-el.zero { inline-size: 4px; block-size: 4px; background: var(--color-border); }
+        /* Avoid only: same stroke-is-total/fill-is-over rule as the bars above.
+           box-sizing keeps the ring inside the size the count already chose, so
+           adding the stroke doesn't quietly inflate every dot by 3px. */
+        .freq-dot-el.slip { box-sizing: border-box; border: var(--slip-stroke) solid var(--color-danger); background: transparent; }
+        .freq-dot-el.zero { inline-size: 4px; block-size: 4px; background: var(--color-border); border: none; }
         .weekday-rail { display: grid; grid-template-rows: 12px repeat(7, 16px); gap: var(--space-1); margin-inline-end: 6px; }
         .weekday-rail span { font-size: 9px; color: var(--color-text-muted); display: flex; align-items: center; }
 
@@ -482,14 +605,74 @@ class GoalAnalytics extends AppElement {
   subscribe() {
     this._root = this.shadowRoot.querySelector('.page');
     this._goal = null;
+    this._year = null;
     this._activePage = 0;
-    this._tfProgress = 'month';
-    this._tfActivity = 'month';
-    this._tfPerf = 'week';
+    // null means "the user hasn't picked one" — every chart then opens on the
+    // goal's own natural period (see _timeframe). Kept as null rather than
+    // seeded with 'week' so an explicit pick of 'week' on a monthly goal is
+    // still distinguishable from never having touched the select.
+    //
+    // Nothing here is persisted. The choice lives on this element instance, so
+    // it survives swiping between analytics pages and switching goals while
+    // the dialog stays mounted, and resets when a fresh element is mounted.
+    this._tfProgress = null;
+    this._tfActivity = null;
+    this._tfPerf = null;
   }
 
-  set goal(g) { this._goal = g; this._render(); }
+  // Reference-guarded, like the year setter below. goal-dialog re-sets this on
+  // every tab change (alongside activePage), which cost a second full render of
+  // a page that was about to be rebuilt anyway — measured at 2 renders per tab
+  // change, now 1. Identity is a safe test here because nothing mutates a goal
+  // in place: every update in goal-dialog replaces the object (an object
+  // literal, a spread, or one of tracking.js's pure helpers), so a genuinely
+  // changed goal always arrives as a new reference.
+  set goal(g) {
+    if (g === this._goal) return;
+    this._goal = g;
+    this._render();
+  }
   get goal() { return this._goal; }
+
+  // Which year's analytics these are. Goals are annual, so this is what the
+  // calendar/frequency spans anchor to (see _span) — set by goal-dialog from
+  // the year the goal is filed under. Absent, it falls back to the current
+  // year, which is what an isolated UI-tier mount (tests, storybook-style
+  // use) gets.
+  set year(y) {
+    const next = y == null ? null : String(y);
+    if (next === this._year) return; // goal-dialog re-sets it on every tab change
+    this._year = next;
+    this._render();
+  }
+  get year() { return this._year; }
+
+  // The inclusive calendar range the Activity page's two full-history charts
+  // cover: 1 January of the year being viewed through today, or through 31
+  // December once that year is over — a past year shows exactly that year
+  // rather than a rolling window running on into the present. Clamped so a
+  // year that hasn't started yet can't produce a backwards range.
+  _span(todayIso) {
+    const year = this._year ?? todayIso.slice(0, 4);
+    const start = `${year}-01-01`;
+    const yearEnd = `${year}-12-31`;
+    const end = todayIso < yearEnd ? todayIso : yearEnd;
+    return { start, end: end < start ? start : end };
+  }
+
+  // How far back the underlying date arrays are gathered. At least a year (so
+  // nothing that used to be counted stops being counted), and further when the
+  // span itself reaches further — a past year's Jan 1 is more than 365 days
+  // behind today, and its charts would otherwise render empty.
+  _daysBack(todayIso) {
+    return Math.max(HISTORY_DAYS_BACK, daysBetween(this._span(todayIso).start, todayIso));
+  }
+
+  // A chart's timeframe: whatever the user last picked on it, else the goal's
+  // own natural period — 'week', or 'month' for a monthly goal, whose weeks
+  // hold no meaningful fraction of a monthly target. One resolver for all
+  // three selects so they can't drift apart on what "default" means.
+  _timeframe(current, goal) { return current ?? naturalUnitFor(goal); }
 
   set activePage(i) { this._activePage = i; this._render(); }
   get activePage() { return this._activePage; }
@@ -511,55 +694,96 @@ class GoalAnalytics extends AppElement {
     this._renderedPage = this._activePage;
   }
 
+  // Timeframe changes update only the card that owns the select, never the
+  // whole page. Two reasons, and the second is the one that actually bit:
+  //
+  //  - The page rule is targeted DOM updates after first mount; rebuilding the
+  //    hero number, every stat card and every other chart because one select
+  //    moved is the opposite of that.
+  //  - _render() replaces .page's innerHTML wholesale, which destroys the
+  //    <select> the user is mid-interaction with. It is recreated with the same
+  //    id, so it looks fine — but it is a different node, so focus lands on
+  //    <body>. Measured: a keyboard user changing the timeframe was thrown to
+  //    the top of the document every time. Swapping only .card-body leaves
+  //    .card-head, and therefore the select, untouched — so focus simply stays
+  //    where it was and the listener bound here stays bound.
   _wireInteractive(kind) {
+    const today = () => todayISO();
     if (kind === 'overview') {
       const sel = this.shadowRoot.querySelector('#tf-progress');
-      sel?.addEventListener('change', () => { this._tfProgress = sel.value; this._render(); });
-    }
-    if (kind === 'overview') {
+      sel?.addEventListener('change', () => {
+        this._tfProgress = sel.value;
+        this._swapCardBody('progress-body', this._progressBody(this._goal, today()));
+      });
       const perf = this.shadowRoot.querySelector('#tf-perf');
-      perf?.addEventListener('change', () => { this._tfPerf = perf.value; this._render(); });
+      perf?.addEventListener('change', () => {
+        this._tfPerf = perf.value;
+        this._swapCardBody('perf-body', this._consistencyBody(this._goal, today()));
+      });
     }
     if (kind === 'activity') {
       const sel = this.shadowRoot.querySelector('#tf-activity');
-      sel?.addEventListener('change', () => { this._tfActivity = sel.value; this._render(); });
+      sel?.addEventListener('change', () => {
+        this._tfActivity = sel.value;
+        const todayIso = today();
+        // Recomputed for this card alone. _renderActivity derives these once
+        // for all three of its cards; here only the histogram is changing.
+        const daysBack = this._daysBack(todayIso);
+        const loggedDates = rawLoggedDates(this._goal, todayIso, daysBack);
+        const slipSplit = isDecreasing(this._goal) ? slipDatesByState(this._goal, todayIso, daysBack) : null;
+        const slipLegend = slipSplit ? this._slipLegend() : '';
+        this._swapCardBody('hist-body', this._histogramBody(this._goal, loggedDates, slipSplit, slipLegend, todayIso));
+        this._syncScrollable('hist-scroll');
+      });
     }
     // Deferred a frame: scrollWidth read immediately after an innerHTML
     // replacement can still reflect pre-layout dimensions, silently scrolling
     // to the wrong (often 0/left) position — the same class of timing bug
     // fixed once already for the due-date/notes reveal flash in
-    // goal-dialog.js, per its own _flashField timing note. Also where
-    // .scrollable-x gets applied (see its own CSS comment for why this can't
-    // be unconditional): scrollWidth/clientWidth are measurable regardless of
-    // the overflow-x value in effect, so this reads real overflow first and
-    // only *then* opts the element into being a native scroll surface —
-    // never the reverse order.
+    // goal-dialog.js, per its own _flashField timing note.
     requestAnimationFrame(() => {
-      ['hist-scroll', 'cal-scroll', 'freq-scroll', 'calc-scroll'].forEach(id => {
-        const el = this.shadowRoot.querySelector('#' + id);
-        if (!el) return;
-        const overflows = el.scrollWidth > el.clientWidth;
-        el.classList.toggle('scrollable-x', overflows);
-        // tabindex only while it genuinely overflows: Chrome (unlike Firefox)
-        // doesn't make scroll containers focusable on their own, so without
-        // this a keyboard user can't reach the off-screen part at all. Gating
-        // it on real overflow keeps the tab order free of dead stops on a
-        // chart that has nothing to scroll — and since these charts always
-        // open scrolled to "now" (below), the most relevant data is already
-        // in view without any scrolling.
-        if (overflows) el.setAttribute('tabindex', '0');
-        else el.removeAttribute('tabindex');
-        el.scrollLeft = el.scrollWidth;
-      });
+      ['hist-scroll', 'cal-scroll', 'freq-scroll', 'calc-scroll'].forEach(id => this._syncScrollable(id));
     });
+  }
+
+  // Replace one card's body in place. Falls back to a full render when the body
+  // comes back empty — that means the card should no longer exist at all (see
+  // _consistencyBody), and only _render can drop it without leaving a stranded
+  // header behind. Rare enough that losing focus on that path is acceptable.
+  _swapCardBody(id, html) {
+    const el = this.shadowRoot.querySelector('#' + id);
+    if (!el || !html) { this._render(); return; }
+    el.innerHTML = html;
+  }
+
+  // Opting one scroll container into being a native scroll surface, but only
+  // once it genuinely overflows. scrollWidth/clientWidth are measurable
+  // regardless of the overflow-x value in effect, so this reads real overflow
+  // first and only then applies .scrollable-x — never the reverse order (see
+  // that class's own note on why it cannot be unconditional). Also where the
+  // chart is anchored to its "now" edge.
+  _syncScrollable(id) {
+    const el = this.shadowRoot.querySelector('#' + id);
+    if (!el) return;
+    const overflows = el.scrollWidth > el.clientWidth;
+    el.classList.toggle('scrollable-x', overflows);
+    // tabindex only while it genuinely overflows: Chrome (unlike Firefox)
+    // doesn't make scroll containers focusable on their own, so without this a
+    // keyboard user can't reach the off-screen part at all. Gating it on real
+    // overflow keeps the tab order free of dead stops on a chart with nothing
+    // to scroll — and since these charts always open scrolled to "now", the
+    // most relevant data is already in view without any scrolling.
+    if (overflows) el.setAttribute('tabindex', '0');
+    else el.removeAttribute('tabindex');
+    el.scrollLeft = el.scrollWidth;
   }
 
   _timeframeSelect(id, current, exclude = []) {
     // No year option: a Telos goal lives inside a single year, so a yearly
-    // bucket can only ever hold one meaningful point (and HISTORY_DAYS_BACK
-    // caps the data at 365 days regardless). Quarter is the coarsest grouping
-    // that still says anything. 'year' stays valid in the utils below — the
-    // "vs year" comparison stat still uses it.
+    // bucket can only ever hold one meaningful point (and TIMEFRAME_MAX caps
+    // every chart at one year's worth of periods regardless). Quarter is the
+    // coarsest grouping that still says anything. 'year' stays valid in the
+    // utils below — the "vs year" comparison stat still uses it.
     const opts = ['week', 'month', 'quarter'].filter(v => !exclude.includes(v)).map(v =>
       `<option value="${v}" ${v === current ? 'selected' : ''}>${t('goal-analytics.timeframe-' + v)}</option>`).join('');
     return `<select id="${id}" aria-label="${t('goal-analytics.timeframe-label')}">${opts}</select>`;
@@ -573,6 +797,11 @@ class GoalAnalytics extends AppElement {
   _perfChart(points) {
     const vals = points.map(p => p.value).filter(v => v !== undefined);
     if (vals.length === 0) return '';
+    // Few enough bars to stretch across the card rather than sit in a narrow
+    // right-aligned cluster (see .perf.fill). Wide columns also leave room to
+    // name every period, so the sparse "first/middle/last" rule — which picks
+    // an off-centre middle out of only four — is dropped in that mode.
+    const fill = points.length <= MAX_BARS_TO_STRETCH;
     const scale = Math.max(100, ...vals);
     let valsHtml = '', tracks = '', axis = '';
     points.forEach((p, i) => {
@@ -581,12 +810,12 @@ class GoalAnalytics extends AppElement {
       valsHtml += `<div class="perf-val tabular">${over ? v + '%' : ''}</div>`;
       tracks += `<div class="perf-col">${v === undefined ? '' :
         `<div class="perf-bar${over ? ' over' : ''}" style="block-size:${Math.max(v > 0 ? 4 : 0, (v / scale) * 100)}%"></div>`}</div>`;
-      const showLabel = i === 0 || i === points.length - 1 || i === Math.floor((points.length - 1) / 2);
+      const showLabel = fill || i === 0 || i === points.length - 1 || i === Math.floor((points.length - 1) / 2);
       axis += `<div class="perf-ax">${showLabel ? p.label : ''}</div>`;
     });
     const rule = scale > 100
       ? `<div class="perf-100" style="inset-block-end:${((100 / scale) * 100).toFixed(1)}%"></div>` : '';
-    return `<div class="perf" role="img" aria-label="${t('goal-analytics.a11y-consistency')}"><div class="perf-vals">${valsHtml}</div>
+    return `<div class="perf${fill ? ' fill' : ''}" role="img" aria-label="${t('goal-analytics.a11y-consistency')}"><div class="perf-vals">${valsHtml}</div>
       <div class="perf-tracks">${rule}${tracks}</div><div class="perf-axis">${axis}</div></div>`;
   }
 
@@ -660,6 +889,15 @@ class GoalAnalytics extends AppElement {
   _renderOverview(goal) {
     const todayIso = todayISO();
     const current = percentValueAt(goal, todayIso) ?? 0;
+    // Countdown gets no trend section and no pace callout. Its percentage is
+    // the calendar running down — nothing else feeds it — so every trend
+    // reading is a restatement of the arithmetic the user already set up: the
+    // week/month/quarter deltas are a fixed rate the goal cannot deviate from,
+    // and the projected finish is the due date by construction ("on pace,
+    // projected right around your 31 Dec deadline" — it could never say
+    // anything else). The days-left card below carries the one figure here
+    // that actually tells the user something.
+    const trend = !isCountdown(goal);
     const recent = completionSeries(goal, 'month', 8, todayIso).map(p => p.value);
     const spark = this._sparkline(recent);
 
@@ -668,10 +906,10 @@ class GoalAnalytics extends AppElement {
       <div class="hero-number"><div class="big tabular">${current}<span class="pct-unit">%</span></div>
         ${spark ? `<div class="spark-wrap">${spark}<span class="spark-label">${t('goal-analytics.last-n-periods', { n: recent.length })}</span></div>` : ''}
       </div>
-      <div class="stat-row centered">${this._typeCard(goal, todayIso)}${this._deadlineCard(goal, todayIso)}</div>
-      <div><p class="section-label">${t('goal-analytics.change-over-time')}</p><div class="stat-row">${this._comparisonRow(goal, todayIso)}</div></div>
+      <div class="stat-row centered">${this._typeCard(goal, todayIso)}${this._deadlineCard(goal, todayIso)}${this._daysLeftCard(goal, todayIso)}</div>
+      ${trend ? `<div><p class="section-label">${t('goal-analytics.change-over-time')}</p><div class="stat-row">${this._comparisonRow(goal, todayIso)}</div></div>` : ''}
       ${this._progressCard(goal, todayIso)}
-      ${this._renderPaceCallout(projectPace(goal, todayIso))}
+      ${trend ? this._renderPaceCallout(projectPace(goal, todayIso)) : ''}
       ${this._consistencyCard(goal, todayIso)}
     </div>`;
   }
@@ -712,7 +950,7 @@ class GoalAnalytics extends AppElement {
           scheduledDays ? this._scheduleStrip(scheduledDays) : ''}</div>`
       : null;
 
-    const count = isCountdown(goal) ? null : updateCount(goal, todayIso, HISTORY_DAYS_BACK);
+    const count = isCountdown(goal) ? null : updateCount(goal, todayIso, this._daysBack(todayIso));
     const countLabel = isDecreasing(goal) ? 'goal-analytics.stat-slips' : tr.type === 'percentage' ? 'goal-analytics.stat-updates' : 'goal-analytics.stat-entries';
     // The Avoid count is every slip logged, forgiven ones included — that's
     // what "slips" means, and hiding the allowed ones would make the number
@@ -720,7 +958,7 @@ class GoalAnalytics extends AppElement {
     // actually interesting, so how many of them actually broke the allowance
     // reads underneath it.
     const overCount = isDecreasing(goal)
-      ? [...slipStates(goal, todayIso, HISTORY_DAYS_BACK).values()].filter(st => st === 'over').length : 0;
+      ? [...slipStates(goal, todayIso, this._daysBack(todayIso)).values()].filter(st => st === 'over').length : 0;
     const countSub = isDecreasing(goal) && count > 0
       ? `<div class="stat-sub stat-sub-lg">${t('goal-analytics.stat-slips-over', { n: overCount })}</div>` : '';
 
@@ -749,6 +987,29 @@ class GoalAnalytics extends AppElement {
     </div>`;
   }
 
+  // Countdown's counterpart to _deadlineCard, which is excluded for this type
+  // because its own type card already names the target date. What that card
+  // can't say is the part that actually moves: how much runway is left. Only
+  // rendered for countdown — every other type either has no date at all or
+  // gets the deadline card above, whose relative phrase ("due this week")
+  // already covers the same ground at the granularity those goals need.
+  _daysLeftCard(goal, todayIso) {
+    if (!isCountdown(goal)) return '';
+    // null, not 0: no due date set yet (the dialog force-opens the field when
+    // countdown is picked, but a goal can sit mid-edit without one) — there is
+    // nothing to count down to, so the card is dropped rather than reading 0.
+    const days = countdownDaysRemaining(goal, todayIso);
+    if (days === null) return '';
+    // countdownDaysRemaining floors at 0, so a passed date reads 0 — which on
+    // its own is ambiguous with "due today". The sub-line disambiguates it.
+    const reached = todayIso >= goal.dueDate;
+    return `<div class="stat">
+      <div class="stat-label">${t('goal-analytics.stat-days-left')}</div>
+      <div class="stat-value big-num tabular">${days}</div>
+      ${reached ? `<div class="stat-sub">${t('goal-analytics.countdown-reached')}</div>` : ''}
+    </div>`;
+  }
+
   // Week, month and quarter. No "vs year": a goal lives inside a single year,
   // so that one always reached back to before the goal existed and
   // permanently read "not enough history" — a third of the row spent saying
@@ -767,32 +1028,47 @@ class GoalAnalytics extends AppElement {
 
   // Achieved score over time against the pace that was available.
   _progressCard(goal, todayIso) {
-    const tf = this._tfProgress;
+    const tf = this._timeframe(this._tfProgress, goal);
+    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.progress-chart-title')}</h3>${this._timeframeSelect('tf-progress', tf)}</div>
+      <div class="card-body" id="progress-body">${this._progressBody(goal, todayIso)}</div>
+    </div>`;
+  }
+
+  // Everything in the Progress card that depends on the timeframe — i.e.
+  // everything below .card-head. Split out so a timeframe change can replace
+  // just this and leave the <select> that triggered it alive in the DOM; see
+  // _swapCardBody for why that matters.
+  _progressBody(goal, todayIso) {
+    const tf = this._timeframe(this._tfProgress, goal);
+    const count = clampPeriods(tf, BARS_PROGRESS[tf]);
     // Sampled by day, not by period — see denseSamples for why (a percentage
     // goal's shorter-lived values fell through the gaps between period
     // boundaries entirely). Both lines read the same sample dates, so they
     // stay aligned on the x-axis.
-    const samples = denseSamples(tf, 12, todayIso);
+    const samples = denseSamples(tf, count, todayIso);
     const achieved = completionSeriesAt(goal, samples).map(p => p.value);
     // null means no dashed line at all. Percentage anchors its ramp on the
     // first recorded value and draws nothing before one exists. Countdown
     // draws nothing ever: its value is driven purely by the calendar, so an
-    // "expected" line is identical to the achieved one by construction — two
-    // lines plotted exactly on top of each other. Weekly/monthly/Avoid use
-    // the recovery curve; for Avoid that is a flat 100, kept deliberately as
-    // a reference showing that a clean run is the whole target.
+    // "expected" line is identical to the achieved one by construction.
+    // Weekly/monthly/Avoid use the recovery curve; for Avoid that is a flat
+    // 100, kept deliberately as a reference showing that a clean run is the
+    // whole target.
     const type = goal?.tracking?.type;
     const expected = type === 'percentage' ? expectedRampSeriesAt(goal, samples)
       : type === 'countdown' ? null
       : recoveryCurveAt(goal, samples, todayIso);
     // Three labels — oldest, midpoint, newest — matching the Consistency
-    // chart's own axis so the two read the same way.
-    const axis = [11, 5, 0].map(i => periodLabel(tf, i, todayIso));
-
-    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.progress-chart-title')}</h3>${this._timeframeSelect('tf-progress', tf)}</div>
-      ${this._lineChart(achieved, expected, axis)}
-      <div class="legend"><span><i class="swatch-line"></i>${t('goal-analytics.legend-achieved')}</span>${expected ? `<span><i class="swatch-line dashed"></i>${t('goal-analytics.legend-expected')}</span>` : ''}</div>
-    </div>`;
+    // chart's own axis so the two read the same way. Four or fewer periods
+    // (quarter, capped at the year's 4) name every one instead: the axis row is
+    // justify-content:space-between, so a "midpoint" picked out of only four
+    // renders at 50% of the width while standing for a period two thirds along.
+    const axisIdx = count <= 4
+      ? Array.from({ length: count }, (_, k) => count - 1 - k)
+      : [count - 1, Math.floor((count - 1) / 2), 0];
+    const axis = axisIdx.map(i => periodLabel(tf, i, todayIso));
+    return `${this._lineChart(achieved, expected, axis)}
+      <div class="legend"><span><i class="swatch-line"></i>${t('goal-analytics.legend-achieved')}</span>${expected ? `<span><i class="swatch-line dashed"></i>${t('goal-analytics.legend-expected')}</span>` : ''}</div>`;
   }
 
   // How each individual period went against its own target. Countdown ("To
@@ -805,17 +1081,30 @@ class GoalAnalytics extends AppElement {
     // A monthly goal has no month inside a week, so that timeframe is dropped
     // rather than shown returning a repeated or empty figure.
     const exclude = naturalUnitIsMonth(goal) ? ['week'] : [];
-    const tf = exclude.includes(this._tfPerf) ? 'month' : this._tfPerf;
-    const count = { week: 12, month: 12, quarter: 8, year: 5 }[tf];
+    const picked = this._timeframe(this._tfPerf, goal);
+    const tf = exclude.includes(picked) ? 'month' : picked;
+    const body = this._consistencyBody(goal, todayIso);
+    if (!body) return '';
+
+    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.consistency-title')}</h3>${this._timeframeSelect('tf-perf', tf, exclude)}</div>
+      <div class="card-body" id="perf-body">${body}</div>
+    </div>`;
+  }
+
+  // Empty string when there is nothing to plot at all — the caller drops the
+  // whole card in that case, and _swapCardBody falls back to a full render so
+  // the card can disappear rather than leaving a stranded header.
+  _consistencyBody(goal, todayIso) {
+    const exclude = naturalUnitIsMonth(goal) ? ['week'] : [];
+    const picked = this._timeframe(this._tfPerf, goal);
+    const tf = exclude.includes(picked) ? 'month' : picked;
+    const count = clampPeriods(tf, BARS_CONSISTENCY[tf]);
     const points = periodPerformanceSeries(goal, tf, count, todayIso)
       .map((p, i) => ({ ...p, label: periodLabel(tf, count - 1 - i, todayIso) }));
     const chart = this._perfChart(points);
     if (!chart) return '';
-
-    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.consistency-title')}</h3>${this._timeframeSelect('tf-perf', tf, exclude)}</div>
-      ${chart}
-      ${tf === naturalUnitOf(goal) ? '' : `<p class="footnote">${t('goal-analytics.consistency-note-avg')}</p>`}
-    </div>`;
+    return `${chart}
+      ${tf === naturalUnitFor(goal) ? '' : `<p class="footnote">${t('goal-analytics.consistency-note-avg')}</p>`}`;
   }
 
   // Fixed 7-slot Mon-Sun strip, scheduled days lit — the same "position
@@ -856,22 +1145,29 @@ class GoalAnalytics extends AppElement {
   _renderScore(goal) {
     const todayIso = todayISO();
     const window = PERIOD_WINDOW[goal.tracking.type];
-    const unit = unitFor(goal);
+    const unit = naturalUnitFor(goal);
 
     // Context groups scale with how much real history actually exists — a
     // goal with nothing logged yet shows only the counted window itself (no
     // fabricated empty dots), one with a long history shows as many full
-    // groups as it genuinely spans, up to HISTORY_DAYS_BACK. Always keyed
+    // groups as it genuinely spans, up to the data window. Always keyed
     // off rawLoggedDates, never dateListFor: decreasing's on-track
     // complement would otherwise read as "infinite real history" for a
     // goal that has never logged a single real entry.
-    const logged = rawLoggedDates(goal, todayIso, HISTORY_DAYS_BACK);
+    const logged = rawLoggedDates(goal, todayIso, this._daysBack(todayIso));
     const extentDays = logged.length === 0 ? 0 : daysBetween(logged.reduce((a, b) => (a < b ? a : b)), todayIso);
     // +1 because extentDays measures the gap between the first record and
     // today, so a goal whose history spans N period-lengths actually touches
     // N+1 periods — the one it started in included. Without it the oldest
     // period of real history fell outside the grid.
-    const extentPeriods = Math.floor(extentDays / (unit === 'month' ? 30.44 : 7)) + 1;
+    // Clamped to one year's worth of periods, the same annual ceiling every
+    // chart on the other pages takes from TIMEFRAME_MAX. Exact for monthly
+    // (12 = three 4-month groups); weekly lands on 54 rather than 52, since
+    // the grid is built from whole 6-week groups and cannot be cut mid-column
+    // — the last slots are simply blank for periods with no history behind them.
+    const extentPeriods = Math.min(
+      TIMEFRAME_MAX[unit],
+      Math.floor(extentDays / (unit === 'month' ? 30.44 : 7)) + 1);
     const availableContextPeriods = Math.max(0, extentPeriods - window);
     // Rounded up, not down: flooring meant only *whole* extra groups were
     // drawn, so up to window-1 periods of real history were silently absent
@@ -1006,29 +1302,34 @@ class GoalAnalytics extends AppElement {
   }
 
   // ── Activity ─────────────────────────────────────────────────────────────
+  // One shared key for both slip-marked cards — stroke and fill mean the same
+  // two things in each. A method rather than an inline string because the
+  // histogram's timeframe handler rebuilds that card on its own and needs the
+  // identical markup back (see _wireInteractive).
+  _slipLegend() {
+    return `<div class="legend"><span><i class="swatch-dot"></i>${t('goal-analytics.legend-allowed')}</span><span><i class="swatch-dot danger"></i>${t('goal-analytics.legend-over')}</span></div>`;
+  }
+
   _renderActivity(goal) {
     const todayIso = todayISO();
+    const daysBack = this._daysBack(todayIso);
     // Two different date sources, deliberately: the calendar wants "on
     // track" for decreasing (the whole point of that inversion — see
     // dateListFor's own doc comment), but "how many times was this logged"
     // (the histogram, the frequency grid) means the real entries — for
     // decreasing that's slips, not the far larger set of days nothing
     // happened on. They're identical arrays for every other type.
-    const dates = dateListFor(goal, todayIso, HISTORY_DAYS_BACK);
-    const loggedDates = rawLoggedDates(goal, todayIso, HISTORY_DAYS_BACK);
+    const dates = dateListFor(goal, todayIso, daysBack);
+    const loggedDates = rawLoggedDates(goal, todayIso, daysBack);
     // Avoid only: which logged slips were forgiven and which broke the
     // allowance. Computed once here because all three cards below colour by
     // it, and each recomputation would be a full re-scan of the year.
-    const slipSplit = isDecreasing(goal) ? slipDatesByState(goal, todayIso, HISTORY_DAYS_BACK) : null;
-    // One shared legend for both slip-coloured cards — the same two colours
-    // mean the same two things in each.
-    const slipLegend = slipSplit
-      ? `<div class="legend"><span><i class="swatch-dot"></i>${t('goal-analytics.legend-allowed')}</span><span><i class="swatch-dot danger"></i>${t('goal-analytics.legend-over')}</span></div>`
-      : '';
+    const slipSplit = isDecreasing(goal) ? slipDatesByState(goal, todayIso, daysBack) : null;
+    const slipLegend = slipSplit ? this._slipLegend() : '';
 
     return `<div class="page">
       ${this._pageHead(goal, 'goal-analytics.page-title-activity')}
-      ${this._histogramCard(loggedDates, slipSplit, slipLegend, todayIso)}
+      ${this._histogramCard(goal, loggedDates, slipSplit, slipLegend, todayIso)}
       ${this._calendarCard(dates, slipSplit, todayIso)}
       ${this._weekdayGridCard(goal, loggedDates, slipSplit, slipLegend, todayIso)}
     </div>`;
@@ -1038,13 +1339,24 @@ class GoalAnalytics extends AppElement {
   // slip inside the allowance is not the same event as one past it — so its
   // bar is split rather than painted one colour. Every other type has a
   // single kind of entry and keeps a plain single-colour bar.
-  _histogramCard(loggedDates, slipSplit, slipLegend, todayIso) {
-    const tf = this._tfActivity;
-    const n = { week: 26, month: 12, quarter: 8, year: 5 }[tf];
+  _histogramCard(goal, loggedDates, slipSplit, slipLegend, todayIso) {
+    const tf = this._timeframe(this._tfActivity, goal);
+    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.count-per-timebox')}</h3>${this._timeframeSelect('tf-activity', tf)}</div>
+      <div class="card-body" id="hist-body">${this._histogramBody(goal, loggedDates, slipSplit, slipLegend, todayIso)}</div>
+    </div>`;
+  }
+
+  // Takes loggedDates/slipSplit rather than deriving them, so a full Activity
+  // render scans the entries once for all three of its cards. The timeframe
+  // handler recomputes them for this card alone — see _wireInteractive.
+  _histogramBody(goal, loggedDates, slipSplit, slipLegend, todayIso) {
+    const tf = this._timeframe(this._tfActivity, goal);
+    const n = clampPeriods(tf, BARS_HISTOGRAM[tf]);
     const hist = resampleSumFromDates(loggedDates, tf, n, todayIso);
     const max = Math.max(1, ...hist);
     const overHist = slipSplit ? resampleSumFromDates(slipSplit.over, tf, n, todayIso) : null;
     const withinHist = slipSplit ? resampleSumFromDates(slipSplit.within, tf, n, todayIso) : null;
+    const fill = n <= MAX_BARS_TO_STRETCH; // see .histogram.fill
     const labelStep = 8;
 
     let bars = '', axis = '';
@@ -1052,40 +1364,57 @@ class GoalAnalytics extends AppElement {
       const indexFromEnd = n - 1 - i;
       const isMax = v === max && v > 0;
       const h = Math.max(v > 0 ? 6 : 0, (v / max) * 100);
-      // flex-grow ratios inside a fixed-height stack, so the two segments
-      // always divide exactly that bar's own height between them — a second
-      // percentage-of-max calculation per segment would round independently
-      // and leave a hairline gap or overshoot at small counts.
+      // A period with no slips at all draws nothing. The stack is stroked now,
+      // so an empty one is no longer invisible the way a transparent box was —
+      // .bar-stack's min-height would render it as a 3px dash on the baseline,
+      // i.e. a mark meaning "slip" on a week that had none, which for an Avoid
+      // goal is exactly backwards: that is its best possible week.
       const barHtml = slipSplit
-        ? `<div class="bar-stack" style="height:${h}%">
+        ? (v > 0 ? `<div class="bar-stack" style="height:${h}%">
             ${overHist[i] > 0 ? `<div class="bar-seg over" style="flex:${overHist[i]}"></div>` : ''}
             ${withinHist[i] > 0 ? `<div class="bar-seg within" style="flex:${withinHist[i]}"></div>` : ''}
-          </div>`
+          </div>` : '')
         : `<div class="bar" style="height:${h}%"></div>`;
       bars += `<div class="bar-col"><div class="bar-val-slot">${isMax ? `<span class="bar-val tabular">${v}</span>` : ''}</div>
         <div class="bar-track">${barHtml}</div></div>`;
-      const showLabel = i === 0 || i === n - 1 || indexFromEnd % labelStep === 0;
+      const showLabel = fill || i === 0 || i === n - 1 || indexFromEnd % labelStep === 0;
       axis += `<div class="ax">${showLabel ? `<span>${periodLabel(tf, indexFromEnd, todayIso)}</span>` : ''}</div>`;
     });
 
-    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.count-per-timebox')}</h3>${this._timeframeSelect('tf-activity', tf)}</div>
-      <div class="histogram-scroll" id="hist-scroll" role="img" aria-label="${t(slipSplit ? 'goal-analytics.a11y-histogram-slips' : 'goal-analytics.a11y-histogram')}"><div class="histogram">${bars}</div><div class="histogram-axis">${axis}</div></div>
-      ${slipLegend}
-    </div>`;
+    return `<div class="histogram-scroll" id="hist-scroll" role="img" aria-label="${t(slipSplit ? 'goal-analytics.a11y-histogram-slips' : 'goal-analytics.a11y-histogram')}"><div class="histogram${fill ? ' fill' : ''}">${bars}</div><div class="histogram-axis${fill ? ' fill' : ''}">${axis}</div></div>
+      ${slipLegend}`;
   }
 
-  // Day-by-day shading over the past year. For Avoid a shaded day can mean
-  // two different things — nothing happened, or a slip that was forgiven —
-  // so the forgiven ones carry the septagon's own knockout dot (see the
+  // Day-by-day shading across the year being viewed — 1 January through
+  // today (or through 31 December for a year already over), not a rolling
+  // 365-day window. Goals are annual, so a window that spilled into the
+  // previous year showed months the goal could not have existed in, and for a
+  // past year it cut off that year's own January. For Avoid a shaded day can
+  // mean two different things — nothing happened, or a slip that was forgiven
+  // — so the forgiven ones carry the septagon's own knockout dot (see the
   // .cell.on.within rule) rather than passing as clean days.
   _calendarCard(dates, slipSplit, todayIso) {
-    const weeks = Math.ceil(HISTORY_DAYS_BACK / 7);
+    const { start, end } = this._span(todayIso);
+    // Whole ISO weeks: the grid's columns are Mon-Sun, so the first column is
+    // the week *containing* 1 January (which can start in December) rather
+    // than a part-week starting mid-column.
+    const firstMonIso = toIso(mondayOfWeek(0, start));
+    const lastMonIso = toIso(mondayOfWeek(0, end));
+    const weeks = Math.floor(daysBetween(firstMonIso, lastMonIso) / 7) + 1;
     const dateSet = new Set(dates);
     const withinSet = slipSplit ? new Set(slipSplit.within) : null;
-    let monthCells = '', gridCells = '', prevMonth = null;
+    // The month row labels the column a month *starts* in. When the span's
+    // first column is the leading partial week — the December days sharing a
+    // Mon-Sun column with 1 January — December does not start there, and
+    // labelling it anyway puts "Dec" one 11px column away from "Jan '26",
+    // where the two overflow their cells and collide into "DecJan '26".
+    // Seeding prevMonth with that month suppresses exactly that one stub; a
+    // year whose 1 January is itself a Monday still labels column 0.
+    const leadIn = localDate(firstMonIso) < localDate(start);
+    let monthCells = '', gridCells = '', prevMonth = leadIn ? localDate(firstMonIso).getMonth() : null;
     for (let c = 0; c < weeks; c++) {
       const weeksAgo = weeks - 1 - c;
-      const mon = mondayOfWeek(weeksAgo, todayIso);
+      const mon = mondayOfWeek(weeksAgo, end);
       const m = mon.getMonth();
       monthCells += m !== prevMonth ? `<span>${monthAbbr(m)}${m === 0 ? ` '${String(mon.getFullYear()).slice(2)}` : ''}</span>` : '<span></span>';
       prevMonth = m;
@@ -1111,11 +1440,16 @@ class GoalAnalytics extends AppElement {
   // with a per-day log to have a cadence at all.
   _weekdayGridCard(goal, loggedDates, slipSplit, slipLegend, todayIso) {
     if (!isFrequency(goal) && !isDecreasing(goal)) return '';
-    const months = 14;
+    // January of the year being viewed through the current month (or through
+    // December for a year already over) — the same annual span the calendar
+    // above covers, rather than a fixed 14 months that reached back into the
+    // previous year and repeated a month name with no year to tell them apart.
+    const { start, end } = this._span(todayIso);
+    const months = monthSpan(start, end);
     const rail = `<div class="weekday-rail"><span></span><span>${t('goal-dialog.dow-mon')[0]}</span><span>${t('goal-dialog.dow-tue')[0]}</span><span>${t('goal-dialog.dow-wed')[0]}</span><span>${t('goal-dialog.dow-thu')[0]}</span><span>${t('goal-dialog.dow-fri')[0]}</span><span>${t('goal-dialog.dow-sat')[0]}</span><span>${t('goal-dialog.dow-sun')[0]}</span></div>`;
     let cols = '';
     for (let mi = months - 1; mi >= 0; mi--) {
-      const md = monthOnOrBefore(mi, todayIso);
+      const md = monthOnOrBefore(mi, end);
       cols += `<div class="month-col"><span class="month-label">${monthAbbr(md.getMonth())}</span>`;
       const byWeekday = [0, 0, 0, 0, 0, 0, 0];
       const overByWeekday = [0, 0, 0, 0, 0, 0, 0];
@@ -1136,10 +1470,22 @@ class GoalAnalytics extends AppElement {
         // rule would either hide a real fail or overstate one among many
         // forgiven days.
         const overPct = count === 0 ? 0 : Math.round(overByWeekday[d] / count * 100);
-        const fill = !slipSplit || count === 0 ? '' : overByWeekday[d] === 0 ? SLIP_ALLOWED_FILL
-          : overByWeekday[d] === count ? 'var(--color-danger)'
-          : `conic-gradient(var(--color-danger) 0 ${overPct}%, ${SLIP_ALLOWED_FILL} ${overPct}% 100%)`;
-        cols += `<div class="dot-cell"><div class="freq-dot-el${count === 0 ? ' zero' : ''}" style="width:${size}px;height:${size}px;opacity:${count === 0 ? 1 : 0.45 + Math.min(count, 4) * 0.18}${fill ? `;background:${fill}` : ''}"></div></div>`;
+        // The ring itself (.slip, below) is the total; this fills it to the
+        // share that broke the allowance. 0% leaves a bare ring, 100% reads
+        // solid because the fill meets the same-coloured stroke, and anything
+        // between is a ring filled that far round — the proportional reading
+        // the old two-hue split was trying to give, minus the second hue.
+        const fill = !slipSplit || count === 0 ? ''
+          : `conic-gradient(var(--color-danger) 0 ${overPct}%, transparent ${overPct}% 100%)`;
+        // Volume-by-opacity is dropped for Avoid: a stroke faded toward the
+        // card stops reading as a stroke at all, which is the whole signal
+        // here, and volume is already encoded twice over by the dot's size and
+        // by the histogram above. Every other type keeps the ramp — there the
+        // mark is a plain solid dot and opacity is the only reinforcement size
+        // has.
+        const opacity = count === 0 || slipSplit ? 1 : 0.45 + Math.min(count, 4) * 0.18;
+        const slipCls = slipSplit && count > 0 ? ' slip' : '';
+        cols += `<div class="dot-cell"><div class="freq-dot-el${count === 0 ? ' zero' : ''}${slipCls}" style="width:${size}px;height:${size}px;opacity:${opacity}${fill ? `;background:${fill}` : ''}"></div></div>`;
       }
       cols += '</div>';
     }
@@ -1150,7 +1496,7 @@ class GoalAnalytics extends AppElement {
   // ── Streaks ──────────────────────────────────────────────────────────────
   _renderStreaks(goal) {
     const todayIso = todayISO();
-    const dates = dateListFor(goal, todayIso, HISTORY_DAYS_BACK);
+    const dates = dateListFor(goal, todayIso, this._daysBack(todayIso));
     const streaks = topStreaks(dates, 10);
     const title = this._pageHead(goal, 'goal-analytics.page-title-streaks');
     if (streaks.length === 0) return `<div class="page">${title}<div class="empty-note">${t('goal-analytics.no-streaks-yet')}</div></div>`;

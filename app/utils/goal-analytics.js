@@ -305,7 +305,13 @@ function singlePeriodFraction(goal, iso, todayIso, cap = true) {
 // Note that an uncapped average would be arithmetically identical to
 // total-achieved/total-expected, since target is constant across periods —
 // capping is the only thing that distinguishes them.
-function naturalUnitFor(goal) {
+// The period a goal is actually measured in — the single source for it. Only
+// monthly goals run on calendar months; every other type (including Avoid,
+// whose allowance refills weekly) is scored Mon-Sun. Exported because the
+// component needs the same answer for its chart defaults and axis labels, and
+// three separate copies of this one-liner had already drifted into existence
+// under three names.
+export function naturalUnitFor(goal) {
   return goal?.tracking?.type === 'monthly' ? 'month' : 'week';
 }
 

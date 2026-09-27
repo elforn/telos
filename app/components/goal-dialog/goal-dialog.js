@@ -165,6 +165,10 @@ class GoalDialog extends AppElement {
     // same two lines the tab-change handler runs, minus its entrance
     // animation, which would read as a slide the user never initiated.
     if (openOnOverview) {
+      // The year the goal is filed under, not the current one: goals are
+      // annual, and the analytics view anchors its full-history charts to that
+      // year's 1 January (see goal-analytics' own `year` setter).
+      this._analyticsEl.year = this._fromYear;
       this._analyticsEl.goal = goal;
       this._analyticsEl.activePage = 0;
       this._showView('analytics');
@@ -1568,6 +1572,7 @@ class GoalDialog extends AppElement {
         requestAnimationFrame(() => this._syncDescHeight());
         return;
       }
+      this._analyticsEl.year = this._fromYear;
       this._analyticsEl.goal = this._goal;
       this._analyticsEl.activePage = index - 1;
       this._showView('analytics');

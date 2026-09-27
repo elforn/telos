@@ -310,3 +310,142 @@ test('arrow keys page between analytics tabs without a swipe', async ({ page }) 
   await page.waitForTimeout(250);
   expect(await page.evaluate(() => window.__modal().activeTab)).toBe(1);
 });
+
+// Geometry, so it has to be e2e — happy-dom resolves no layout at all, and
+// this whole class of bug is about boxes ending up wider than their declared
+// size. Both assertions guard the same root cause: .ax and .bar-col are
+// `flex: 0 0 18px`, but a flex item's min-inline-size defaults to `auto`, so a
+// slot holding a label wider than 18px silently grew to fit it. That made the
+// labels row wider than the bars row it annotates (labels drifting off their
+// own bar), and since the scroll container takes scrollWidth from the wider
+// row, scrolling fully right stopped short of the newest bar — it read as the
+// chart sitting centred rather than hanging right.
+test('the histogram hangs its newest bar flush right, with the axis the same width as the bars', async ({ page }) => {
+  await createGoal(page, { title: 'Flush right', type: 'weekly' });
+  await reopenGoal(page);
+  await gotoTab(page, 3); // Activity
+
+  const m = await page.evaluate(() => {
+    const ga = window.__ga().shadowRoot;
+    const sc = ga.querySelector('#hist-scroll');
+    const bars = ga.querySelector('.histogram');
+    const axis = ga.querySelector('.histogram-axis');
+    return {
+      overflows: sc.scrollWidth > sc.clientWidth,
+      gapToRight: sc.getBoundingClientRect().right - bars.getBoundingClientRect().right,
+      barsW: bars.getBoundingClientRect().width,
+      axisW: axis.getBoundingClientRect().width,
+      slots: [...axis.querySelectorAll('.ax')].map(a => a.getBoundingClientRect().width),
+    };
+  });
+
+  expect(m.overflows).toBe(true); // 26 weeks never fits — otherwise this proves nothing
+  expect(Math.abs(m.gapToRight)).toBeLessThan(1);
+  expect(Math.abs(m.axisW - m.barsW)).toBeLessThan(1);
+  expect(Math.max(...m.slots)).toBeLessThanOrEqual(18);
+});
+
+// Changing a timeframe used to call _render(), which replaces .page's innerHTML
+// wholesale. The select was recreated with the same id so it looked fine, but
+// it was a different node — so focus fell to the document body and a keyboard
+// user was thrown to the top of the page on every change. Only .card-body is
+// swapped now; .card-head, and therefore the select, is never touched.
+// Needs e2e: this is about node identity and focus, neither of which happy-dom
+// models faithfully through a shadow root.
+test('changing a timeframe keeps focus on the select and leaves the rest of the page alone', async ({ page }) => {
+  await createGoal(page, { title: 'Targeted render', type: 'weekly' });
+  await reopenGoal(page);
+  await gotoTab(page, 1); // Overview
+
+  const r = await page.evaluate(() => {
+    const ga = window.__ga().shadowRoot;
+    const sel = ga.querySelector('#tf-progress');
+    const hero = ga.querySelector('.hero-number');
+    const perf = ga.querySelector('#perf-body');
+    const bodyHTML = ga.querySelector('#progress-body').innerHTML;
+    sel.focus();
+    const focusBefore = ga.activeElement?.id;
+    sel.value = 'quarter';
+    sel.dispatchEvent(new Event('change'));
+    return {
+      focusBefore,
+      focusAfter: ga.activeElement?.id,
+      sameSelect: ga.querySelector('#tf-progress') === sel,
+      heroUntouched: ga.querySelector('.hero-number') === hero,
+      otherCardUntouched: ga.querySelector('#perf-body') === perf,
+      bodyChanged: ga.querySelector('#progress-body').innerHTML !== bodyHTML,
+    };
+  });
+
+  expect(r.focusBefore).toBe('tf-progress');
+  expect(r.focusAfter).toBe('tf-progress');   // was null — focus fell to <body>
+  expect(r.sameSelect).toBe(true);
+  expect(r.heroUntouched).toBe(true);
+  expect(r.otherCardUntouched).toBe(true);
+  expect(r.bodyChanged).toBe(true);           // the card it owns did update
+});
+
+test('the Activity histogram re-anchors to its newest bar after a targeted swap', async ({ page }) => {
+  await createGoal(page, { title: 'Targeted activity', type: 'weekly' });
+  await reopenGoal(page);
+  await gotoTab(page, 3); // Activity
+
+  const r = await page.evaluate(async () => {
+    const ga = window.__ga().shadowRoot;
+    const sel = ga.querySelector('#tf-activity');
+    const cal = ga.querySelector('#cal-scroll');
+    sel.focus();
+    sel.value = 'quarter';
+    sel.dispatchEvent(new Event('change'));
+    await new Promise(res => requestAnimationFrame(res));
+    const hs = ga.querySelector('#hist-scroll');
+    const bars = ga.querySelector('.histogram');
+    return {
+      focusAfter: ga.activeElement?.id,
+      calendarUntouched: ga.querySelector('#cal-scroll') === cal,
+      barCount: ga.querySelectorAll('.bar-col').length,
+      gapToRight: hs.getBoundingClientRect().right - bars.getBoundingClientRect().right,
+    };
+  });
+
+  expect(r.focusAfter).toBe('tf-activity');
+  expect(r.calendarUntouched).toBe(true);     // only the histogram card rebuilt
+  expect(r.barCount).toBe(4);                 // quarter, capped at the year's 4
+  expect(Math.abs(r.gapToRight)).toBeLessThan(1); // _syncScrollable still ran
+});
+
+// goal-dialog's tab handler sets .year, .goal and .activePage on every tab
+// change. All three setters re-render, so a tab change used to rebuild the page
+// twice — once for a goal that had not changed, then again for the page that
+// had. Both .year and .goal are reference-guarded now. Measured here rather
+// than reasoned about: the wasted render was invisible, just slow.
+test('switching analytics tabs rebuilds the page once, not twice', async ({ page }) => {
+  await createGoal(page, { title: 'Render count', type: 'weekly' });
+  await reopenGoal(page);
+  await gotoTab(page, 1); // Overview
+
+  const r = await page.evaluate(async () => {
+    const ga = window.__ga();
+    let renders = 0;
+    const orig = ga._render.bind(ga);
+    ga._render = function () { renders++; return orig(); };
+
+    // Nothing outside the dialog should be involved at all — .page lives in
+    // goal-analytics' own shadow root, so the rows behind the modal are untouched.
+    const home = document.querySelector('app-router').shadowRoot.querySelector('home-page');
+    const firstRow = home.shadowRoot.querySelector('goal-item');
+
+    window.__modal().shadowRoot.querySelectorAll('.tab-seg')[2].click(); // Overview -> Score
+    await new Promise(res => setTimeout(res, 400));
+
+    return {
+      renders,
+      scoreShown: !!ga.shadowRoot.querySelector('.calc-grid'),
+      behindModalUntouched: home.shadowRoot.querySelector('goal-item') === firstRow,
+    };
+  });
+
+  expect(r.renders).toBe(1);                 // was 2
+  expect(r.scoreShown).toBe(true);           // and it did actually switch page
+  expect(r.behindModalUntouched).toBe(true);
+});
