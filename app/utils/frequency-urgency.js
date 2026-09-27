@@ -381,8 +381,12 @@ function scheduledRowUrgency(goal, todayIso, reminderDays) {
 // with no actual shortfall yet — see each helper below for how that's
 // distinguished from a genuine one).
 //
-// Two shapes: { kind: 'count', count } for Any/monthly, which have no
-// day-of-week concept at all to point to, just an aggregate shortfall; and
+// Two shapes: { kind: 'count', count, done, target } for Any/monthly, which
+// have no day-of-week concept at all to point to, just an aggregate
+// shortfall — `done`/`target` ride along so the UI can say "2 done, 3
+// missing" rather than a bare "3 missing", which on its own gives no sense
+// of how big the commitment was (3 missing out of 3 and out of 7 are very
+// different situations). count + done === target always, by construction; and
 // { kind: 'days', days: [{ wd, state }, ...] } (all 7 WEEKDAYS, Mon-Sun)
 // for scheduled-days/every-day, which can name a full picture per day —
 // see scheduledDayStates below for the 5 states. The UI renders the
@@ -390,17 +394,21 @@ function scheduledRowUrgency(goal, todayIso, reminderDays) {
 // spelling out day names — position alone disambiguates Tue from Thu, Sat
 // from Sun, with a single letter per slot, and needs no translation-length
 // accommodation the way spelled-out day names would.
+//
+// Returns null (not a 0 count) when there is no genuine shortfall, so the
+// caller's own "is there anything to report" check is a plain null test
+// rather than a number comparison on a shape that also carries done/target.
 function nxMissedCount(goal, todayIso, type) {
   const { target } = goal.tracking;
   const count = currentPeriodCount(goal.tracking, todayIso);
   const remainingNeed = target - count;
-  if (remainingNeed <= 0) return 0; // met
+  if (remainingNeed <= 0) return null; // met
   const slack = remainingDaysInPeriod(type, todayIso) - remainingNeed;
   // Only the same critical zone nxBucket itself uses ('overdue'/'tomorrow'
   // once logged) counts as a genuine shortfall — slack === 1 is just the
-  // day-ahead preview, nothing actually missed yet, so it reports 0 here
-  // even though remainingNeed is still > 0 in that case too.
-  return slack <= 0 ? remainingNeed : 0;
+  // day-ahead preview, nothing actually missed yet, so it reports nothing
+  // here even though remainingNeed is still > 0 in that case too.
+  return slack <= 0 ? { count: remainingNeed, done: count, target } : null;
 }
 
 // The local calendar date, this week, for a given WEEKDAYS index (0=Mon).
@@ -450,8 +458,8 @@ export function frequencyMissedDetail(goal, active, todayIso = todayISO()) {
   if (!tr) return null;
 
   if (tr.type === 'monthly') {
-    const count = nxMissedCount(goal, todayIso, 'monthly');
-    return count > 0 ? { kind: 'count', count } : null;
+    const missed = nxMissedCount(goal, todayIso, 'monthly');
+    return missed ? { kind: 'count', ...missed } : null;
   }
 
   if (tr.type === 'weekly') {
@@ -460,8 +468,8 @@ export function frequencyMissedDetail(goal, active, todayIso = todayISO()) {
       return days.some(d => d.state === 'missed') ? { kind: 'days', days } : null;
     }
     if (tr.reminderDays === 'any') {
-      const count = nxMissedCount(goal, todayIso, 'weekly');
-      return count > 0 ? { kind: 'count', count } : null;
+      const missed = nxMissedCount(goal, todayIso, 'weekly');
+      return missed ? { kind: 'count', ...missed } : null;
     }
     if (Array.isArray(tr.reminderDays) && tr.reminderDays.length > 0) {
       const days = scheduledDayStates(goal, todayIso, tr.reminderDays);

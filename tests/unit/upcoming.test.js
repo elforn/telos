@@ -178,7 +178,7 @@ describe('upcoming — frequency goals feed the same buckets as dueDate', () => 
     vi.setSystemTime(new Date(2026, 7, 14)); // Friday — 3 days left, target 3, slack 0
     const goals = { '2026': { capstone: [goal({ id: 'g1', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: 'any' } })], milestones: [], wow: [], focus: [] } };
     const { today } = collectUpcoming({ goals, lists: [] });
-    expect(today[0].detail).toEqual({ kind: 'count', count: 3 });
+    expect(today[0].detail).toEqual({ kind: 'count', count: 3, done: 0, target: 3 });
   });
 
   it('attaches a "days" detail for a scheduled-days frequency miss even while bucketed as today', () => {

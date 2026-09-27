@@ -465,12 +465,21 @@ describe('frequency-urgency — frequencyMissedDetail (Upcoming dialog "why" com
   });
 
   it('Any mode: returns a plain count once genuinely behind (slack <= 0)', () => {
-    expect(frequencyMissedDetail(weeklyAny(3, []), true, FRI)).toEqual({ kind: 'count', count: 3 });
+    expect(frequencyMissedDetail(weeklyAny(3, []), true, FRI)).toEqual({ kind: 'count', count: 3, done: 0, target: 3 });
+  });
+
+  it('carries done/target alongside the count, so the UI can say how big the commitment was', () => {
+    // 1 of 3 logged, Friday — 3 days left, 2 still needed, slack 1... so push
+    // to Saturday: 2 days left, 2 needed, slack 0.
+    const detail = frequencyMissedDetail(weeklyAny(3, [MON]), true, SAT);
+    expect(detail).toEqual({ kind: 'count', count: 2, done: 1, target: 3 });
+    // The invariant the "N done, M missing" wording relies on.
+    expect(detail.done + detail.count).toBe(detail.target);
   });
 
   it('monthly: returns a plain count once genuinely behind', () => {
     const target = 10;
-    expect(frequencyMissedDetail(monthly(target, []), true, '2026-08-22')).toEqual({ kind: 'count', count: 10 }); // slack 0
+    expect(frequencyMissedDetail(monthly(target, []), true, '2026-08-22')).toEqual({ kind: 'count', count: 10, done: 0, target }); // slack 0
     expect(frequencyMissedDetail(monthly(target, []), true, '2026-08-21')).toBeNull(); // slack 1, day-ahead only
   });
 

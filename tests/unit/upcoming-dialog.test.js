@@ -79,11 +79,12 @@ describe('upcoming-dialog — structure', () => {
     expect(row.querySelector('.day-strip')).toBeNull();
   });
 
-  it('renders a plain "missed" count for an Any/monthly frequency shortfall', () => {
+  it('renders a "missed" count for an Any/monthly frequency shortfall, with how much was already done', () => {
     const el = mount();
-    el.open({ overdue: [{ ...GOAL_ENTRY, detail: { kind: 'count', count: 2 } }], today: [], tomorrow: [] });
+    el.open({ overdue: [{ ...GOAL_ENTRY, detail: { kind: 'count', count: 2, done: 3, target: 5 } }], today: [], tomorrow: [] });
     const row = el.shadowRoot.querySelector('.upcoming-row');
-    expect(row.querySelector('.upcoming-detail-text').textContent).toBe('2 missing');
+    // A bare "2 missing" gave no sense of scale — 2 of 2 and 2 of 7 read the same.
+    expect(row.querySelector('.upcoming-detail-text').textContent).toBe('3 done, 2 missing');
   });
 
   const ALL_DAY_STATES = [

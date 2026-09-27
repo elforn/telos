@@ -469,7 +469,7 @@ class UpcomingDialog extends AppElement {
     }
     const text = detail.kind === 'overdue'
       ? t('upcoming.detail-days-overdue', { days: detail.days })
-      : t('upcoming.detail-missed-count', { count: detail.count });
+      : t('upcoming.detail-missed-count', { count: detail.count, done: detail.done, target: detail.target });
     const span = document.createElement('span');
     span.className = 'upcoming-detail-text';
     span.setAttribute('aria-hidden', 'true');
