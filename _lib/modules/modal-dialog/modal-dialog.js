@@ -11,7 +11,7 @@ const DRAG_FALLBACK_MS = 350;             // safety net if transitionend never f
 
 // Horizontal swipe-to-change-tab thresholds (body drag, tabCount > 1 only) — same
 // shape as the dismiss-drag thresholds above, just on the other axis.
-const TAB_SWIPE_DISTANCE_RATIO = 0.28;    // commit past 28% of the body's width
+const TAB_SWIPE_DISTANCE_RATIO = 0.28;    // commit past 28% of the sheet's width
 const TAB_SWIPE_VELOCITY = 0.5;           // …or a flick faster than 0.5 px/ms
 const TAB_SWIPE_INTENT_PX = 10;           // movement below this is too small to classify yet
 
@@ -32,7 +32,8 @@ class ModalDialog extends AppElement {
         dialog {
           border: none;
           border-radius: var(--radius-lg);
-          padding: var(--space-6) var(--space-5);
+          padding-block: var(--space-6);
+          padding-inline: 0;   /* the three children own the inline inset — see the body rule below */
           max-inline-size: min(90vw, 400px);
           inline-size: 100%;
           background: var(--color-surface);
@@ -64,7 +65,7 @@ class ModalDialog extends AppElement {
           animation: fade-in 0.2s ease-out;
         }
 
-        .handle { display: none; flex-shrink: 0; }
+        .handle { display: none; flex-shrink: 0; padding-inline: var(--space-5); }
         .handle.has-tabs { display: flex; align-items: center; justify-content: center; padding-block: var(--space-2); }
 
         /* Static, not reactive — see the comment above _bodyDown for why this can't be
@@ -72,11 +73,19 @@ class ModalDialog extends AppElement {
            active, not just during a swipe. */
         .body.has-tabs { touch-action: none; }
 
+        /* The inline inset lives on the three children, not on the dialog, so that the
+           scroll container spans the full sheet and its own padding is the gutter the
+           scrollbar paints in. With the inset on the dialog instead, this element's
+           content box ran edge to edge and the bar painted straight over the content —
+           and on overlay-scrollbar platforms no space is reserved for it at all, so
+           scrollbar-gutter is spec'd to zero there — and with no part/exportparts, a
+           consuming app can't reach this element to fix it either. */
         .body {
           flex: 1 1 auto;
           min-block-size: 0;
           overflow-y: auto;
           overscroll-behavior-y: contain;
+          padding-inline: var(--space-5);
         }
 
         @media (max-width: ${MOBILE_BREAKPOINT}px) {
@@ -128,6 +137,7 @@ class ModalDialog extends AppElement {
 
         .footer {
           display: flex;
+          padding-inline: var(--space-5);
           justify-content: flex-end;
           gap: var(--space-2);
           margin-block-start: var(--space-1);

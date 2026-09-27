@@ -12,6 +12,10 @@ HTMLElement.prototype.releasePointerCapture = () => {};
 
 const SHEET_HEIGHT = 400;
 
+// Slices one authored CSS rule, brace to brace — happy-dom's getComputedStyle does not
+// apply media-query or shadow-root rules, so rules are asserted as text.
+const rule = (css, selector) => css.slice(css.indexOf(selector), css.indexOf('}', css.indexOf(selector)));
+
 // Deterministic media-query stub: sheet mode (max-width) and reduced-motion controlled per test.
 function stubMatchMedia({ sheet = true, reduced = false } = {}) {
   window.matchMedia = vi.fn(query => ({
@@ -209,17 +213,31 @@ describe('modal-dialog — slots and structure', () => {
   it('.body has overflow-y: auto and flex sizing that allows it to shrink', () => {
     const el = mount();
     const css = el.shadowRoot.querySelector('style').textContent;
-    const bodyRule = css.slice(css.indexOf('.body {'), css.indexOf('.body {') + 200);
+    const bodyRule = rule(css, '.body {');
     expect(bodyRule).toMatch(/overflow-y:\s*auto/);
     expect(bodyRule).toMatch(/flex:\s*1 1 auto/);
     expect(bodyRule).toMatch(/min-block-size:\s*0/);
   });
 
+  it('inline padding lives on the three children, not the dialog, so the scrollbar clears the content', () => {
+    // .body is the scroll container. A scrollbar paints at its inline-end padding
+    // edge, and overlay scrollbars reserve no space — so with the inset on the
+    // dialog the bar landed on the content. Its own padding is the clearance.
+    const el = mount();
+    const css = el.shadowRoot.querySelector('style').textContent;
+    const bareRule = rule(css, 'dialog {');
+    expect(bareRule).toMatch(/padding-block:\s*var\(--space-6\)/);
+    expect(bareRule).toMatch(/padding-inline:\s*0/);
+    for (const name of ['.handle {', '.body {', '.footer {']) {
+      expect(rule(css, name)).toMatch(/padding-inline:\s*var\(--space-5\)/);
+    }
+  });
+
   it('.handle and .footer have flex-shrink: 0', () => {
     const el = mount();
     const css = el.shadowRoot.querySelector('style').textContent;
-    const handleBaseRule = css.slice(css.indexOf('.handle {'), css.indexOf('.handle {') + 80);
-    const footerRule = css.slice(css.indexOf('.footer {'), css.indexOf('.footer {') + 200);
+    const handleBaseRule = rule(css, '.handle {');
+    const footerRule = rule(css, '.footer {');
     expect(handleBaseRule).toMatch(/flex-shrink:\s*0/);
     expect(footerRule).toMatch(/flex-shrink:\s*0/);
   });
