@@ -5,6 +5,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.4.0] — 2026-09-27
+
+### Added
+- **Goals now open on their Overview instead of the edit form.** Once a goal is set up there's little left to change in it — today's entry is logged on the row itself — so tapping a goal now shows how it's going, with the edit form one tap away. New goals still open straight into the form.
+- **A deadline card on Overview**, next to the type and entry count, showing the date and how close it is ("due this week", "overdue"). Goals with no deadline show nothing.
+- **Weekly goals on a set schedule now show their days** under the "3×/week" line, so you can see at a glance that it's Mon/Wed/Fri rather than "three times somewhere in the week".
+- **Avoid goals now separate forgiven slips from real ones.** The count-per-timebox bars and the frequency-by-weekday grid split into two colours — within allowance and over it — and the calendar marks a forgiven slip with a dot so it no longer passes as a clean day. The slip count on Overview says how many actually broke the allowance.
+- **"vs week" is back in the comparison row**, alongside month and quarter.
+
+### Changed
+- **Avoid goals' allowance is now always per week.** The "per 4 weeks" option is gone. Its four-week blocks were counted backwards from whatever date you were looking from, so the same week could count as clean or over depending on when you looked — which is what made the history chart dip on weeks your goal row called clean.
+- **A failed week on the Score page now turns the whole cell red**, the same treatment the year view uses for a failed goal, instead of recolouring the mark inside it.
+- **Monthly Score boxes now fill around the box** like the monthly dots on your goal row, rather than filling bottom-up.
+- **The tab name and goal name stay pinned** to the top of the analytics pages while the charts scroll.
+- **A drop in the comparison row now reads red**, matching the green already used for a rise. No change reads plain.
+- **The Consistency chart is hidden for "To date" goals**, which have no per-period target to measure against — every bar read 0%.
+- **A "To date" goal's Overview now names the date it counts down to**, instead of repeating the words "To date" twice.
+
+### Fixed
+- **The Score page was hiding real history.** It only drew whole extra six-week groups, so a goal with twelve weeks behind it showed six. Every period you've actually recorded is now on the page.
+- **Avoid goals' history chart no longer counts slips that hadn't happened yet.** Asking what your score was on a past date counted the whole week's slips against only the days elapsed by then, so the line dipped hardest on days when nothing had happened at all — and forgiven slips appeared to cost score. Frequency goals had the same problem in reverse, reading as partly done before anything was logged.
+- **The expected-pace line no longer drops at the start of each week.** You can't be behind on the Monday of a week you're going to finish.
+- **A percentage goal's progress line now shows values that only lasted a few days.** Setting 10% on 1 May and 100% on 14 May used to draw a flat 100% from May onward — the 10% leg vanished entirely.
+- **Editing a deadline, title, or notes now updates the analytics pages.** They kept showing the values from when the dialog was opened.
+- **The analytics pages no longer scroll sideways.**
+- **Periods from before a goal existed no longer look like missed ones** on the Score page — they're left blank, keeping their space so you can see how many periods count toward the score.
+
 ## [3.3.0] — 2026-09-25
 
 ### Added
