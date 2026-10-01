@@ -233,15 +233,28 @@ test('only charts that genuinely overflow become scrollable and keyboard-reachab
       };
     }).filter(Boolean));
 
+  const bodyTouchAction = await page.evaluate(() => getComputedStyle(
+    window.__gd().shadowRoot.querySelector('#modal').shadowRoot.querySelector('.body')).touchAction);
+
   expect(charts.length).toBeGreaterThan(0);
+  // The dialog body concedes the vertical axis and claims the horizontal one in
+  // JS (Socle 1.3.0). Asserted here because everything below depends on it.
+  expect(bodyTouchAction).toBe('pan-y pinch-zoom');
+
   for (const c of charts) {
-    // The invariant that matters: overflow, native scrolling, and keyboard
-    // reachability are all the same switch. A chart that can't scroll must stay
-    // out of the tab order and must not claim touch-action, so the dialog's own
-    // swipe-to-change-tab keeps working over it.
+    // Overflow, native scrolling and keyboard reachability are all the same switch.
     expect(c.scrollable, `${c.id} scrollable-x`).toBe(c.overflows);
     expect(c.tabindex, `${c.id} tabindex`).toBe(c.overflows ? '0' : null);
-    if (c.overflows) expect(c.touchAction, `${c.id} touch-action`).toBe('pan-x');
+    // No chart may declare an axis of its own, overflowing or not. touch-action
+    // intersects down the whole ancestor chain and a descendant can only ever
+    // subtract: under the body's `pan-y pinch-zoom`, a chart asking for `pan-x`
+    // intersects to nothing at all — the `none` that leaves the browser flinging
+    // invisibly and spending the user's next tap cancelling it. These charts
+    // carried `pan-x` until Socle 1.3.0, which looked like "let this one pan
+    // sideways" but never could: native horizontal panning inside a tabbed
+    // dialog is a platform constraint (docs/gestures.md, "Axis ownership"), and
+    // the scroll-to-now pass plus keyboard scrolling cover it instead.
+    expect(c.touchAction, `${c.id} touch-action`).toBe('auto');
   }
 });
 
@@ -448,4 +461,45 @@ test('switching analytics tabs rebuilds the page once, not twice', async ({ page
   expect(r.renders).toBe(1);                 // was 2
   expect(r.scoreShown).toBe(true);           // and it did actually switch page
   expect(r.behindModalUntouched).toBe(true);
+});
+
+// Native horizontal panning is unavailable to these charts: modal-dialog's body
+// declares `pan-y pinch-zoom` while tabs are active, touch-action intersects down
+// the whole ancestor chain, and a descendant can never loosen what an ancestor
+// restricted. Socle 1.3.0 names manual pointer-driven replication as the remedy
+// (docs/gestures.md, "Axis ownership"). Confirmed broken on a real device before
+// this existed — no scroll at all — so the drag path is worth pinning.
+test('a chart that overflows can be dragged horizontally', async ({ page }) => {
+  await createGoal(page, { title: 'Drag scroll', type: 'weekly' });
+  await reopenGoal(page);
+  await gotoTab(page, 3); // Activity
+
+  const box = await page.evaluate(() => {
+    const el = window.__ga().shadowRoot.querySelector('#hist-scroll');
+    return { ...el.getBoundingClientRect().toJSON(), overflows: el.scrollWidth > el.clientWidth };
+  });
+  expect(box.overflows).toBe(true); // 26 weeks never fits — otherwise this proves nothing
+
+  // Opens anchored to "now" at the right edge, so drag right to go back in time.
+  const before = await page.evaluate(() => window.__ga().shadowRoot.querySelector('#hist-scroll').scrollLeft);
+  expect(before).toBeGreaterThan(0);
+
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + 40, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(box.x + 40 + (120 * i / 6), y);
+  await page.mouse.up();
+
+  const after = await page.evaluate(() => window.__ga().shadowRoot.querySelector('#hist-scroll').scrollLeft);
+  expect(after).toBeLessThan(before);          // dragging right scrolled back
+  expect(before - after).toBeGreaterThan(50);  // and by roughly the drag distance
+
+  // A vertical drag must be released to the dialog, not swallowed as a scroll.
+  const mid = await page.evaluate(() => window.__ga().shadowRoot.querySelector('#hist-scroll').scrollLeft);
+  await page.mouse.move(box.x + 100, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(box.x + 100, y + (80 * i / 6));
+  await page.mouse.up();
+  const afterVertical = await page.evaluate(() => window.__ga().shadowRoot.querySelector('#hist-scroll').scrollLeft);
+  expect(afterVertical).toBe(mid);
 });

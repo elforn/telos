@@ -13,6 +13,7 @@ import {
   slipStates, slipDatesByState, firstRecordIso, naturalUnitFor,
 } from '../../utils/goal-analytics.js';
 import { urgencyOf } from '../../utils/urgency.js';
+import { attachScrollClaim, dominantAxis } from '../../../_lib/core/scroll-claim.js';
 import { septagonWedgePath, septagonWedgeState, septagonWedgeCentroid } from '../goal-item/goal-item.js';
 
 // Knockout dot marking a forgiven slip, the same mark the row's septagon
@@ -418,18 +419,10 @@ class GoalAnalytics extends AppElement {
            (where "now" lives) instead of sitting stuck to the left edge —
            independent of the scrollLeft fix in _wireInteractive, which only
            matters once there's enough content to actually need scrolling.
-           overflow-x/touch-action deliberately NOT set here — see .scrollable-x,
-           applied conditionally by _wireInteractive once real overflow is
-           confirmed. Confirmed on-device: declaring overflow-x: auto on an
-           element — regardless of whether it currently has any real overflow
-           content — breaks that element's inherited touch-action: none from
-           an ancestor (.body.has-tabs), even on a completely empty test div at
-           the same shadow depth as everything that's worked reliably. Static
-           touch-action alone doesn't fix it; the overflow-x declaration itself
-           is what breaks inheritance. So it can only ever be present when this
-           container is genuinely meant to be a native scroll surface (and
-           therefore is *not* meant to double as a tab-swipe surface), never
-           unconditionally. */
+           overflow-x deliberately NOT set here — see .scrollable-x, applied
+           conditionally by _wireInteractive once real overflow is confirmed, so
+           a chart that doesn't overflow never becomes a scroll surface and can
+           still be swiped across to change tabs. */
         .calc-scroll-outer { display: flex; justify-content: flex-end; padding: var(--space-2) 0; }
         /* flex:1 absorbs the space that would otherwise sit empty to the
            left of the counted group — .calc-grid keeps its own natural
@@ -439,11 +432,17 @@ class GoalAnalytics extends AppElement {
         /* --color-text-primary for the same reason as .empty-note: it's the
            only text explaining the blank area, so it can't be sub-4.5:1. */
         .calc-older-note { flex: 1; align-self: center; margin: 0; text-align: center; font-size: var(--font-size-micro); color: var(--color-text-primary); line-height: 1.4; }
-        /* touch-action: pan-x is static (present the instant the class is
-           added, well before any subsequent touch) — not set reactively
-           inside a gesture handler, which is the same distinction that made
-           .body's own touch-action fix reliable rather than racy. */
-        .scrollable-x { overflow-x: auto; overflow-y: hidden; touch-action: pan-x; }
+        /* No touch-action here. modal-dialog's .body.has-tabs declares
+           "pan-y pinch-zoom" while tabs are active, and touch-action intersects
+           down the whole ancestor chain — a descendant can never loosen what an
+           ancestor restricted, so "pan-x" could not grant horizontal panning
+           back. All it did was subtract: pan-x ∩ pan-y pinch-zoom is nothing at
+           all, i.e. the "none" that leaves the browser flinging invisibly and
+           eating the next tap. Native horizontal panning of these charts inside
+           a tabbed dialog is a platform constraint, not something to solve here
+           (Socle 1.3.0, docs/gestures.md "Axis ownership"); keyboard scrolling
+           and the scroll-to-now pass in _wireInteractive still work. */
+        .scrollable-x { overflow-x: auto; overflow-y: hidden; }
         .calc-grid { display: flex; align-items: stretch; gap: 0; inline-size: max-content; }
         .calc-group { display: flex; flex-direction: column; gap: 9px; padding: 8px 9px; flex-shrink: 0; }
         .calc-group.counted { background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-raised)); border-radius: var(--radius-md); margin-inline-start: var(--space-2); padding-inline-start: var(--space-3); padding-inline-end: 10px; }
@@ -775,7 +774,63 @@ class GoalAnalytics extends AppElement {
     // most relevant data is already in view without any scrolling.
     if (overflows) el.setAttribute('tabindex', '0');
     else el.removeAttribute('tabindex');
+    if (overflows) this._attachDragScroll(el);
     el.scrollLeft = el.scrollWidth;
+  }
+
+  // Pointer-driven horizontal scrolling for a chart, because native panning is
+  // not available to it. modal-dialog's .body declares `pan-y pinch-zoom` while
+  // tabs are active, touch-action intersects down the whole ancestor chain, and
+  // a descendant can never loosen what an ancestor restricted — so no value on
+  // this element can hand horizontal panning back. That is a platform
+  // constraint, and the remedy Socle prescribes for it is to replicate the
+  // scroll by hand (docs/gestures.md, "Axis ownership"), exactly as
+  // modal-dialog replicates its own vertical scroll for the same reason.
+  //
+  // The dialog's tab swipe does not fight this: _bodyDown bails out of tracking
+  // whenever the press lands inside a genuinely overflowing horizontal scroller.
+  _attachDragScroll(el) {
+    if (el.__dragScroll) return;
+    el.__dragScroll = true;
+    let drag = null;
+    const scrollable = () => el.scrollWidth > el.clientWidth;
+
+    // Registered once, permanently, and never per-gesture inside pointerdown:
+    // Chrome only leaves touchmove cancelable when a blocking listener already
+    // existed as the sequence began (see core/scroll-claim.js).
+    attachScrollClaim(el, () => drag?.claim === 'x' && scrollable());
+
+    el.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || !scrollable()) return;
+      // Keep the press away from modal-dialog's tab swipe. It does try to yield
+      // to a nested horizontal scroller (_withinHorizontalScroller), but that
+      // walk uses parentElement and so never crosses a shadow boundary — this
+      // scroller lives in goal-analytics' own shadow root, where the retargeted
+      // target it inspects can't reach. Gated on actually overflowing, which
+      // preserves the intended split: a chart wider than the card scrolls, one
+      // that fits stays a tab-swipe surface.
+      e.stopPropagation();
+      drag = { x: e.clientX, y: e.clientY, left: el.scrollLeft, id: e.pointerId, claim: undefined };
+    });
+    el.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (drag.claim === undefined) {
+        // Same 6px decision as the library's, for the same reason: at flick
+        // speed the first touchmove is already a large jump, so deciding later
+        // arrives after the browser has committed.
+        drag.claim = dominantAxis(dx, dy);
+        // Vertical belongs to the dialog body — stop tracking entirely so the
+        // claim predicate goes false and native scrolling takes over.
+        if (drag.claim === 'y') { drag = null; return; }
+        if (drag.claim === 'x') el.setPointerCapture(drag.id);
+      }
+      if (drag.claim !== 'x') return;
+      el.scrollLeft = drag.left - dx;
+    });
+    const end = () => { drag = null; };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
   }
 
   _timeframeSelect(id, current, exclude = []) {
