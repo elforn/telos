@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.6.0] — 2026-10-01
+
+### Changed
+- **Swiping the sheet's drag handle no longer changes pages.** The handle is dismiss-only now. Pages are still reachable three ways — swipe the sheet body, tap the dots, or use the arrow keys. The handle owned both directions, which is what made a flick there leave the browser running an invisible fling (see below); dropping its sideways swipe was the only way to give one direction back.
+- **Pinch-zoom works again** on goal and list rows, and inside dialogs and toasts. Every surface with a swipe gesture had been taking both directions away from the browser, which disabled zooming along with them.
+
+### Fixed
+- **The first tap straight after a swipe no longer goes missing.** Flicking to change page in a dialog, or swiping the year header, left the browser running a fling with nothing to move — it coasted invisibly for about three quarters of a second and spent your next tap stopping itself. Tapping a second time always worked, which is what made it look random. Swipe surfaces now hand the browser back the direction they don't use and claim only the one they do (Socle 1.3.0).
+- **Charts wider than the card can be dragged sideways.** They were meant to scroll on their own and never did on a touchscreen — the dialog had taken sideways movement away from them, and nothing gave it back. Charts that fit the card still let you swipe across them to change page, as before.
+- **Dialogs scroll vertically with native momentum again**, with no dead spot at the start of a drag.
+
+---
+
 ## [3.5.0] — 2026-09-28
 
 ### Added
