@@ -48,6 +48,15 @@ function pointerXY(type, clientX, clientY = 0, extra = {}) {
   return new PointerEvent(type, { button: 0, pointerId: 2, clientX, clientY, bubbles: true, ...extra });
 }
 
+// happy-dom has no TouchEvent constructor; the claim only reads touches.length,
+// cancelable and preventDefault. Returns whether the claim prevented it.
+function bodyTouchMove(el, touches = 1) {
+  const ev = new Event('touchmove', { cancelable: true, bubbles: true });
+  Object.defineProperty(ev, 'touches', { value: new Array(touches).fill({}) });
+  el.dispatchEvent(ev);
+  return ev.defaultPrevented;
+}
+
 function mountWithTabs(count) {
   const el = mount();
   el.shadowRoot.querySelector('.body').getBoundingClientRect = () => ({ width: BODY_WIDTH });
@@ -182,7 +191,7 @@ describe('modal-dialog — slots and structure', () => {
     const handleRule = css.slice(css.indexOf('.handle {'), css.indexOf('.handle::before'));
     expect(handleRule).toMatch(/inline-size:\s*100%/);
     expect(handleRule).toMatch(/min-block-size:\s*var\(--space-6\)/);
-    expect(handleRule).toMatch(/touch-action:\s*none/);
+    expect(handleRule).toMatch(/touch-action:\s*pan-x pinch-zoom/);
     // Visible pill unchanged: 36×4 rendered on ::before.
     expect(css).toMatch(/\.handle::before[^}]*inline-size:\s*36px/);
   });
@@ -470,7 +479,11 @@ describe('modal-dialog — tabs: swipe and tap on the handle', () => {
     return new PointerEvent(type, { button: 0, pointerId: 3, clientX, clientY, bubbles: true, ...extra });
   }
 
-  it('a horizontal drag on the handle margin changes tabs, same thresholds as the body', () => {
+  it('a horizontal drag on the handle does not change tabs — the handle is vertical only', () => {
+    // Removed deliberately. Owning both axes forced touch-action: none here, which meant
+    // the claim could not work and a hard flick left an invisible fling that ate the next
+    // tap — on the element that holds the tab dots. Tabs change via the body, a dot, or
+    // the arrow keys.
     const el = mountWithTabs(3);
     const handle = el.shadowRoot.querySelector('.handle');
     const dialog = el.shadowRoot.querySelector('dialog');
@@ -478,24 +491,50 @@ describe('modal-dialog — tabs: swipe and tap on the handle', () => {
     el.addEventListener('modal-tab-change', onChange);
 
     handle.dispatchEvent(handlePointer('pointerdown', 200, 20));
-    handle.dispatchEvent(handlePointer('pointermove', 110, 20)); // dx = -90, > 28% of 300
+    handle.dispatchEvent(handlePointer('pointermove', 110, 20)); // dx = -90
     handle.dispatchEvent(handlePointer('pointerup', 110, 20));
 
-    expect(el.activeTab).toBe(1);
-    expect(onChange.mock.calls[0][0].detail).toEqual({ index: 1 });
-    expect(dialog.style.transform).toBe(''); // never touched the dismiss-drag path
+    expect(el.activeTab).toBe(0);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(dialog.style.transform).toBe(''); // a sideways drag never commits a dismiss either
   });
 
-  it('a horizontal drag starting directly on a dot changes tabs (dot no longer swallows the drag)', () => {
+  it('a horizontal drag starting on a dot neither changes tabs nor dismisses', () => {
     const el = mountWithTabs(3);
     const dot = el.shadowRoot.querySelectorAll('.tab-seg')[0];
     const handle = el.shadowRoot.querySelector('.handle');
+    const dialog = el.shadowRoot.querySelector('dialog');
 
     dot.dispatchEvent(handlePointer('pointerdown', 200, 20));
     handle.dispatchEvent(handlePointer('pointermove', 110, 20));
     handle.dispatchEvent(handlePointer('pointerup', 110, 20));
 
-    expect(el.activeTab).toBe(1);
+    expect(el.activeTab).toBe(0);
+    expect(dialog.style.transform).toBe('');
+  });
+
+  it('claims vertical touchmove on the handle so a dismiss flick generates no fling', () => {
+    const el = mountWithTabs(3);
+    const handle = el.shadowRoot.querySelector('.handle');
+
+    expect(bodyTouchMove(handle)).toBe(false); // no drag in flight
+    handle.dispatchEvent(handlePointer('pointerdown', 200, 20));
+    expect(bodyTouchMove(handle)).toBe(true);  // the handle owns vertical outright
+    handle.dispatchEvent(handlePointer('pointerup', 200, 20));
+    expect(bodyTouchMove(handle)).toBe(false);
+  });
+
+  it('defers pointer capture while tabs are present so a dot tap still fires its click', () => {
+    const el = mountWithTabs(3);
+    const handle = el.shadowRoot.querySelector('.handle');
+    const captured = [];
+    handle.setPointerCapture = (id) => captured.push(id);
+
+    handle.dispatchEvent(handlePointer('pointerdown', 200, 20));
+    expect(captured).toEqual([]);                         // not on pointerdown
+
+    handle.dispatchEvent(handlePointer('pointermove', 200, 30)); // 10px down
+    expect(captured).toEqual([3]);                         // captured once it is a real drag
   });
 
   it('a vertical drag starting directly on a dot still dismisses (dot no longer swallows the drag)', () => {
@@ -566,18 +605,6 @@ describe('modal-dialog — tabs: swipe and tap on the handle', () => {
     handle.dispatchEvent(pointer('pointerup', 25));
 
     expect(dialog.close).not.toHaveBeenCalled();
-  });
-
-  it('a rightward drag on the handle goes to the previous tab', () => {
-    const el = mountWithTabs(3);
-    el.activeTab = 1;
-    const handle = el.shadowRoot.querySelector('.handle');
-
-    handle.dispatchEvent(handlePointer('pointerdown', 100, 20));
-    handle.dispatchEvent(handlePointer('pointermove', 190, 20)); // dx = +90
-    handle.dispatchEvent(handlePointer('pointerup', 190, 20));
-
-    expect(el.activeTab).toBe(0);
   });
 
   it('pointercancel tears down an in-flight handle drag on a tabbed dialog without side effects', () => {
@@ -938,7 +965,7 @@ describe('modal-dialog — tabs: swipe on the body', () => {
     expect(el.activeTab).toBe(1);
   });
 
-  it('a vertical-dominant drag drives .body\'s own scroll manually (no native hand-off) and does not change tabs', () => {
+  it('concedes a vertical-dominant drag to the browser and does not change tabs', () => {
     const el = mountWithTabs(3);
     const body = el.shadowRoot.querySelector('.body');
     const onChange = vi.fn();
@@ -946,15 +973,65 @@ describe('modal-dialog — tabs: swipe on the body', () => {
     body.scrollTop = 0;
 
     body.dispatchEvent(pointerXY('pointerdown', 200, 100));
-    body.dispatchEvent(pointerXY('pointermove', 190, 250)); // dx=-10, dy=+150 — classifies vertical here
-    expect(body.scrollTop).toBe(0); // the classifying move itself doesn't scroll yet (the ~10px dead zone)
+    body.dispatchEvent(pointerXY('pointermove', 190, 250)); // dy dominates — conceded here
+    body.dispatchEvent(pointerXY('pointermove', 190, 200));
 
-    body.dispatchEvent(pointerXY('pointermove', 190, 200)); // finger moves up 50px from its last position
-    expect(body.scrollTop).toBe(50); // content follows the finger, same direction native scroll would
+    // No JS scroll replication any more: native scrolling owns this axis under pan-y,
+    // which is what restores momentum. Nothing should be driven by hand.
+    expect(body.scrollTop).toBe(0);
+    expect(body.style.transform).toBe('');
 
     body.dispatchEvent(pointerXY('pointerup', 190, 200));
     expect(el.activeTab).toBe(0);
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('stops tracking once a drag is conceded, so a later sideways curve cannot swipe', () => {
+    const el = mountWithTabs(3);
+    const body = el.shadowRoot.querySelector('.body');
+    const onChange = vi.fn();
+    el.addEventListener('modal-tab-change', onChange);
+
+    body.dispatchEvent(pointerXY('pointerdown', 200, 100));
+    body.dispatchEvent(pointerXY('pointermove', 198, 140)); // vertical — conceded
+    body.dispatchEvent(pointerXY('pointermove', 20, 140));  // finger curves hard sideways
+    body.dispatchEvent(pointerXY('pointerup', 20, 140));
+
+    expect(el.activeTab).toBe(0);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(body.style.transform).toBe('');
+  });
+
+  it('claims a horizontal drag by preventing touchmove, so the browser generates no fling', () => {
+    const el = mountWithTabs(3);
+    const body = el.shadowRoot.querySelector('.body');
+
+    body.dispatchEvent(pointerXY('pointerdown', 200, 100));
+    expect(bodyTouchMove(body)).toBe(false); // nothing decided yet
+
+    body.dispatchEvent(pointerXY('pointermove', 192, 101)); // 8px horizontal — claimed
+    expect(bodyTouchMove(body)).toBe(true);
+
+    body.dispatchEvent(pointerXY('pointerup', 192, 101));
+    expect(bodyTouchMove(body)).toBe(false); // released
+  });
+
+  it('never claims touchmove for a conceded vertical drag', () => {
+    const el = mountWithTabs(3);
+    const body = el.shadowRoot.querySelector('.body');
+
+    body.dispatchEvent(pointerXY('pointerdown', 200, 100));
+    body.dispatchEvent(pointerXY('pointermove', 201, 112)); // vertical
+    expect(bodyTouchMove(body)).toBe(false);
+  });
+
+  it('leaves pinch-zoom alone while a horizontal swipe is claimed', () => {
+    const el = mountWithTabs(3);
+    const body = el.shadowRoot.querySelector('.body');
+
+    body.dispatchEvent(pointerXY('pointerdown', 200, 100));
+    body.dispatchEvent(pointerXY('pointermove', 150, 101));
+    expect(bodyTouchMove(body, 2)).toBe(false);
   });
 
   it('does nothing when tabCount is 1 or 0', () => {

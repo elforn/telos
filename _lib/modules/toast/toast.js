@@ -1,4 +1,5 @@
 import { t } from '../../core/strings.js';
+import { attachScrollClaim, dominantAxis } from '../../core/scroll-claim.js';
 
 const SWIPE_THRESHOLD = 120; // calibrated on-device — 60 dismissed too easily on a real swipe
 const TAP_THRESHOLD = 18; // matches modules/gestures/gestures.js's own constant
@@ -48,17 +49,17 @@ function ensureStyles() {
       box-shadow: var(--shadow-sheet);
       pointer-events: auto;
       white-space: nowrap;
-      /* Must be 'none', not 'manipulation' — on Chrome for Android, the
-         compositor's own scroll-gesture arbitration can commit to native
-         panning before (or independent of) a JS setPointerCapture() call
-         under 'manipulation', firing pointercancel mid-drag or swallowing
-         the gesture outright. 'none' keeps this element out of that
-         arbitration entirely, which is the documented fix (see
-         https://github.com/mdn/content/issues/38468 and
-         https://alexii.uk/blog/touch-action-chrome-36-unpredictable-scrolling/).
-         Confirmed on-device: swipe-to-dismiss did not work at all with
-         'manipulation', reliably works with 'none'. */
-      touch-action: none;
+      /* Not 'manipulation': that leaves pan-x with the browser, so Chrome's
+         compositor arbitration can commit to native panning before any JS runs
+         and fire pointercancel mid-drag — on-device, swipe-to-dismiss did not
+         work at all under 'manipulation'. But not 'none' either, which was the
+         previous fix here: taking both axes means a flick still starts a fling
+         that has nothing to move, so it runs invisibly and spends the user's
+         next tap cancelling itself. pan-y removes pan-x (which is what makes the
+         swipe reliable) while leaving vertical with the browser, so the page can
+         still be scrolled with a finger that lands on a toast. The horizontal
+         axis is then claimed explicitly — see core/scroll-claim.js. */
+      touch-action: pan-y pinch-zoom;
       animation: socle-toast-in var(--duration-normal, 220ms) var(--ease-out, ease);
     }
     .socle-toast-out {
@@ -176,6 +177,7 @@ export function toast(message, type = 'info', { duration, action } = {}) {
     if (dismissed) return;
     dismissed = true;
     clearTimeout(timerId);
+    removeScrollClaim();
     document.removeEventListener('keydown', onKeyDown);
     if (activeToast === handle) activeToast = null;
 
@@ -252,8 +254,14 @@ export function toast(message, type = 'info', { duration, action } = {}) {
   let dragStartX = null;
   let dragStartY = null;
   let dragPhase = 'idle'; // 'idle' | 'tracking' | 'swipe' | 'cancelled'
+  // Decided on its own, smaller threshold than the phase transition above: by the time
+  // an 18px euclidean move is confirmed the browser has already committed, and a fling
+  // it generates outlives the gesture to eat the next tap.
+  let dragClaim; // 'x' = ours, 'browser' = conceded, undefined = undecided
+  const removeScrollClaim = attachScrollClaim(el, () => dragClaim === 'x');
 
   const onDragMove = e => {
+    if (dragClaim === undefined) dragClaim = dominantAxis(e.clientX - dragStartX, e.clientY - dragStartY);
     if (dragPhase === 'cancelled') return;
     const dx = e.clientX - dragStartX;
     if (dragPhase === 'tracking') {
@@ -297,6 +305,7 @@ export function toast(message, type = 'info', { duration, action } = {}) {
     dragStartX = null;
     dragStartY = null;
     dragPhase = 'idle';
+    dragClaim = undefined;
     if (!wasSwipe) return; // plain tap, or a vertical/cancelled move — never captured
     if (Math.abs(dx) > SWIPE_THRESHOLD) dismiss({ swipeDx: dx });
     else springBack();
@@ -308,6 +317,7 @@ export function toast(message, type = 'info', { duration, action } = {}) {
     dragStartX = null;
     dragStartY = null;
     dragPhase = 'idle';
+    dragClaim = undefined;
     if (wasSwipe) springBack();
   }
 
@@ -316,6 +326,7 @@ export function toast(message, type = 'info', { duration, action } = {}) {
     dragStartX = e.clientX;
     dragStartY = e.clientY;
     dragPhase = 'tracking';
+    dragClaim = undefined;
     el.addEventListener('pointermove', onDragMove);
     el.addEventListener('pointerup', onDragEnd);
     el.addEventListener('pointercancel', onDragCancel);

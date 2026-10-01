@@ -3,6 +3,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { defineStrings } from '../../core/strings.js';
 import { toast, _resetToast } from './toast.js';
 
+// happy-dom has no TouchEvent constructor; the claim only reads touches.length,
+// cancelable and preventDefault.
+function toastTouchMove(el, touches = 1) {
+  const ev = new Event('touchmove', { cancelable: true, bubbles: true });
+  Object.defineProperty(ev, 'touches', { value: new Array(touches).fill({}) });
+  el.dispatchEvent(ev);
+  return ev.defaultPrevented;
+}
+
+
 // happy-dom does not implement pointer capture — no-op it so the swipe-to-
 // dismiss handlers (which call setPointerCapture on pointerdown) can run.
 HTMLElement.prototype.setPointerCapture = () => {};
@@ -380,17 +390,53 @@ describe('toast', () => {
     expect(document.querySelector('.socle-toast')).toBeTruthy();
   });
 
-  it('sets touch-action: none, not manipulation — required for reliable swipe on Chrome for Android', () => {
-    // Regression: 'manipulation' looks equally reasonable in isolation and
-    // was the previous value, but Chrome for Android's compositor-thread
-    // gesture arbitration can commit to native panning under 'manipulation'
-    // before (or independent of) setPointerCapture(), firing pointercancel
-    // mid-drag or swallowing the gesture outright — only reproducible
-    // on-device, not in this (happy-dom) test environment. 'none' is the
-    // documented fix; this test only guards against silently reverting it.
+  it('sets touch-action: pan-y pinch-zoom — neither manipulation nor none', () => {
+    // Regression guard for a value that took three rounds to get right, and is only
+    // reproducible on-device (not in happy-dom). 'manipulation' leaves pan-x with the
+    // browser, so Chrome for Android's compositor arbitration can claim the drag and
+    // fire pointercancel — swipe-to-dismiss did not work at all under it. 'none' was
+    // the previous fix and made the swipe reliable, but by taking BOTH axes it left the
+    // browser flinging invisibly after a flick, which spent the user's next tap.
+    // pan-y removes pan-x (the part that fixes the swipe) and keeps vertical native.
     toast('Check touch-action');
     const el = document.querySelector('.socle-toast');
-    expect(getComputedStyle(el).touchAction).toBe('none');
+    expect(getComputedStyle(el).touchAction).toBe('pan-y pinch-zoom');
+  });
+
+  it('claims a horizontal drag so the browser generates no fling', () => {
+    toast('Swipe me');
+    const el = document.querySelector('.socle-toast');
+    el.dispatchEvent(new PointerEvent('pointerdown', { button: 0, pointerId: 1, clientX: 100, clientY: 50, bubbles: true }));
+    expect(toastTouchMove(el)).toBe(false); // undecided
+
+    el.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: 92, clientY: 51, bubbles: true }));
+    expect(toastTouchMove(el)).toBe(true);
+  });
+
+  it('concedes a vertical drag so the page behind can still be scrolled', () => {
+    toast('Swipe me');
+    const el = document.querySelector('.socle-toast');
+    el.dispatchEvent(new PointerEvent('pointerdown', { button: 0, pointerId: 1, clientX: 100, clientY: 50, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: 101, clientY: 62, bubbles: true }));
+    expect(toastTouchMove(el)).toBe(false);
+  });
+
+  it('releases the claim after the drag ends', () => {
+    toast('Swipe me');
+    const el = document.querySelector('.socle-toast');
+    el.dispatchEvent(new PointerEvent('pointerdown', { button: 0, pointerId: 1, clientX: 100, clientY: 50, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: 60, clientY: 51, bubbles: true }));
+    expect(toastTouchMove(el)).toBe(true);
+    el.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: 60, clientY: 51, bubbles: true }));
+    expect(toastTouchMove(el)).toBe(false);
+  });
+
+  it('leaves pinch-zoom alone while a horizontal drag is claimed', () => {
+    toast('Swipe me');
+    const el = document.querySelector('.socle-toast');
+    el.dispatchEvent(new PointerEvent('pointerdown', { button: 0, pointerId: 1, clientX: 100, clientY: 50, bubbles: true }));
+    el.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: 60, clientY: 51, bubbles: true }));
+    expect(toastTouchMove(el, 2)).toBe(false);
   });
 
   it('does not treat a near-zero-movement press as a drag', () => {

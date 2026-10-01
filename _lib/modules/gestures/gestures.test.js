@@ -56,6 +56,116 @@ const pup = (el, x = 0, y = 0) =>
 const pcancel = (el) =>
   el.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true }));
 
+// happy-dom has no TouchEvent constructor; the claim handler only reads touches.length,
+// cancelable and preventDefault, so a plain cancelable Event carries enough.
+const tmove = (el, touchCount = 1) => {
+  const ev = new Event('touchmove', { cancelable: true, bubbles: true });
+  Object.defineProperty(ev, 'touches', { value: new Array(touchCount).fill({}) });
+  el.dispatchEvent(ev);
+  return ev.defaultPrevented;
+};
+
+describe('Gestures — scroll claim', () => {
+  let el;
+  beforeEach(() => {
+    swipeSpy = vi.fn(); swipeMoveSpy = vi.fn();
+    el = document.createElement('t-swipe');
+    document.body.appendChild(el);
+  });
+  afterEach(() => { document.body.innerHTML = ''; });
+
+  it('does not claim before any movement', () => {
+    pdown(el, 0, 0);
+    expect(tmove(el)).toBe(false);
+  });
+
+  it('does not claim while movement is still under the claim threshold', () => {
+    pdown(el, 0, 0); pmove(el, 4, 1);
+    expect(tmove(el)).toBe(false);
+  });
+
+  it('claims once a horizontal move passes the claim threshold', () => {
+    pdown(el, 0, 0); pmove(el, 8, 1);
+    expect(tmove(el)).toBe(true);
+  });
+
+  it('claims at the 6px threshold, well before the 18px swipe classification', () => {
+    pdown(el, 0, 0); pmove(el, 8, 1);
+    expect(tmove(el)).toBe(true);
+    expect(swipeMoveSpy).not.toHaveBeenCalled(); // still below TAP_THRESHOLD
+  });
+
+  it('concedes a vertical gesture to the browser so native scrolling keeps working', () => {
+    pdown(el, 0, 0); pmove(el, 1, 8);
+    expect(tmove(el)).toBe(false);
+  });
+
+  it('stays conceded even once the vertical move grows past the swipe threshold', () => {
+    pdown(el, 0, 0); pmove(el, 1, 8); pmove(el, 2, 60);
+    expect(tmove(el)).toBe(false);
+  });
+
+  it('never claims a multi-touch sequence, so pinch-zoom is untouched', () => {
+    pdown(el, 0, 0); pmove(el, 40, 1);
+    expect(tmove(el, 2)).toBe(false);
+  });
+
+  it('releases the claim after pointerup', () => {
+    pdown(el, 0, 0); pmove(el, 40, 1); pup(el, 40, 1);
+    expect(tmove(el)).toBe(false);
+  });
+
+  it('releases the claim after pointercancel', () => {
+    pdown(el, 0, 0); pmove(el, 40, 1); pcancel(el);
+    expect(tmove(el)).toBe(false);
+  });
+
+  it('releases the claim when an early horizontal twitch turns into a vertical drag', () => {
+    // The claim decides at 6px but the swipe/tap classification happens at 18px, so a
+    // drag can be claimed and then abandoned. Leaving the claim set would keep
+    // preventing touchmove for a gesture we no longer own.
+    pdown(el, 0, 0);
+    pmove(el, 8, 1);            // horizontal at the claim threshold — claimed
+    expect(tmove(el)).toBe(true);
+    pmove(el, 10, 60);          // now vertical past the swipe threshold — abandoned
+    expect(tmove(el)).toBe(false);
+  });
+
+  it('stops claiming once disconnected', () => {
+    pdown(el, 0, 0); pmove(el, 40, 1);
+    expect(tmove(el)).toBe(true);
+    el.remove();
+    expect(tmove(el)).toBe(false);
+  });
+});
+
+describe('Gestures — scroll claim on hold-drag', () => {
+  let el;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    holdDragStartSpy = vi.fn(); holdDragSpy = vi.fn(); holdDragEndSpy = vi.fn();
+    el = document.createElement('t-holddrag');
+    document.body.appendChild(el);
+  });
+  afterEach(() => { document.body.innerHTML = ''; vi.useRealTimers(); });
+
+  it('does not claim during the hold wait', () => {
+    pdown(el, 0, 0);
+    expect(tmove(el)).toBe(false);
+  });
+
+  it('claims once the hold activates, so the browser cannot pan under the drag', () => {
+    pdown(el, 0, 0);
+    vi.advanceTimersByTime(500);
+    expect(holdDragStartSpy).toHaveBeenCalledTimes(1);
+    expect(tmove(el)).toBe(true);
+  });
+
+  it('keeps touch-action permissive so the page can still scroll before the hold fires', () => {
+    expect(el.style.touchAction).toBe('manipulation');
+  });
+});
+
 describe('Gestures — tap', () => {
   let el;
 
@@ -313,8 +423,8 @@ describe('Gestures — swipe', () => {
     expect(typeof e.dx).toBe('number');
   });
 
-  it('sets touch-action: manipulation', () => {
-    expect(el.style.touchAction).toBe('manipulation');
+  it('sets touch-action: pan-y pinch-zoom so the browser keeps vertical scrolling', () => {
+    expect(el.style.touchAction).toBe('pan-y pinch-zoom');
   });
 
   it('calls preventDefault on pointerup after a completed swipe to suppress synthetic click', () => {

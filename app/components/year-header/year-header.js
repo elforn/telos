@@ -636,15 +636,6 @@ class YearHeader extends Gestures(AppElement) {
     `;
   }
 
-  connectedCallback() {
-    super.connectedCallback();
-    // Override the Gestures mixin default so horizontal pointer events reach onSwipe.
-    // `none` (rather than `pan-y`) also prevents scroll-inertia from starting on
-    // diagonal swipes — which would cause the first tap after a year-swipe to be
-    // swallowed as an inertia-cancel instead of registering as a click.
-    this.style.touchAction = 'none';
-  }
-
   onSwipe(e) {
     const delta = e.direction === 'left' ? 1 : e.direction === 'right' ? -1 : 0;
     if (!delta) return;

@@ -146,7 +146,7 @@ class ListsPageItem extends Gestures(AppElement) {
           padding-block: 0;
           padding-inline: 0 2px;
           margin-inline-start: -5px;
-          touch-action: none;
+          /* No touch-action: none — see the note on the other drag handles. */
         }
 
         .drag-btn svg { pointer-events: none; }

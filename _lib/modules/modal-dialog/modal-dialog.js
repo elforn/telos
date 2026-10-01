@@ -1,5 +1,6 @@
 import { AppElement } from '../../core/app-element.js';
 import { t } from '../../core/strings.js';
+import { attachScrollClaim, dominantAxis, CLAIM_THRESHOLD } from '../../core/scroll-claim.js';
 
 const MOBILE_BREAKPOINT = 600;
 
@@ -13,7 +14,6 @@ const DRAG_FALLBACK_MS = 350;             // safety net if transitionend never f
 // shape as the dismiss-drag thresholds above, just on the other axis.
 const TAB_SWIPE_DISTANCE_RATIO = 0.28;    // commit past 28% of the sheet's width
 const TAB_SWIPE_VELOCITY = 0.5;           // …or a flick faster than 0.5 px/ms
-const TAB_SWIPE_INTENT_PX = 10;           // movement below this is too small to classify yet
 
 class ModalDialog extends AppElement {
   template() {
@@ -68,10 +68,12 @@ class ModalDialog extends AppElement {
         .handle { display: none; flex-shrink: 0; padding-inline: var(--space-5); }
         .handle.has-tabs { display: flex; align-items: center; justify-content: center; padding-block: var(--space-2); }
 
-        /* Static, not reactive — see the comment above _bodyDown for why this can't be
-           set per-gesture inside a pointerdown handler. Applies for as long as tabs are
-           active, not just during a swipe. */
-        .body.has-tabs { touch-action: none; }
+        /* Static, not reactive — the browser decides gesture ownership before any
+           pointerdown handler runs, so this must be in force from paint. pan-y leaves
+           vertical scrolling (and its native momentum) with the browser and keeps only
+           the horizontal axis for the tab swipe; pinch-zoom keeps double-tap-to-zoom
+           disabled, so there is no 300ms click delay. See the comment above _bodyDown. */
+        .body.has-tabs { touch-action: pan-y pinch-zoom; }
 
         /* The inline inset lives on the three children, not on the dialog, so that the
            scroll container spans the full sheet and its own padding is the gutter the
@@ -118,7 +120,13 @@ class ModalDialog extends AppElement {
             inline-size: 100%;
             min-block-size: var(--space-6);
             margin-block-end: var(--space-2);
-            touch-action: none;
+            /* The handle is vertical-only (dismiss), so it concedes the horizontal axis
+               and claims vertical explicitly — see _handleDown. It used to be 'none',
+               which owned both axes for a tab swipe it no longer has, and paid for it:
+               a hard flick still started an invisible fling that ate the next tap, on
+               the very surface that holds the tab dots. Nothing here scrolls
+               horizontally, so the browser does nothing with the pan-x it is given. */
+            touch-action: pan-x pinch-zoom;
           }
 
           .handle::before {
@@ -246,6 +254,8 @@ class ModalDialog extends AppElement {
     this._onHandleUp = this._handleUp.bind(this);
     this._onHandleCancel = this._handleCancel.bind(this);
     this._handle.addEventListener('pointerdown', this._onHandleDown);
+    // The handle owns the vertical axis; see the comment above _handleDown.
+    this._removeHandleClaim = attachScrollClaim(this._handle, () => !!this._drag);
 
     // Tabs: keyboard paging on the segment row, swipe paging on the body.
     this._onTabsKeydown = this._handleTabsKeydown.bind(this);
@@ -256,14 +266,21 @@ class ModalDialog extends AppElement {
     this._onBodyUp = this._bodyUp.bind(this);
     this._onBodyCancel = this._bodyCancel.bind(this);
     this._body.addEventListener('pointerdown', this._onBodyDown);
+    // Registered permanently, not per-gesture: Chrome only leaves touchmove cancelable
+    // when a blocking listener existed as the touch sequence began.
+    this._removeBodyClaim = attachScrollClaim(this._body, () => this._bodyDrag?.claim === 'x');
   }
 
   unsubscribe() {
     this._dialog?.removeEventListener('close', this._onClose);
     this._dialog?.removeEventListener('click', this._onBackdrop);
     this._handle?.removeEventListener('pointerdown', this._onHandleDown);
+    this._removeHandleClaim?.();
+    this._removeHandleClaim = null;
     this._handleTabs?.removeEventListener('keydown', this._onTabsKeydown);
     this._body?.removeEventListener('pointerdown', this._onBodyDown);
+    this._removeBodyClaim?.();
+    this._removeBodyClaim = null;
     this._footerSlot?.removeEventListener('slotchange', this._onFooterSlotChange);
     this._teardownDrag();
     this._teardownBodyDrag();
@@ -286,34 +303,32 @@ class ModalDialog extends AppElement {
   // deferred until ~10px of movement classifies the direction — mirroring
   // _bodyDown/_bodyMove's approach — so a tap still resolves to its own click.
 
+  // ── Swipe-down-to-dismiss (handle) ───────────────────────────────────────
+  // Vertical only. Horizontal tab-swipe used to live here too, which forced
+  // `touch-action: none` — the handle owned both axes, so it had nothing to concede and
+  // the scroll claim could not work (under `none` touchmove is non-cancelable, so there
+  // is nothing left to preventDefault). Measured on-device: a hard horizontal flick on
+  // the handle still started an invisible fling that swallowed the next tap, and the tab
+  // dots live inside this element — so the cost landed on the tap alternative to the very
+  // gesture causing it. Removing the handle's horizontal swipe lets it concede the
+  // horizontal axis and claim vertical, which is the rule everything else follows.
+  // Tabs are still changed by swiping the body, tapping a dot, or the arrow keys.
   _handleDown(e) {
     if (e.button !== 0 || !this._isSheet()) return;
-
-    if (this._tabCount <= 1) {
-      this._handle.setPointerCapture(e.pointerId);
-      this._drag = {
-        startY: e.clientY,
-        startTime: Date.now(),
-        pointerId: e.pointerId,
-        height: this._dialog.getBoundingClientRect().height,
-      };
-      this._dialog.style.transition = 'none';
-      this._handle.addEventListener('pointermove', this._onHandleMove);
-      this._handle.addEventListener('pointerup', this._onHandleUp);
-      this._handle.addEventListener('pointercancel', this._onHandleCancel);
-      return;
-    }
-
+    const hasTabs = this._tabCount > 1;
     this._drag = {
-      startX: e.clientX,
       startY: e.clientY,
       startTime: Date.now(),
       pointerId: e.pointerId,
       height: this._dialog.getBoundingClientRect().height,
-      width: this._body.getBoundingClientRect().width,
-      horizontal: null, // undecided until ~10px of movement
-      lastDx: 0,
+      // Capture is deferred while tabs are present: capturing on pointerdown redirects
+      // the click to .handle, which would stop the tab dots inside it working.
+      captured: !hasTabs,
     };
+    if (!hasTabs) {
+      this._handle.setPointerCapture(e.pointerId);
+      this._dialog.style.transition = 'none';
+    }
     this._handle.addEventListener('pointermove', this._onHandleMove);
     this._handle.addEventListener('pointerup', this._onHandleUp);
     this._handle.addEventListener('pointercancel', this._onHandleCancel);
@@ -322,25 +337,16 @@ class ModalDialog extends AppElement {
   _handleMove(e) {
     const d = this._drag;
     if (!d) return;
-
-    if (d.horizontal === undefined) {
-      // No-tabs path: vertical-only, unchanged. Follow the finger downward;
-      // clamp upward drags to rest so the sheet never rises.
-      this._dialog.style.transform = `translateY(${Math.max(0, e.clientY - d.startY)}px)`;
-      return;
-    }
-
-    const dx = e.clientX - d.startX;
     const dy = e.clientY - d.startY;
 
-    if (d.horizontal === null) {
-      if (Math.abs(dx) < TAB_SWIPE_INTENT_PX && Math.abs(dy) < TAB_SWIPE_INTENT_PX) return;
-      d.horizontal = Math.abs(dx) > Math.abs(dy);
+    if (!d.captured) {
+      if (Math.abs(dy) < CLAIM_THRESHOLD) return;
       this._handle.setPointerCapture(d.pointerId);
-      if (!d.horizontal) this._dialog.style.transition = 'none';
+      this._dialog.style.transition = 'none';
+      d.captured = true;
     }
 
-    if (d.horizontal) { d.lastDx = dx; return; }
+    // Follow the finger downward; clamp upward drags to rest so the sheet never rises.
     this._dialog.style.transform = `translateY(${Math.max(0, dy)}px)`;
   }
 
@@ -349,22 +355,8 @@ class ModalDialog extends AppElement {
     if (!d) return;
     this._removeDragListeners();
     this._drag = null;
-
-    if (d.horizontal === undefined) {
-      this._resolveDismiss(e.clientY - d.startY, d.startTime, d.height);
-      return;
-    }
-
-    if (d.horizontal === null) return; // never moved past the intent threshold — a tap, let native click fire
-
-    if (d.horizontal) {
-      const elapsed = Date.now() - d.startTime;
-      const velocity = elapsed > 0 ? Math.abs(d.lastDx) / elapsed : 0;
-      const commit = Math.abs(d.lastDx) > d.width * TAB_SWIPE_DISTANCE_RATIO || velocity > TAB_SWIPE_VELOCITY;
-      if (commit) this._selectTab(this._activeTab + (d.lastDx < 0 ? 1 : -1));
-      return;
-    }
-
+    // Never crossed the threshold — a tap, not a drag. Let the dot's native click fire.
+    if (!d.captured) return;
     this._resolveDismiss(e.clientY - d.startY, d.startTime, d.height);
   }
 
@@ -471,7 +463,7 @@ class ModalDialog extends AppElement {
   _renderTabSegments() {
     const on = this._tabCount > 1;
     this._handle.classList.toggle('has-tabs', on);
-    this._body.classList.toggle('has-tabs', on); // static touch-action: none — see the CSS rule and the comment above _bodyDown
+    this._body.classList.toggle('has-tabs', on); // static touch-action: pan-y pinch-zoom — see the CSS rule and the comment above _bodyDown
     this._handleTabs.hidden = !on;
     // The handle is aria-hidden by default (a touch affordance, not a control —
     // see docs). Once it holds real, independently meaningful buttons, it must
@@ -523,48 +515,44 @@ class ModalDialog extends AppElement {
   }
 
   // ── Swipe-to-change-tab (body) ───────────────────────────────────────────
-  // .body.has-tabs (CSS, above) gives .body a STATIC touch-action: none
-  // whenever tabCount > 1 — not set reactively here in _bodyDown. Two failed
-  // rounds (pan-y, then a reactive none) confirmed why: Chrome's compositor
-  // thread makes its own gesture-ownership decision on a separate thread,
-  // using whatever touch-action was already in effect BEFORE a pointerdown
-  // handler runs — a value changed reactively, in response to the touch
-  // that's already begun, is not guaranteed to apply to that same gesture.
-  // .handle's touch-action: none has always been static from initial paint
-  // and never had this problem; an on-device isolation test (static class,
-  // same 'none' value, same gating) confirmed static is what actually fixes
-  // it. setPointerCapture() never helped either way — it only redirects
-  // event delivery, it can't reclaim a gesture the browser already owns.
+  // .body.has-tabs (CSS, above) gives .body a STATIC touch-action: pan-y pinch-zoom
+  // whenever tabCount > 1 — never set reactively here in _bodyDown. The browser makes
+  // its own gesture-ownership decision on a separate thread, using whatever touch-action
+  // was already in effect BEFORE a pointerdown handler runs, so a value changed in
+  // response to a touch that has already begun is not guaranteed to apply to it.
   //
-  // This has a real, permanent cost, not just during a swipe: CSS
-  // touch-action intersects down the whole ancestor chain, and a descendant
-  // can never loosen what an ancestor already restricted. So for as long as
-  // a dialog has tabCount > 1, ANY nested horizontally-scrollable content in
-  // the body (a chart with its own overflow-x: auto region, say) permanently
-  // loses native panning too — not just when a swipe is attempted. A
-  // consumer with that kind of content needs its own manual pointer-driven
-  // scroll replication for it, the same technique used below for .body's
-  // own vertical fallback. This is not something this module can solve
-  // generically — it doesn't know what a consumer slots in — so it's
-  // documented as a real, user-facing behaviour change (see
-  // docs/modal-dialog.md), not something to design around silently here.
-  // Whether this also affects native text-selection-via-drag on a nested
-  // input/textarea is unverified — flagged, not yet confirmed either way.
+  // Getting the VALUE right took three attempts, and the first two are instructive:
+  // pan-y alone (1.2.2) narrowed the race but still lost diagonal swipes; a reactive
+  // none (1.2.3) lost to the compositor outright; a static none (1.2.4) finally made
+  // the swipe reliable. But none takes BOTH axes, and that is what cost us — with
+  // nothing able to scroll, a flick still made the browser start a fling, the fling had
+  // nothing to move, and it ran invisibly while spending the user's next tap cancelling
+  // itself. Roughly 700ms after any hard swipe, the next tap did nothing.
   //
-  // Vertical drags: browsers don't hand a touch-action: none gesture back to
-  // native scrolling mid-touch, so a vertical classification can't hand off
-  // to native scroll — JS drives .body.scrollTop itself for the rest of
-  // that gesture instead (mirroring how .handle's dismiss-drag has always
-  // manually driven its own transform, for the same reason). This costs a
-  // ~10px dead zone during the undecided phase (nothing scrolls until
-  // direction is known) — the standard, unavoidable cost of JS-driven axis
-  // disambiguation.
+  // The missing piece was never a touch-action value. It was the claim: calling
+  // preventDefault() on the first horizontal touchmove, which is what actually stops the
+  // browser generating a scroll — and therefore a fling — for a gesture we own. Pointer
+  // events cannot do it; only a non-passive touchmove listener can, and the library had
+  // none anywhere. See core/scroll-claim.js.
+  //
+  // So the body now concedes the vertical axis and claims only the horizontal one:
+  //   - horizontal → we claim it, no scroll starts, no fling, the next tap survives
+  //   - vertical   → the browser keeps it, with native momentum, and we stop tracking
+  // There is no JS scrollTop replication any more, and no direction dead zone.
+  //
+  // What this does NOT fix: touch-action intersects down the whole ancestor chain and a
+  // descendant can never loosen it, so pan-y still removes pan-x from everything inside
+  // .body — nested horizontally-scrollable slotted content loses native panning exactly
+  // as it did under none. That cost is unchanged and still documented.
+  //
+  // setPointerCapture() is still not a tool for any of this — it only redirects event
+  // delivery, it cannot reclaim a gesture the browser already owns.
 
   _bodyDown(e) {
     if (e.button !== 0 || this._tabCount <= 1) return;
     if (e.target.closest('button, a, input, textarea, select, [contenteditable]')) return;
-    // Doesn't restore that descendant's native panning (touch-action: none above is
-    // static on .body and can't be selectively lifted per-touch) — its purpose now is
+    // Doesn't restore that descendant's native panning (pan-y on .body is static and
+    // still strips pan-x from descendants, which can't be loosened) — its purpose is
     // purely to stop our own tab-swipe tracking from hijacking a gesture the user
     // aimed at that scroller's content.
     if (this._withinHorizontalScroller(e.target)) return;
@@ -574,7 +562,7 @@ class ModalDialog extends AppElement {
       startTime: Date.now(),
       width: this._body.getBoundingClientRect().width,
       pointerId: e.pointerId,
-      horizontal: null, // undecided until ~10px of movement
+      claim: undefined, // 'x' = ours, 'browser' = conceded, undefined = undecided
       lastDx: 0,
     };
     this._body.addEventListener('pointermove', this._onBodyMove);
@@ -584,7 +572,11 @@ class ModalDialog extends AppElement {
 
   _withinHorizontalScroller(el) {
     let node = el;
-    while (node && node !== this._body) {
+    // Stop at the host too, not just .body: slotted content lives in the light DOM, so
+    // walking parentElement from it never crosses into the shadow tree where .body is —
+    // without this the walk runs on up to <html> and an unrelated outer scroller can
+    // wrongly suppress the tab swipe.
+    while (node && node !== this._body && node !== this) {
       if (node.scrollWidth > node.clientWidth + 1) {
         const overflowX = getComputedStyle(node).overflowX;
         if (overflowX === 'auto' || overflowX === 'scroll') return true;
@@ -600,24 +592,22 @@ class ModalDialog extends AppElement {
     const dx = e.clientX - d.startX;
     const dy = e.clientY - d.startY;
 
-    if (d.horizontal === null) {
-      if (Math.abs(dx) < TAB_SWIPE_INTENT_PX && Math.abs(dy) < TAB_SWIPE_INTENT_PX) return;
-      d.horizontal = Math.abs(dx) > Math.abs(dy);
+    if (d.claim === undefined) {
+      d.claim = dominantAxis(dx, dy);
+      if (d.claim === undefined) return;
+      if (d.claim !== 'x') {
+        // Vertical belongs to the browser under pan-y. Hand it over completely and stop
+        // tracking — native scrolling with native momentum, nothing replicated in JS.
+        this._removeBodyDragListeners();
+        this._bodyDrag = null;
+        return;
+      }
       this._body.setPointerCapture(d.pointerId);
-      // Vertical: dead-zone this classifying move (nothing to scroll relative to
-      // yet) and pick scroll-replication up from the next one. Horizontal falls
-      // through below so this same move's dx still counts toward the swipe.
-      if (d.horizontal) this._body.style.transition = 'none';
-      else { d.lastY = e.clientY; return; }
+      this._body.style.transition = 'none';
     }
 
-    if (d.horizontal) {
-      d.lastDx = dx;
-      this._body.style.transform = `translateX(${dx}px)`;
-    } else {
-      this._body.scrollTop -= e.clientY - d.lastY;
-      d.lastY = e.clientY;
-    }
+    d.lastDx = dx;
+    this._body.style.transform = `translateX(${dx}px)`;
   }
 
   _bodyUp() {
@@ -625,7 +615,7 @@ class ModalDialog extends AppElement {
     if (!d) return;
     this._removeBodyDragListeners();
     this._bodyDrag = null;
-    if (!d.horizontal) return;
+    if (d.claim !== 'x') return; // never crossed the threshold — a tap, not a swipe
 
     const elapsed = Date.now() - d.startTime;
     const velocity = elapsed > 0 ? Math.abs(d.lastDx) / elapsed : 0;

@@ -151,7 +151,7 @@ class ListItem extends Gestures(AppElement) {
           padding-inline: 0 2px;
           margin-inline-start: -5px;
           font-family: var(--font-family);
-          touch-action: none;
+          /* No touch-action: none — see the note on the other drag handles. */
         }
 
         /* Groups title + tag-pills into one vertical stack sharing the same

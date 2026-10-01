@@ -684,7 +684,10 @@ class GoalItem extends Gestures(AppElement) {
           padding-inline: 0 2px;
           margin-inline-start: -5px;
           font-family: var(--font-family);
-          touch-action: none;
+          /* No touch-action: none. Hold-drag claims the touch sequence on
+             activation (core/scroll-claim.js); taking both axes here only
+             stopped the page scrolling from the handle, and left the browser
+             flinging invisibly — which costs the user's next tap. */
         }
 
         :host(.hold-active) .bar {

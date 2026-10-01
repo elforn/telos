@@ -1,3 +1,5 @@
+import { attachScrollClaim, dominantAxis } from '../../core/scroll-claim.js';
+
 const TAP_THRESHOLD = 18;
 const LONG_PRESS_DELAY = 500;
 
@@ -13,16 +15,15 @@ export const Gestures = (Base) => class extends Base {
     if (!hasTap && !hasLongPress && !hasSwipe && !hasHoldDrag) return;
 
     if (!this._pointerDown) {
-      if (hasHoldDrag || hasSwipe) {
-        // manipulation = pan-y + pan-x + pinch-zoom but no double-tap-to-zoom.
-        // Suppresses click-delay disambiguation on shadow DOM descendants (e.g. revealed
-        // action buttons) that would otherwise inherit pan-y from the host and trigger
-        // the browser's 300ms double-tap wait. Horizontal swipe detection is unaffected
-        // because browsers only pan-x when a container is actually scrollable horizontally.
-        this.style.touchAction = 'manipulation';
-      } else {
-        this.style.touchAction = 'manipulation';
-      }
+      // touch-action declares which axes the BROWSER keeps, before any handler runs.
+      // A horizontal gesture must not leave pan-x with the browser, or the compositor
+      // claims diagonal swipes on its own thread and JS never sees them. pan-y keeps
+      // native vertical scrolling (and its momentum) working, and pinch-zoom keeps
+      // double-tap-to-zoom disabled — so there is still no 300ms click delay on shadow
+      // DOM descendants, which is why 'manipulation' was chosen here previously.
+      // Never 'none': that takes both axes and leaves the browser flinging invisibly,
+      // which costs the user's next tap. See core/scroll-claim.js.
+      this.style.touchAction = hasSwipe ? 'pan-y pinch-zoom' : 'manipulation';
       if (hasLongPress || hasHoldDrag) this.style.userSelect = 'none';
 
       this._pointerDown = this._gestureDown.bind(this);
@@ -32,6 +33,13 @@ export const Gestures = (Base) => class extends Base {
     }
 
     this.addEventListener('pointerdown', this._pointerDown);
+
+    // Gestures that move content need to be able to claim the touch sequence from the
+    // browser. Registered permanently, not per-gesture — see core/scroll-claim.js.
+    this._gestureClaimsAxis = hasSwipe;
+    if ((hasSwipe || hasHoldDrag) && !this._removeScrollClaim) {
+      this._removeScrollClaim = attachScrollClaim(this, () => this._gesture?.claim === 'x');
+    }
 
     if (hasHoldDrag && typeof this.onHoldDragKey === 'function' && !this._holdDragKeyHandler) {
       this._holdDragKeyHandler = e => {
@@ -51,6 +59,8 @@ export const Gestures = (Base) => class extends Base {
     this._gestureRemoveInflight();
     this._gesture = null;
     if (this._pointerDown) this.removeEventListener('pointerdown', this._pointerDown);
+    this._removeScrollClaim?.();
+    this._removeScrollClaim = null;
     if (this._holdDragKeyHandler) {
       this.removeEventListener('keydown', this._holdDragKeyHandler);
       this._holdDragKeyHandler = null;
@@ -77,6 +87,9 @@ export const Gestures = (Base) => class extends Base {
       this._longPressTimer = setTimeout(() => {
         if (this._gesture?.phase === 'tracking') {
           this._gesture.phase = 'holdDrag';
+          // The hold completed without movement, so the browser has not started
+          // scrolling and the next touchmove is still ours to take.
+          this._gesture.claim = 'x';
           this.setPointerCapture(this._gesture.pointerId);
           navigator.vibrate?.(40);
           this.onHoldDragStart(this._gestureEvent('holddragstart',
@@ -99,6 +112,12 @@ export const Gestures = (Base) => class extends Base {
   _gestureMove(e) {
     const g = this._gesture;
     if (!g) return;
+
+    // The claim decision runs first and on its own, smaller threshold — the phase
+    // transitions below happen at TAP_THRESHOLD, far too late to stop a fling.
+    if (g.claim === undefined && this._gestureClaimsAxis) {
+      g.claim = dominantAxis(e.clientX - g.startX, e.clientY - g.startY);
+    }
 
     if (g.phase === 'holdDrag') {
       if (typeof this.onHoldDrag === 'function') {
@@ -130,6 +149,9 @@ export const Gestures = (Base) => class extends Base {
     if (typeof this.onSwipe === 'function') {
       if (isVertical) {
         g.phase = 'cancelled';
+        // Release the claim: an early horizontal twitch may already have set it, and
+        // _gestureUp won't run to clear it once the in-flight listeners are gone.
+        g.claim = null;
         this._gestureRemoveInflight();
       } else {
         this.setPointerCapture(e.pointerId);
@@ -141,6 +163,7 @@ export const Gestures = (Base) => class extends Base {
     } else if (typeof this.onHoldDragStart === 'function') {
       if (isVertical) {
         g.phase = 'cancelled';
+        g.claim = null;
         this._gestureRemoveInflight();
       }
       // Horizontal during hold-wait — keep tracking, let hold timer run
@@ -273,6 +296,7 @@ Gestures.attach = (element, handlers) => {
       longPressTimer = setTimeout(() => {
         if (gesture?.phase === 'tracking') {
           gesture.phase = 'holdDrag';
+          gesture.claim = 'x'; // hold completed without movement — see the mixin comment
           navigator.vibrate?.(40);
           handlers.onHoldDragStart(makeEvent('holddragstart', gesture, gesture.startX, gesture.startY, 0, 0));
         }
@@ -301,6 +325,7 @@ Gestures.attach = (element, handlers) => {
     const g = gesture;
     const dx = e.clientX - g.startX;
     const dy = e.clientY - g.startY;
+    if (g.claim === undefined && hasSwipe) g.claim = dominantAxis(dx, dy);
     if (g.phase === 'holdDrag') {
       handlers.onHoldDrag?.(makeEvent('holddrag', g, e.clientX, e.clientY, dx, dy));
       return;
@@ -316,6 +341,7 @@ Gestures.attach = (element, handlers) => {
       if (hasSwipe) {
         if (isVertical) {
           g.phase = 'cancelled';
+          g.claim = null; // release it — see the mixin comment
           element.releasePointerCapture(e.pointerId);
           removeInflight();
         } else {
@@ -325,6 +351,7 @@ Gestures.attach = (element, handlers) => {
       } else if (handlers.onHoldDragStart) {
         if (isVertical) {
           g.phase = 'cancelled';
+          g.claim = null;
           element.releasePointerCapture(e.pointerId);
           removeInflight();
         }
@@ -373,13 +400,20 @@ Gestures.attach = (element, handlers) => {
     }
   };
 
-  element.style.touchAction = (hasSwipe || !!handlers.onHoldDragStart) ? 'manipulation' : 'none';
+  // Same rule as the mixin. Note the tap-only / long-press-only case is 'manipulation',
+  // not 'none' — a tap target must never block scrolling that starts on top of it.
+  element.style.touchAction = hasSwipe ? 'pan-y pinch-zoom' : 'manipulation';
   element.style.userSelect = 'none';
   element.addEventListener('pointerdown', onDown);
+
+  const removeScrollClaim = (hasSwipe || hasHoldDragHandlers)
+    ? attachScrollClaim(element, () => gesture?.claim === 'x')
+    : null;
 
   return () => {
     clearTimeout(longPressTimer);
     removeInflight();
+    removeScrollClaim?.();
     element.removeEventListener('pointerdown', onDown);
     if (keydownHandler) element.removeEventListener('keydown', keydownHandler);
     gesture = null;

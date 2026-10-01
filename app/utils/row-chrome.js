@@ -45,7 +45,10 @@ export function rowChromeStyles(selector) {
       padding-inline-end: var(--space-3);
       cursor: pointer;
       user-select: none;
-      touch-action: pan-y;
+      /* No touch-action here. The Gestures mixin sets pan-y pinch-zoom on the
+         HOST for any component with onSwipe, and touch-action intersects down
+         the tree — a descendant can only ever subtract. Declaring pan-y here
+         stripped pinch-zoom from every row in the app. */
       transition: transform var(--duration-normal) var(--ease-decelerate);
       will-change: transform;
     }
