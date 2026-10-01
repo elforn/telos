@@ -50,6 +50,21 @@ function pointerXY(type, clientX, clientY = 0, extra = {}) {
 
 // happy-dom has no TouchEvent constructor; the claim only reads touches.length,
 // cancelable and preventDefault. Returns whether the claim prevented it.
+// A consumer whose scrollable region lives in its OWN shadow root — the case a
+// parentElement walk cannot see, because the event target retargets to the slotted host.
+customElements.define('nested-scroller-host', class extends HTMLElement {
+  connectedCallback() {
+    if (this.shadowRoot) return;
+    const sr = this.attachShadow({ mode: 'open' });
+    const scroller = document.createElement('div');
+    scroller.id = 'inner';
+    scroller.style.overflowX = 'auto';
+    Object.defineProperty(scroller, 'scrollWidth', { value: 600 });
+    Object.defineProperty(scroller, 'clientWidth', { value: 200 });
+    sr.appendChild(scroller);
+  }
+});
+
 function bodyTouchMove(el, touches = 1) {
   const ev = new Event('touchmove', { cancelable: true, bubbles: true });
   Object.defineProperty(ev, 'touches', { value: new Array(touches).fill({}) });
@@ -1069,6 +1084,35 @@ describe('modal-dialog — tabs: swipe on the body', () => {
     el.shadowRoot.querySelector('.body').dispatchEvent(pointerXY('pointerup', 130, 100));
 
     expect(el.activeTab).toBe(0);
+  });
+
+  it('_withinHorizontalScroller sees a scroller inside a nested shadow root', () => {
+    // Driven directly rather than through dispatch: happy-dom does not propagate a
+    // composed event from a nested shadow root through a slot, so the real integration
+    // case is covered in reference-app/tests/e2e/axis-ownership.spec.js instead. This
+    // asserts the walk itself crosses a shadow boundary and stops at .body.
+    const el = mountWithTabs(3);
+    const body = el.shadowRoot.querySelector('.body');
+    const host = document.createElement('nested-scroller-host');
+    el.appendChild(host);
+    const inner = host.shadowRoot.querySelector('#inner');
+
+    // The path a composed pointerdown on `inner` really produces, innermost first.
+    const path = [inner, host.shadowRoot, host, body, el.shadowRoot, el];
+    expect(el._withinHorizontalScroller({ composedPath: () => path })).toBe(true);
+  });
+
+  it('_withinHorizontalScroller stops at .body and ignores scrollers outside the dialog', () => {
+    const el = mountWithTabs(3);
+    const body = el.shadowRoot.querySelector('.body');
+    const outer = document.createElement('div');
+    outer.style.overflowX = 'auto';
+    Object.defineProperty(outer, 'scrollWidth', { value: 600 });
+    Object.defineProperty(outer, 'clientWidth', { value: 200 });
+
+    // outer sits beyond .body, so the walk must have stopped before reaching it
+    const path = [document.createElement('span'), body, el.shadowRoot, el, outer];
+    expect(el._withinHorizontalScroller({ composedPath: () => path })).toBe(false);
   });
 
   it('pointercancel tears the in-flight body drag down without changing tabs', () => {

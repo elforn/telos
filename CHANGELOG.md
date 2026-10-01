@@ -13,7 +13,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - **The first tap straight after a swipe no longer goes missing.** Flicking to change page in a dialog, or swiping the year header, left the browser running a fling with nothing to move — it coasted invisibly for about three quarters of a second and spent your next tap stopping itself. Tapping a second time always worked, which is what made it look random. Swipe surfaces now hand the browser back the direction they don't use and claim only the one they do (Socle 1.3.0).
-- **Charts wider than the card can be dragged sideways.** They were meant to scroll on their own and never did on a touchscreen — the dialog had taken sideways movement away from them, and nothing gave it back. Charts that fit the card still let you swipe across them to change page, as before.
+- **Charts wider than the card can be dragged and flicked sideways.** They were meant to scroll on their own and never did on a touchscreen — the dialog had taken sideways movement away from them, and nothing gave it back. A flick now carries with momentum and settles, and pressing a moving chart stops it. Charts that fit the card still let you swipe across them to change page, as before.
 - **Dialogs scroll vertically with native momentum again**, with no dead spot at the start of a drag.
 
 ---

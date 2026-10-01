@@ -495,6 +495,10 @@ test('a chart that overflows can be dragged horizontally', async ({ page }) => {
   expect(before - after).toBeGreaterThan(50);  // and by roughly the drag distance
 
   // A vertical drag must be released to the dialog, not swallowed as a scroll.
+  // Let the release momentum settle first — otherwise the baseline is read while
+  // the chart is still coasting and the comparison below measures the coast, not
+  // the vertical drag.
+  await page.waitForTimeout(600);
   const mid = await page.evaluate(() => window.__ga().shadowRoot.querySelector('#hist-scroll').scrollLeft);
   await page.mouse.move(box.x + 100, y);
   await page.mouse.down();
@@ -502,4 +506,44 @@ test('a chart that overflows can be dragged horizontally', async ({ page }) => {
   await page.mouse.up();
   const afterVertical = await page.evaluate(() => window.__ga().shadowRoot.querySelector('#hist-scroll').scrollLeft);
   expect(afterVertical).toBe(mid);
+});
+
+// The hand-rolled scroll needs hand-rolled momentum too: replicating the drag
+// 1:1 stopped dead on release, which reads as broken next to every other scroll
+// surface on the platform. Unlike the compositor fling that caused the swallowed
+// taps, this one is ours — a press just cancels it and costs nothing.
+test('a flicked chart keeps coasting after release, and a press stops it', async ({ page }) => {
+  await createGoal(page, { title: 'Chart momentum', type: 'weekly' });
+  await reopenGoal(page);
+  await gotoTab(page, 3); // Activity
+
+  const read = () => page.evaluate(() => window.__ga().shadowRoot.querySelector('#hist-scroll').scrollLeft);
+  const box = await page.evaluate(() =>
+    window.__ga().shadowRoot.querySelector('#hist-scroll').getBoundingClientRect().toJSON());
+  const y = box.y + box.height / 2;
+
+  // A fast flick: short, quick moves so the release velocity is real.
+  await page.mouse.move(box.x + 40, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 5; i++) await page.mouse.move(box.x + 40 + i * 24, y);
+  const atRelease = await read();
+  await page.mouse.up();
+
+  await page.waitForTimeout(250);
+  const coasted = await read();
+  expect(coasted).toBeLessThan(atRelease); // kept going after the finger left
+
+  // Pressing on a coasting chart stops it where it is.
+  await page.mouse.move(box.x + 60, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 5; i++) await page.mouse.move(box.x + 60 + i * 24, y);
+  await page.mouse.up();
+  await page.waitForTimeout(40);
+  const mid = await read();
+  await page.mouse.move(box.x + 60, y);
+  await page.mouse.down();
+  await page.waitForTimeout(200);
+  const afterPress = await read();
+  await page.mouse.up();
+  expect(Math.abs(afterPress - mid)).toBeLessThan(12); // halted, not still coasting
 });

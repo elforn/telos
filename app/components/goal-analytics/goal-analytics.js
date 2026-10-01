@@ -62,6 +62,11 @@ const BARS_HISTOGRAM   = { week: 26, month: 12, quarter: 4 };
 // At or below this many bars, a chart stretches its columns across the card
 // instead of keeping them at the fixed 18px it needs when they might overflow.
 const MAX_BARS_TO_STRETCH = 6;
+// Momentum for the hand-rolled chart scroll (see _attachDragScroll). Decay is
+// per 16.67ms frame and scaled by real elapsed time, so a janky frame slows the
+// coast by the same amount it would have at 60fps rather than overshooting.
+const FLING_DECAY = 0.94;
+const FLING_MIN_VELOCITY = 0.02; // px/ms — below this a coast is imperceptible
 function clampPeriods(unit, count) { return Math.min(count, TIMEFRAME_MAX[unit] ?? count); }
 
 function pad(n) { return String(n).padStart(2, '0'); }
@@ -788,12 +793,40 @@ class GoalAnalytics extends AppElement {
   // modal-dialog replicates its own vertical scroll for the same reason.
   //
   // The dialog's tab swipe does not fight this: _bodyDown bails out of tracking
-  // whenever the press lands inside a genuinely overflowing horizontal scroller.
+  // whenever the press lands inside a genuinely overflowing horizontal scroller,
+  // which since Socle 1.3.1 it can actually see across a shadow boundary.
   _attachDragScroll(el) {
     if (el.__dragScroll) return;
     el.__dragScroll = true;
-    let drag = null;
+    let drag = null, flingId = null;
     const scrollable = () => el.scrollWidth > el.clientWidth;
+    const stopFling = () => { if (flingId !== null) cancelAnimationFrame(flingId); flingId = null; };
+
+    // Momentum has to be written by hand too. Replicating the scroll 1:1 gave a
+    // drag that stopped dead the instant the finger lifted — correct, and
+    // immediately wrong-feeling next to every other scroll surface on the
+    // platform. Velocity comes from the last two moves rather than the whole
+    // gesture, so a drag that slows to a stop before release coasts nowhere,
+    // which is what a reader expects when they are lining a chart up.
+    //
+    // This fling is ours, not the browser's, so a tap landing on it costs
+    // nothing — it just stops here. That is the whole difference from the
+    // compositor fling this module spent a session chasing.
+    const fling = v => {
+      if (Math.abs(v) < FLING_MIN_VELOCITY || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      let last = performance.now();
+      const step = now => {
+        const dt = Math.min(now - last, 32); // a dropped frame must not teleport it
+        last = now;
+        const max = el.scrollWidth - el.clientWidth;
+        const next = Math.max(0, Math.min(max, el.scrollLeft - v * dt));
+        if (next === el.scrollLeft) { flingId = null; return; } // hit an edge
+        el.scrollLeft = next;
+        v *= Math.pow(FLING_DECAY, dt / 16.67);
+        flingId = Math.abs(v) < FLING_MIN_VELOCITY ? null : requestAnimationFrame(step);
+      };
+      flingId = requestAnimationFrame(step);
+    };
 
     // Registered once, permanently, and never per-gesture inside pointerdown:
     // Chrome only leaves touchmove cancelable when a blocking listener already
@@ -802,15 +835,15 @@ class GoalAnalytics extends AppElement {
 
     el.addEventListener('pointerdown', e => {
       if (e.button !== 0 || !scrollable()) return;
-      // Keep the press away from modal-dialog's tab swipe. It does try to yield
-      // to a nested horizontal scroller (_withinHorizontalScroller), but that
-      // walk uses parentElement and so never crosses a shadow boundary — this
-      // scroller lives in goal-analytics' own shadow root, where the retargeted
-      // target it inspects can't reach. Gated on actually overflowing, which
-      // preserves the intended split: a chart wider than the card scrolls, one
-      // that fits stays a tab-swipe surface.
-      e.stopPropagation();
-      drag = { x: e.clientX, y: e.clientY, left: el.scrollLeft, id: e.pointerId, claim: undefined };
+      // No stopPropagation needed: modal-dialog yields to a nested horizontal
+      // scroller on its own, and since Socle 1.3.1 that check walks
+      // composedPath() so it reaches this element inside goal-analytics' shadow
+      // root. The intended split still holds either way — a chart wider than
+      // the card scrolls, one that fits stays a tab-swipe surface — because
+      // both sides gate on the same "does it actually overflow" test.
+      stopFling(); // a press on a coasting chart stops it, as it would natively
+      drag = { x: e.clientX, y: e.clientY, left: el.scrollLeft, id: e.pointerId,
+               claim: undefined, lastX: e.clientX, lastT: performance.now(), v: 0 };
     });
     el.addEventListener('pointermove', e => {
       if (!drag || e.pointerId !== drag.id) return;
@@ -827,8 +860,14 @@ class GoalAnalytics extends AppElement {
       }
       if (drag.claim !== 'x') return;
       el.scrollLeft = drag.left - dx;
+      // Only the most recent movement feeds the release velocity.
+      const t = performance.now(), gap = t - drag.lastT;
+      if (gap > 0) { drag.v = (e.clientX - drag.lastX) / gap; drag.lastX = e.clientX; drag.lastT = t; }
     });
-    const end = () => { drag = null; };
+    const end = () => {
+      if (drag?.claim === 'x' && performance.now() - drag.lastT < 60) fling(drag.v);
+      drag = null;
+    };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
   }

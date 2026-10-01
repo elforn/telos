@@ -555,14 +555,14 @@ class ModalDialog extends AppElement {
     // still strips pan-x from descendants, which can't be loosened) — its purpose is
     // purely to stop our own tab-swipe tracking from hijacking a gesture the user
     // aimed at that scroller's content.
-    if (this._withinHorizontalScroller(e.target)) return;
+    if (this._withinHorizontalScroller(e)) return;
     this._bodyDrag = {
       startX: e.clientX,
       startY: e.clientY,
       startTime: Date.now(),
       width: this._body.getBoundingClientRect().width,
       pointerId: e.pointerId,
-      claim: undefined, // 'x' = ours, 'browser' = conceded, undefined = undecided
+      claim: undefined, // 'x' = ours, 'y' = conceded, undefined = undecided
       lastDx: 0,
     };
     this._body.addEventListener('pointermove', this._onBodyMove);
@@ -570,18 +570,22 @@ class ModalDialog extends AppElement {
     this._body.addEventListener('pointercancel', this._onBodyCancel);
   }
 
-  _withinHorizontalScroller(el) {
-    let node = el;
-    // Stop at the host too, not just .body: slotted content lives in the light DOM, so
-    // walking parentElement from it never crosses into the shadow tree where .body is —
-    // without this the walk runs on up to <html> and an unrelated outer scroller can
-    // wrongly suppress the tab swipe.
-    while (node && node !== this._body && node !== this) {
+  // Walks composedPath(), not parentElement. Pointer events are composed, so the target
+  // .body's listener receives is retargeted to the slotted node — a parentElement walk
+  // from there can never descend into a consumer's own shadow root, and the dialog paged
+  // tabs while the user was trying to scroll a chart that lives inside one. composedPath()
+  // crosses those boundaries, and because .body is itself in the path it is also the
+  // natural place to stop: anything beyond it is outside the dialog and none of our
+  // business. Reported from a downstream app; only reproducible in a real browser, so the
+  // integration case lives in reference-app/tests/e2e/axis-ownership.spec.js.
+  _withinHorizontalScroller(e) {
+    for (const node of e.composedPath()) {
+      if (node === this._body) return false;
+      if (node.nodeType !== 1) continue; // skip ShadowRoot / Document / Window
       if (node.scrollWidth > node.clientWidth + 1) {
         const overflowX = getComputedStyle(node).overflowX;
         if (overflowX === 'auto' || overflowX === 'scroll') return true;
       }
-      node = node.parentElement;
     }
     return false;
   }
