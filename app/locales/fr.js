@@ -50,6 +50,7 @@ defineStrings({
   'goal-item.countdown-days':     '{count}j',
   'goal-item.countdown-days-unset': '–',
   'goal-item.failed-suffix':      ', échoué',
+  'goal-item.tags-aria':          ', étiquettes : {tags}',
 
   // Urgence des échéances (partagé par objectifs, éléments, agrégats).
   'urgency.far':          'à venir',
@@ -399,6 +400,7 @@ defineStrings({
   'list-item.delete':          'Supprimer',
   'list-item.drag':      'Glisser pour réordonner',
   'list-item.duedate-aria': '{title}, {when}',
+  'list-item.tags-aria': ', étiquettes : {tags}',
 
   'lists.toast-list-saved':      'Liste enregistrée',
   'lists.toast-list-hidden':     'Liste ajoutée — masquée par le filtre actif',
@@ -560,6 +562,6 @@ defineStrings({
   'goal-analytics.calendar-title':    'Calendrier',
   'goal-analytics.frequency-title':   'Fréquence par jour',
   'goal-analytics.best-streaks':      'Meilleures séries',
-  'goal-analytics.no-streaks-yet':    'Pas encore de série — revenez quand il y aura plus d’historique.',
+  'goal-analytics.no-streaks-yet':    'Pas encore de séries : deux jours d’affilée en commencent une.',
   'goal-analytics.days-abbrev':       'j',
 }, 'fr');

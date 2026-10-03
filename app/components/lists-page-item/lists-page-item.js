@@ -4,12 +4,8 @@ import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
 import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
 import { COLOR_PALETTE } from '../../utils/color-palette.js';
-import { rowChromeStyles } from '../../utils/row-chrome.js';
-
-const COLOR_WIDTH     = 48;
-const COMMIT_RATIO    = 2.0;
-const COMMIT_VELOCITY = 0.35;
-const SWIPE_DEAD_ZONE = 15;
+import { rowChromeStyles, dragHandleStyles, colorPanelStyles } from '../../utils/row-chrome.js';
+import { COLOR_WIDTH, swipeOffset, swipeCommitted, trackSwipe, closeReveal } from '../../utils/row-swipe.js';
 
 class ListsPageItem extends Gestures(AppElement) {
   set list(value) {
@@ -30,18 +26,11 @@ class ListsPageItem extends Gestures(AppElement) {
         :host {
           display: block;
           position: relative;
-          --row-gap: 6px; /* between --space-1 (4px) and --space-2 (8px) */
         }
 
         /* ── Left panel — revealed by swiping right ───────────────────────── */
 
-        .color-panel {
-          position: absolute;
-          inset-block: 0;
-          inset-inline-start: 0;
-          inline-size: ${COLOR_WIDTH}px;
-          background: var(--color-panel-bg, var(--color-surface-raised));
-        }
+        ${colorPanelStyles('.color-panel', COLOR_WIDTH)}
 
         /* ── Row ──────────────────────────────────────────────────────────── */
 
@@ -130,25 +119,10 @@ class ListsPageItem extends Gestures(AppElement) {
           font-weight: var(--font-weight-semibold);
         }
 
-        .drag-btn {
-          position: relative;
-          z-index: 1;
-          flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          background: none;
-          border: none;
-          cursor: grab;
-          color: var(--color-text-muted);
-          opacity: 0.45;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding-block: 0;
-          padding-inline: 0 2px;
-          margin-inline-start: -5px;
-          /* No touch-action: none — see the note on the other drag handles. */
-        }
+        ${dragHandleStyles('.drag-btn')}
 
+        /* Local extra — see dragHandleStyles' own note on why the shared
+           helper deliberately leaves this out. */
         .drag-btn svg { pointer-events: none; }
 
         .chevron {
@@ -260,16 +234,15 @@ class ListsPageItem extends Gestures(AppElement) {
     super._gestureCancel(e);
   }
 
+  // No delete panel on this row, so deleteWidth stays 0 — a left swipe
+  // clamps to a zero offset and the row simply doesn't move.
   onSwipeMove(e) {
-    this._row.style.transition = 'none';
-    const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : 0;
-    this._row.style.transform = `translateX(${Math.min(COLOR_WIDTH, dx)}px)`;
+    trackSwipe(this._row, swipeOffset(e, { colorWidth: COLOR_WIDTH }));
   }
 
   onSwipe(e) {
     if (e.direction === 'right') {
-      const commit = e.distance >= COLOR_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
-      if (commit) {
+      if (swipeCommitted(e, COLOR_WIDTH)) {
         this.dispatchEvent(new CustomEvent('list-color-cycle', {
           bubbles: true, composed: true, detail: { list: this._list },
         }));
@@ -281,9 +254,7 @@ class ListsPageItem extends Gestures(AppElement) {
   // ── Private ───────────────────────────────────────────────────────────────
 
   _closeReveal() {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    this._row.style.transition = reduced ? 'none' : 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
-    this._row.style.transform  = '';
+    closeReveal(this._row);
   }
 
   _update() {

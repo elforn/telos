@@ -659,6 +659,17 @@ class HomePage extends AppElement {
     };
     this.watch('goalsDeadlinesVisible', this._onGoalsDeadlinesVisible);
 
+    // year-header.js owns the toggle and hides the pills via CSS alone
+    // (--goal-item-tags-display). This page watches the same key purely to
+    // keep each goal-item's accessible name in step — see goal-item's
+    // tagsVisible setter. Mirrors _onGoalsDeadlinesVisible above, re-running
+    // the same render rather than reaching into rows directly.
+    this._onGoalsTagsVisible = tagsVisible => {
+      this._tagsVisible = tagsVisible?.[String(this._year)] === true;
+      this._onGoals(getState().goals);
+    };
+    this.watch('goalsTagsVisible', this._onGoalsTagsVisible);
+
     // Each goal-item's own urgency icon/full-row-red state is otherwise
     // only as fresh as the last time its .goal was set — re-run the exact
     // same render this page already does on any real data change, so
@@ -1386,6 +1397,7 @@ class HomePage extends AppElement {
     syncChildren(container, items, 'goal-item', (el, goal) => {
       el.goal = goal;
       el.deadlinesLevel = this._deadlinesLevel;
+      el.tagsVisible = this._tagsVisible;
     }, { getElId: el => el._goal?.id });
   }
 

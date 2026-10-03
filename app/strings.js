@@ -56,6 +56,7 @@ defineStrings({
   'goal-item.countdown-days':     '{count}d',
   'goal-item.countdown-days-unset': '–',
   'goal-item.failed-suffix':      ', failed',
+  'goal-item.tags-aria':          ', tags: {tags}',
 
   // Deadline / due-date urgency phrasing (shared by goals, items, roll-ups).
   'urgency.far':          'upcoming',
@@ -398,6 +399,7 @@ defineStrings({
   'list-item.delete':          'Delete',
   'list-item.drag':      'Drag to reorder',
   'list-item.duedate-aria': '{title}, {when}',
+  'list-item.tags-aria': ', tags: {tags}',
 
   'lists.toast-list-saved':      'List saved',
   'lists.toast-list-hidden':     'List added — hidden by the current filter',
@@ -575,6 +577,6 @@ defineStrings({
   'goal-analytics.calendar-title':    'Calendar',
   'goal-analytics.frequency-title':   'Frequency by weekday',
   'goal-analytics.best-streaks':      'Best streaks',
-  'goal-analytics.no-streaks-yet':    'No streaks yet — check back once there’s more history.',
+  'goal-analytics.no-streaks-yet':    'No streaks yet — two days in a row starts one.',
   'goal-analytics.days-abbrev':       'd',
 });

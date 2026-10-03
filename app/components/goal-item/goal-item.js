@@ -2,22 +2,18 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { Gestures } from '../../../_lib/modules/gestures/gestures.js';
 import { t } from '../../../_lib/core/strings.js';
 import { icons } from '../../icons.js';
-import { tagStrip } from '../../utils/tag-color.js';
+import { tagColor } from '../../utils/tag-color.js';
 import { urgencyOf, mostUrgent } from '../../utils/urgency.js';
 import { frequencyUrgencyOf, frequencyRowUrgencyOf } from '../../utils/frequency-urgency.js';
 import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
-import { rowChromeStyles } from '../../utils/row-chrome.js';
+import { rowChromeStyles, dragHandleStyles, colorPanelStyles, actionButtonStyles, tagPillStyles } from '../../utils/row-chrome.js';
+import { COLOR_WIDTH, DELETE_WIDTH, swipeOffset, swipeCommitted, trackSwipe, closeReveal } from '../../utils/row-swipe.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 import {
   percentValue, isFrequency, isEntryBased, isDecreasing, isCountdown, countdownDaysRemaining,
   recentDots, recentWeekStates, isLoggedOn, currentPeriodCount,
 } from '../../utils/tracking.js';
 
-const REVEAL_WIDTH = 60;
-const COLOR_WIDTH = 48;    // left-side colour panel, revealed by swiping right — mirrors lists-page-item
-const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
-const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
-const SWIPE_DEAD_ZONE = 15;   // px of drag before bar starts moving
 const DRAG_100_INSET = 7;         // px shaved off the drag-to-set-% denominator so the last few px of the bar aren't needed to reach 100 — the fill/UI itself is untouched, only how far a drag has to travel
 const DRAG_100_INSET_MAX = 28;    // px — the inset grows toward this ceiling the faster the drag is moving, so a fast flick to the end reaches 100 sooner than a slow, deliberate drag would
 const DRAG_VELOCITY_FOR_MAX_INSET = 1.2; // px/ms — drag speed at/above which the full extra inset applies; roughly a brisk flick
@@ -193,6 +189,19 @@ class GoalItem extends Gestures(AppElement) {
     if (this.shadowRoot) this._update();
   }
 
+  // Whether this goal's year currently shows tag colours (goalsTagsVisible —
+  // home-page.js resolves and pushes it, matching deadlinesLevel above). The
+  // pills themselves are hidden by CSS alone, via the
+  // --goal-item-tags-display property year-header.js writes; this exists
+  // only so the row's accessible name can stay in step with what is actually
+  // on screen. Announcing tags a sighted user has deliberately turned off
+  // would give screen-reader users a different row than everyone else.
+  // Defaults to visible when never set, so the component stands alone.
+  set tagsVisible(value) {
+    this._tagsVisible = value;
+    if (this.shadowRoot) this._update();
+  }
+
   template() {
     return `
       <style>
@@ -202,20 +211,7 @@ class GoalItem extends Gestures(AppElement) {
           overflow: hidden;
         }
 
-        .action-btn {
-          position: absolute;
-          inset-block: 0;
-          inline-size: ${REVEAL_WIDTH}px;
-          color: var(--color-text-inverse);
-          border: none;
-          cursor: pointer;
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-semibold);
-          font-family: var(--font-family);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
+        ${actionButtonStyles('.action-btn', DELETE_WIDTH)}
 
         .action-btn svg { pointer-events: none; }
 
@@ -228,13 +224,7 @@ class GoalItem extends Gestures(AppElement) {
            Mirrors lists-page-item's own .color-panel/swipe exactly: a
            momentary reveal that always snaps back (see onSwipe below), not
            a persisted state like the delete panel's left-swipe. */
-        .color-panel {
-          position: absolute;
-          inset-block: 0;
-          inset-inline-start: 0;
-          inline-size: ${COLOR_WIDTH}px;
-          background: var(--color-panel-bg, var(--color-surface-raised));
-        }
+        ${colorPanelStyles('.color-panel', COLOR_WIDTH)}
 
         ${rowChromeStyles('.bar')}
 
@@ -309,12 +299,31 @@ class GoalItem extends Gestures(AppElement) {
         }
         :host([data-failed]) .septagon-within-dot { fill: var(--color-danger-track); }
 
+        /* Title + tag-pills in one vertical stack, exactly list-item's
+           .main-col: the pills always sit below the title and align to the
+           title's own start edge rather than a hardcoded inset. The title is
+           single-line here (not list-item's 2-line clamp), so there's no
+           has-tags class switching which shape is in effect — the stack is
+           one line taller when tags exist, and still clears the row's
+           56px/68px height with room to spare. */
         .content {
           position: relative;
           z-index: 1;
           flex: 1;
           min-inline-size: 0;
           overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          /* The 6px that list-item and lists-page-item both get from their
+             row's own gap property. Applied as a start margin on this one
+             child instead of as a gap on .bar, because a gap there would
+             also re-space the whole right-hand cluster (% label, frequency
+             dots, urgency badge, notes icon) — those already carry their own
+             margins, and only the handle-to-title boundary was out of step
+             with the other two rows. --row-gap is declared by
+             rowChromeStyles() on .bar and inherits down to here. */
+          margin-inline-start: var(--row-gap);
         }
 
         .title {
@@ -326,21 +335,8 @@ class GoalItem extends Gestures(AppElement) {
           text-overflow: ellipsis;
         }
 
-        /* inset-block-end nudged up 2px (was flush at 0) so it no longer
-           touches the row's new border-block-end divider directly below it —
-           left as a bottom-edge strip rather than porting list-item's pill
-           treatment for now; goal rows already carry more competing content
-           (progress %, frequency dots, urgency icon) than list-item's did. */
-        .tag-strip {
-          position: absolute;
-          inset-block-end: 2px;
-          inset-inline-start: var(--space-10);
-          inset-inline-end: var(--space-4);
-          block-size: 3px;
-          pointer-events: none;
-          z-index: 2;
-          display: var(--tag-strip-display, block);
-        }
+        /* Shared with list-item — see tagPillStyles for the full rationale. */
+        ${tagPillStyles('--goal-item-tags-display')}
 
         .desc-icon {
           position: relative;
@@ -666,29 +662,7 @@ class GoalItem extends Gestures(AppElement) {
            "did the thing" circle without needing a second hue. */
         .septagon-ring .progress { fill: none; stroke: var(--color-accent); stroke-width: 1.5; stroke-dasharray: 4 3; }
 
-        .drag-btn {
-          position: relative;
-          z-index: 1;
-          flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          background: none;
-          border: none;
-          cursor: grab;
-          color: var(--color-text-muted);
-          opacity: 0.45;
-          font-size: var(--font-size-body);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding-block: 0;
-          padding-inline: 0 2px;
-          margin-inline-start: -5px;
-          font-family: var(--font-family);
-          /* No touch-action: none. Hold-drag claims the touch sequence on
-             activation (core/scroll-claim.js); taking both axes here only
-             stopped the page scrolling from the handle, and left the browser
-             flinging invisibly — which costs the user's next tap. */
-        }
+        ${dragHandleStyles('.drag-btn')}
 
         :host(.hold-active) .bar {
           box-shadow: 0 0 0 2px var(--color-accent);
@@ -853,8 +827,8 @@ class GoalItem extends Gestures(AppElement) {
         <button class="drag-btn" id="drag-btn" type="button" aria-label=""></button>
         <span class="content">
           <span class="title"></span>
+          <span class="tag-pills" aria-hidden="true"></span>
         </span>
-        <span class="tag-strip" aria-hidden="true"></span>
         <span class="desc-icon" aria-hidden="true">${icons.info}</span>
         ${urgencyBadgeMarkup}
         <span class="pct-label" hidden></span>
@@ -879,7 +853,7 @@ class GoalItem extends Gestures(AppElement) {
     this._bar = this.shadowRoot.querySelector('.bar');
     this._fill = this.shadowRoot.querySelector('.fill');
     this._title = this.shadowRoot.querySelector('.title');
-    this._stripEl = this.shadowRoot.querySelector('.tag-strip');
+    this._tagPillsEl = this.shadowRoot.querySelector('.tag-pills');
     this._pctLabel = this.shadowRoot.querySelector('.pct-label');
     this._septagonStrip = this.shadowRoot.querySelector('.septagon-strip');
     this._freqDots = this.shadowRoot.querySelector('.freq-dots');
@@ -1066,15 +1040,9 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   onSwipeMove(e) {
-    this._bar.style.transition = 'none';
-    let offset;
-    if (this._revealedDir === 'left') {
-      offset = Math.min(0, -REVEAL_WIDTH + e.dx);
-    } else {
-      const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : Math.min(0, e.dx + SWIPE_DEAD_ZONE);
-      offset = Math.max(-REVEAL_WIDTH, Math.min(COLOR_WIDTH, dx));
-    }
-    this._bar.style.transform = `translateX(${offset}px)`;
+    trackSwipe(this._bar, swipeOffset(e, {
+      revealed: this._revealedDir, deleteWidth: DELETE_WIDTH, colorWidth: COLOR_WIDTH,
+    }));
   }
 
   onSwipe(e) {
@@ -1087,8 +1055,7 @@ class GoalItem extends Gestures(AppElement) {
     // (mirrors lists-page-item exactly), unlike left-swipe delete below,
     // which persists open until confirmed or dismissed.
     if (e.direction === 'right') {
-      const commit = e.distance >= COLOR_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
-      if (commit) {
+      if (swipeCommitted(e, COLOR_WIDTH)) {
         this.dispatchEvent(new CustomEvent('goal-color-cycle', {
           bubbles: true, composed: true, detail: { goal: this._goal },
         }));
@@ -1097,10 +1064,8 @@ class GoalItem extends Gestures(AppElement) {
       return;
     }
 
-    const commit = e.distance >= REVEAL_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
-
-    if (commit) {
-      this._bar.style.transform = `translateX(-${REVEAL_WIDTH}px)`;
+    if (swipeCommitted(e, DELETE_WIDTH)) {
+      this._bar.style.transform = `translateX(-${DELETE_WIDTH}px)`;
       this._revealedDir = 'left';
     } else {
       this._closeReveal(); // _closeReveal sets its own spring transition
@@ -1116,9 +1081,7 @@ class GoalItem extends Gestures(AppElement) {
   }
 
   _closeReveal() {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    this._bar.style.transition = reduced ? 'none' : 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
-    this._bar.style.transform = '';
+    closeReveal(this._bar);
     this._revealedDir = null;
   }
 
@@ -1283,6 +1246,8 @@ class GoalItem extends Gestures(AppElement) {
     // way frequency does), so appending the suffix there would just repeat
     // what was already said.
     if (failed && urgency !== 'overdue') label += t('goal-item.failed-suffix');
+    const tags = this._goal?.tags ?? [];
+    if (tags.length && this._tagsVisible !== false) label += t('goal-item.tags-aria', { tags: tags.join(', ') });
     return label;
   }
 
@@ -1347,10 +1312,25 @@ class GoalItem extends Gestures(AppElement) {
     this._bar.dataset.type = this._goal?.tracking?.type ?? 'percentage';
     this._setPct(this._pct);
     if (this._pct === 100 && prevPct !== undefined && prevPct < 100) this._celebrate();
-    if (this._stripEl) {
-      const bg = tagStrip(this._goal?.tags ?? []);
-      this._stripEl.style.background = bg;
-      this._stripEl.hidden = !bg;
+    // Rebuilt only when the tag list actually changes. _update() runs twice
+    // per render here (home-page's syncChildren sets .goal then
+    // .deadlinesLevel, each a setter that calls it), and re-parsing this
+    // markup both times — on every store write, for every goal — is work
+    // nothing asked for. JSON.stringify rather than join() so no separator
+    // can collide with a tag's own characters. Safe to cache against the
+    // DOM: AppElement only renders a shadow root once and keeps it across
+    // disconnect/reconnect, so the key can never outlive the markup it
+    // describes.
+    if (this._tagPillsEl) {
+      const tags = this._goal?.tags ?? [];
+      const tagsKey = JSON.stringify(tags);
+      if (tagsKey !== this._tagPillsKey) {
+        this._tagPillsKey = tagsKey;
+        this._tagPillsEl.innerHTML = tags
+          .map(tag => `<span class="tag-pill" style="background:${tagColor(tag)}"></span>`)
+          .join('');
+        this._tagPillsEl.hidden = tags.length === 0;
+      }
     }
 
     const color = this._goal?.color ?? null;

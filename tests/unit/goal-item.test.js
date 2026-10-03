@@ -561,7 +561,7 @@ describe('goal-item — swipe', () => {
     window.matchMedia = () => ({ matches: false });
     el._closeReveal();
     expect(el.shadowRoot.querySelector('.bar').style.transition)
-      .toBe('transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)');
+      .toBe('transform 0.28s var(--ease-spring)');
   });
 
   it('_closeReveal uses transition:none when prefers-reduced-motion is set', () => {
@@ -1294,5 +1294,96 @@ describe('goal-item — frequency: log tick + celebration', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('goal-item — tag pills', () => {
+  const tagged = tags => ({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 0 }, tags });
+
+  it('renders one .tag-pill per tag', () => {
+    const el = mount(tagged(['work', 'urgent']));
+    expect(el.shadowRoot.querySelectorAll('.tag-pill').length).toBe(2);
+  });
+
+  it('gives each tag pill a background colour', () => {
+    const el = mount(tagged(['work']));
+    expect(el.shadowRoot.querySelector('.tag-pill').style.background).not.toBe('');
+  });
+
+  it('renders the pills inside .content, below the title', () => {
+    const el = mount(tagged(['work']));
+    const content = el.shadowRoot.querySelector('.content');
+    expect(content.querySelector('.tag-pills')).not.toBeNull();
+    expect(content.lastElementChild.classList.contains('tag-pills')).toBe(true);
+  });
+
+  it('hides the tag-pills container when the goal has no tags', () => {
+    const el = mount(tagged([]));
+    expect(el.shadowRoot.querySelector('.tag-pills').hidden).toBe(true);
+  });
+
+  it('hides the tag-pills container when tags is absent entirely', () => {
+    const el = mount({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 0 } });
+    expect(el.shadowRoot.querySelector('.tag-pills').hidden).toBe(true);
+  });
+
+  it('shows the tag-pills container when the goal has tags', () => {
+    const el = mount(tagged(['work']));
+    expect(el.shadowRoot.querySelector('.tag-pills').hidden).toBe(false);
+  });
+
+  it('re-renders pills when tags change on an existing goal', () => {
+    const el = mount(tagged(['work']));
+    el.goal = tagged(['work', 'urgent', 'home']);
+    expect(el.shadowRoot.querySelectorAll('.tag-pill').length).toBe(3);
+  });
+
+  it('matches list-item: same colour for the same tag name', async () => {
+    const { tagColor } = await import('../../app/utils/tag-color.js');
+    const el = mount(tagged(['health']));
+    const pill = el.shadowRoot.querySelector('.tag-pill');
+    expect(pill.style.background).toBe(tagColor('health'));
+  });
+});
+
+describe('goal-item — tags in the accessible name', () => {
+  const tagged = tags => ({ id: 'g1', title: 'Goal', tracking: { type: 'percentage', value: 0 }, tags });
+  const aria = el => el.shadowRoot.querySelector('.bar').getAttribute('aria-label');
+
+  it('names the tags when they are on screen', () => {
+    expect(aria(mount(tagged(['health', 'work'])))).toBe('Goal, tags: health, work');
+  });
+
+  it('says nothing about tags when the goal has none', () => {
+    expect(aria(mount(tagged([])))).toBe('Goal');
+  });
+
+  // The pills hide via CSS alone, so without this the row would read out tags
+  // that a sighted user has deliberately turned off for the year.
+  it('omits them once the year hides tag colours', () => {
+    const el = mount(tagged(['health', 'work']));
+    el.tagsVisible = false;
+    expect(aria(el)).toBe('Goal');
+  });
+
+  it('names them again when the year turns them back on', () => {
+    const el = mount(tagged(['health']));
+    el.tagsVisible = false;
+    el.tagsVisible = true;
+    expect(aria(el)).toBe('Goal, tags: health');
+  });
+
+  it('defaults to naming them when the page never pushes a value', () => {
+    expect(aria(mount(tagged(['health'])))).toContain('tags: health');
+  });
+
+  it('appends after the urgency clause, not before it', () => {
+    const el = mount({ ...tagged(['health']), dueDate: isoDaysFromNow(-1) });
+    expect(aria(el)).toBe('Goal, overdue, tags: health');
+  });
+
+  it('leaves the pills themselves out of the a11y tree — the label carries them now', () => {
+    const el = mount(tagged(['health']));
+    expect(el.shadowRoot.querySelector('.tag-pills').getAttribute('aria-hidden')).toBe('true');
   });
 });

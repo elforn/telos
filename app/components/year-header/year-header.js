@@ -661,7 +661,7 @@ class YearHeader extends Gestures(AppElement) {
 
     this._onGoalsTagsVisible = tagsVisible => {
       const visible = tagsVisible?.[String(this._year)] === true;
-      document.documentElement.style.setProperty('--tag-strip-display', visible ? 'block' : 'none');
+      document.documentElement.style.setProperty('--goal-item-tags-display', visible ? 'flex' : 'none');
       this.shadowRoot?.querySelector('#tags-show-btn')?.classList.toggle('active', visible);
       this.shadowRoot?.querySelector('#tags-hide-btn')?.classList.toggle('active', !visible);
     };

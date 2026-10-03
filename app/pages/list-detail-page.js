@@ -1425,9 +1425,13 @@ class ListDetailPage extends AppElement {
 
     this._onListsTagsVisible = tagsVisible => {
       const visible = tagsVisible?.[this._listId] === true;
+      this._tagsVisible = visible;
       document.documentElement.style.setProperty('--list-item-tags-display', visible ? 'flex' : 'none');
       this.shadowRoot?.querySelector('#tags-show-btn')?.classList.toggle('active', visible);
       this.shadowRoot?.querySelector('#tags-hide-btn')?.classList.toggle('active', !visible);
+      // The pills hide via CSS alone, but each row's accessible name has to
+      // follow — see list-item's tagsVisible setter.
+      this._itemList?.querySelectorAll('list-item').forEach(el => { el.tagsVisible = visible; });
     };
     this.watch('listsTagsVisible', this._onListsTagsVisible);
 
@@ -1835,6 +1839,7 @@ class ListDetailPage extends AppElement {
       el.selectionMode    = this._selectionMode;
       el.selected         = this._selectionMode && this._selectedIds.has(item.id);
       el.deadlinesVisible = this._deadlinesVisible;
+      el.tagsVisible      = this._tagsVisible;
     }, { getElId: el => el._item?.id });
     // syncChildren only ever re-appends 'list-item' elements, so the add-row
     // button (not a list-item) needs to be explicitly re-pinned to the end

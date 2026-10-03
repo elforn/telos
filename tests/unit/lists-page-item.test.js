@@ -274,7 +274,7 @@ describe('lists-page-item — swipe', () => {
     window.matchMedia = () => ({ matches: false });
     el._closeReveal();
     expect(el.shadowRoot.querySelector('.row').style.transition)
-      .toBe('transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)');
+      .toBe('transform 0.28s var(--ease-spring)');
   });
 
   it('_closeReveal uses transition:none when prefers-reduced-motion is set', () => {

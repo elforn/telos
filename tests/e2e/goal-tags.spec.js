@@ -111,15 +111,15 @@ test.describe('Goal tags — creation', () => {
     await createGoalWithTag(page, '#add-capstone', '#capstone-list', 'Healthy living', 'health');
   });
 
-  test('tag chip appears on the goal item after creation', async ({ page }) => {
-    const stripBg = await page.evaluate(() => {
-      const strip = document.querySelector('app-router').shadowRoot
+  test('tag pill appears on the goal item after creation', async ({ page }) => {
+    const pills = await page.evaluate(() => {
+      const root = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
-        .querySelector('#capstone-list goal-item').shadowRoot
-        .querySelector('.tag-strip');
-      return strip?.style.background ?? '';
+        .querySelector('#capstone-list goal-item').shadowRoot;
+      return [...root.querySelectorAll('.tag-pill')].map(p => p.style.background);
     });
-    expect(stripBg).not.toBe('');
+    expect(pills.length).toBe(1);
+    expect(pills[0]).not.toBe('');
   });
 
   test('tag is stored on the goal and accessible via _goal', async ({ page }) => {
@@ -276,8 +276,8 @@ test.describe('Goal tags — editing', () => {
 
 // ── Goal tags — filter chip in filter bar ────────────────────────────────────
 
-test.describe('Goal tags — tag strip hidden when no tags', () => {
-  test('tag strip is hidden on a goal without tags', async ({ page }) => {
+test.describe('Goal tags — tag pills hidden when no tags', () => {
+  test('tag pills are hidden on a goal without tags', async ({ page }) => {
     await page.goto(`/${currentYear}`);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
@@ -316,13 +316,16 @@ test.describe('Goal tags — tag strip hidden when no tags', () => {
       return list?.querySelectorAll('goal-item').length === 1;
     });
 
-    const stripHidden = await page.evaluate(() => {
-      const strip = document.querySelector('app-router').shadowRoot
+    const pillsState = await page.evaluate(() => {
+      const el = document.querySelector('app-router').shadowRoot
         .querySelector('home-page').shadowRoot
         .querySelector('#capstone-list goal-item').shadowRoot
-        .querySelector('.tag-strip');
-      return strip?.hidden;
+        .querySelector('.tag-pills');
+      // getComputedStyle, not just .hidden: author CSS sets `display` on this
+      // selector unconditionally, so the property alone can't prove it's gone.
+      return { hidden: el?.hidden, display: getComputedStyle(el).display };
     });
-    expect(stripHidden).toBe(true);
+    expect(pillsState.hidden).toBe(true);
+    expect(pillsState.display).toBe('none');
   });
 });

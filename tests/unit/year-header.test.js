@@ -219,9 +219,9 @@ describe('year-header — accent color picker', () => {
   });
 });
 
-// ── year-header — tag strip toggle ────────────────────────────────────────────
+// ── year-header — tag pills toggle ────────────────────────────────────────────
 
-describe('year-header — tag strip toggle', () => {
+describe('year-header — tag pills toggle', () => {
   beforeEach(() => {
     Store.setState('goalsTagsVisible', {});
   });
@@ -253,16 +253,16 @@ describe('year-header — tag strip toggle', () => {
     expect(el.shadowRoot.querySelector('#tags-hide-btn').classList.contains('active')).toBe(true);
   });
 
-  it('sets --tag-strip-display: block on documentElement when visible', () => {
+  it('sets --goal-item-tags-display: flex on documentElement when visible', () => {
     Store.setState('goalsTagsVisible', { '2026': true });
     mount();
-    expect(document.documentElement.style.getPropertyValue('--tag-strip-display')).toBe('block');
+    expect(document.documentElement.style.getPropertyValue('--goal-item-tags-display')).toBe('flex');
   });
 
-  it('sets --tag-strip-display: none on documentElement when hidden', () => {
+  it('sets --goal-item-tags-display: none on documentElement when hidden', () => {
     Store.setState('goalsTagsVisible', { '2026': false });
     mount();
-    expect(document.documentElement.style.getPropertyValue('--tag-strip-display')).toBe('none');
+    expect(document.documentElement.style.getPropertyValue('--goal-item-tags-display')).toBe('none');
   });
 
   it('does not affect a different year', () => {

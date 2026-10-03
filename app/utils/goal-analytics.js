@@ -177,11 +177,21 @@ export function computeStreaks(dates) {
   return streaks;
 }
 
+// A single logged day is a run of one, which computeStreaks reports
+// faithfully — but it isn't a streak, and listing rows of "1d" buries the
+// real ones. The floor is applied here rather than in computeStreaks so that
+// function stays an honest primitive: callers that want every run, including
+// the ones of length 1, still get them.
+export const MIN_STREAK_DAYS = 2;
+
 // Top-N longest, then re-sorted most-recent-first for display — selecting
 // by length and displaying by date are two different orderings, so a
 // 4-day streak can sit above an 11-day one if it happened more recently.
+// Filtered before selecting, not after, so single days can't consume slots
+// that genuine streaks would otherwise fill.
 export function topStreaks(dates, n = 10) {
   return computeStreaks(dates)
+    .filter(s => s.length >= MIN_STREAK_DAYS)
     .sort((a, b) => b.length - a.length)
     .slice(0, n)
     .sort((a, b) => b.end.localeCompare(a.end));

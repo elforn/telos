@@ -6,14 +6,10 @@ import { tagColor } from '../../utils/tag-color.js';
 import { urgencyOf } from '../../utils/urgency.js';
 import { urgencyBadgeMarkup, urgencyBadgeStyles } from '../../utils/urgency-badge.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
-import { rowChromeStyles } from '../../utils/row-chrome.js';
+import { rowChromeStyles, dragHandleStyles, colorPanelStyles, actionButtonStyles, tagPillStyles } from '../../utils/row-chrome.js';
+import { COLOR_WIDTH, DELETE_WIDTH, swipeOffset, swipeCommitted, trackSwipe, closeReveal } from '../../utils/row-swipe.js';
 import { createTapCounter } from '../../../_lib/core/multi-tap.js';
 
-const COLOR_WIDTH = 48;   // left-side colour panel, revealed by swiping right — mirrors lists-page-item
-const DELETE_WIDTH = 60;   // icon-only delete button
-const COMMIT_RATIO = 2.0;  // fraction of reveal width needed to commit
-const COMMIT_VELOCITY = 0.35; // px/ms — fast flick commits regardless
-const SWIPE_DEAD_ZONE = 15;   // px of drag before row starts moving
 const MULTI_TAP_WINDOW = 200; // ms between taps counted toward triple-tap-to-complete
 
 // Done-celebration particles — a handful of big, quiet dots drifting up
@@ -55,6 +51,15 @@ class ListItem extends Gestures(AppElement) {
     if (this.shadowRoot) this._update();
   }
 
+  // Whether this item's list currently shows tag colours (listsTagsVisible —
+  // list-detail-page.js pushes it). See goal-item's own copy for why the
+  // accessible name has to know this when the pills themselves are hidden by
+  // CSS alone. Defaults to visible when never set.
+  set tagsVisible(value) {
+    this._tagsVisible = value;
+    if (this.shadowRoot) this._update();
+  }
+
   set selectionMode(val) {
     this._selectionMode = !!val;
     if (!val && this._revealedDir === null) {
@@ -85,39 +90,18 @@ class ListItem extends Gestures(AppElement) {
            :last-child reflects this custom element's own position in the
            light-DOM list regardless of what lives in its shadow root. */
 
-        .action-btn {
-          position: absolute;
-          inset-block: 0;
-          color: var(--color-text-inverse);
-          border: none;
-          cursor: pointer;
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-semibold);
-          font-family: var(--font-family);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
+        ${actionButtonStyles('.action-btn', DELETE_WIDTH)}
 
         /* Colour panel — left side, revealed by swiping row right. Mirrors
            lists-page-item's own .color-panel/swipe exactly: a momentary
            reveal that always snaps back (see onSwipe below), not a
            persisted state like the delete panel's left-swipe. */
-        .color-panel {
-          position: absolute;
-          inset-block: 0;
-          inset-inline-start: 0;
-          inline-size: ${COLOR_WIDTH}px;
-          background: var(--color-panel-bg, var(--color-surface-raised));
-        }
+        ${colorPanelStyles('.color-panel', COLOR_WIDTH)}
 
         /* delete — right side, revealed by swiping row left */
         .delete-btn {
           inset-inline-end: 0;
-          inline-size: ${DELETE_WIDTH}px;
           background: var(--color-danger);
-          font-size: var(--font-size-caption);
-          font-weight: var(--font-weight-semibold);
         }
 
         .action-btn svg {
@@ -130,29 +114,10 @@ class ListItem extends Gestures(AppElement) {
           block-size: var(--row-height);
           padding-block: 10px;
           overflow: hidden;
-          gap: 6px;
+          gap: var(--row-gap);
         }
 
-        .drag-btn {
-          position: relative;
-          z-index: 1;
-          flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          background: none;
-          border: none;
-          cursor: grab;
-          color: var(--color-text-muted);
-          opacity: 0.45;
-          font-size: var(--font-size-body);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding-block: 0;
-          padding-inline: 0 2px;
-          margin-inline-start: -5px;
-          font-family: var(--font-family);
-          /* No touch-action: none — see the note on the other drag handles. */
-        }
+        ${dragHandleStyles('.drag-btn')}
 
         /* Groups title + tag-pills into one vertical stack sharing the same
            start edge, so the pills always sit below the text (never overlap
@@ -187,31 +152,8 @@ class ListItem extends Gestures(AppElement) {
           -webkit-line-clamp: 1;
         }
 
-        /* Tag colour — a row of short pill/oval dots (one per tag, no text),
-           replacing the old full-width bottom-edge strip: once rows sit flush
-           against each other, a strip spanning the whole row width would read
-           as a second divider line touching the next row's own border. Each
-           dot's colour is tagColor(tag)'s same hash-derived hue as before.
-           Never wraps — a row that runs out of horizontal space just clips
-           the overflow tags rather than wrapping to a second line, which
-           would break the row's fixed height. */
-        .tag-pills {
-          display: var(--list-item-tags-display, flex);
-          align-items: center;
-          flex-wrap: nowrap;
-          gap: 3px;
-          overflow: hidden;
-          pointer-events: none;
-        }
-
-        .tag-pills[hidden] { display: none; }
-
-        .tag-pill {
-          flex-shrink: 0;
-          inline-size: 20px;
-          block-size: 9px;
-          border-radius: var(--radius-full);
-        }
+        /* Shared with goal-item — see tagPillStyles for the full rationale. */
+        ${tagPillStyles('--list-item-tags-display')}
 
         .row[data-status="done"] {
           background: color-mix(in srgb, var(--color-app-accent) 15%, var(--color-surface));
@@ -602,15 +544,9 @@ class ListItem extends Gestures(AppElement) {
 
   onSwipeMove(e) {
     if (this._selectionMode) return;
-    this._row.style.transition = 'none';
-    let offset;
-    if (this._revealedDir === 'left') {
-      offset = Math.min(0, -DELETE_WIDTH + e.dx);
-    } else {
-      const dx = e.dx > 0 ? Math.max(0, e.dx - SWIPE_DEAD_ZONE) : Math.min(0, e.dx + SWIPE_DEAD_ZONE);
-      offset = Math.max(-DELETE_WIDTH, Math.min(COLOR_WIDTH, dx));
-    }
-    this._row.style.transform = `translateX(${offset}px)`;
+    trackSwipe(this._row, swipeOffset(e, {
+      revealed: this._revealedDir, deleteWidth: DELETE_WIDTH, colorWidth: COLOR_WIDTH,
+    }));
   }
 
   onSwipe(e) {
@@ -622,8 +558,7 @@ class ListItem extends Gestures(AppElement) {
     // which persists open until confirmed or dismissed. Marking an item done
     // now happens via the status badge (tap-to-cycle) instead of a swipe.
     if (e.direction === 'right') {
-      const commit = e.distance >= COLOR_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
-      if (commit) {
+      if (swipeCommitted(e, COLOR_WIDTH)) {
         this.dispatchEvent(new CustomEvent('item-color-cycle', {
           bubbles: true, composed: true, detail: { item: this._item },
         }));
@@ -632,8 +567,7 @@ class ListItem extends Gestures(AppElement) {
       return;
     }
 
-    const commit = e.distance >= DELETE_WIDTH * COMMIT_RATIO || e.velocity >= COMMIT_VELOCITY;
-    if (commit) {
+    if (swipeCommitted(e, DELETE_WIDTH)) {
       this._row.style.transform = `translateX(-${DELETE_WIDTH}px)`;
       this._revealedDir = 'left';
     } else {
@@ -644,9 +578,7 @@ class ListItem extends Gestures(AppElement) {
   // ── Private ───────────────────────────────────────────────────────────────
 
   _closeReveal() {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    this._row.style.transition = reduced ? 'none' : 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
-    this._row.style.transform = '';
+    closeReveal(this._row);
     this._revealedDir = null;
   }
 
@@ -727,8 +659,14 @@ class ListItem extends Gestures(AppElement) {
     const urgency = this._deadlinesVisible === false ? 'none' : urgencyOf(this._item?.dueDate, active);
     const failed = urgency === 'overdue';
     this._title.textContent = title;
-    this._row.setAttribute('aria-label',
-      urgency === 'none' ? title : t('list-item.duedate-aria', { title, when: t(`urgency.${urgency}`) }));
+    const tags = this._item?.tags ?? [];
+    let ariaLabel = urgency === 'none'
+      ? title
+      : t('list-item.duedate-aria', { title, when: t(`urgency.${urgency}`) });
+    if (tags.length && this._tagsVisible !== false) {
+      ariaLabel += t('list-item.tags-aria', { tags: tags.join(', ') });
+    }
+    this._row.setAttribute('aria-label', ariaLabel);
     this._row.dataset.status = status;
     this._row.dataset.hasNote = String(!!this._item?.note);
     this._row.dataset.hasUrl = String(!!this._item?.url);
@@ -736,13 +674,20 @@ class ListItem extends Gestures(AppElement) {
     this.toggleAttribute('data-failed', failed);
     this._badge.textContent = t(`item-dialog.status-${status}`);
     this._badge.dataset.status = status;
+    // Rebuilt only when the tag list actually changes — see goal-item's own
+    // copy of this guard for the reasoning. It matters more here than there:
+    // a list can hold hundreds of items where a goal section holds ten.
     if (this._tagPillsEl) {
       const tags = this._item?.tags ?? [];
-      this._tagPillsEl.innerHTML = tags
-        .map(tag => `<span class="tag-pill" style="background:${tagColor(tag)}"></span>`)
-        .join('');
-      this._tagPillsEl.hidden = tags.length === 0;
-      this._mainCol?.classList.toggle('has-tags', tags.length > 0);
+      const tagsKey = JSON.stringify(tags);
+      if (tagsKey !== this._tagPillsKey) {
+        this._tagPillsKey = tagsKey;
+        this._tagPillsEl.innerHTML = tags
+          .map(tag => `<span class="tag-pill" style="background:${tagColor(tag)}"></span>`)
+          .join('');
+        this._tagPillsEl.hidden = tags.length === 0;
+        this._mainCol?.classList.toggle('has-tags', tags.length > 0);
+      }
     }
     const color = this._item?.color ?? null;
     this._row.style.setProperty('--row-accent-color', color ?? 'transparent');

@@ -39,9 +39,9 @@ async function clickTagsHideBtn(page) {
   });
 }
 
-function getTagStripDisplay(page) {
+function getTagPillsDisplay(page) {
   return page.evaluate(() =>
-    document.documentElement.style.getPropertyValue('--tag-strip-display')
+    document.documentElement.style.getPropertyValue('--goal-item-tags-display')
   );
 }
 
@@ -63,20 +63,20 @@ function getHideBtnActive(page) {
   );
 }
 
-// ── Goal tag strip — show ─────────────────────────────────────────────────────
+// ── Goal tag pills — show ─────────────────────────────────────────────────────
 
-test.describe('Goal tag strip — show', () => {
+test.describe('Goal tag pills — show', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(`/${currentYear}`);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
   });
 
-  test('clicking tags-show-btn sets --tag-strip-display to block', async ({ page }) => {
+  test('clicking tags-show-btn sets --goal-item-tags-display to flex', async ({ page }) => {
     await openMenu(page);
     await clickTagsShowBtn(page);
-    const val = await getTagStripDisplay(page);
-    expect(val).toBe('block');
+    const val = await getTagPillsDisplay(page);
+    expect(val).toBe('flex');
   });
 
   test('tags-show-btn gains active class after clicking', async ({ page }) => {
@@ -92,10 +92,10 @@ test.describe('Goal tag strip — show', () => {
   });
 });
 
-// ── Goal tag strip — hide ─────────────────────────────────────────────────────
+// ── Goal tag pills — hide ─────────────────────────────────────────────────────
 
-test.describe('Goal tag strip — hide', () => {
-  test('clicking tags-hide-btn sets --tag-strip-display to none', async ({ page }) => {
+test.describe('Goal tag pills — hide', () => {
+  test('clicking tags-hide-btn sets --goal-item-tags-display to none', async ({ page }) => {
     await page.goto(`/${currentYear}`);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await waitForPage(page);
@@ -106,7 +106,7 @@ test.describe('Goal tag strip — hide', () => {
     await openMenu(page);
     await clickTagsHideBtn(page);
 
-    const val = await getTagStripDisplay(page);
+    const val = await getTagPillsDisplay(page);
     expect(val).toBe('none');
   });
 
@@ -125,9 +125,9 @@ test.describe('Goal tag strip — hide', () => {
   });
 });
 
-// ── Goal tag strip — menu closes after toggle ─────────────────────────────────
+// ── Goal tag pills — menu closes after toggle ─────────────────────────────────
 
-test.describe('Goal tag strip — menu closes', () => {
+test.describe('Goal tag pills — menu closes', () => {
   test('menu closes automatically after clicking tags-show-btn', async ({ page }) => {
     await page.goto(`/${currentYear}`);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);

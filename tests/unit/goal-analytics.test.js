@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  percentValueAt, dateListFor, rawLoggedDates, computeStreaks, topStreaks, countByBucket,
+  percentValueAt, dateListFor, rawLoggedDates, computeStreaks, topStreaks, MIN_STREAK_DAYS, countByBucket,
   completionSeries, periodPerformanceSeries, recoveryCurve,
   expectedRampSeries,
   comparisonDelta, updateCount, projectPace,
@@ -132,6 +132,37 @@ describe('goal-analytics — computeStreaks / topStreaks', () => {
     expect(computeStreaks(['2026-01-01'])).toEqual([{ start: '2026-01-01', end: '2026-01-01', length: 1 }]);
   });
 
+  // A lone logged day is a run of one — computeStreaks reports it (above),
+  // but it is not a streak and the Streaks page must not list it.
+  it('topStreaks drops runs shorter than MIN_STREAK_DAYS', () => {
+    expect(MIN_STREAK_DAYS).toBe(2);
+    const dates = ['2026-01-01', '2026-01-05', '2026-01-10', '2026-01-11'];
+    expect(computeStreaks(dates).map(s => s.length)).toEqual([1, 1, 2]);
+    expect(topStreaks(dates).map(s => s.length)).toEqual([2]);
+  });
+
+  it('topStreaks returns nothing when every logged day stands alone', () => {
+    expect(topStreaks(['2026-01-01', '2026-01-03', '2026-01-05'])).toEqual([]);
+  });
+
+  it('topStreaks keeps a bare two-day run — the shortest thing that counts', () => {
+    expect(topStreaks(['2026-01-01', '2026-01-02'])).toEqual([
+      { start: '2026-01-01', end: '2026-01-02', length: 2 },
+    ]);
+  });
+
+  // Filtered before the top-N slice, so single days can't consume slots that
+  // genuine streaks would otherwise fill.
+  it('topStreaks fills its N slots with real streaks, not single days', () => {
+    const dates = [
+      '2026-01-01',                              // lone day
+      '2026-01-05',                              // lone day
+      '2026-02-01', '2026-02-02',                // 2d
+      '2026-03-01', '2026-03-02', '2026-03-03',  // 3d
+    ];
+    expect(topStreaks(dates, 2).map(s => s.length).sort()).toEqual([2, 3]);
+  });
+
   it('topStreaks selects the N longest, then re-sorts by recency — not by length', () => {
     // Two streaks: an 5-day one further back, a 2-day one more recent.
     const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05', '2026-02-10', '2026-02-11'];
@@ -140,8 +171,16 @@ describe('goal-analytics — computeStreaks / topStreaks', () => {
     expect(top[1]).toEqual({ start: '2026-01-01', end: '2026-01-05', length: 5 }); // longer, but older
   });
 
+  // Every date here is part of a two-day run: the original version of this
+  // test used five isolated days, which the MIN_STREAK_DAYS floor now
+  // discards before the cap is ever reached.
   it('caps at n results', () => {
-    const dates = ['2026-01-01', '2026-01-03', '2026-01-05', '2026-01-07', '2026-01-09'];
+    const dates = [
+      '2026-01-01', '2026-01-02',
+      '2026-01-05', '2026-01-06',
+      '2026-01-09', '2026-01-10',
+    ];
+    expect(topStreaks(dates).length).toBe(3);
     expect(topStreaks(dates, 2).length).toBe(2);
   });
 });

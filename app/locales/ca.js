@@ -50,6 +50,7 @@ defineStrings({
   'goal-item.countdown-days':     '{count}d',
   'goal-item.countdown-days-unset': '–',
   'goal-item.failed-suffix':      ', fallat',
+  'goal-item.tags-aria':          ', etiquetes: {tags}',
 
   // Urgència dels venciments (compartit per objectius, elements, agregats).
   'urgency.far':          'properament',
@@ -399,6 +400,7 @@ defineStrings({
   'list-item.delete':          'Elimina',
   'list-item.drag':      'Arrossega per reordenar',
   'list-item.duedate-aria': '{title}, {when}',
+  'list-item.tags-aria': ', etiquetes: {tags}',
 
   'lists.toast-list-saved':      'Llista desada',
   'lists.toast-list-hidden':     'Llista afegida — amagada pel filtre actiu',
@@ -560,6 +562,6 @@ defineStrings({
   'goal-analytics.calendar-title':    'Calendari',
   'goal-analytics.frequency-title':   'Freqüència per dia',
   'goal-analytics.best-streaks':      'Millors ratxes',
-  'goal-analytics.no-streaks-yet':    'Encara no hi ha cap ratxa — torna quan hi hagi més historial.',
+  'goal-analytics.no-streaks-yet':    'Encara no hi ha ratxes: dos dies seguits en comencen una.',
   'goal-analytics.days-abbrev':       'd',
 }, 'ca');

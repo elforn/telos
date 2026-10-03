@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.7.0] — 2026-10-03
+
+### Changed
+- **Tags on a goal are shown as coloured pills, the same as tags on a list item.** Goal rows had kept a thin colour bar along the bottom edge from before rows sat flush against each other — against the row below it read as a second divider line rather than as a tag. The colours themselves are unchanged: a tag is the same colour on a goal as it is on a list item.
+- **A goal's title now lines up with a list's.** Goal rows sat 6px closer to the drag handle than either kind of list row did.
+- **Streaks start at two days.** A single logged day was being listed as a one-day streak, which pushed the real ones down the page. The Streaks tab now shows runs of two days and longer, and says so when there's nothing to show yet.
+- **Overdue rows outline their tag pills** so they stay readable against the red. The pill keeps its own colour — the alternative was turning every tag white, which would have thrown away the one thing the colour tells you.
+
+### Added
+- **Screen readers now read a row's tags** — on goals and on list items. If tags are switched off for that year or list, they aren't read out either, so what's announced matches what's on screen.
+
+---
+
 ## [3.6.0] — 2026-10-01
 
 ### Changed

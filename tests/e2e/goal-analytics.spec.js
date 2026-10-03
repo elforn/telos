@@ -469,6 +469,28 @@ test('switching analytics tabs rebuilds the page once, not twice', async ({ page
 // restricted. Socle 1.3.0 names manual pointer-driven replication as the remedy
 // (docs/gestures.md, "Axis ownership"). Confirmed broken on a real device before
 // this existed — no scroll at all — so the drag path is worth pinning.
+// scrollLeft on these charts is driven by goal-analytics' own rAF fling, so
+// "has it stopped" can only be answered by watching frames — never by waiting a
+// fixed time. A fling that slams into an edge terminates immediately (its
+// `next === el.scrollLeft` guard), which is the common case and settles in
+// ~300ms; one that merely decelerates *near* an edge has no such exit and
+// crawls sub-pixel until |v| drops below FLING_MIN_VELOCITY, ~1s from a
+// typical release velocity. A 600ms sleep caught that tail roughly once in
+// twenty runs, reading a baseline that then drifted a pixel or two before the
+// next assertion — the whole flake. Returns the settled value.
+async function settledScrollLeft(page) {
+  return page.evaluate(() => new Promise(resolve => {
+    const el = window.__ga().shadowRoot.querySelector('#hist-scroll');
+    let last = el.scrollLeft, stable = 0;
+    const tick = () => {
+      if (el.scrollLeft === last) stable++; else { stable = 0; last = el.scrollLeft; }
+      if (stable >= 10) resolve(el.scrollLeft);   // ~165ms of no movement at 60fps
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }));
+}
+
 test('a chart that overflows can be dragged horizontally', async ({ page }) => {
   await createGoal(page, { title: 'Drag scroll', type: 'weekly' });
   await reopenGoal(page);
@@ -495,11 +517,9 @@ test('a chart that overflows can be dragged horizontally', async ({ page }) => {
   expect(before - after).toBeGreaterThan(50);  // and by roughly the drag distance
 
   // A vertical drag must be released to the dialog, not swallowed as a scroll.
-  // Let the release momentum settle first — otherwise the baseline is read while
-  // the chart is still coasting and the comparison below measures the coast, not
-  // the vertical drag.
-  await page.waitForTimeout(600);
-  const mid = await page.evaluate(() => window.__ga().shadowRoot.querySelector('#hist-scroll').scrollLeft);
+  // The baseline has to be taken once the chart has genuinely stopped, or this
+  // measures the tail of the coast rather than the vertical drag.
+  const mid = await settledScrollLeft(page);
   await page.mouse.move(box.x + 100, y);
   await page.mouse.down();
   for (let i = 1; i <= 6; i++) await page.mouse.move(box.x + 100, y + (80 * i / 6));
@@ -546,4 +566,73 @@ test('a flicked chart keeps coasting after release, and a press stops it', async
   const afterPress = await read();
   await page.mouse.up();
   expect(Math.abs(afterPress - mid)).toBeLessThan(12); // halted, not still coasting
+});
+
+// ── Streaks: a run of one is not a streak ────────────────────────────────────
+// Seeded straight into IDB and loaded cold (mirrors upcoming.spec.js's own
+// pattern), so these assert what a real launch renders rather than what a
+// live setState happens to leave behind. The floor itself lives in
+// topStreaks (MIN_STREAK_DAYS); goal-analytics.test.js covers the function.
+
+function daysAgo(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function seedGoalWithEntries(page, entries) {
+  await page.evaluate(async ({ entries, year }) => {
+    await new Promise((res, rej) => {
+      const r = indexedDB.open('telos', 1);
+      r.onsuccess = () => {
+        const db = r.result;
+        const tx = db.transaction('state', 'readwrite');
+        const os = tx.objectStore('state');
+        const g = os.get('root');
+        g.onsuccess = () => os.put({ id: 'root', data: { ...(g.result?.data ?? {}),
+          goals: { [year]: {
+            capstone: [{ id: 'streaky', title: 'Streak goal', tags: [],
+                         tracking: { type: 'weekly', target: 5, entries } }],
+            milestones: [], wow: [], focus: [],
+          } },
+        } });
+        tx.oncomplete = () => { db.close(); res(); };
+        tx.onerror = () => { db.close(); rej(tx.error); };
+      };
+      r.onerror = () => rej(r.error);
+    });
+  }, { entries, year: String(currentYear) });
+  await page.reload();
+  await waitForPage(page);
+  await page.waitForFunction(() =>
+    document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot.querySelectorAll('goal-item').length > 0);
+}
+
+test('the Streaks tab lists runs of 2+ days and ignores isolated ones', async ({ page }) => {
+  // A 4-day run, a 2-day run, and three days that stand alone.
+  await seedGoalWithEntries(page, [
+    daysAgo(2), daysAgo(3), daysAgo(4), daysAgo(5),
+    daysAgo(10), daysAgo(11),
+    daysAgo(20), daysAgo(30), daysAgo(40),
+  ]);
+  await reopenGoal(page);
+  await gotoTab(page, 4);
+
+  const lengths = await page.evaluate(() =>
+    [...window.__ga().shadowRoot.querySelectorAll('.streak-len')].map(el => el.textContent.trim()));
+  // Rows are ordered most-recent-first: the 4-day run ended 2 days ago, the
+  // 2-day run 10 days ago. Neither ordering nor length admits the three lone
+  // days — they are gone entirely.
+  expect(lengths).toEqual(['4d', '2d']);
+});
+
+test('the Streaks tab falls back to its empty note when no day has a neighbour', async ({ page }) => {
+  await seedGoalWithEntries(page, [daysAgo(2), daysAgo(8), daysAgo(15)]);
+  await reopenGoal(page);
+  await gotoTab(page, 4);
+
+  expect(await page.evaluate(() => window.__ga().shadowRoot.querySelectorAll('.streak-row').length)).toBe(0);
+  const note = await page.evaluate(() => window.__ga().shadowRoot.querySelector('.empty-note')?.textContent ?? '');
+  expect(note).toContain('two days in a row');
 });
