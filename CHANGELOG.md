@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.8.0] — 2026-10-03
+
+### Changed
+- **The tab bar runs the full width of the screen now, in square cells.** It was the last rounded thing left on screen — a pill on a grey track with a shadow under it, held 16px in from edges that every row on the page runs flush to. What you tap is unchanged: Years and Lists still take the middle, because they are the only two places the app has, and the bell and the gear still sit at the ends.
+- **Every tab is easier to hit.** Tabs went from 40px tall to 56 — the same height as a goal or a list row — and the bell and gear from 40px wide to 56, each now anchored in a screen corner. On a phone with a home indicator the bar fills that strip rather than leaving a band of empty white under the tabs.
+
+### Added
+- **Settings has a Close button.** Its switches take effect as you tap them and leave the sheet open, so unlike the year, list and lists menus — where picking anything closes the sheet for you — there was nothing in it that doubled as the way out. Closing meant the drag handle at the top of the sheet, which is the furthest point on it from your thumb.
+
+---
+
 ## [3.7.0] — 2026-10-03
 
 ### Changed
