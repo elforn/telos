@@ -443,6 +443,7 @@ defineStrings({
   'bottom-nav.lists':    'Llistes',
   'bottom-nav.settings': 'Ajustos',
 
+  'settings.close':            'Tanca',
   'settings.repair':           'Reparar la instal·lació',
   'settings.export-reminder':  'Recordatori d\'exportació',
   'settings.reminder-on':      'Mostra',

@@ -100,34 +100,65 @@ class BottomNav extends AppElement {
           touch-action: manipulation;
           background: var(--color-surface);
           border-block-start: 0.5px solid var(--color-border);
-          padding-block-start: var(--space-2);
-          padding-block-end: calc(var(--space-3) + var(--safe-area-bottom, 0px));
-          padding-inline: var(--space-4);
+          /* Full-bleed band: the bar is divided into cells that meet its own
+             edges, so there is no bar-level inset left to set. The safe area
+             moves onto each cell as padding-block-end instead, which lets a
+             cell's background fill the home-indicator strip while its label
+             stays centred in the --nav-height box above it. Previously the
+             active cell was a 40px pill floating in a 67px bar (101px with a
+             home indicator) — the inset, the track padding and the shadow all
+             existed to make a pill read as a pill, and none survive the
+             radius going to 0. */
+          padding: 0;
           --badge-size: 8px;
           --badge-inset: 6px;
+          /* The counted variant of --badge-size: a pill wide enough for a
+             digit rather than a dot. Declared here so the badges and the
+             calc()s that position them read the same number. */
+          --badge-count-size: 16px;
+          /* Cell height. --row-height (56px) rather than --nav-height (64px):
+             a nav cell is then exactly as tall as a goal/list row, so the bar
+             reads as one more band in the same rhythm instead of a heavier
+             slab under them. Total bar is 57px vs the old pill bar's 67px. */
+          --nav-cell-height: var(--row-height);
+          /* Icon cells are square and fixed-width; the two route cells take
+             the rest, so Years/Lists keep ~2/3 of the bar between them — they
+             are the app's only two destinations, the bell and gear open sheets. */
+          --nav-icon-cell: var(--nav-cell-height);
+          /* The bell/gear glyph. Both the svg rules and the badge-positioning
+             calc()s below read this, so resizing a glyph moves its badge with
+             it instead of letting the two drift apart. */
+          --nav-icon-size: 22px;
         }
 
         .nav-row {
           display: flex;
-          align-items: center;
-          gap: var(--space-2);
+          /* stretch, not center — every cell owns the bar's full height */
+          align-items: stretch;
         }
 
+        /* No track, no inset, no radius — the group is just the region the two
+           route cells divide between them. The raised slab it used to draw was
+           always present and never meant anything; it existed to give the
+           moving pill something to move against. */
         .pills {
           display: flex;
           flex: 1;
-          gap: var(--space-1);
-          background: var(--color-surface-raised);
-          border-radius: var(--radius-full);
-          padding: var(--pill-inset);
         }
 
         .pill {
           position: relative;
           flex: 1;
-          min-block-size: var(--touch-target);
+          /* Cells are --nav-cell-height (see :host) plus the safe area. Both
+             the size and the padding are needed: box-sizing is border-box
+             everywhere in a shadow root (core/styles/base.js adopts it), so
+             without the calc the padding would eat the cell's own height
+             instead of extending it. The pair means the background reaches
+             the screen edge while the label stays centred in the 64px above
+             the home indicator. */
+          min-block-size: calc(var(--nav-cell-height) + var(--safe-area-bottom, 0px));
+          padding-block-end: var(--safe-area-bottom, 0px);
           border: none;
-          border-radius: var(--radius-full);
           background: none;
           cursor: pointer;
           font-family: var(--font-family);
@@ -141,7 +172,13 @@ class BottomNav extends AppElement {
            green/yellow/red; grows into a numbered badge (today+overdue) when red. */
         .pill-dot {
           position: absolute;
-          inset-block-start: 4px;
+          /* Rides the label's top edge. The cell vertically centres
+             --font-size-body text, so that edge sits half the leftover space
+             down; the badge is then pulled up by half its own height to
+             straddle it. Both variants below share this derivation, so the
+             dot and the counted pill stay optically aligned with each other. */
+          inset-block-start: calc(
+            (var(--nav-cell-height) - var(--font-size-body)) / 2 - var(--badge-size) / 2);
           inset-inline-end: var(--space-3);
           inline-size: var(--badge-size);
           block-size: var(--badge-size);
@@ -156,10 +193,11 @@ class BottomNav extends AppElement {
         .pill-dot[data-urgency="overdue"] { background: var(--color-danger); }
         .pill-dot[data-count] {
           box-sizing: border-box;
-          inset-block-start: 3px;
+          inset-block-start: calc(
+            (var(--nav-cell-height) - var(--font-size-body)) / 2 - var(--badge-count-size) / 2);
           inline-size: auto;
-          min-inline-size: 16px;
-          block-size: 16px;
+          min-inline-size: var(--badge-count-size);
+          block-size: var(--badge-count-size);
           /* border-box + top-heavy padding pushes the digit down to optical
              centre (this font's numerals otherwise sit high in the circle). */
           padding-block: 2px 0;
@@ -173,16 +211,22 @@ class BottomNav extends AppElement {
           font-weight: var(--font-weight-semibold);
         }
 
+        /* No box-shadow. At full height the cell's bottom edge is flush with
+           the bar's own and the host clips, so --shadow-card's entire 0 1px
+           lobe falls outside the bar; what remained was a 3px side blur at 6%
+           alpha against a near-surface fill, i.e. nothing. */
         .pill.active {
-          background: var(--color-surface);
+          background: var(--color-surface-raised);
           color: var(--color-text-primary);
-          box-shadow: var(--shadow-card);
           font-weight: var(--font-weight-semibold);
         }
 
+        /* Inset, not outset: these cells now sit flush against the bar's
+           own edges, so an outward ring on the first/last one would be drawn
+           past the viewport and clipped. */
         .pill:focus-visible {
           outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
+          outline-offset: -2px;
         }
 
         /* ── Upcoming bell ─────────────────────────────────────────────────
@@ -190,13 +234,13 @@ class BottomNav extends AppElement {
            nothing overdue/today/tomorrow anywhere — see _subscribeUpcoming. */
         .bell-btn {
           flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
+          inline-size: var(--nav-icon-cell);
+          min-block-size: calc(var(--nav-cell-height) + var(--safe-area-bottom, 0px));
+          padding-block-end: var(--safe-area-bottom, 0px);
           background: none;
           border: none;
           cursor: pointer;
           color: var(--color-text-secondary);
-          border-radius: var(--radius-full);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -205,23 +249,37 @@ class BottomNav extends AppElement {
         }
 
         .bell-btn svg {
-          inline-size: 22px;
-          block-size: 22px;
+          inline-size: var(--nav-icon-size);
+          block-size: var(--nav-icon-size);
           pointer-events: none;
         }
 
+        /* Inset, not outset: these cells now sit flush against the bar's
+           own edges, so an outward ring on the first/last one would be drawn
+           past the viewport and clipped. */
         .bell-btn:focus-visible {
           outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
+          outline-offset: -2px;
         }
 
+        /* Both icon badges straddle the centred glyph's top-end corner rather
+           than the cell's: the cell is now much larger than the glyph, so a
+           cell-corner badge would float away from the thing it annotates.
+           --nav-badge-block/-inline are the two halves of that derivation —
+           walk in to the glyph's own edge, then pull back by half the badge so
+           it overlaps the corner. Shared with .gear-badge below, which differs
+           only in which badge size it substitutes. */
         .bell-badge {
           position: absolute;
-          inset-block-start: 2px;
-          inset-inline-end: 2px;
+          --nav-badge-block: calc(
+            (var(--nav-cell-height) - var(--nav-icon-size)) / 2 - var(--badge-count-size) / 2);
+          --nav-badge-inline: calc(
+            (var(--nav-icon-cell) - var(--nav-icon-size)) / 2 - var(--badge-count-size) / 4);
+          inset-block-start: var(--nav-badge-block);
+          inset-inline-end: var(--nav-badge-inline);
           box-sizing: border-box;
-          min-inline-size: 16px;
-          block-size: 16px;
+          min-inline-size: var(--badge-count-size);
+          block-size: var(--badge-count-size);
           padding-block: 2px 0;
           padding-inline: 4px;
           border-radius: var(--radius-full);
@@ -240,13 +298,13 @@ class BottomNav extends AppElement {
 
         .gear-btn {
           flex-shrink: 0;
-          min-block-size: var(--touch-target);
-          min-inline-size: var(--touch-target);
+          inline-size: var(--nav-icon-cell);
+          min-block-size: calc(var(--nav-cell-height) + var(--safe-area-bottom, 0px));
+          padding-block-end: var(--safe-area-bottom, 0px);
           background: none;
           border: none;
           cursor: pointer;
           color: var(--color-text-secondary);
-          border-radius: var(--radius-full);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -255,15 +313,18 @@ class BottomNav extends AppElement {
         }
 
         .gear-btn svg {
-          inline-size: 22px;
-          block-size: 22px;
+          inline-size: var(--nav-icon-size);
+          block-size: var(--nav-icon-size);
           pointer-events: none;
         }
 
         .gear-badge {
           position: absolute;
-          inset-block-start: var(--badge-inset);
-          inset-inline-end: var(--badge-inset);
+          /* Same derivation as .bell-badge, substituting the plain dot's size. */
+          inset-block-start: calc(
+            (var(--nav-cell-height) - var(--nav-icon-size)) / 2 - var(--badge-size) / 2);
+          inset-inline-end: calc(
+            (var(--nav-icon-cell) - var(--nav-icon-size)) / 2 - var(--badge-size) / 4);
           inline-size: var(--badge-size);
           block-size: var(--badge-size);
           border-radius: var(--radius-full);
@@ -271,9 +332,12 @@ class BottomNav extends AppElement {
           pointer-events: none;
         }
 
+        /* Inset, not outset: these cells now sit flush against the bar's
+           own edges, so an outward ring on the first/last one would be drawn
+           past the viewport and clipped. */
         .gear-btn:focus-visible {
           outline: 2px solid var(--color-accent);
-          outline-offset: 2px;
+          outline-offset: -2px;
         }
 
         /* ── Settings modal content ─────────────────────────────────────── */
@@ -506,6 +570,29 @@ class BottomNav extends AppElement {
           outline-offset: 2px;
         }
 
+        /* Unlike the import modal's filled .modal-btn actions, settings has no
+           save step — its toggles commit on tap — so Close is plain text and
+           must not read as a confirming action. Matches goal-dialog's #close.
+           Settings is the one sheet here that is an editor rather than a menu:
+           its toggles deliberately leave it open (only export/import close it,
+           and only to navigate onward), so unlike the year/list/lists menus it
+           has no terminal row that doubles as the way out. */
+        #settings-close {
+          min-block-size: var(--touch-target);
+          padding-inline: var(--space-2);
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-family: var(--font-family);
+          font-size: var(--font-size-body);
+          color: var(--color-text-secondary);
+        }
+
+        #settings-close:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
         .modal-btn {
           min-block-size: var(--touch-target);
           padding-inline: var(--space-2);
@@ -617,6 +704,7 @@ class BottomNav extends AppElement {
           </div>
         </div>
 
+        <button type="button" slot="footer" id="settings-close" aria-label="${t('settings.close')}">${t('settings.close')}</button>
       </modal-dialog>
 
       <modal-dialog id="import-modal" aria-label="${t('sync.import')}">
@@ -823,6 +911,12 @@ class BottomNav extends AppElement {
     this._onGearKey = e => { if (e.detail === 0) this._onGear(); };
     this.shadowRoot.querySelector('#gear-btn').addEventListener('pointerup', this._onGear);
     this.shadowRoot.querySelector('#gear-btn').addEventListener('click', this._onGearKey);
+
+    // listen() rather than a manual add/remove pair: this button has no
+    // pointerup/click split to manage (nothing opens on press here), so the
+    // auto-cleanup form is enough — see AppElement.listen.
+    this.listen(this.shadowRoot.querySelector('#settings-close'), 'click',
+      () => this._settingsModal.close());
 
     this._onThemeGroup = e => {
       const btn = e.target.closest('[data-theme]');

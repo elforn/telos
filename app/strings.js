@@ -454,6 +454,7 @@ defineStrings({
   'bottom-nav.lists':    'Lists',
   'bottom-nav.settings': 'Settings',
 
+  'settings.close':             'Close',
   'settings.repair':            'Repair installation',
   'settings.export-reminder':   'Export reminder',
   'settings.reminder-on':       'Show',

@@ -155,6 +155,38 @@ describe('bottom-nav — settings pills', () => {
   });
 });
 
+// ── Settings close button ─────────────────────────────────────────────────────
+// Settings is the one sheet in the nav that is an editor rather than a menu —
+// its toggles commit on tap and deliberately leave it open, so unlike the
+// year/list/lists menus it has no terminal row that doubles as the way out.
+
+describe('bottom-nav — settings close button', () => {
+  it('renders a close button in the settings modal footer', () => {
+    const el = mount();
+    const btn = el.shadowRoot.querySelector('#settings-close');
+    expect(btn).toBeTruthy();
+    expect(btn.getAttribute('slot')).toBe('footer');
+  });
+
+  it('close button carries a visible label and a matching accessible name', () => {
+    const el = mount();
+    const btn = el.shadowRoot.querySelector('#settings-close');
+    expect(btn.textContent.trim()).toBe('Close');
+    expect(btn.getAttribute('aria-label')).toBe('Close');
+  });
+
+  it('close button click calls close() on the settings modal', () => {
+    const el = mount();
+    el.shadowRoot.querySelector('#settings-close').click();
+    expect(el.shadowRoot.querySelector('#settings-modal').close).toHaveBeenCalledOnce();
+  });
+
+  it('close button is a real button, so Enter and Space activate it natively', () => {
+    const el = mount();
+    expect(el.shadowRoot.querySelector('#settings-close').tagName).toBe('BUTTON');
+  });
+});
+
 // ── aria-current on nav pills ─────────────────────────────────────────────────
 
 describe('bottom-nav — aria-current', () => {

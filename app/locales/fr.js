@@ -443,6 +443,7 @@ defineStrings({
   'bottom-nav.lists':    'Listes',
   'bottom-nav.settings': 'Réglages',
 
+  'settings.close':            'Fermer',
   'settings.repair':           'Réparer l\'installation',
   'settings.export-reminder':  'Rappel d\'exportation',
   'settings.reminder-on':      'Afficher',
