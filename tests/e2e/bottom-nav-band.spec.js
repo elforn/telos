@@ -109,6 +109,42 @@ test.describe('Bottom nav — full-bleed band', () => {
     expect(m.publishedHeight).toBe(`${m.navHeight}px`);
   });
 
+  test('a toast still clears the bar after the height change', async ({ page }) => {
+    // #toast-container is pinned above the nav off --bottom-nav-height
+    // (index.html), and the bar just went 67px -> 57px. The var is published at
+    // runtime by a ResizeObserver, so this is the one consumer that silently
+    // follows the nav's own geometry — and nothing asserted the clearance.
+    await page.goto(`/${new Date().getFullYear()}`);
+    await waitForPage(page);
+
+    // Saving a goal is the shortest path to a real toast.
+    await page.evaluate(() => {
+      document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('#add-capstone').click();
+    });
+    await page.waitForFunction(() =>
+      document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('home-page')?.shadowRoot?.querySelector('goal-dialog')?.shadowRoot
+        ?.querySelector('#modal')?.shadowRoot?.querySelector('dialog')?.open
+    );
+    await page.evaluate(() => {
+      const sr = document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelector('goal-dialog').shadowRoot;
+      const inp = sr.querySelector('input');
+      inp.value = 'Toast clearance';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      sr.querySelector('#close').click();
+    });
+    await expect(page.locator('#toast-container')).toBeVisible();
+
+    const gap = await page.evaluate(() => {
+      const toast = document.querySelector('#toast-container').getBoundingClientRect();
+      const nav = document.querySelector('bottom-nav').getBoundingClientRect();
+      return Math.round(nav.top - toast.bottom);
+    });
+    expect(gap).toBeGreaterThanOrEqual(0);
+  });
+
   test('every cell clears the 40px minimum touch target', async ({ page }) => {
     await page.goto('/');
     await waitForPage(page);
