@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.9.0] — 2026-10-05
+
+### Changed
+- **The Streaks tab now only appears on goals where a streak actually means something** — an every-day weekly goal (7×/week) or an Avoid goal. For any other type, "days in a row" either wasn't tracked finely enough to say anything or wasn't what the number was showing in the first place; the tab updates live if you change a goal's type or target.
+- **The Overview page leads with the goal's own name**, with the page name ("Overview", "Score"…) trailing it in a smaller, secondary style — the reverse of before. The percentage now sits bigger and centred, with its trend sparkline stacked underneath rather than off to the side.
+- **The Consistency chart (how each period went against target) now only shows for goals that have a real per-period target** — weekly, monthly, and Avoid. Percentage goals had always rendered this chart as a flat, empty-looking line, since there's nothing period-by-period for a percentage to measure against.
+- **Score dots, squares and heptagons, the Activity calendar's day cells, and the frequency grid's dots have all been resized** for a cleaner, more legible fit — smaller on the Score grid, larger and more spread out on the frequency grid, with slightly rounded corners on the calendar's day cells.
+- **Chart bars keep one true width now**, sized as a genuine fraction of the chart's own rendered area rather than a value that could silently drift from flex layout. A goal with only a few real weeks or months of history shows its bars at the same width as one with a full chart's worth — only the quarter view, which is always exactly four bars, stretches to fill the card.
+- **Switching tabs inside an open goal keeps your place.** Scroll down into the Activity calendar, hop over to Score, then back — Activity is still scrolled where you left it. Resets the next time you reopen the goal.
+
+### Fixed
+- **The Consistency chart no longer reports a sliver of empty scrollable space** past its last bar on some goals — a stray whitespace character in its own markup was being counted as overflow content that didn't actually exist.
+- **A period's result label on the Consistency chart no longer collides with its neighbours.** Labels used to sit in one shared row at a fixed height above every bar, which put the chart's highest and lowest values — the two furthest apart — directly on top of each other. Each label now tracks its own bar's height instead.
+
+---
+
 ## [3.8.0] — 2026-10-03
 
 ### Changed
