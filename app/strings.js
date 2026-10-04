@@ -524,16 +524,11 @@ defineStrings({
   'goal-analytics.vs-week':    'vs week',
   'goal-analytics.vs-month':   'vs month',
   'goal-analytics.vs-quarter': 'vs quarter',
-  'goal-analytics.not-enough-history': 'not enough history',
   'goal-analytics.pts': 'pts',
 
-  'goal-analytics.change-over-time':     'Change over time',
   'goal-analytics.progress-chart-title': 'Completion vs. expected pace',
-  'goal-analytics.legend-achieved':      'Achieved',
-  'goal-analytics.legend-expected':      'Expected pace',
   'goal-analytics.legend-allowed':       'Within allowance',
   'goal-analytics.legend-over':          'Over allowance',
-  'goal-analytics.last-n-periods':       'last {n} periods',
 
   'goal-analytics.pace-insufficient': 'Not enough recent momentum to project a finish date.',
   'goal-analytics.pace-on-track':     'On pace — projected to finish right around your {deadline} deadline.',
@@ -550,7 +545,7 @@ defineStrings({
 
   // Screen-reader descriptions for the chart graphics, which convey their
   // data purely visually (SVG wedges, sized dots, shaded cells).
-  'goal-analytics.a11y-sparkline':      'Sparkline of recent progress',
+  'goal-analytics.a11y-sparkline':      'Sparkline of progress over the last {n} months',
   'goal-analytics.a11y-progress-chart': 'Line chart of completion against expected pace',
   'goal-analytics.a11y-consistency': 'Bar chart of how each period went against target',
   'goal-analytics.a11y-histogram':      'Bar chart of entry counts per period',

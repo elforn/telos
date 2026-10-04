@@ -516,16 +516,11 @@ defineStrings({
   'goal-analytics.vs-week':              'vs setmana',
   'goal-analytics.vs-month':             'vs mes',
   'goal-analytics.vs-quarter':           'vs trimestre',
-  'goal-analytics.not-enough-history':   'historial insuficient',
   'goal-analytics.pts':                  'pts',
 
-  'goal-analytics.change-over-time':     'Evolució en el temps',
   'goal-analytics.progress-chart-title': 'Progrés vs ritme previst',
-  'goal-analytics.legend-achieved':      'Assolit',
-  'goal-analytics.legend-expected':      'Ritme previst',
   'goal-analytics.legend-allowed':       'Dins del marge',
   'goal-analytics.legend-over':          'Fora del marge',
-  'goal-analytics.last-n-periods':       'últims {n} períodes',
 
   'goal-analytics.pace-insufficient': 'No hi ha prou impuls recent per projectar una data de finalització.',
   'goal-analytics.pace-on-track':     'Al ritme previst — final projectat cap al termini del {deadline}.',
@@ -540,7 +535,7 @@ defineStrings({
   'goal-analytics.older-periods-note-week':  'Les setmanes anteriors apareixeran aquí',
   'goal-analytics.older-periods-note-month': 'Els mesos anteriors apareixeran aquí',
 
-  'goal-analytics.a11y-sparkline': 'Minigràfic del progrés recent',
+  'goal-analytics.a11y-sparkline': 'Minigràfic del progrés dels últims {n} mesos',
   'goal-analytics.a11y-progress-chart': 'Gràfic de línies del progrés respecte al ritme previst',
   'goal-analytics.a11y-consistency': 'Gràfic de barres del resultat de cada període respecte a l’objectiu',
   'goal-analytics.a11y-histogram': 'Gràfic de barres del nombre d’entrades per període',

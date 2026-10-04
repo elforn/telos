@@ -18,6 +18,13 @@ import { swatches } from '../../utils/color-palette.js';
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
 const TYPES = ['percentage', 'weekly', 'monthly', 'decreasing', 'countdown'];
+// Every chart inside goal-analytics that keeps its own independent
+// horizontal scroll (see that file's own _syncScrollable). Queried by id
+// regardless of which analytics page is current — querySelector harmlessly
+// returns null for an id that doesn't exist on whichever page is showing,
+// so one flat list covers Overview/Score/Activity without needing to know
+// which chart belongs to which page.
+const CHART_SCROLL_IDS = ['perf-scroll', 'hist-scroll', 'cal-scroll', 'freq-scroll', 'calc-scroll'];
 // "12 Apr" for the carried-over hint — localised month, no year, since the
 // picker is already constrained to the goal's own year.
 function formatShortDate(iso) {
@@ -47,6 +54,18 @@ class GoalDialog extends AppElement {
     this._fromYear    = year    ?? String(this.currentYear);
     this._fromSection = section ?? 'capstone';
     this._resetForm(goal);
+    // Scroll memory is for the span of one open dialog only (see
+    // _saveTabScroll/_restoreTabScroll) — a fresh open, even of the same
+    // goal reopened right after closing, starts with none, which is what
+    // makes "always opens at the top" true regardless of where a previous
+    // session left off. _lastTabIndex picks up from here: _resetForm just
+    // set activeTab directly (its own setter deliberately skips the
+    // modal-tab-change event), so this is the one place that needs to know
+    // the starting tab without that event ever having fired.
+    this._scrollMemory = new Map();
+    this._lastTabIndex = this._modal.activeTab;
+    const body = this._modal.shadowRoot?.querySelector('.body');
+    if (body) body.scrollTop = 0;
     // A saved goal opens on its Overview, not the edit form (see _resetForm):
     // nothing there wants the caret, and focusing the title input would raise
     // the on-screen keyboard over a page that exists to be read. A new goal
@@ -1563,6 +1582,12 @@ class GoalDialog extends AppElement {
     // _resetForm for where tabCount itself gets set.
     this._onModalTabChange = e => {
       const index = e.detail.index;
+      // Capture wherever the tab we're LEAVING was scrolled to (both the
+      // shared modal body and each chart's own internal scroll) before
+      // switching anything — see _saveTabScroll/_restoreTabScroll's own
+      // comments for why this is session-only, not persisted.
+      this._saveTabScroll(this._lastTabIndex);
+      this._lastTabIndex = index;
       if (index === 0) {
         this._showView('main');
         this._animateViewEnter(this._viewMain, 'enter-back');
@@ -1570,6 +1595,7 @@ class GoalDialog extends AppElement {
         // the view is hidden — so a dialog that opened on Overview has never
         // had a chance to measure it until now.
         requestAnimationFrame(() => this._syncDescHeight());
+        this._restoreTabScroll(index);
         return;
       }
       this._analyticsEl.year = this._fromYear;
@@ -1577,6 +1603,7 @@ class GoalDialog extends AppElement {
       this._analyticsEl.activePage = index - 1;
       this._showView('analytics');
       this._animateViewEnter(this._viewAnalytics, 'enter-fwd');
+      this._restoreTabScroll(index);
     };
     this._modal.addEventListener('modal-tab-change', this._onModalTabChange);
     this._onAnalyticsEditBtn = () => {
@@ -2374,6 +2401,50 @@ class GoalDialog extends AppElement {
     const targetScrollTop = Math.max(0, elCenterInBody - body.clientHeight / 2);
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     body.scrollTo({ top: targetScrollTop, behavior: reduced ? 'auto' : 'smooth' });
+  }
+
+  // Per-tab scroll memory, for the span of one open dialog only — see
+  // _onModalTabChange for where this gets read/written, and open() for where
+  // it gets thrown away. A plain Map keyed by tab index (0 = Edit, 1..N =
+  // goal-analytics' own pages); each entry is { bodyTop, charts } where
+  // charts is itself a { [scrollId]: scrollLeft } map of whichever
+  // CHART_SCROLL_IDS actually exist on that tab. Never persisted anywhere —
+  // a fresh open (even of the same goal) starts empty, which is what makes
+  // reopening land back at the top rather than wherever a previous session
+  // left off.
+  _saveTabScroll(index) {
+    const body = this._modal?.shadowRoot?.querySelector('.body');
+    if (!body) return;
+    const charts = {};
+    for (const id of CHART_SCROLL_IDS) {
+      const el = this._analyticsEl.shadowRoot.querySelector('#' + id);
+      if (el) charts[id] = el.scrollLeft;
+    }
+    this._scrollMemory.set(index, { bodyTop: body.scrollTop, charts });
+  }
+
+  // Restores a previously-saved position, or does nothing for a tab never
+  // visited this session — leaving each chart at whatever position its own
+  // natural render already put it (goal-analytics' own _syncScrollable
+  // anchors a genuinely-overflowing chart to "now"; a short one just has no
+  // scroll at all), and the body wherever _showView's own content swap left
+  // it (effectively the top, nothing having scrolled it yet). Deferred a
+  // frame: goal-analytics' own rAF-based _syncScrollable (queued when
+  // activePage is set, just before this runs) would otherwise overwrite a
+  // chart's scrollLeft with its own "scrolled to now" default on the very
+  // frame this tries to restore it — same ordering hazard as that method's
+  // own doc comment on reading scrollWidth too early.
+  _restoreTabScroll(index) {
+    const saved = this._scrollMemory.get(index);
+    if (!saved) return;
+    requestAnimationFrame(() => {
+      const body = this._modal?.shadowRoot?.querySelector('.body');
+      if (body) body.scrollTop = saved.bodyTop;
+      for (const [id, scrollLeft] of Object.entries(saved.charts)) {
+        const el = this._analyticsEl.shadowRoot.querySelector('#' + id);
+        if (el) el.scrollLeft = scrollLeft;
+      }
+    });
   }
 
   _showView(name) {

@@ -19,10 +19,32 @@ import {
 // so there's nothing there for that page to explain. Countdown additionally
 // has no discrete per-day log of any kind, so Activity/Streaks are dropped
 // outright rather than shown empty.
+//
+// Streaks is further narrowed to just the three target-bearing types —
+// percentage's own "logged days" are whatever days someone happened to move
+// the slider, an arbitrary editing cadence with no real-world continuity to
+// it, unlike a frequency/decreasing goal where consecutive days IS the thing
+// being tracked. "Updates in a row" isn't a streak of anything. Activity
+// keeps percentage (its histogram reads as "how often did I come back to
+// this", which does mean something — see _typeCard's own "updates" label for
+// that same type, deliberately distinct from "entries").
+//
+// Narrowed further still, to weekly-every-day and decreasing only — monthly
+// and weekly-at-less-than-7 both log on a genuinely non-daily cadence, so
+// computeStreaks' plain "was there also an entry yesterday" check isn't just
+// noisy for them, it's close to structurally incapable of ever firing: a
+// goal scheduled for, say, Mon/Wed/Fri never has two entries on literally
+// adjacent calendar days, so every run gets cut at length 1 and filtered out
+// by MIN_STREAK_DAYS before the page ever has anything to show. "Every day"
+// (weekly, target === 7 — see tracking.js, it's a preset, not its own type)
+// and decreasing are the only two shapes where consecutive calendar days is
+// actually the thing being measured in the first place.
 export function pagesFor(goal) {
   const pages = ['overview'];
   if (isFrequency(goal) || isDecreasing(goal)) pages.push('score');
-  if (goal?.tracking?.type !== 'countdown') pages.push('activity', 'streaks');
+  if (goal?.tracking?.type !== 'countdown') pages.push('activity');
+  const everyDay = goal?.tracking?.type === 'weekly' && goal?.tracking?.target === 7;
+  if (everyDay || isDecreasing(goal)) pages.push('streaks');
   return pages;
 }
 

@@ -2623,16 +2623,26 @@ describe('goal-dialog — analytics tabs', () => {
     expect(el._modal.tabCount).toBe(0);
   });
 
-  it('an existing weekly goal gets 1 (edit) + 4 analytics pages = 5', () => {
+  it('an existing weekly goal (not every-day) gets 1 + 3 — no Streaks for this target', () => {
+    // Streaks only exists for target 7 ("every day") or decreasing — a
+    // non-daily cadence's logged days are never on adjacent calendar days
+    // by design, so the page would have nothing to ever show. See
+    // pagesFor's own comment.
     const el = mount();
     el.open({ id: '1', title: 'Run', tracking: { type: 'weekly', target: 3, value: 0, entries: [] } });
+    expect(el._modal.tabCount).toBe(4); // edit, overview, score, activity
+  });
+
+  it('an existing weekly goal at target 7 ("every day") gets the full 1 + 4, Streaks included', () => {
+    const el = mount();
+    el.open({ id: '1', title: 'Run daily', tracking: { type: 'weekly', target: 7, value: 0, entries: [] } });
     expect(el._modal.tabCount).toBe(5); // edit, overview, score, activity, streaks
   });
 
-  it('an existing percentage goal gets 1 + 3 — no score page for this type', () => {
+  it('an existing percentage goal gets 1 + 2 — no score page, no streaks, for this type', () => {
     const el = mount();
     el.open({ id: '1', title: 'Ship it', tracking: { type: 'percentage', value: 50 } });
-    expect(el._modal.tabCount).toBe(4); // edit, overview, activity, streaks
+    expect(el._modal.tabCount).toBe(3); // edit, overview, activity
   });
 
   it('an existing countdown goal gets 1 + 1 — analytics has only its own overview page', () => {

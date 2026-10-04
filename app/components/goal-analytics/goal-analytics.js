@@ -7,7 +7,7 @@ import {
 } from '../../utils/tracking.js';
 import {
   pagesFor, percentValueAt, dateListFor, rawLoggedDates, topStreaks, countByBucket,
-  completionSeries, periodPerformanceSeries,
+  periodPerformanceSeries,
   denseSamples, completionSeriesAt, expectedRampSeriesAt, recoveryCurveAt,
   comparisonDelta, updateCount, projectPace,
   slipStates, slipDatesByState, firstRecordIso, naturalUnitFor,
@@ -59,14 +59,42 @@ const TIMEFRAME_MAX = { week: 52, month: 12, quarter: 4, year: 1 };
 const BARS_PROGRESS    = { week: 12, month: 12, quarter: 4 };
 const BARS_CONSISTENCY = { week: 12, month: 12, quarter: 4 };
 const BARS_HISTOGRAM   = { week: 26, month: 12, quarter: 4 };
-// At or below this many bars, a chart stretches its columns across the card
-// instead of keeping them at the fixed 18px it needs when they might overflow.
-const MAX_BARS_TO_STRETCH = 6;
+// How many calendar months the Overview sparkline covers at most. Seven, not
+// six, because the marks are month *boundaries* and the segments between
+// them are what reads as a period — the two end marks also trim their own
+// line caps, so N months draw N-1 segments. Seven gives six.
+//
+// Anchored
+// to the calendar rather than counted back from today's date, and clamped to
+// the year the goal is filed under — a goal is annual, so a window reaching
+// before 1 January is reaching outside its own lifetime. Early in the year it
+// simply draws fewer segments (March → Jan, Feb, Mar) instead of padding
+// empty months in front of them. One unit for every tracking type on purpose:
+// the value plotted is the rolling score, which is a continuously-running
+// number sampleable at any date, so there is no per-type period to match.
+const SPARK_MONTHS = 7;
 // Momentum for the hand-rolled chart scroll (see _attachDragScroll). Decay is
 // per 16.67ms frame and scaled by real elapsed time, so a janky frame slows the
 // coast by the same amount it would have at 60fps rather than overshooting.
 const FLING_DECAY = 0.94;
 const FLING_MIN_VELOCITY = 0.02; // px/ms — below this a coast is imperceptible
+
+// Score grid glyph sizes (px), named rather than left as bare literals
+// because they went through many rounds of live visual tuning this session
+// and will likely be tuned again — one spot to change instead of hunting
+// through _scoreCell's body. Septagon gets its own, larger size: it draws 7
+// wedges where wedge/squareSweep draw at most 4, and needs more room per
+// wedge to stay legible at the same overall scale.
+const SCORE_GLYPH_SIZE = 27;
+const SCORE_SEPTAGON_SIZE = 31.5;
+
+// Frequency-by-weekday dot sizing (px): an untouched day is a fixed small
+// dot; a logged day starts at FREQ_DOT_BASE and grows by FREQ_DOT_STEP per
+// entry, capped at 4 entries (_weekdayGridCard's own Math.min(count, 4)).
+// Same reasoning as the Score sizes above — tuned live, likely to move again.
+const FREQ_DOT_ZERO = 5;
+const FREQ_DOT_BASE = 7.5;
+const FREQ_DOT_STEP = 3;
 function clampPeriods(unit, count) { return Math.min(count, TIMEFRAME_MAX[unit] ?? count); }
 
 function pad(n) { return String(n).padStart(2, '0'); }
@@ -122,6 +150,18 @@ function quarterOf(d) { return Math.floor(d.getMonth() / 3) + 1; }
 function monthSpan(startIso, endIso) {
   const a = localDate(startIso), b = localDate(endIso);
   return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+}
+
+// monthSpan's week-grained counterpart: how many ISO (Mon-Sun) weeks the
+// inclusive [startIso, endIso] range touches. Used only to decide how many
+// bars a chart actually needs — see _barCount.
+function weekStartIso(iso) {
+  const d = localDate(iso);
+  const dow = (d.getDay() + 6) % 7; // Monday-based, matching isoWeekKey
+  return toIso(new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow));
+}
+function weekSpan(startIso, endIso) {
+  return Math.floor(daysBetween(weekStartIso(startIso), weekStartIso(endIso)) / 7) + 1;
 }
 
 function periodLabel(unit, indexFromEnd, todayIso) {
@@ -251,10 +291,15 @@ class GoalAnalytics extends AppElement {
   // Every analytics page leads with which goal it belongs to — the edit form
   // shows the title in its own input, but the analytics pages otherwise give
   // no clue which goal you swiped into.
+  // The goal name leads and carries the weight — it is what the whole dialog
+  // is about; the page name trails it as a quieter locator. The <h2> stays on
+  // the page name regardless of visual order: it is the part that differs
+  // between the four pages, so it is what makes the heading useful to a
+  // screen reader moving between them.
   _pageHead(goal, titleKey) {
     return `<div class="page-head">
-      <h2 class="page-title">${t(titleKey)}</h2>
       <p class="page-goal" title="${esc(goal?.title)}">${esc(goal?.title)}</p>
+      <h2 class="page-title">${t(titleKey)}</h2>
     </div>`;
   }
 
@@ -269,11 +314,36 @@ class GoalAnalytics extends AppElement {
              note above the class. A local value rather than a token because
              tokens.css defines no border width at all. */
           --slip-stroke: 1.5px;
+          /* How many bar columns span one screenful on the Consistency and
+             Count-per-timebox charts, at week/month timeframes (quarter stays
+             on its own stretch-to-fill rule below — it already reads well).
+             Not a round number on purpose: 12 lets a 12-bar month view show
+             every bar at a glance with no scrolling, while the same per-bar
+             width applied to a longer run (26 weeks) leaves a sliver of the
+             13th bar visible at the edge — the ordinary "there's more, keep
+             scrolling" affordance, rather than a hard-edged cutoff that reads
+             as the end of the data. The per-bar width formula below
+             subtracts the gaps a 12-bar row actually has (11 of them) before
+             dividing by this span — without that, a real 12-bar chart
+             overflowed by about a bar-and-a-half purely from gap width,
+             scrolling exactly where "at a glance" promised it wouldn't. */
+          --chart-bar-span: 12.25;
+          /* Same idea as --chart-bar-span above, for the Activity calendar's
+             day-cells: there's no "N fit with no scroll" target here the way
+             a 12-bar month view has — the calendar always spans a full year
+             (52+ columns), so it always scrolls regardless of cell size. This
+             is really just "how big should one cell be," expressed as a
+             fit-count because that's the only lever this formula has. 16
+             landed on ~17.5px on the viewport this was tuned against — there
+             is no fixed-px route to that number that stays correct across
+             different screen widths, so the fit-count is the target instead,
+             picked to land close to the requested size on a typical phone. */
+          --calendar-col-span: 16;
         }
         .page { display: flex; flex-direction: column; gap: calc(var(--space-5) + 3px); }
-        /* One line: heading at the start, goal name at the end. The heading
-           never shrinks, so a long goal name ellipsises rather than squeezing
-           the label that identifies the page. */
+        /* One line: goal name at the start, page name at the end. The page
+           name never shrinks, so a long goal name ellipsises rather than
+           squeezing the label that identifies which page you are on. */
         /* Pinned to the top of modal-dialog's own scrolling .body: which page
            you are on and which goal it belongs to are the two things that
            must never scroll out of reach, since the charts below repeat the
@@ -283,10 +353,21 @@ class GoalAnalytics extends AppElement {
            negative inline margin, which made this element wider than the
            dialog body and gave every analytics page its own horizontal
            scrollbar. The cards below span exactly the content box anyway, so
-           there is nothing out there to cover. */
-        .page-head { position: sticky; inset-block-start: 0; z-index: 2; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); background: var(--color-surface); padding-block: var(--space-2); margin-block-start: calc(-1 * var(--space-2)); }
-        .page-goal { margin: 0; min-inline-size: 0; flex: 1; text-align: end; font-size: var(--font-size-micro); color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .page-title { margin: 0; flex-shrink: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+           there is nothing out there to cover.
+
+           No block padding and no negative start margin. Both used to be
+           here, cancelling out to put the element at the body top while still
+           pushing the text 8px down from it — the whole reason the title sat
+           low under the sheet handle. Neither buys anything: sticky pins this
+           element flush to the top of the scrollport, so there is never
+           content above it left to cover (and anything above that line is
+           outside the scrollport and clipped regardless), which also made the
+           negative margin inert — a flow position above the clamp could never
+           paint. The line box's own internal leading is the breathing room on
+           both edges now. */
+        .page-head { position: sticky; inset-block-start: 0; z-index: 2; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); background: var(--color-surface); }
+        .page-goal { margin: 0; min-inline-size: 0; flex: 1; font-size: var(--font-size-subheading); font-weight: var(--font-weight-bold); color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .page-title { margin: 0; flex-shrink: 0; font-size: var(--font-size-subheading); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); }
 
         /* Entrance-only transition on page change (swipe, dot tap, or arrow key) —
            direction follows whether the new page index is higher or lower than the
@@ -304,7 +385,7 @@ class GoalAnalytics extends AppElement {
         }
         .card { background: var(--color-surface-raised); border-radius: var(--radius-md); padding: var(--space-4); }
         .card-head { display: flex; justify-content: space-between; align-items: baseline; margin-block-end: var(--space-3); gap: var(--space-2); }
-        .card-head h3 { margin: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+        .card-head h3 { margin: 0; font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
         /* 32px, not the project's 40px --touch-target: a deliberate, accepted
            middle ground (was 24px). A full 40px pill would visually outweigh
            the card heading it sits beside, and changing timeframe is a
@@ -312,38 +393,76 @@ class GoalAnalytics extends AppElement {
         .card-head select { border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary); font-size: var(--font-size-micro); font-weight: var(--font-weight-medium); border-radius: var(--radius-full); padding: 4px 10px; min-block-size: 32px; }
         .tabular { font-variant-numeric: tabular-nums; }
         .footnote { font-size: var(--font-size-micro); color: var(--color-text-muted); line-height: 1.5; }
-        /* --color-text-primary, not muted/secondary: this is the entire
-           content of the page when a goal has no streaks yet, so it has to
-           clear 4.5:1 — and both of the quieter tokens are documented as
-           failing that at body size. The smaller caption size still keeps it
-           from reading as loud as a heading. */
-        .empty-note { font-size: var(--font-size-caption); color: var(--color-text-primary); line-height: 1.5; text-align: center; padding: var(--space-6) var(--space-2); }
+        /* Matches .calc-older-note exactly, same reasoning and same
+           override: this used to be --color-text-primary specifically
+           because it's the entire content of the page when a goal has no
+           streaks yet, so it had to clear 4.5:1 (secondary fails that at
+           this size) — overridden on request, consistency with the other
+           empty-state note outweighing that margin here too. */
+        .empty-note { font-size: var(--font-size-micro); color: var(--color-text-secondary); line-height: 1.5; text-align: center; padding: var(--space-6) var(--space-2); }
 
         /* Overview */
-        .hero-number { display: flex; align-items: flex-end; justify-content: center; gap: var(--space-3); padding: var(--space-5) 0 var(--space-3); }
-        .hero-number .big { font-size: 3.25rem; font-weight: var(--font-weight-bold); line-height: 1; color: var(--color-text-primary); }
+        /* Number centred with the spark stacked under it, rather than the two
+           sitting side by side: the spark is a footnote to the number, not a
+           second reading of equal weight. */
+        /* No padding of its own on any edge — the page's own section gap is
+           the only separation this needs, and stacking a second helping on top
+           of it is what left the number floating well down the card. */
+        .hero-number { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+        .hero-number .big { font-size: var(--font-size-hero); font-weight: var(--font-weight-bold); line-height: 1; color: var(--color-text-primary); }
         .hero-number .big .pct-unit { font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); color: var(--color-text-secondary); }
-        .spark-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-        .spark-label { font-size: 9px; color: var(--color-text-muted); }
         .stat-row { display: flex; gap: var(--space-2); }
+        /* Label at the start, value centred under it. The value is the thing
+           being compared across the three cards, so centring lines all three
+           up on one optical axis; the label reads as a caption on the card
+           rather than a heading over the number, so it stays at the start. */
+        .stat-row.comparison .stat-value { justify-content: center; }
         .stat-row.centered .stat { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-block-size: 78px; }
         .stat { flex: 1; background: var(--color-surface-raised); border-radius: var(--radius-md); padding: var(--space-3); min-width: 0; }
         .stat-label { font-size: var(--font-size-micro); color: var(--color-text-secondary); font-weight: var(--font-weight-medium); margin-block-end: var(--space-1); }
         .stat-value { font-size: var(--font-size-subheading); font-weight: var(--font-weight-bold); color: var(--color-text-primary); display: flex; align-items: baseline; gap: 3px; }
+        /* The three card values that can hold real words rather than a short
+           number — the goal's type, its logged count, its deadline. One size
+           with every other value on the page; the class exists for the
+           ellipsis, which the type label genuinely needs ("Hebdomadaire" in
+           fr, "Fins la data" in ca, in a three-card row). Blocks rather than
+           flex rows so text-overflow applies: none of the three carries a
+           .unit child, which is the only thing the flex row was for.
+           max-inline-size is load-bearing — .stat-row.centered .stat centres
+           on the inline axis, so without a cap these shrink-to-fit and
+           overflow the card instead of ellipsising inside it. */
+        .stat-headline { font-size: var(--font-size-subheading); display: block; max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* The one value allowed out of the shared size — "how many times have
+           I done this" is the figure this card exists to answer, and at the
+           shared size it read as a caption rather than a count. Safe to grow
+           where the type label was not: it is at most three digits (a year
+           holds 365 days), so it cannot run out of card the way a word like
+           "Hebdomadaire" does. Two classes deep to out-specify .stat-headline
+           above, whose size it is overriding. The countdown card's days-left
+           figure deliberately stays at the shared size. */
+        .stat-headline.stat-count { font-size: var(--font-size-title); }
         .stat-value .unit { font-size: var(--font-size-micro); font-weight: var(--font-weight-medium); color: var(--color-text-secondary); }
         .stat.delta-up .stat-value { color: var(--color-success); }
         .stat.delta-down .stat-value { color: var(--color-danger); }
         .stat-value.overdue { color: var(--color-danger); }
         .stat-value.muted { color: var(--color-text-muted); font-weight: var(--font-weight-medium); }
-        .stat-value.big-num { font-size: var(--font-size-title); }
-        .stat-sub { font-size: 10px; color: var(--color-text-muted); margin-block-start: 2px; }
-        /* The slips breakdown sits opposite the type stack in the same row,
-           so it matches that stack's own second line rather than the smaller
-           footnote size the comparison cards use. */
-        .stat-sub.stat-sub-lg { font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); color: var(--color-text-secondary); margin-block-start: 3px; }
-        .type-stack { display: flex; flex-direction: column; gap: 3px; }
-        .type-stack .type-primary { font-size: var(--font-size-subheading); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
-        .type-stack .type-secondary { font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); color: var(--color-text-secondary); }
+        /* Every piece of supporting text inside a stat card is one size:
+           --font-size-micro, the same token .stat-label and .stat-value .unit
+           already used. Two sizes in these cards total — the value, and
+           everything around it — so the value is the only thing that reads as
+           the value. There used to be four (a bare 10px here, caption on the
+           two second lines, micro on the labels), which made "3×/week", the
+           M/T/W strip, "entries" and "overdue" all subtly disagree with each
+           other for no reason any of them could justify. Weight and colour
+           still separate them; size no longer does. */
+        .stat-sub { font-size: var(--font-size-micro); color: var(--color-text-muted); margin-block-start: 2px; }
+        /* The slips breakdown sits opposite the type stack in the same row, so
+           it carries that stack's own second-line weight and colour — size is
+           shared with everything else now, so only those two are left here. */
+        .stat-sub.stat-sub-lg { font-weight: var(--font-weight-medium); color: var(--color-text-secondary); margin-block-start: 3px; }
+        .type-stack { display: flex; flex-direction: column; gap: 3px; max-inline-size: 100%; min-inline-size: 0; }
+        .type-stack .type-primary { font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+        .type-stack .type-secondary { font-size: var(--font-size-micro); font-weight: var(--font-weight-medium); color: var(--color-text-secondary); }
         /* Scheduled-days strip (weekly goals on specific days). Fixed slot
            width so the 7 letters keep their Mon-Sun positions whatever the
            locale's day initials are — position is what tells Tue from Thu.
@@ -353,11 +472,8 @@ class GoalAnalytics extends AppElement {
         .sched-strip { display: inline-flex; gap: 2px; margin-block-start: 2px; }
         .sched-slot { min-inline-size: 12px; text-align: center; font-size: var(--font-size-micro); font-weight: var(--font-weight-semibold); color: var(--color-border); }
         .sched-slot.on { color: var(--color-accent); }
-        .section-label { font-size: var(--font-size-micro); font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin: 0 0 var(--space-2); }
         .legend { display: flex; gap: var(--space-4); font-size: var(--font-size-micro); color: var(--color-text-secondary); margin-block-start: var(--space-2); }
         .legend span { display: inline-flex; align-items: center; gap: 5px; }
-        .legend .swatch-line { inline-size: 12px; block-size: 2px; border-radius: 2px; background: var(--color-accent); display: inline-block; }
-        .legend .swatch-line.dashed { background: none; border-top: 1.5px dashed var(--color-text-secondary); }
         /* Avoid's allowed/over-allowance key, shared by the count histogram
            and the weekday grid — a filled block rather than the line swatch
            above, matching the solid marks those two charts actually draw. */
@@ -375,31 +491,57 @@ class GoalAnalytics extends AppElement {
         .pace-callout { display: flex; align-items: flex-start; gap: var(--space-2); background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface-raised)); border-radius: var(--radius-md); padding: var(--space-3); font-size: var(--font-size-caption); color: var(--color-text-primary); line-height: 1.5; }
         .pace-callout svg { inline-size: 16px; block-size: 16px; flex-shrink: 0; margin-block-start: 1px; color: var(--color-accent); }
 
-        /* Per-period result (Overview bar chart) */
-        .perf { display: flex; flex-direction: column; inline-size: max-content; margin-inline-start: auto; }
-        /* Few enough bars that they cannot overflow the card: stretch them to
-           fill it instead of leaving a right-aligned 80px cluster in a 300px
-           card. Capping quarter at the year's 4 periods (TIMEFRAME_MAX) is
-           what made this reachable — at 18px fixed columns those 4 bars used a
-           quarter of the width and the axis labels ran into each other. */
-        .perf.fill { inline-size: 100%; margin-inline-start: 0; }
-        .perf.fill .perf-col, .perf.fill .perf-val, .perf.fill .perf-ax { flex: 1 1 0; min-inline-size: 0; }
-        .perf-vals, .perf-tracks, .perf-axis { display: flex; gap: var(--space-1); }
-        .perf-tracks { block-size: 82px; position: relative; align-items: stretch; }
-        .perf-vals { min-block-size: 11px; }
+        /* Per-period result (Overview bar chart). .perf-scroll is the real
+           scroll surface — container-type lets its bar/axis columns size
+           themselves as a fraction of ITS width (cqi) rather than their own
+           overflowed content width, which is what makes "~12 columns per
+           screen" mean anything. .perf-tracks/.perf-axis are its two rows,
+           direct children rather than wrapped in a shared flex-column parent
+           — deliberately mirroring the Activity histogram's own
+           .histogram/.histogram-axis structure exactly (same max-content +
+           margin-inline-start:auto right-alignment on each row independently).
+           An earlier version here used a wrapping .perf div instead, which
+           broke two things a direct structural match avoids: that wrapper's
+           own box, sized separately from its cqi-driven children, measurably
+           added a few stray px of overflow even for an exactly-fitting bar
+           count (confirmed by direct measurement); and — the more serious
+           one — a chart showing *fewer* than a full screenful of bars (a
+           young goal, see firstRecordIso below) would stretch that wrapper to
+           the full scroll width while its actual bars stayed left-aligned
+           inside it, floating the newest bar in the middle of the card
+           instead of hanging it against the right edge. Two independent
+           max-content rows, exactly like the histogram, right-align correctly
+           regardless of how many bars are actually present. */
+        .perf-scroll { padding-block-end: var(--chart-scrollbar-room); container-type: inline-size; }
+        .perf-tracks, .perf-axis { display: flex; gap: var(--space-1); inline-size: max-content; margin-inline-start: auto; }
+        /* .fill is quarter-only now (see _perfChart's own comment) — always
+           exactly 4 bars (TIMEFRAME_MAX.quarter), stretched to fill the card
+           rather than sitting in a right-aligned 80px cluster. Week/month
+           never get this class, however few bars a young goal has: they keep
+           the fixed --chart-bar-span width so a 3-bar chart's bars are the
+           same width as a 12-bar chart's, not fatter. */
+        .perf-tracks.fill, .perf-axis.fill { inline-size: 100%; margin-inline-start: 0; }
+        .perf-tracks.fill .perf-col, .perf-axis.fill .perf-ax { flex: 1 1 0; min-inline-size: 0; }
+        /* Matches the Overview line chart's own plot height below, and the
+           Activity histogram's — three bar/line charts at one height so
+           switching between them doesn't involve a size jump. 14px of that is
+           reserved headroom for a label sitting above a bar at its tallest
+           (100%) — see .perf-val — the same reservation the histogram makes
+           via its own separate .bar-val-slot row. */
+        .perf-tracks { block-size: 96px; padding-block-start: 14px; position: relative; align-items: stretch; }
         .perf-axis { margin-block-start: var(--space-1); min-block-size: 11px; }
-        /* min-inline-size:0 on every fixed 18px slot below (.perf-col/-val/-ax,
-           .bar-col, .ax). A flex item defaults to min-inline-size:auto, so
-           "flex: 0 0 18px" is NOT actually 18px once the slot holds text wider
-           than that — a labelled axis slot grew to its label (26.5px for
-           "Sep 21"), which had two consequences: the labels row ended up wider
-           than the bars row it annotates, so labels no longer sat over their
-           own bar; and because the scroll container takes its scrollWidth from
-           the wider row, scrolling fully right left the bars short of the edge
-           — the newest bar appearing to float mid-card instead of hanging
-           right. Labels are still free to paint outside their slot
-           (overflow: visible, below) — they just no longer push it wider. */
-        .perf-col { flex: 0 0 18px; min-inline-size: 0; display: flex; align-items: flex-end; }
+        /* The column width: a fraction of the scroll surface's own layout
+           width (cqi, via .perf-scroll's container-type above), not a fixed
+           pixel value — see --chart-bar-span on :host for why 12.15 and not a
+           round number, and for why the gap count is subtracted before
+           dividing. min-inline-size:0 keeps a labelled slot from growing past
+           that fraction to fit its own text (a labelled axis slot once grew
+           to its label's width instead, 26.5px for "Sep 21" against an 18px
+           slot — same failure mode, just against a now-dynamic rather than
+           fixed basis). Labels are still free to paint outside their slot
+           (overflow: visible on .perf-ax) — they just no longer push it
+           wider. */
+        .perf-col { position: relative; flex: 0 0 calc((100cqi - (var(--chart-bar-span) - 1) * var(--space-1)) / var(--chart-bar-span)); min-inline-size: 0; display: flex; align-items: flex-end; }
         .perf-bar { inline-size: 100%; background: var(--color-accent); border-radius: 3px 3px 0 0; min-block-size: 3px; }
         /* Over-target reads as a distinct colour rather than just a taller bar —
            at the week timeframe the value is uncapped, so a 200% week would
@@ -408,17 +550,47 @@ class GoalAnalytics extends AppElement {
            the scale actually exceeds 100 (otherwise 100% is the top edge). */
         .perf-bar.over { background: var(--color-success); }
         .perf-100 { position: absolute; inline-size: 100%; inset-inline-start: 0; border-block-start: 1px dashed var(--color-text-secondary); pointer-events: none; }
-        .perf-val { flex: 0 0 18px; min-inline-size: 0; font-size: 8px; color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); text-align: center; white-space: nowrap; }
-        .perf-ax { flex: 0 0 18px; min-inline-size: 0; font-size: 8px; color: var(--color-text-muted); text-align: center; white-space: nowrap; }
+        /* Anchored to its own bar's current top, inline (the same
+           inset-block-end percentage the bar's own block-size uses, plus a
+           2px gap folded into the calc) — rather than sitting in one shared
+           row at a fixed height above every bar regardless of how tall it is.
+           The previous shared-row version put the highest and lowest labels
+           at the exact same height — the two numbers furthest apart in value,
+           rendered closest together on screen, reading as a collision rather
+           than a range. Tracking each bar's own top instead spreads them
+           exactly as far apart as their values actually are. No transform:
+           inset-block-end alone already parks the label's bottom edge at that
+           line (height is intrinsic, so the text extends upward from there on
+           its own) — a translateY on top of that re-shifted it up by a second,
+           unwanted full line-height, caught in a real render (the label
+           floated a whole line above its bar, not snug against it). */
+        .perf-val { position: absolute; inset-inline: 0; text-align: center; font-size: var(--font-size-micro); color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); white-space: nowrap; pointer-events: none; }
+        /* The trailing label is the one label that must not paint outside its
+           slot — see the Activity histogram's own .ax:last-child, the exact
+           same fix for the exact same cause, ported here after it turned out
+           to still apply: bleed past the inline-END edge of the LAST slot
+           inflates #perf-scroll's own scrollWidth even though it never
+           changes the slot's own rendered box (confirmed by direct
+           measurement — every .perf-ax measured exactly its intended cqi
+           width regardless). A week/month's "Sep 28"-style trailing label is
+           wider than its ~24px slot, so without this the chart reported a
+           few px of scroll range that led nowhere — no content actually
+           lived past the visible edge, just an unreachable sliver of air.
+           Every other label bleeding symmetrically is harmless (mid-row
+           bleed lands over a neighbour, inline-start bleed isn't reachable by
+           scrolling); only the last one's end-ward bleed extends the
+           scrollable area itself. */
+        .perf-axis:not(.fill) .perf-ax:last-child { display: flex; justify-content: flex-end; }
+        .perf-ax { flex: 0 0 calc((100cqi - (var(--chart-bar-span) - 1) * var(--space-1)) / var(--chart-bar-span)); min-inline-size: 0; font-size: var(--font-size-micro); color: var(--color-text-muted); text-align: center; white-space: nowrap; overflow: visible; }
 
         .line-wrap { position: relative; }
-        .line-start-val { position: absolute; font-size: 8px; font-weight: var(--font-weight-semibold); color: var(--color-text-secondary); white-space: nowrap; pointer-events: none; }
+        .line-start-val { position: absolute; font-size: var(--font-size-micro); font-weight: var(--font-weight-semibold); color: var(--color-text-secondary); white-space: nowrap; pointer-events: none; }
         .line-axis { display: flex; justify-content: space-between; margin-block-start: var(--space-1); }
-        .line-axis span { font-size: 8px; color: var(--color-text-muted); white-space: nowrap; }
+        .line-axis span { font-size: var(--font-size-micro); color: var(--color-text-muted); white-space: nowrap; }
 
         /* Score */
         .calc-header { display: flex; justify-content: space-between; align-items: center; margin-block-end: var(--space-3); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
-        .calc-header-pct { display: inline-flex; align-items: center; justify-content: center; inline-size: 44px; block-size: 44px; flex-shrink: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); color: var(--color-text-primary); background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-raised)); border-radius: var(--radius-md); }
+        .calc-header-pct { display: inline-flex; align-items: center; justify-content: center; inline-size: 44px; block-size: 44px; flex-shrink: 0; font-size: var(--font-size-body); font-weight: var(--font-weight-bold); color: var(--color-text-primary); background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-raised)); border-radius: var(--radius-md); }
         /* justify-content: flex-end so a goal with little enough real
            history to fit without scrolling still anchors to the right
            (where "now" lives) instead of sitting stuck to the left edge —
@@ -434,9 +606,14 @@ class GoalAnalytics extends AppElement {
            width, so it still ends up flush against the right edge exactly
            as it does with no note present, via the container's own
            justify-content:flex-end. */
-        /* --color-text-primary for the same reason as .empty-note: it's the
-           only text explaining the blank area, so it can't be sub-4.5:1. */
-        .calc-older-note { flex: 1; align-self: center; margin: 0; text-align: center; font-size: var(--font-size-micro); color: var(--color-text-primary); line-height: 1.4; }
+        /* Matches .calc-header's own colour by deliberate choice, not an
+           oversight — it used to be --color-text-primary specifically
+           because it's the only text explaining the blank area (the same
+           reasoning .empty-note used to carry too, before the identical
+           override was applied there as well), which --color-text-secondary
+           doesn't clear at this size. Overridden on request: matching the
+           header text it sits beside outweighs that margin here. */
+        .calc-older-note { flex: 1; align-self: center; margin: 0; text-align: center; font-size: var(--font-size-micro); color: var(--color-text-secondary); line-height: 1.4; }
         /* No touch-action here. modal-dialog's .body.has-tabs declares
            "pan-y pinch-zoom" while tabs are active, and touch-action intersects
            down the whole ancestor chain — a descendant can never loosen what an
@@ -449,9 +626,9 @@ class GoalAnalytics extends AppElement {
            and the scroll-to-now pass in _wireInteractive still work. */
         .scrollable-x { overflow-x: auto; overflow-y: hidden; }
         .calc-grid { display: flex; align-items: stretch; gap: 0; inline-size: max-content; }
-        .calc-group { display: flex; flex-direction: column; gap: 9px; padding: 8px 9px; flex-shrink: 0; }
-        .calc-group.counted { background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-raised)); border-radius: var(--radius-md); margin-inline-start: var(--space-2); padding-inline-start: var(--space-3); padding-inline-end: 10px; }
-        .calc-group-label { font-size: 8px; color: var(--color-text-muted); text-align: center; margin-block-end: 2px; }
+        .calc-group { display: flex; flex-direction: column; gap: 7px; padding: 6px 7px; flex-shrink: 0; }
+        .calc-group.counted { background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-raised)); border-radius: var(--radius-md); margin-inline-start: var(--space-2); padding-inline-start: var(--space-3); padding-inline-end: 8px; }
+        .calc-group-label { font-size: var(--font-size-micro); color: var(--color-text-muted); text-align: center; margin-block-end: 2px; }
         /* The cell's own text colour is what the septagon's knockout dot
            punches through to
            (SEPTAGON_DOT_FILL is currentColor), so every cell carries its own
@@ -478,7 +655,7 @@ class GoalAnalytics extends AppElement {
            invisible, but still occupying its slot so the counted group keeps
            the full height of everything it will eventually count. */
         .calc-cell.placeholder { visibility: hidden; }
-        .calc-badge { position: absolute; top: -5px; right: -7px; background: var(--color-accent); color: var(--color-text-on-accent); font-size: 7px; font-weight: var(--font-weight-bold); padding: 1px 3px; border-radius: var(--radius-full); line-height: 1.3; }
+        .calc-badge { position: absolute; top: -4px; right: -6px; background: var(--color-accent); color: var(--color-text-on-accent); font-size: var(--font-size-micro); font-weight: var(--font-weight-bold); padding: 1px 3px; border-radius: var(--radius-full); line-height: 1.3; }
         .calc-label-slot { block-size: 9px; font-size: 7px; font-weight: var(--font-weight-semibold); color: var(--color-accent); white-space: nowrap; }
 
         /* Activity */
@@ -505,16 +682,22 @@ class GoalAnalytics extends AppElement {
            changed. A few dead px on a chart that doesn't scroll is the cheaper
            trade. The Score grid is exempt — .calc-scroll-outer already carries
            --space-2 of block padding for its own reasons. */
-        .histogram-scroll { padding-block-end: var(--chart-scrollbar-room); }
+        /* container-type: see .perf-scroll's own comment — same purpose, so
+           .bar-col/.ax below can size against this element's real width
+           rather than their own overflowed content width. */
+        .histogram-scroll { padding-block-end: var(--chart-scrollbar-room); container-type: inline-size; }
         .histogram { display: flex; align-items: stretch; gap: var(--space-1); block-size: 96px; inline-size: max-content; margin-inline-start: auto; }
         /* Same stretch-to-fill rule as .perf above, for the same reason — see
            its comment. The axis row is a sibling, so it carries the class too
            and its slots stay aligned with the bars. */
         .histogram.fill, .histogram-axis.fill { inline-size: 100%; margin-inline-start: 0; }
         .histogram.fill .bar-col, .histogram-axis.fill .ax { flex: 1 1 0; min-inline-size: 0; }
-        .bar-col { flex: 0 0 18px; min-inline-size: 0; display: flex; flex-direction: column; align-items: center; }
+        /* Width: see .perf-col's own comment — same --chart-bar-span fraction
+           of the scroll surface's layout width, shared across both this chart
+           and Consistency so the two read at one bar width. */
+        .bar-col { flex: 0 0 calc((100cqi - (var(--chart-bar-span) - 1) * var(--space-1)) / var(--chart-bar-span)); min-inline-size: 0; display: flex; flex-direction: column; align-items: center; }
         .bar-val-slot { block-size: 14px; display: flex; align-items: flex-end; justify-content: center; }
-        .bar-val { font-size: 8px; color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); white-space: nowrap; }
+        .bar-val { font-size: var(--font-size-micro); color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); white-space: nowrap; }
         .bar-track { flex: 1; inline-size: 100%; display: flex; align-items: flex-end; min-height: 0; }
         .bar { inline-size: 100%; background: var(--color-accent); border-radius: 3px 3px 0 0; min-height: 3px; }
         /* Avoid's split bar: one rounded, clipped column holding the
@@ -544,9 +727,13 @@ class GoalAnalytics extends AppElement {
            to hold a label outright, and end-aligning one there would visibly
            shove it off the bar it names. */
         .histogram-axis:not(.fill) .ax:last-child { display: flex; justify-content: flex-end; }
-        .ax { flex: 0 0 18px; min-inline-size: 0; font-size: 8px; color: var(--color-text-muted); text-align: center; white-space: nowrap; overflow: visible; }
+        .ax { flex: 0 0 calc((100cqi - (var(--chart-bar-span) - 1) * var(--space-1)) / var(--chart-bar-span)); min-inline-size: 0; font-size: var(--font-size-micro); color: var(--color-text-muted); text-align: center; white-space: nowrap; overflow: visible; }
         .heatmap-outer { display: flex; gap: var(--space-2); align-items: flex-start; }
-        .heatmap-scroll { flex: 1; min-width: 0; padding-block-end: var(--chart-scrollbar-room); }
+        /* container-type: lets .heatmap/.heatmap-monthrow size their own
+           columns as a fraction of THIS element's real width (cqi) — same
+           mechanism as .histogram-scroll/.perf-scroll, see their own
+           comments for the general idea. */
+        .heatmap-scroll { flex: 1; min-width: 0; padding-block-end: var(--chart-scrollbar-room); container-type: inline-size; }
         /* margin-inline-start:auto pins the newest column to the right edge.
            Without it a span narrow enough to fit (early in the year, or a
            short frequency grid) sat left-aligned with the gap on the right,
@@ -556,10 +743,25 @@ class GoalAnalytics extends AppElement {
            container, so the scroll-to-right-edge pass in _wireInteractive
            keeps working unchanged for the overflowing case. */
         .heatmap-inner { inline-size: max-content; margin-inline-start: auto; }
-        .heatmap-monthrow { display: grid; grid-auto-flow: column; grid-auto-columns: 11px; gap: 3px; block-size: 12px; margin-block-end: 3px; }
-        .heatmap-monthrow span { font-size: 8px; color: var(--color-text-muted); white-space: nowrap; }
-        .heatmap { display: grid; grid-auto-flow: column; grid-auto-columns: 11px; grid-template-rows: repeat(7, 11px); gap: 3px; }
-        .heatmap .cell { inline-size: 11px; block-size: 11px; border-radius: 3px; background: var(--color-border); }
+        /* Column width: a fraction of .heatmap-scroll's own layout width
+           (cqi), sized so --calendar-col-span columns span it exactly — see
+           that token on :host. Gap (3px, literal below — this block never
+           used a token for it) is subtracted before dividing, same reason
+           --chart-bar-span's own formula does: without it a 15-column fit
+           overflows by almost a column purely from gap width. Shared with
+           .heatmap below so month labels stay aligned with their columns. */
+        .heatmap-monthrow { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100cqi - (var(--calendar-col-span) - 1) * 3px) / var(--calendar-col-span)); gap: 3px; block-size: 12px; margin-block-end: 3px; }
+        .heatmap-monthrow span { font-size: var(--font-size-micro); color: var(--color-text-muted); white-space: nowrap; }
+        /* Row height uses the exact same formula as the column width above,
+           rather than a separate fixed value — cells stay square at whatever
+           size that formula resolves to, on any viewport. */
+        .heatmap { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100cqi - (var(--calendar-col-span) - 1) * 3px) / var(--calendar-col-span)); grid-template-rows: repeat(7, calc((100cqi - (var(--calendar-col-span) - 1) * 3px) / var(--calendar-col-span))); gap: 3px; }
+        /* No explicit inline-size/block-size — a grid item's default
+           align-items/justify-items is stretch, so the cell already fills
+           its track (the calc above) exactly; repeating that same formula a
+           third time here would just be another place for the two to drift
+           apart. */
+        .heatmap .cell { border-radius: 5px; background: var(--color-border); }
         .heatmap .cell.on { background: var(--color-accent); }
         /* Avoid only: a day shaded because the slip on it was forgiven, not
            because it was clean. Without this the calendar showed allowed
@@ -570,8 +772,18 @@ class GoalAnalytics extends AppElement {
         .heatmap .cell.on.within::after { content: ''; inline-size: 5px; block-size: 5px; border-radius: 50%; background: var(--color-surface-raised); }
         .heatmap-daylabels { flex-shrink: 0; display: flex; flex-direction: column; }
         .heatmap-daylabels .spacer { block-size: 12px; margin-block-end: 3px; }
-        .daylabel-grid { display: grid; grid-template-rows: repeat(7, 11px); gap: 3px; }
-        .daylabel-grid span { font-size: 8px; color: var(--color-text-muted); line-height: 11px; }
+        /* .daylabel-grid sits outside .heatmap-scroll entirely (a structural
+           sibling, not a descendant — see .heatmap-outer's own markup), so it
+           cannot read the cqi-based row height above via CSS at all:
+           container query units only resolve for elements actually inside
+           the query container's own subtree. --cal-row-h is the measured
+           value instead, written by _syncCalendarRowHeight once the real
+           cell size has settled post-layout — same cross-branch problem
+           _syncScorePillWidth solves for the Score header's pill, same fix.
+           The 11px fallback is what renders for the one frame before that
+           measurement lands. */
+        .daylabel-grid { display: grid; grid-template-rows: repeat(7, var(--cal-row-h, 11px)); gap: 3px; }
+        .daylabel-grid span { font-size: var(--font-size-micro); color: var(--color-text-muted); line-height: var(--cal-row-h, 11px); }
         .freqgrid-wrap { display: flex; }
         /* flex:1 + min-width:0, matching .heatmap-scroll above — without it,
            this flex item (child of .freqgrid-wrap) defaults to min-width:auto
@@ -581,18 +793,23 @@ class GoalAnalytics extends AppElement {
            _wireInteractive: without the constraint, both values reflect the
            same already-overflowed size, so real overflow never registered. */
         .freqgrid-scroll { flex: 1; min-width: 0; padding-block-end: var(--chart-scrollbar-room); }
-        .freqgrid { display: grid; grid-auto-flow: column; gap: 10px; inline-size: max-content; margin-inline-start: auto; }
-        .month-col { display: grid; grid-template-rows: 12px repeat(7, 16px); gap: var(--space-1); text-align: center; }
-        .month-label { font-size: 9px; color: var(--color-text-muted); }
+        .freqgrid { display: grid; grid-auto-flow: column; gap: 13px; inline-size: max-content; margin-inline-start: auto; }
+        /* Row height 16->20px and gap 4->5px (a literal, not --space-2's
+           8px — that jump read as too loose): both just wide enough for the
+           dot size below's new max (~19.5px) to sit inside its own row
+           without touching its neighbours, which a plain dot-size increase
+           on its own stopped being true for. */
+        .month-col { display: grid; grid-template-rows: 12px repeat(7, 20px); gap: 5px; text-align: center; }
+        .month-label { font-size: var(--font-size-micro); color: var(--color-text-muted); }
         .dot-cell { display: flex; align-items: center; justify-content: center; }
         .freq-dot-el { border-radius: 50%; background: var(--color-accent); }
         /* Avoid only: same stroke-is-total/fill-is-over rule as the bars above.
            box-sizing keeps the ring inside the size the count already chose, so
            adding the stroke doesn't quietly inflate every dot by 3px. */
         .freq-dot-el.slip { box-sizing: border-box; border: var(--slip-stroke) solid var(--color-danger); background: transparent; }
-        .freq-dot-el.zero { inline-size: 4px; block-size: 4px; background: var(--color-border); border: none; }
-        .weekday-rail { display: grid; grid-template-rows: 12px repeat(7, 16px); gap: var(--space-1); margin-inline-end: 6px; }
-        .weekday-rail span { font-size: 9px; color: var(--color-text-muted); display: flex; align-items: center; }
+        .freq-dot-el.zero { inline-size: 5px; block-size: 5px; background: var(--color-border); border: none; }
+        .weekday-rail { display: grid; grid-template-rows: 12px repeat(7, 20px); gap: 5px; margin-inline-end: 6px; }
+        .weekday-rail span { font-size: var(--font-size-micro); color: var(--color-text-muted); display: flex; align-items: center; }
 
         /* Streaks */
         .streak-list { display: flex; flex-direction: column; gap: 9px; }
@@ -672,6 +889,45 @@ class GoalAnalytics extends AppElement {
     return Math.max(HISTORY_DAYS_BACK, daysBetween(this._span(todayIso).start, todayIso));
   }
 
+  // How many of a week/month chart's own fixed-cap bars should actually be
+  // plotted: never more than `maxCount` (BARS_CONSISTENCY/BARS_HISTOGRAM's own
+  // ceiling), and never reaching further back than whichever is LATER of the
+  // goal's first-ever recorded entry or 1 January of the year being viewed —
+  // a Telos goal lives inside one year, and a period before its own first
+  // entry has nothing to show but empty padding ahead of the real data.
+  // Quarter is deliberately excluded from callers of this (it's already
+  // year-bound via TIMEFRAME_MAX.quarter=4, and always short enough to use
+  // the stretch-to-fill layout regardless). Falls back to the year boundary
+  // alone for a goal with no entries yet — there's nothing to bound against
+  // — and never returns fewer than 1 (an empty chart still needs one period's
+  // width to lay out against, and an all-empty count would hit MAX_BARS_TO_
+  // STRETCH's fill path anyway, the same as any other sparse case).
+  _barCount(goal, unit, maxCount, todayIso) {
+    const yearStart = this._span(todayIso).start;
+    const first = firstRecordIso(goal);
+    const earliest = first && first > yearStart ? first : yearStart;
+    const elapsed = unit === 'month' ? monthSpan(earliest, todayIso) : weekSpan(earliest, todayIso);
+    return Math.max(1, Math.min(maxCount, elapsed));
+  }
+
+  // The sparkline's x-axis: up to SPARK_MONTHS calendar months of the year
+  // being viewed, oldest first. Each month is read on the last day it
+  // actually reaches — its own final day, or the span's end for the month
+  // still in progress — so one segment means one calendar month and the
+  // readings run strictly oldest to newest.
+  _sparkSamples(todayIso) {
+    const { start, end } = this._span(todayIso);
+    const endDate = localDate(end);
+    const months = Math.min(SPARK_MONTHS, monthSpan(start, end));
+    const out = [];
+    for (let back = months - 1; back >= 0; back--) {
+      const m = new Date(endDate.getFullYear(), endDate.getMonth() - back, 1);
+      const monthEnd = new Date(m.getFullYear(), m.getMonth() + 1, 0); // day 0 of next month
+      out.push(toIso(monthEnd < endDate ? monthEnd : endDate));
+    }
+    return out;
+  }
+
   // A chart's timeframe: whatever the user last picked on it, else the goal's
   // own natural period — 'week', or 'month' for a monthly goal, whose weeks
   // hold no meaningful fraction of a monthly target. One resolver for all
@@ -712,42 +968,82 @@ class GoalAnalytics extends AppElement {
   //    .card-head, and therefore the select, untouched — so focus simply stays
   //    where it was and the listener bound here stays bound.
   _wireInteractive(kind) {
+    if (kind === 'overview') this._wireOverviewSelects();
+    if (kind === 'activity') this._wireActivitySelect();
+    this._schedulePostRenderSync();
+  }
+
+  _wireOverviewSelects() {
     const today = () => todayISO();
-    if (kind === 'overview') {
-      const sel = this.shadowRoot.querySelector('#tf-progress');
-      sel?.addEventListener('change', () => {
-        this._tfProgress = sel.value;
-        this._swapCardBody('progress-body', this._progressBody(this._goal, today()));
-      });
-      const perf = this.shadowRoot.querySelector('#tf-perf');
-      perf?.addEventListener('change', () => {
-        this._tfPerf = perf.value;
-        this._swapCardBody('perf-body', this._consistencyBody(this._goal, today()));
-      });
-    }
-    if (kind === 'activity') {
-      const sel = this.shadowRoot.querySelector('#tf-activity');
-      sel?.addEventListener('change', () => {
-        this._tfActivity = sel.value;
-        const todayIso = today();
-        // Recomputed for this card alone. _renderActivity derives these once
-        // for all three of its cards; here only the histogram is changing.
-        const daysBack = this._daysBack(todayIso);
-        const loggedDates = rawLoggedDates(this._goal, todayIso, daysBack);
-        const slipSplit = isDecreasing(this._goal) ? slipDatesByState(this._goal, todayIso, daysBack) : null;
-        const slipLegend = slipSplit ? this._slipLegend() : '';
-        this._swapCardBody('hist-body', this._histogramBody(this._goal, loggedDates, slipSplit, slipLegend, todayIso));
-        this._syncScrollable('hist-scroll');
-      });
-    }
-    // Deferred a frame: scrollWidth read immediately after an innerHTML
-    // replacement can still reflect pre-layout dimensions, silently scrolling
-    // to the wrong (often 0/left) position — the same class of timing bug
-    // fixed once already for the due-date/notes reveal flash in
-    // goal-dialog.js, per its own _flashField timing note.
-    requestAnimationFrame(() => {
-      ['hist-scroll', 'cal-scroll', 'freq-scroll', 'calc-scroll'].forEach(id => this._syncScrollable(id));
+    const sel = this.shadowRoot.querySelector('#tf-progress');
+    sel?.addEventListener('change', () => {
+      this._tfProgress = sel.value;
+      this._swapCardBody('progress-body', this._progressBody(this._goal, today()));
     });
+    const perf = this.shadowRoot.querySelector('#tf-perf');
+    perf?.addEventListener('change', () => {
+      this._tfPerf = perf.value;
+      this._swapCardBody('perf-body', this._consistencyBody(this._goal, today()));
+      this._syncScrollable('perf-scroll');
+    });
+  }
+
+  _wireActivitySelect() {
+    const sel = this.shadowRoot.querySelector('#tf-activity');
+    sel?.addEventListener('change', () => {
+      this._tfActivity = sel.value;
+      const todayIso = todayISO();
+      // Recomputed for this card alone. _renderActivity derives these once
+      // for all three of its cards; here only the histogram is changing.
+      const daysBack = this._daysBack(todayIso);
+      const loggedDates = rawLoggedDates(this._goal, todayIso, daysBack);
+      const slipSplit = isDecreasing(this._goal) ? slipDatesByState(this._goal, todayIso, daysBack) : null;
+      const slipLegend = slipSplit ? this._slipLegend() : '';
+      this._swapCardBody('hist-body', this._histogramBody(this._goal, loggedDates, slipSplit, slipLegend, todayIso));
+      this._syncScrollable('hist-scroll');
+    });
+  }
+
+  // Deferred a frame: scrollWidth read immediately after an innerHTML
+  // replacement can still reflect pre-layout dimensions, silently scrolling
+  // to the wrong (often 0/left) position — the same class of timing bug
+  // fixed once already for the due-date/notes reveal flash in
+  // goal-dialog.js, per its own _flashField timing note. The pill-width
+  // sync below needs the same deferral for the same reason — the counted
+  // group's real width (glyphs + its own range label) isn't settled until
+  // after this render's own layout pass.
+  _schedulePostRenderSync() {
+    requestAnimationFrame(() => {
+      ['perf-scroll', 'hist-scroll', 'cal-scroll', 'freq-scroll', 'calc-scroll'].forEach(id => this._syncScrollable(id));
+      this._syncScorePillWidth();
+      this._syncCalendarRowHeight();
+    });
+  }
+
+  // The header's percentage pill has no width of its own to answer to — the
+  // thing it needs to line up with, the counted (rightmost, highlighted)
+  // group below it, is sized by its own content (glyphs plus however wide
+  // its own month-range label turns out to be), which varies per goal. A
+  // no-op on every page but Score, where either element doesn't exist.
+  _syncScorePillWidth() {
+    const pill = this.shadowRoot.querySelector('.calc-header-pct');
+    const counted = this.shadowRoot.querySelector('.calc-group.counted');
+    if (!pill || !counted) return;
+    pill.style.inlineSize = `${counted.getBoundingClientRect().width}px`;
+  }
+
+  // The day-of-week labels (.daylabel-grid) sit outside .heatmap-scroll
+  // entirely — a structural sibling, not a descendant — so they can't read
+  // the calendar's cqi-based cell size via CSS at all (container query units
+  // only resolve inside the query container's own subtree). Measures the
+  // real rendered cell size instead and writes it as a custom property the
+  // labels' own CSS falls back to — see .daylabel-grid's own comment. A
+  // no-op on every page but Activity, where neither element exists.
+  _syncCalendarRowHeight() {
+    const cell = this.shadowRoot.querySelector('.heatmap .cell');
+    const labels = this.shadowRoot.querySelector('.daylabel-grid');
+    if (!cell || !labels) return;
+    labels.style.setProperty('--cal-row-h', `${cell.getBoundingClientRect().height}px`);
   }
 
   // Replace one card's body in place. Falls back to a full render when the body
@@ -888,50 +1184,95 @@ class GoalAnalytics extends AppElement {
   // any coarser timeframe. The scale stretches past 100 only when some bar
   // actually exceeds it, and the dashed rule marks where 100% sits once it is
   // no longer the top edge.
-  _perfChart(points) {
+  // `fill`: quarter only, passed in by the caller rather than derived from
+  // the bar count here. Week/month always keep the fixed --chart-bar-span
+  // column width, however few bars a young goal has to show — stretching a
+  // sparse chart to fill the card would mean its bars are a DIFFERENT width
+  // than a fuller chart's, defeating the point of a fixed per-bar width in
+  // the first place (12.25 bars per screen stops meaning anything if "how
+  // wide is a bar" also depends on how many there are). Quarter is the one
+  // exception: it is always exactly 4 bars (TIMEFRAME_MAX.quarter), already
+  // year-bound by construction, and reads better stretched full-width than
+  // left mostly empty.
+  _perfChart(points, fill) {
     const vals = points.map(p => p.value).filter(v => v !== undefined);
     if (vals.length === 0) return '';
-    // Few enough bars to stretch across the card rather than sit in a narrow
-    // right-aligned cluster (see .perf.fill). Wide columns also leave room to
-    // name every period, so the sparse "first/middle/last" rule — which picks
-    // an off-centre middle out of only four — is dropped in that mode.
-    const fill = points.length <= MAX_BARS_TO_STRETCH;
     const scale = Math.max(100, ...vals);
-    let valsHtml = '', tracks = '', axis = '';
+    // The best period, and the worst one that still has *something* in it —
+    // an untouched 0% period isn't "low", it's absent, and labelling it would
+    // read as a floor that was never actually attempted. Ties resolve to
+    // whichever occurs first (oldest), via indexOf/findIndex, so at most one
+    // bar ever carries each label even when several periods share the value
+    // — a flat, all-100% run gets exactly one callout, not one per bar.
+    const maxVal = Math.max(...vals);
+    const nonZero = vals.filter(v => v > 0);
+    const minVal = nonZero.length ? Math.min(...nonZero) : undefined;
+    const maxIdx = points.findIndex(p => p.value === maxVal);
+    const minIdx = minVal === undefined ? -1 : points.findIndex(p => p.value === minVal);
+    let tracks = '', axis = '';
     points.forEach((p, i) => {
       const v = p.value;
       const over = v !== undefined && v > 100;
-      valsHtml += `<div class="perf-val tabular">${over ? v + '%' : ''}</div>`;
-      tracks += `<div class="perf-col">${v === undefined ? '' :
-        `<div class="perf-bar${over ? ' over' : ''}" style="block-size:${Math.max(v > 0 ? 4 : 0, (v / scale) * 100)}%"></div>`}</div>`;
+      // "over" already covers any bar that broke 100%, regardless of whether
+      // it's the single highest — that is its own, pre-existing callout, kept
+      // as-is and simply joined by the two new ones.
+      const labelled = over || i === maxIdx || i === minIdx;
+      const heightPct = v === undefined ? 0 : Math.max(v > 0 ? 4 : 0, (v / scale) * 100);
+      // The label's own inset-block-end matches the bar's block-size exactly,
+      // so it tracks that specific bar's current top — see .perf-val's own
+      // comment on why that beats one shared row at a fixed height.
+      const label = labelled ? `<span class="perf-val tabular" style="inset-block-end:calc(${heightPct}% + 2px)">${v}%</span>` : '';
+      tracks += `<div class="perf-col">${label}${v === undefined ? '' :
+        `<div class="perf-bar${over ? ' over' : ''}" style="block-size:${heightPct}%"></div>`}</div>`;
       const showLabel = fill || i === 0 || i === points.length - 1 || i === Math.floor((points.length - 1) / 2);
       axis += `<div class="perf-ax">${showLabel ? p.label : ''}</div>`;
     });
     const rule = scale > 100
       ? `<div class="perf-100" style="inset-block-end:${((100 / scale) * 100).toFixed(1)}%"></div>` : '';
-    return `<div class="perf${fill ? ' fill' : ''}" role="img" aria-label="${t('goal-analytics.a11y-consistency')}"><div class="perf-vals">${valsHtml}</div>
-      <div class="perf-tracks">${rule}${tracks}</div><div class="perf-axis">${axis}</div></div>`;
+    // All one line, deliberately: a newline + indentation here used to sit
+    // between the opening tag and .perf-tracks, which turns out not to be
+    // cosmetic — it leaves a whitespace-only text node as this element's
+    // first child, invisible to any .children-based child count (text nodes
+    // aren't elements) but still factored into the parent's own scrollable
+    // overflow area in this browser, inflating #perf-scroll's scrollWidth by
+    // several px even though every real element measured correctly. Confirmed
+    // by direct comparison: the histogram's own equivalent template has never
+    // had that whitespace and has never shown the discrepancy.
+    return `<div class="perf-scroll" id="perf-scroll" role="img" aria-label="${t('goal-analytics.a11y-consistency')}"><div class="perf-tracks${fill ? ' fill' : ''}">${rule}${tracks}</div><div class="perf-axis${fill ? ' fill' : ''}">${axis}</div></div>`;
   }
 
+  // Min-max autoscaled, deliberately not a 0-100 axis: the signal in a run of
+  // score snapshots is usually a few points of movement, which a full-range
+  // axis flattens into a straight line. The cost is that the shape says
+  // nothing about absolute level — that is the hero number's job, directly
+  // above it.
   _sparkline(values) {
-    const w = 96, h = 30;
+    const w = 120, h = 26, pad = 3; // h was 30, compressed 4px on request
     const finite = values.filter(v => v !== undefined);
     if (finite.length < 2) return '';
     const min = Math.min(...finite), max = Math.max(...finite), range = (max - min) || 1;
+    // x still comes from the index over the full array, so a gap of
+    // undefined values keeps its real position on the timeline.
     const pts = values.map((v, i) => {
-      const x = (i / (values.length - 1)) * w;
-      const y = v === undefined ? null : h - 3 - ((v - min) / range) * (h - 6);
-      return y === null ? null : `${x.toFixed(1)},${y.toFixed(1)}`;
+      if (v === undefined) return null;
+      const x = pad + (i / (values.length - 1)) * (w - pad * 2);
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      return { x: +x.toFixed(1), y: +y.toFixed(1) };
     }).filter(Boolean);
-    const last = pts[pts.length - 1].split(',');
-    return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${t('goal-analytics.a11y-sparkline')}">
-      <polyline points="${pts.join(' ')}" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-      <circle cx="${last[0]}" cy="${last[1]}" r="2.5" fill="var(--color-accent)" />
+    // Per-month marks (one punched into the line per month, matching the
+    // a11y label below) were tried and dropped on request — plain line reads
+    // better. The aria-label still names the month count: that describes the
+    // data span, not the marks, and stays true either way.
+    return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${t('goal-analytics.a11y-sparkline', { n: values.length })}">
+      <polyline points="${pts.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
     </svg>`;
   }
 
   _lineChart(seriesA, seriesB, axisLabels = []) {
-    const w = 268, h = 92, padTop = 8, padBottom = 4;
+    // 96: matches the Consistency bar chart's .perf-tracks height and the
+    // Activity histogram's .histogram height, so the two Overview charts
+    // read at one plot size instead of each picking its own.
+    const w = 268, h = 96, padTop = 8, padBottom = 4;
     // Undefined points are skipped, not drawn as 0 — completionSeries leaves
     // them in precisely so "no snapshot existed yet" stays distinguishable
     // from a real 0%. Plotting them flattened the line along the axis and
@@ -992,18 +1333,18 @@ class GoalAnalytics extends AppElement {
     // anything else). The days-left card below carries the one figure here
     // that actually tells the user something.
     const trend = !isCountdown(goal);
-    const recent = completionSeries(goal, 'month', 8, todayIso).map(p => p.value);
+    const recent = completionSeriesAt(goal, this._sparkSamples(todayIso)).map(p => p.value);
     const spark = this._sparkline(recent);
 
     return `<div class="page">
       ${this._pageHead(goal, 'goal-analytics.page-title-overview')}
       <div class="hero-number"><div class="big tabular">${current}<span class="pct-unit">%</span></div>
-        ${spark ? `<div class="spark-wrap">${spark}<span class="spark-label">${t('goal-analytics.last-n-periods', { n: recent.length })}</span></div>` : ''}
+        ${spark}
       </div>
       <div class="stat-row centered">${this._typeCard(goal, todayIso)}${this._deadlineCard(goal, todayIso)}${this._daysLeftCard(goal, todayIso)}</div>
-      ${trend ? `<div><p class="section-label">${t('goal-analytics.change-over-time')}</p><div class="stat-row">${this._comparisonRow(goal, todayIso)}</div></div>` : ''}
-      ${this._progressCard(goal, todayIso)}
+      ${trend ? `<div class="stat-row comparison">${this._comparisonRow(goal, todayIso)}</div>` : ''}
       ${trend ? this._renderPaceCallout(projectPace(goal, todayIso)) : ''}
+      ${this._progressCard(goal, todayIso)}
       ${this._consistencyCard(goal, todayIso)}
     </div>`;
   }
@@ -1039,7 +1380,7 @@ class GoalAnalytics extends AppElement {
     const scheduledDays = tr.type === 'weekly' && Array.isArray(tr.reminderDays) && tr.reminderDays.length > 0
       ? tr.reminderDays : null;
     const typeStack = typeLabel
-      ? `<div class="type-stack"><span class="type-primary">${typeLabel}</span>${
+      ? `<div class="type-stack"><span class="type-primary stat-headline">${typeLabel}</span>${
           summary ? `<span class="type-secondary">${summary}</span>` : ''}${
           scheduledDays ? this._scheduleStrip(scheduledDays) : ''}</div>`
       : null;
@@ -1057,7 +1398,7 @@ class GoalAnalytics extends AppElement {
       ? `<div class="stat-sub stat-sub-lg">${t('goal-analytics.stat-slips-over', { n: overCount })}</div>` : '';
 
     return `${typeStack ? `<div class="stat">${typeStack}</div>` : ''}
-      ${count !== null ? `<div class="stat"><div class="stat-label">${t(countLabel)}</div><div class="stat-value big-num tabular">${count}</div>${countSub}</div>` : ''}`;
+      ${count !== null ? `<div class="stat"><div class="stat-label">${t(countLabel)}</div><div class="stat-value stat-headline stat-count tabular">${count}</div>${countSub}</div>` : ''}`;
   }
 
   // A goal with a deadline says so here rather than only on its row — this
@@ -1076,7 +1417,7 @@ class GoalAnalytics extends AppElement {
     const bucket = urgencyOf(goal.dueDate, active);
     return `<div class="stat">
       <div class="stat-label">${t('goal-analytics.stat-deadline')}</div>
-      <div class="stat-value${bucket === 'overdue' ? ' overdue' : ''}">${shortDate(goal.dueDate, todayIso)}</div>
+      <div class="stat-value stat-headline${bucket === 'overdue' ? ' overdue' : ''}">${shortDate(goal.dueDate, todayIso)}</div>
       ${bucket === 'none' ? '' : `<div class="stat-sub">${t(`urgency.${bucket}`)}</div>`}
     </div>`;
   }
@@ -1099,7 +1440,7 @@ class GoalAnalytics extends AppElement {
     const reached = todayIso >= goal.dueDate;
     return `<div class="stat">
       <div class="stat-label">${t('goal-analytics.stat-days-left')}</div>
-      <div class="stat-value big-num tabular">${days}</div>
+      <div class="stat-value tabular">${days}</div>
       ${reached ? `<div class="stat-sub">${t('goal-analytics.countdown-reached')}</div>` : ''}
     </div>`;
   }
@@ -1112,7 +1453,7 @@ class GoalAnalytics extends AppElement {
     return ['week', 'month', 'quarter'].map(unit => {
       const delta = comparisonDelta(goal, unit, todayIso);
       const label = t(`goal-analytics.vs-${unit}`);
-      if (delta === null) return `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value muted tabular">—</div><div class="stat-sub">${t('goal-analytics.not-enough-history')}</div></div>`;
+      if (delta === null) return `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value muted tabular">—</div></div>`;
       // Zero is neither gain nor loss and stays the default text colour —
       // only a real move in either direction gets coloured.
       const dir = delta > 0 ? ' delta-up' : delta < 0 ? ' delta-down' : '';
@@ -1122,8 +1463,17 @@ class GoalAnalytics extends AppElement {
 
   // Achieved score over time against the pace that was available.
   _progressCard(goal, todayIso) {
-    const tf = this._timeframe(this._tfProgress, goal);
-    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.progress-chart-title')}</h3>${this._timeframeSelect('tf-progress', tf)}</div>
+    // A monthly goal has no week inside a month — same exclusion
+    // Consistency already applies to its own timeframe select, and for the
+    // same reason: offering it isn't just unhelpful, it's also how a stale
+    // selection could leak in (this element is reused across different
+    // goals in one session, and _tfProgress is never reset on goal change —
+    // a goal viewed right after a weekly one could otherwise inherit its
+    // 'week' pick with no way for that choice to make sense here).
+    const exclude = naturalUnitIsMonth(goal) ? ['week'] : [];
+    const picked = this._timeframe(this._tfProgress, goal);
+    const tf = exclude.includes(picked) ? 'month' : picked;
+    return `<div class="card"><div class="card-head"><h3>${t('goal-analytics.progress-chart-title')}</h3>${this._timeframeSelect('tf-progress', tf, exclude)}</div>
       <div class="card-body" id="progress-body">${this._progressBody(goal, todayIso)}</div>
     </div>`;
   }
@@ -1133,8 +1483,18 @@ class GoalAnalytics extends AppElement {
   // just this and leave the <select> that triggered it alive in the DOM; see
   // _swapCardBody for why that matters.
   _progressBody(goal, todayIso) {
-    const tf = this._timeframe(this._tfProgress, goal);
-    const count = clampPeriods(tf, BARS_PROGRESS[tf]);
+    const exclude = naturalUnitIsMonth(goal) ? ['week'] : [];
+    const picked = this._timeframe(this._tfProgress, goal);
+    const tf = exclude.includes(picked) ? 'month' : picked;
+    const maxCount = clampPeriods(tf, BARS_PROGRESS[tf]);
+    // Month only, matching the request precisely: never reach before 1
+    // January of the year being viewed, or before the goal's own first
+    // entry if that's later — the same bound Consistency/Histogram already
+    // apply to their own bar counts (_barCount). Week/quarter are left at
+    // their plain fixed cap — a 12-week (~3-month) reach rarely crosses a
+    // year boundary, and quarter is already year-bound by construction
+    // (TIMEFRAME_MAX.quarter = 4).
+    const count = tf === 'month' ? this._barCount(goal, tf, maxCount, todayIso) : maxCount;
     // Sampled by day, not by period — see denseSamples for why (a percentage
     // goal's shorter-lived values fell through the gaps between period
     // boundaries entirely). Both lines read the same sample dates, so they
@@ -1161,17 +1521,27 @@ class GoalAnalytics extends AppElement {
       ? Array.from({ length: count }, (_, k) => count - 1 - k)
       : [count - 1, Math.floor((count - 1) / 2), 0];
     const axis = axisIdx.map(i => periodLabel(tf, i, todayIso));
-    return `${this._lineChart(achieved, expected, axis)}
-      <div class="legend"><span><i class="swatch-line"></i>${t('goal-analytics.legend-achieved')}</span>${expected ? `<span><i class="swatch-line dashed"></i>${t('goal-analytics.legend-expected')}</span>` : ''}</div>`;
+    // No legend: the card title says what's being measured, and the solid
+    // vs. dashed line is explained by the chart itself (the callout above it
+    // names the projected finish, which only makes sense read against the
+    // dashed pace line it is compared to).
+    return this._lineChart(achieved, expected, axis);
   }
 
-  // How each individual period went against its own target. Countdown ("To
-  // date") has no per-period target and no entries to measure a period
-  // against — every bar came back 0%, a chart saying nothing — so it gets no
-  // card at all. Its progress is the calendar running down, which the hero
-  // number and the Progress chart already show in full.
+  // How each individual period went against its own target. Only weekly,
+  // monthly, and decreasing goals have one — countdown ("To date") and
+  // percentage don't, so there's nothing for a bar to measure a period
+  // against: every one of them silently came back 0% forever, a chart saying
+  // nothing (confirmed directly for percentage — .perf-bar rendered at
+  // block-size:0% across the board, just the 3px min-height floor repeated
+  // as a flat line). Written as what the card DOES need (a target) rather
+  // than an exclusion list of types that lack one, so a future type without
+  // a per-period target doesn't silently repeat this. Countdown's progress
+  // is the calendar running down, and percentage's is its own cumulative
+  // number — both already shown in full by the hero number and the Progress
+  // chart above.
   _consistencyCard(goal, todayIso) {
-    if (isCountdown(goal)) return '';
+    if (!isFrequency(goal) && !isDecreasing(goal)) return '';
     // A monthly goal has no month inside a week, so that timeframe is dropped
     // rather than shown returning a repeated or empty figure.
     const exclude = naturalUnitIsMonth(goal) ? ['week'] : [];
@@ -1192,10 +1562,11 @@ class GoalAnalytics extends AppElement {
     const exclude = naturalUnitIsMonth(goal) ? ['week'] : [];
     const picked = this._timeframe(this._tfPerf, goal);
     const tf = exclude.includes(picked) ? 'month' : picked;
-    const count = clampPeriods(tf, BARS_CONSISTENCY[tf]);
+    const maxCount = clampPeriods(tf, BARS_CONSISTENCY[tf]);
+    const count = tf === 'quarter' ? maxCount : this._barCount(goal, tf, maxCount, todayIso);
     const points = periodPerformanceSeries(goal, tf, count, todayIso)
       .map((p, i) => ({ ...p, label: periodLabel(tf, count - 1 - i, todayIso) }));
-    const chart = this._perfChart(points);
+    const chart = this._perfChart(points, tf === 'quarter');
     if (!chart) return '';
     return `${chart}
       ${tf === naturalUnitFor(goal) ? '' : `<p class="footnote">${t('goal-analytics.consistency-note-avg')}</p>`}`;
@@ -1304,19 +1675,20 @@ class GoalAnalytics extends AppElement {
   // One column of the score grid: `window` periods, newest at the top. The
   // counted group is the one the score actually reads; the rest are context.
   _scoreGroup(goal, { isCountedGroup, topPeriodsAgo, window, unit, todayIso }) {
-    const labelDate = unit === 'month' ? monthOnOrBefore(topPeriodsAgo, todayIso) : mondayOfWeek(topPeriodsAgo, todayIso);
+    const periodDate = periodsAgo => unit === 'month' ? monthOnOrBefore(periodsAgo, todayIso) : mondayOfWeek(periodsAgo, todayIso);
 
-    let cellsHtml = '', realCells = 0;
+    let cellsHtml = '', realCells = 0, oldestRealPeriodsAgo = topPeriodsAgo;
     for (let rIdx = 0; rIdx < window; rIdx++) {
       // Recency weighting is visible as opacity, strongest at the top where
       // "now" is — the same 1..window ramp weightedAverage itself applies.
       const weight = isCountedGroup ? (window - rIdx) / window : 0;
+      const periodsAgo = topPeriodsAgo + rIdx;
       const cell = this._scoreCell(goal, {
-        periodsAgo: topPeriodsAgo + rIdx,
+        periodsAgo,
         opacity: isCountedGroup ? (0.55 + weight * 0.45) : 1,
         unit, todayIso,
       });
-      if (!cell.placeholder) realCells++;
+      if (!cell.placeholder) { realCells++; oldestRealPeriodsAgo = periodsAgo; }
       cellsHtml += cell.html;
     }
     // A group with nothing real in it at all is dropped whole — reserving
@@ -1324,8 +1696,22 @@ class GoalAnalytics extends AppElement {
     // grid leftward with columns that will never gain a mark.
     if (realCells === 0) return '';
 
+    // Each column spans `window` periods, newest at the top — 6 weeks or 4
+    // months, either of which routinely crosses a calendar-month boundary (a
+    // monthly column, spanning 4 real months by construction, crosses one
+    // every single time). A single "top period's month" label silently
+    // mis-described every period beneath it once that happened. Ranged over
+    // the real span only (oldest real cell to newest), not the full reserved
+    // window — a group with placeholder cells at the bottom (not-yet-existing
+    // history) shouldn't claim to cover a month with no real data in it.
+    const topDate = periodDate(topPeriodsAgo);
+    const bottomDate = periodDate(oldestRealPeriodsAgo);
+    const sameMonth = topDate.getFullYear() === bottomDate.getFullYear() && topDate.getMonth() === bottomDate.getMonth();
+    const label = sameMonth ? monthAbbr(topDate.getMonth())
+      : `${monthAbbr(bottomDate.getMonth())}–${monthAbbr(topDate.getMonth())}`;
+
     return `<div class="calc-group${isCountedGroup ? ' counted' : ''}">
-      <div class="calc-group-label">${monthAbbr(labelDate.getMonth())}</div>${cellsHtml}</div>`;
+      <div class="calc-group-label">${label}</div>${cellsHtml}</div>`;
   }
 
   // One period's mark. Returns its `placeholder` state alongside the html so
@@ -1343,7 +1729,7 @@ class GoalAnalytics extends AppElement {
       // A week that spent more than its allowance is a failed week — the
       // same thing the row's own septagon shows by draining those days.
       failed = weekStates.some(d => !d.future && d.state === 'over');
-      shape = septagonGlyph(weekStates, 26, failed);
+      shape = septagonGlyph(weekStates, SCORE_SEPTAGON_SIZE, failed);
     } else {
       const periodIso = toIso(unit === 'month' ? monthOnOrBefore(periodsAgo, todayIso) : mondayOfWeek(periodsAgo, todayIso));
       const keyFn = unit === 'month' ? monthKey : isoWeekKey;
@@ -1358,9 +1744,9 @@ class GoalAnalytics extends AppElement {
       failed = !isCurrent && !placeholder && count < target;
       if (goal.tracking.type === 'weekly') {
         const filled = Math.min(count, target);
-        shape = wedgeGlyph(Array.from({ length: target }, (_, s) => s < filled ? 'on' : 'off'), 22, failed);
+        shape = wedgeGlyph(Array.from({ length: target }, (_, s) => s < filled ? 'on' : 'off'), SCORE_GLYPH_SIZE, failed);
       } else {
-        shape = squareSweepGlyph(count / target, 22, failed);
+        shape = squareSweepGlyph(count / target, SCORE_GLYPH_SIZE, failed);
       }
       if (count > target) badge = `<span class="calc-badge">+${count - target}</span>`;
     }
@@ -1445,12 +1831,15 @@ class GoalAnalytics extends AppElement {
   // handler recomputes them for this card alone — see _wireInteractive.
   _histogramBody(goal, loggedDates, slipSplit, slipLegend, todayIso) {
     const tf = this._timeframe(this._tfActivity, goal);
-    const n = clampPeriods(tf, BARS_HISTOGRAM[tf]);
+    const maxN = clampPeriods(tf, BARS_HISTOGRAM[tf]);
+    const n = tf === 'quarter' ? maxN : this._barCount(goal, tf, maxN, todayIso);
     const hist = resampleSumFromDates(loggedDates, tf, n, todayIso);
     const max = Math.max(1, ...hist);
     const overHist = slipSplit ? resampleSumFromDates(slipSplit.over, tf, n, todayIso) : null;
     const withinHist = slipSplit ? resampleSumFromDates(slipSplit.within, tf, n, todayIso) : null;
-    const fill = n <= MAX_BARS_TO_STRETCH; // see .histogram.fill
+    // Quarter only — see _perfChart's own comment on why week/month never
+    // stretch regardless of how few bars a young goal has.
+    const fill = tf === 'quarter';
     const labelStep = 8;
 
     let bars = '', axis = '';
@@ -1532,8 +1921,15 @@ class GoalAnalytics extends AppElement {
 
   // Which weekdays a goal actually lands on, month by month. Only for types
   // with a per-day log to have a cadence at all.
+  // Shown for every type that reaches Activity at all (i.e. every type except
+  // countdown, which has no Activity page — see pagesFor — so never reaches
+  // this function in the first place). Purely a count of loggedDates by
+  // weekday and month, nothing here reads a frequency-specific field
+  // (target/entries), so percentage's own loggedDates (whichever days the
+  // percentage was updated, from its history) plot exactly the same way a
+  // frequency goal's logged days do — "which weekday do I tend to touch
+  // this on" is as real a pattern for an occasional update as for a habit.
   _weekdayGridCard(goal, loggedDates, slipSplit, slipLegend, todayIso) {
-    if (!isFrequency(goal) && !isDecreasing(goal)) return '';
     // January of the year being viewed through the current month (or through
     // December for a year already over) — the same annual span the calendar
     // above covers, rather than a fixed 14 months that reached back into the
@@ -1556,7 +1952,7 @@ class GoalAnalytics extends AppElement {
       }
       for (let d = 0; d < 7; d++) {
         const count = byWeekday[d];
-        const size = count === 0 ? 4 : 6 + Math.min(count, 4) * 2.4;
+        const size = count === 0 ? FREQ_DOT_ZERO : FREQ_DOT_BASE + Math.min(count, 4) * FREQ_DOT_STEP;
         // Size still means volume; for Avoid, colour means kind. A cell
         // holding both forgiven and over-allowance slips splits
         // proportionally rather than picking a winner — at 8-14px a wedge

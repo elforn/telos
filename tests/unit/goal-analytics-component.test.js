@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/goal-analytics/goal-analytics.js';
 
@@ -29,14 +29,25 @@ function countdownGoal(startDate, dueDate) {
 }
 
 describe('goal-analytics — page count per type', () => {
-  it('percentage: overview, activity, streaks — no score page', () => {
+  it('percentage: overview, activity — no score page, no streaks', () => {
+    // No per-period target (Score) and no real continuity to a run of
+    // consecutive "I updated the slider" days (Streaks) — see pagesFor's
+    // own comment.
     const el = mount(pctGoal(50, [{ date: TODAY, value: 50 }]));
-    expect(el.pageCount).toBe(3);
+    expect(el.pageCount).toBe(2);
   });
 
-  it('weekly/monthly/decreasing: overview, score, activity, streaks', () => {
-    expect(mount(weeklyGoal(3, [])).pageCount).toBe(4);
-    expect(mount(monthlyGoal(2, [])).pageCount).toBe(4);
+  it('weekly/monthly: overview, score, activity — no Streaks unless every-day', () => {
+    // Streaks only makes sense where consecutive calendar days is the thing
+    // actually being measured — a 3x/week goal's logged days are never on
+    // adjacent days by design, so the page would have nothing to ever show.
+    // See pagesFor's own comment.
+    expect(mount(weeklyGoal(3, [])).pageCount).toBe(3);
+    expect(mount(monthlyGoal(2, [])).pageCount).toBe(3);
+  });
+
+  it('weekly at target 7 ("every day") and decreasing: the full 4, Streaks included', () => {
+    expect(mount(weeklyGoal(7, [])).pageCount).toBe(4);
     expect(mount(decreasingGoal(1, [])).pageCount).toBe(4);
   });
 
@@ -52,13 +63,14 @@ describe('goal-analytics — Overview page', () => {
     expect(el.shadowRoot.querySelector('.hero-number .big').textContent).toContain('62');
   });
 
-  it('shows "not enough history" for a comparison with no snapshot old enough', () => {
+  it('shows a bare "—" for a comparison with no snapshot old enough, no caption underneath', () => {
     const el = mount(pctGoal(50, [{ date: TODAY, value: 50 }]));
     const stats = el.shadowRoot.querySelectorAll('.stat-row .stat');
     // Quarter, not year — a goal lives inside one year, so "vs year" could
     // never have history behind it and was dropped.
     const quarterStat = [...stats].find(s => s.querySelector('.stat-label')?.textContent.includes('quarter'));
     expect(quarterStat.querySelector('.stat-value').textContent.trim()).toBe('—');
+    expect(quarterStat.querySelector('.stat-sub')).toBeNull();
   });
 
   it('shows a real delta once history covers the comparison point', () => {
@@ -212,11 +224,11 @@ describe('goal-analytics — Activity page', () => {
     expect(el.shadowRoot.querySelector('.freqgrid')).toBeTruthy();
   });
 
-  it('omits the frequency grid for percentage goals', () => {
+  it('shows the frequency grid for percentage goals too — it is just logged-day counts', () => {
     const el = mount(pctGoal(50, [{ date: TODAY, value: 50 }]));
     el.activePage = 1; // activity is index 1 for percentage (no score page)
     expect(el.shadowRoot.querySelector('.histogram')).toBeTruthy();
-    expect(el.shadowRoot.querySelector('.freqgrid')).toBeNull();
+    expect(el.shadowRoot.querySelector('.freqgrid')).toBeTruthy();
   });
 
   it('scrolls the histogram/calendar/frequency-grid containers to their right edge by default', () => {
@@ -229,14 +241,17 @@ describe('goal-analytics — Activity page', () => {
 });
 
 describe('goal-analytics — Streaks page', () => {
+  // target 7 ("every day") — Streaks only exists on this page shape now,
+  // see pagesFor's own comment on why a non-daily weekly goal has no
+  // Streaks tab to land on at all.
   it('renders streak rows for a goal with real history', () => {
-    const el = mount(weeklyGoal(3, ['2026-09-14', '2026-09-15', '2026-09-16']));
+    const el = mount(weeklyGoal(7, ['2026-09-14', '2026-09-15', '2026-09-16']));
     el.activePage = 3;
     expect(el.shadowRoot.querySelectorAll('.streak-row').length).toBeGreaterThan(0);
   });
 
   it('shows an empty state for a goal with no history yet', () => {
-    const el = mount(weeklyGoal(3, []));
+    const el = mount(weeklyGoal(7, []));
     el.activePage = 3;
     expect(el.shadowRoot.querySelector('.empty-note')).toBeTruthy();
     expect(el.shadowRoot.querySelector('.streak-row')).toBeNull();
@@ -246,6 +261,15 @@ describe('goal-analytics — Streaks page', () => {
     const el = mount(countdownGoal('2026-01-01', '2026-12-31'));
     el.activePage = 3;
     expect(el.shadowRoot.querySelector('.hero-number')).toBeTruthy();
+    expect(el.shadowRoot.querySelector('.streak-row')).toBeNull();
+    expect(el.shadowRoot.querySelector('.empty-note')).toBeNull();
+  });
+
+  it('is not reachable for a weekly goal that is not every-day either (clamped back to Activity)', () => {
+    const el = mount(weeklyGoal(3, ['2026-09-14', '2026-09-15']));
+    expect(el.pageCount).toBe(3); // overview, score, activity — no 4th page to land on
+    el.activePage = 3;
+    expect(el.shadowRoot.querySelector('.histogram')).toBeTruthy(); // landed on Activity instead
     expect(el.shadowRoot.querySelector('.streak-row')).toBeNull();
     expect(el.shadowRoot.querySelector('.empty-note')).toBeNull();
   });
@@ -283,9 +307,65 @@ describe('goal-analytics — localisation', () => {
   });
 });
 
+describe('goal-analytics — Overview sparkline', () => {
+  // The spark is anchored to the calendar, not counted back from today's
+  // date, and clamped to the year the goal is filed under — so these assert
+  // against a frozen clock rather than whatever month the suite runs in.
+  // No more per-month circle marks (removed on request — plain line reads
+  // better), so these read the point count/order straight off the
+  // polyline's own points attribute instead.
+  const sparkPoints = el => {
+    const pts = el.shadowRoot.querySelector('.hero-number svg polyline')?.getAttribute('points') ?? '';
+    return pts.trim().split(/\s+/).filter(Boolean);
+  };
+  const sparkMarks = el => sparkPoints(el).length;
+  const sparkXs = el => sparkPoints(el).map(p => Number(p.split(',')[0]));
+
+  // Enough weeks logged that every monthly reading is a real number.
+  const logged = (fromIso, days) => {
+    const [y, m, d] = fromIso.split('-').map(Number);
+    return Array.from({ length: days }, (_, i) => {
+      const dt = new Date(y, m - 1, d + i);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    });
+  };
+
+  afterEach(() => vi.useRealTimers());
+
+  it('covers seven calendar months once the year is far enough along', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 3)); // 3 Oct 2026
+    const el = mount(weeklyGoal(3, logged('2026-01-05', 270)));
+    expect(sparkMarks(el)).toBe(7); // seven boundaries, six segments between them
+  });
+
+  it('draws only the months that exist when the year has barely started', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 2, 15)); // 15 Mar 2026 — Jan, Feb, Mar
+    const el = mount(weeklyGoal(3, logged('2026-01-05', 70)));
+    expect(sparkMarks(el)).toBe(3);
+  });
+
+  it('never reaches back past 1 January of the year being viewed', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 1, 10)); // 10 Feb 2026 — Jan, Feb only
+    const el = mount(weeklyGoal(3, logged('2026-01-02', 40)));
+    expect(sparkMarks(el)).toBe(2);
+  });
+
+  it('orders its readings oldest to newest', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 3));
+    const el = mount(weeklyGoal(3, logged('2026-01-05', 270)));
+    const xs = sparkXs(el);
+    expect(xs).toEqual([...xs].sort((a, b) => a - b));
+  });
+
+});
+
 describe('goal-analytics — accessibility', () => {
   it('gives each analytics page an h2 heading so card h3s are not orphaned', () => {
-    const el = mount(weeklyGoal(3, []));
+    const el = mount(weeklyGoal(7, [])); // every-day, so Streaks exists to check too
     for (const [page, title] of [[0, 'Overview'], [1, 'Score'], [2, 'Activity'], [3, 'Streaks']]) {
       el.activePage = page;
       const h2 = el.shadowRoot.querySelector('h2.page-title');
@@ -317,7 +397,12 @@ describe('goal-analytics — accessibility', () => {
     // missing it is simply absent from the result and the check passes
     // vacuously. That is exactly how an unlabelled chart slipped through once.
     const CHARTS = {
-      0: ['.perf', '.line-wrap svg', '.spark-wrap svg'],
+      // .hero-number svg, not the old .spark-wrap svg: that wrapper div is
+      // gone (the hero number and spark sit directly in .hero-number now),
+      // so the old selector always matched nothing and this check was
+      // silently passing vacuously for the sparkline — exactly the failure
+      // mode this test's own comment above warns about.
+      0: ['#perf-scroll', '.line-wrap svg', '.hero-number svg'],
       2: ['#hist-scroll', '#cal-scroll', '#freq-scroll'],
     };
     const el = mount(weeklyGoal(3, [...Array(6)].map((_, i) => `2026-09-${14 + i}`)));
@@ -681,7 +766,7 @@ describe('goal-analytics — a goal with no tracking at all', () => {
 describe('goal-analytics — Consistency chart', () => {
   it('is not shown for a "To date" goal, which has no per-period target to measure', () => {
     const el = mount(countdownGoal('2026-01-01', '2026-12-31'));
-    expect(el.shadowRoot.querySelector('.perf')).toBeNull();
+    expect(el.shadowRoot.querySelector('#perf-scroll')).toBeNull();
     expect(el.shadowRoot.querySelector('#tf-perf')).toBeNull();
     expect(el.shadowRoot.querySelector('.hero-number')).toBeTruthy(); // the rest of Overview is intact
   });
@@ -690,6 +775,101 @@ describe('goal-analytics — Consistency chart', () => {
     for (const goal of [weeklyGoal(3, [isoDaysAgo(0)]), monthlyGoal(2, [isoDaysAgo(0)]), decreasingGoal(1, [])]) {
       expect(mount(goal).shadowRoot.querySelector('#tf-perf')).toBeTruthy();
     }
+  });
+
+  describe('highest and lowest-non-zero bar labels', () => {
+    // Frozen on a Sunday so "this week" is a known, complete Mon-Sun span —
+    // the chart's own natural-unit weeks line up exactly with the entries
+    // below rather than depending on whatever day the suite happens to run.
+    afterEach(() => vi.useRealTimers());
+
+    function weekLabelled(target = 2) {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2026, 8, 20)); // Sun 20 Sep 2026
+      const entries = [
+        '2026-09-16',                                   // this week: 1 of 2 — the low
+        '2026-09-08', '2026-09-09',                      // last week: 2 of 2 — neither extreme
+        '2026-09-01', '2026-09-02', '2026-09-03',        // two weeks back: 3 of 2 — the high, and over 100%
+        // the week before that, and everything older: untouched (0%)
+      ];
+      return mount(weeklyGoal(target, entries));
+    }
+
+    it('labels the single highest bar, inside its own column so it tracks that bar', () => {
+      const el = weekLabelled();
+      const cols = [...el.shadowRoot.querySelectorAll('.perf-col')];
+      const highCol = cols.find(c => c.querySelector('.perf-bar.over'));
+      expect(highCol).toBeTruthy();
+      expect(highCol.querySelector('.perf-val')?.textContent.trim()).toBe('150%');
+    });
+
+    it('labels the lowest bar that is still above zero, inside its own column', () => {
+      const el = weekLabelled();
+      // The fixture's one 50%-of-target week is the most recent (this week),
+      // so it is always the last column — oldest-to-newest, same as every
+      // other chart in this file.
+      const cols = [...el.shadowRoot.querySelectorAll('.perf-col')];
+      expect(cols[cols.length - 1].querySelector('.perf-val')?.textContent.trim()).toBe('50%');
+    });
+
+    it('positions a label at its own bar\'s current top, not a shared fixed height', () => {
+      const el = weekLabelled();
+      const cols = [...el.shadowRoot.querySelectorAll('.perf-col')];
+      const highVal = cols.find(c => c.querySelector('.perf-bar.over')).querySelector('.perf-val');
+      const lowVal = cols[cols.length - 1].querySelector('.perf-val');
+      // The high bar is "over" (150%, i.e. scale itself), so its bar fills
+      // the full track — its label sits at the very top (inset-block-end
+      // 100%). The low bar (50% of a 150%-scaled track) is far shorter, so
+      // its label should sit nowhere near that height.
+      expect(highVal.style.insetBlockEnd).toBe('calc(100% + 2px)');
+      expect(lowVal.style.insetBlockEnd).not.toBe(highVal.style.insetBlockEnd);
+    });
+
+    it('does not label an untouched (0%) period as the low', () => {
+      const el = weekLabelled();
+      const vals = [...el.shadowRoot.querySelectorAll('.perf-val')];
+      // Every week older than the three seeded ones logged nothing — none of
+      // those bars should carry a label, only the real low (50%) should.
+      const labelled = vals.map(v => v.textContent.trim()).filter(Boolean);
+      expect(labelled.sort()).toEqual(['150%', '50%']);
+    });
+
+    it('labels neither bar when every period has the same value', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2026, 8, 20));
+      // Every week hits exactly target — min and max are the same number, so
+      // only its first (oldest) occurrence should carry a label, not all 12.
+      const entries = Array.from({ length: 12 }, (_, w) => {
+        const base = new Date(2026, 8, 20 - w * 7);
+        return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
+      });
+      const el = mount(weeklyGoal(1, entries));
+      const vals = [...el.shadowRoot.querySelectorAll('.perf-val')];
+      const labelled = vals.map(v => v.textContent.trim()).filter(Boolean);
+      expect(labelled).toEqual(['100%']);
+    });
+  });
+});
+
+describe('goal-analytics — Score tab text sizes', () => {
+  // happy-dom can't resolve computed CSS (confirmed by this file's own
+  // existing tests in this style), so these assert the rules themselves.
+  it('the "contribute" header text is caption-sized', () => {
+    // Went caption -> body -> back to caption across rounds of feedback —
+    // this pins whatever the most recent request actually was, not a
+    // historical "bigger than X" claim that goes stale the next time it
+    // changes again.
+    const css = mount(weeklyGoal(3, [])).shadowRoot.querySelector('style').textContent;
+    expect(css).toMatch(/\.calc-header\s*\{[^}]*font-size:\s*var\(--font-size-caption\)/);
+  });
+
+  it('the older-periods note is micro-sized and matches the header\'s colour', () => {
+    const css = mount(weeklyGoal(3, [])).shadowRoot.querySelector('style').textContent;
+    expect(css).toMatch(/\.calc-older-note\s*\{[^}]*font-size:\s*var\(--font-size-micro\)/);
+    // Deliberate override of the usual --color-text-primary contrast floor
+    // for "sole explanatory text" — matching the header it sits beside was
+    // explicitly requested over that margin.
+    expect(css).toMatch(/\.calc-older-note\s*\{[^}]*color:\s*var\(--color-text-secondary\)/);
   });
 });
 
@@ -729,11 +909,13 @@ function mountFor(goal, year) {
 describe('goal-analytics — countdown Overview says only what the calendar cannot', () => {
   it('drops the trend section and the pace callout — both restate the arithmetic', () => {
     const el = mount(countdownGoal(`${THIS_YEAR}-01-01`, `${THIS_YEAR}-12-31`));
-    expect(el.shadowRoot.querySelector('.section-label')).toBeNull();
+    // The comparison row itself, not a heading over it — that heading is gone,
+    // and this assertion was only ever using it to stand for the section.
+    expect(el.shadowRoot.querySelector('.stat-row.comparison')).toBeNull();
     expect(el.shadowRoot.querySelector('.pace-callout')).toBeNull();
     // Every other type still gets both.
     const pct = mount(pctGoal(50, [{ date: isoDaysAgo(90), value: 10 }, { date: isoDaysAgo(0), value: 50 }]));
-    expect(pct.shadowRoot.querySelector('.section-label')).toBeTruthy();
+    expect(pct.shadowRoot.querySelector('.stat-row.comparison')).toBeTruthy();
   });
 
   it('shows a days-left card beside the type card', () => {
@@ -803,6 +985,56 @@ describe('goal-analytics — one year is the ceiling on every chart', () => {
     const el = weeklyWithYear();
     pick(el, '#tf-progress', 'month');
     expect(el.shadowRoot.querySelectorAll('.line-axis span').length).toBe(3);
+  });
+});
+
+describe('goal-analytics — Consistency/Activity bar count is bounded by first entry and year start', () => {
+  function pick(el, id, value) {
+    const sel = el.shadowRoot.querySelector(id);
+    sel.value = value;
+    sel.dispatchEvent(new Event('change'));
+  }
+
+  it('a goal 3 weeks old shows 3 week-bars, not the full 12-week cap', () => {
+    const el = mount(weeklyGoal(1, [isoDaysAgo(14), isoDaysAgo(7), isoDaysAgo(0)]));
+    expect(el.shadowRoot.querySelectorAll('.perf-col').length).toBe(3);
+  });
+
+  it('a goal 3 months old shows 3 month-bars, not the full 12-month cap', () => {
+    const el = mount(weeklyGoal(1, [isoDaysAgo(60)]));
+    pick(el, '#tf-perf', 'month');
+    expect(el.shadowRoot.querySelectorAll('.perf-col').length).toBe(3);
+  });
+
+  it('the Activity histogram respects the same bound', () => {
+    const el = mount(weeklyGoal(1, [isoDaysAgo(14), isoDaysAgo(7), isoDaysAgo(0)]));
+    el.activePage = 2;
+    expect(el.shadowRoot.querySelectorAll('.bar-col').length).toBe(3);
+  });
+
+  it('never reaches before 1 January of the year being viewed, even for an older goal', () => {
+    // First entry is in the PRIOR year — the bound should clamp to this
+    // year's own 1 January instead of reaching back to that entry.
+    const el = mountFor(weeklyGoal(1, [`${THIS_YEAR - 1}-11-01`, `${THIS_YEAR}-01-15`]), THIS_YEAR);
+    pick(el, '#tf-perf', 'month');
+    const months = el.shadowRoot.querySelectorAll('.perf-col').length;
+    // From January of THIS_YEAR through "today" (the real current month) —
+    // comfortably more than a couple, comfortably short of reaching into the
+    // prior year's November.
+    expect(months).toBeGreaterThan(0);
+    expect(months).toBeLessThanOrEqual(12);
+  });
+
+  it('falls back to the year boundary alone for a goal with no entries yet', () => {
+    const el = mount(weeklyGoal(3, []));
+    // No throw, and at least one column rendered rather than an empty chart.
+    expect(el.shadowRoot.querySelectorAll('.perf-col').length).toBeGreaterThan(0);
+  });
+
+  it('quarter is unaffected — still shows all 4 regardless of how recent the first entry is', () => {
+    const el = mount(weeklyGoal(1, [isoDaysAgo(0)])); // first entry is today
+    pick(el, '#tf-perf', 'quarter');
+    expect(el.shadowRoot.querySelectorAll('.perf-col').length).toBe(4);
   });
 });
 
@@ -888,7 +1120,12 @@ describe('goal-analytics — Avoid: forgiven vs over is a shape, not a hue', () 
   it('draws nothing at all for a period with no slips', () => {
     // The stack is stroked now, so an empty one would render as a 3px dash on
     // the baseline — a slip mark on an Avoid goal's best possible period.
-    const el = mount(decreasingGoal(1, [isoDaysAgo(0)]));
+    // Two slips ten weeks apart, not one: the chart's own bar count is now
+    // bounded by the goal's first entry (see _barCount), so a goal with a
+    // single entry today would show a single bar — nothing left to assert
+    // "mostly empty" against. Reaching back ten weeks keeps the weeks in
+    // between genuinely in view and genuinely empty.
+    const el = mount(decreasingGoal(1, [isoDaysAgo(70), isoDaysAgo(0)]));
     el.activePage = 2;
     const cols = [...el.shadowRoot.querySelectorAll('.bar-col')];
     const empty = cols.filter(c => !c.querySelector('.bar-stack'));
@@ -931,7 +1168,7 @@ describe('goal-analytics — few bars stretch to fill the card', () => {
   it('the Consistency chart fills and names every quarter', () => {
     const el = weekly();
     pick(el, '#tf-perf', 'quarter');
-    expect(el.shadowRoot.querySelector('.perf').classList.contains('fill')).toBe(true);
+    expect(el.shadowRoot.querySelector('.perf-tracks').classList.contains('fill')).toBe(true);
     expect([...el.shadowRoot.querySelectorAll('.perf-ax')].every(a => a.textContent.trim())).toBe(true);
   });
 
@@ -947,7 +1184,7 @@ describe('goal-analytics — few bars stretch to fill the card', () => {
   it('keeps the fixed-width, right-anchored layout once the bars could overflow', () => {
     const el = weekly();
     pick(el, '#tf-perf', 'month');
-    expect(el.shadowRoot.querySelector('.perf').classList.contains('fill')).toBe(false);
+    expect(el.shadowRoot.querySelector('.perf-tracks').classList.contains('fill')).toBe(false);
     // The sparse first/middle/last axis rule is back.
     const labelled = [...el.shadowRoot.querySelectorAll('.perf-ax')].filter(a => a.textContent.trim());
     expect(labelled.length).toBe(3);
@@ -996,14 +1233,28 @@ describe('goal-analytics — every chart opens on the goal’s natural period', 
     return el.shadowRoot.querySelector(`${id} option[selected]`)?.value;
   }
 
-  it('week for percentage, weekly and Avoid goals', () => {
-    for (const goal of [pctGoal(50, [{ date: isoDaysAgo(0), value: 50 }]), weeklyGoal(3, []), decreasingGoal(1, [])]) {
+  it('week for weekly and Avoid goals, on every chart including Consistency', () => {
+    // target 7 so the weekly fixture keeps its Streaks page too — the point
+    // here is the shared page shape the pageCount-2 math below assumes, not
+    // the Streaks-gating behaviour itself (covered separately).
+    for (const goal of [weeklyGoal(7, []), decreasingGoal(1, [])]) {
       const el = mount(goal);
       expect(selected(el, '#tf-progress')).toBe('week');
       expect(selected(el, '#tf-perf')).toBe('week');
       el.activePage = el.pageCount - 2; // Activity
       expect(selected(el, '#tf-activity')).toBe('week');
     }
+  });
+
+  it('week for a percentage goal too, on the charts it actually has', () => {
+    // No #tf-perf here: percentage has no per-period target for Consistency
+    // to measure against, so it has no Consistency card at all — see
+    // _consistencyCard's own guard.
+    const el = mount(pctGoal(50, [{ date: isoDaysAgo(0), value: 50 }]));
+    expect(selected(el, '#tf-progress')).toBe('week');
+    expect(el.shadowRoot.querySelector('#tf-perf')).toBeNull();
+    el.activePage = el.pageCount - 1; // Activity — the last page now that percentage has no Streaks
+    expect(selected(el, '#tf-activity')).toBe('week');
   });
 
   it('month for a monthly goal — its weeks hold no fraction of a monthly target', () => {

@@ -23,7 +23,14 @@ const SHADOW_HELPERS = () => {
   };
 };
 
-async function createGoal(page, { title, type }) {
+// target: optional, weekly only — Streaks only exists on the page for a
+// weekly goal at target 7 ("every day") or a decreasing one (see pagesFor),
+// so any test that needs to reach the Streaks tab on a weekly goal has to
+// ask for target: 7 explicitly rather than relying on the form's own
+// default (3, see DEFAULT_TARGET in tracking.js). Steps the stepper rather
+// than hardcoding a click count, so this stays correct however many clicks
+// away from whatever the default happens to be.
+async function createGoal(page, { title, type, target }) {
   await page.evaluate(() => {
     document.querySelector('app-router').shadowRoot
       .querySelector('home-page').shadowRoot
@@ -37,6 +44,20 @@ async function createGoal(page, { title, type }) {
     window.__gd().shadowRoot.querySelector(`.type-pill[data-type="${type}"]`)?.click();
   }, { title, type });
   await page.waitForTimeout(150);
+  if (target !== undefined) {
+    await page.evaluate((target) => {
+      const root = window.__gd().shadowRoot;
+      const valueEl = root.querySelector('#target-value');
+      const up = root.querySelector('#target-up');
+      const down = root.querySelector('#target-down');
+      let guard = 0;
+      while (Number(valueEl.textContent) !== target && guard < 20) {
+        (Number(valueEl.textContent) < target ? up : down).click();
+        guard++;
+      }
+    }, target);
+    await page.waitForTimeout(100);
+  }
   await page.evaluate(() => window.__gd().shadowRoot.querySelector('#close').click());
   await page.waitForFunction(() => !window.__dialogOpen());
   // The dialog closing and the row appearing are separate async steps — the
@@ -84,7 +105,7 @@ test('an unsaved draft shows no analytics tabs', async ({ page }) => {
 });
 
 test('a saved weekly goal exposes Edit + 4 analytics tabs and renders each one', async ({ page }) => {
-  await createGoal(page, { title: 'Weekly analytics', type: 'weekly' });
+  await createGoal(page, { title: 'Weekly analytics', type: 'weekly', target: 7 });
   await reopenGoal(page);
 
   expect(await page.evaluate(() => window.__modal().tabCount)).toBe(5);
@@ -163,13 +184,17 @@ test('a deadline set in the edit form shows up on Overview', async ({ page }) =>
 test('a percentage goal has no Score tab, so Activity sits one index earlier', async ({ page }) => {
   await createGoal(page, { title: 'Percentage analytics', type: 'percentage' });
   await reopenGoal(page);
-  // Edit + Overview + Activity + Streaks — no rolling-score page for this type.
-  expect(await page.evaluate(() => window.__modal().tabCount)).toBe(4);
+  // Edit + Overview + Activity — no rolling-score page for this type, and no
+  // Streaks either (its "logged days" are just whenever someone happened to
+  // move the slider, no real continuity to a run of them — see pagesFor).
+  expect(await page.evaluate(() => window.__modal().tabCount)).toBe(3);
   await gotoTab(page, 2);
   expect(await page.evaluate(() => !!window.__ga().shadowRoot.querySelector('.histogram'))).toBe(true);
   expect(await page.evaluate(() => !!window.__ga().shadowRoot.querySelector('.calc-grid'))).toBe(false);
-  // Weekday cadence is meaningless without per-day entries.
-  expect(await page.evaluate(() => !!window.__ga().shadowRoot.querySelector('.freqgrid'))).toBe(false);
+  // Weekday-by-month cadence is real for percentage too — it's just a count
+  // of whichever days the percentage got updated, same as any other type's
+  // logged days.
+  expect(await page.evaluate(() => !!window.__ga().shadowRoot.querySelector('.freqgrid'))).toBe(true);
 });
 
 test('a countdown goal exposes Overview only', async ({ page }) => {
@@ -187,7 +212,7 @@ test('no analytics page scrolls the dialog sideways', async ({ page }) => {
   // 16px wider than the dialog body. Only real layout can see this — the
   // element's own box is fine in isolation, it is the containing scroll
   // width that goes wrong.
-  await createGoal(page, { title: 'Sideways scroll', type: 'weekly' });
+  await createGoal(page, { title: 'Sideways scroll', type: 'weekly', target: 7 });
   await reopenGoal(page);
   for (const tab of [1, 2, 3, 4]) {
     await gotoTab(page, tab);
@@ -259,7 +284,7 @@ test('only charts that genuinely overflow become scrollable and keyboard-reachab
 });
 
 test('the analytics view never overflows the page horizontally', async ({ page }) => {
-  await createGoal(page, { title: 'No page overflow', type: 'weekly' });
+  await createGoal(page, { title: 'No page overflow', type: 'weekly', target: 7 });
   await reopenGoal(page);
   for (const tab of [1, 2, 3, 4]) {
     await gotoTab(page, tab);
@@ -272,7 +297,7 @@ test('the analytics view never overflows the page horizontally', async ({ page }
 });
 
 test('every analytics page carries an h2 heading and labelled charts', async ({ page }) => {
-  await createGoal(page, { title: 'A11y structure', type: 'weekly' });
+  await createGoal(page, { title: 'A11y structure', type: 'weekly', target: 7 });
   await reopenGoal(page);
   for (const tab of [2, 3, 4]) {
     await gotoTab(page, tab);
@@ -349,13 +374,43 @@ test('the histogram hangs its newest bar flush right, with the axis the same wid
       barsW: bars.getBoundingClientRect().width,
       axisW: axis.getBoundingClientRect().width,
       slots: [...axis.querySelectorAll('.ax')].map(a => a.getBoundingClientRect().width),
+      scrollW: sc.getBoundingClientRect().width,
+      span: Number(getComputedStyle(window.__ga()).getPropertyValue('--chart-bar-span')),
     };
   });
 
   expect(m.overflows).toBe(true); // 26 weeks never fits — otherwise this proves nothing
   expect(Math.abs(m.gapToRight)).toBeLessThan(1);
   expect(Math.abs(m.axisW - m.barsW)).toBeLessThan(1);
-  expect(Math.max(...m.slots)).toBeLessThanOrEqual(18);
+  // Slot width is a fraction (--chart-bar-span) of the scroll surface's own
+  // width (cqi), not a fixed pixel value — see .perf-col/.bar-col's own
+  // comment. Asserted against that formula, with slack for the gap between
+  // columns, rather than a hardcoded width that would go stale the next time
+  // the span changes.
+  const expectedSlot = m.scrollW / m.span;
+  expect(Math.max(...m.slots)).toBeLessThanOrEqual(expectedSlot + 1);
+});
+
+// A real bug, caught only by a real browser: a weekly goal's Consistency
+// chart plots exactly 12 bars, sized (via --chart-bar-span) specifically so
+// 12 of them fit one screen with no scrolling needed. The trailing axis
+// label ("Sep 28"-shaped) is wider than its own ~24px slot and paints past
+// it — fine for every other label (bleed lands over a neighbour or off the
+// unreachable start edge), but that one label's bleed past the inline-END
+// edge inflated #perf-scroll's own scrollWidth by several px even though no
+// element's own rendered box ever grew (confirmed by direct measurement
+// before the fix) — a few px of "scrollable" area with no real content
+// behind it. The Activity histogram already carried the fix for this exact
+// failure mode (.ax:last-child); this is its Consistency-chart counterpart.
+test('the Consistency chart does not phantom-overflow when its bars genuinely fit', async ({ page }) => {
+  await createGoal(page, { title: 'No phantom scroll', type: 'weekly' });
+  await reopenGoal(page);
+
+  const m = await page.evaluate(() => {
+    const sc = window.__ga().shadowRoot.querySelector('#perf-scroll');
+    return { scrollW: sc.scrollWidth, clientW: sc.clientWidth };
+  });
+  expect(m.scrollW).toBeLessThanOrEqual(m.clientW + 1);
 });
 
 // Changing a timeframe used to call _render(), which replaces .page's innerHTML
@@ -592,7 +647,10 @@ async function seedGoalWithEntries(page, entries) {
         g.onsuccess = () => os.put({ id: 'root', data: { ...(g.result?.data ?? {}),
           goals: { [year]: {
             capstone: [{ id: 'streaky', title: 'Streak goal', tags: [],
-                         tracking: { type: 'weekly', target: 5, entries } }],
+                         // target 7 ("every day") — Streaks only exists on
+                         // the page at this target (or for decreasing), see
+                         // pagesFor's own comment.
+                         tracking: { type: 'weekly', target: 7, entries } }],
             milestones: [], wow: [], focus: [],
           } },
         } });
@@ -635,4 +693,104 @@ test('the Streaks tab falls back to its empty note when no day has a neighbour',
   expect(await page.evaluate(() => window.__ga().shadowRoot.querySelectorAll('.streak-row').length)).toBe(0);
   const note = await page.evaluate(() => window.__ga().shadowRoot.querySelector('.empty-note')?.textContent ?? '');
   expect(note).toContain('two days in a row');
+});
+
+// _syncScorePillWidth measures a real rendered element (the counted group)
+// and writes the result onto a sibling with no width of its own — CSS alone
+// can't connect them (the pill isn't inside the counted group, just next to
+// its header). happy-dom never lays either one out for real, so this can
+// only be caught in a real browser.
+test('the Score header pill matches the counted group\'s rendered width', async ({ page }) => {
+  await createGoal(page, { title: 'Pill width sync', type: 'weekly', target: 7 });
+  await reopenGoal(page);
+  await gotoTab(page, 2); // Score
+
+  const m = await page.evaluate(() => {
+    const ga = window.__ga().shadowRoot;
+    const pill = ga.querySelector('.calc-header-pct');
+    const counted = ga.querySelector('.calc-group.counted');
+    return { pillW: pill.getBoundingClientRect().width, countedW: counted.getBoundingClientRect().width };
+  });
+  expect(m.countedW).toBeGreaterThan(0); // otherwise this proves nothing
+  expect(Math.abs(m.pillW - m.countedW)).toBeLessThan(1);
+});
+
+// _syncCalendarRowHeight measures the heatmap's real cell height and writes
+// it as --cal-row-h onto .daylabel-grid, a structural sibling of
+// .heatmap-scroll (not a descendant), so CSS/cqi alone can't size one from
+// the other. Needs a real layout pass, same reasoning as the pill-width test
+// above.
+test('the day-label rows line up with the real heatmap cell height', async ({ page }) => {
+  await createGoal(page, { title: 'Calendar row sync', type: 'weekly' });
+  await reopenGoal(page);
+  await gotoTab(page, 3); // Activity
+
+  const m = await page.evaluate(() => {
+    const ga = window.__ga().shadowRoot;
+    const cellH = ga.querySelector('.heatmap .cell').getBoundingClientRect().height;
+    const label = ga.querySelector('.daylabel-grid span');
+    return {
+      cellH,
+      labelH: label.getBoundingClientRect().height,
+      calRowH: getComputedStyle(ga.querySelector('.daylabel-grid')).getPropertyValue('--cal-row-h'),
+    };
+  });
+  expect(m.cellH).toBeGreaterThan(0); // otherwise this proves nothing
+  expect(m.calRowH).toBe(`${m.cellH}px`);
+  expect(Math.abs(m.labelH - m.cellH)).toBeLessThan(1);
+});
+
+// The Consistency chart's columns only ever stretch to fill the available
+// width (the `fill` class, flex: 1 1 0) for the quarter timeframe, which is
+// always a fixed 4 bars (TIMEFRAME_MAX.quarter) — week/month stay a fixed,
+// cqi-based column width (--chart-bar-span) no matter how many real periods
+// of data actually exist. A fixed-width column that happens to look right
+// for a goal with lots of history is not the same thing as a column that
+// stays fixed when there's barely any — this pins the mechanism (the `fill`
+// class itself, gated on tf === 'quarter'), not just one goal's measurements.
+test('Consistency bars only stretch to fill on the quarter timeframe, never week/month', async ({ page }) => {
+  await createGoal(page, { title: 'Fixed bar width', type: 'weekly' });
+  await reopenGoal(page);
+  await gotoTab(page, 1); // Overview
+
+  const m = await page.evaluate(() => {
+    const ga = window.__ga().shadowRoot;
+    const sel = ga.querySelector('#tf-perf');
+    const read = () => {
+      const tracks = ga.querySelector('.perf-tracks');
+      return {
+        fillClass: tracks.classList.contains('fill'),
+        colW: tracks.querySelector('.perf-col')?.getBoundingClientRect().width ?? 0,
+        span: Number(getComputedStyle(window.__ga()).getPropertyValue('--chart-bar-span')),
+        // --space-1 is a rem value — convert using the real root font-size
+        // rather than assuming 16px, so this stays correct if that token or
+        // the root size ever changes.
+        gap: parseFloat(getComputedStyle(window.__ga()).getPropertyValue('--space-1'))
+          * parseFloat(getComputedStyle(document.documentElement).fontSize),
+        scrollW: ga.querySelector('#perf-scroll').getBoundingClientRect().width,
+      };
+    };
+    const forTf = (tf) => {
+      sel.value = tf;
+      sel.dispatchEvent(new Event('change'));
+      return read();
+    };
+    return { week: forTf('week'), month: forTf('month'), quarter: forTf('quarter') };
+  });
+
+  expect(m.week.fillClass).toBe(false);
+  expect(m.month.fillClass).toBe(false);
+  expect(m.quarter.fillClass).toBe(true);
+
+  // Fixed timeframes: column width is a set fraction of the scroll surface
+  // (mirroring .perf-col's own calc(), gap included), not however much room
+  // happens to be left over.
+  const slotFor = (m) => (m.scrollW - (m.span - 1) * m.gap) / m.span;
+  expect(Math.abs(m.week.colW - slotFor(m.week))).toBeLessThan(1);
+  expect(Math.abs(m.month.colW - slotFor(m.month))).toBeLessThan(1);
+
+  // Quarter: exactly 4 bars, stretched so together (plus their 3 gaps) they
+  // account for the full row width — the opposite layout rule from
+  // week/month, where leftover space stays unused rather than stretching.
+  expect(m.quarter.colW * 4 + m.quarter.gap * 3).toBeGreaterThan(m.quarter.scrollW - 2);
 });

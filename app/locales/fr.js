@@ -516,16 +516,11 @@ defineStrings({
   'goal-analytics.vs-week':              'vs semaine',
   'goal-analytics.vs-month':             'vs mois',
   'goal-analytics.vs-quarter':           'vs trimestre',
-  'goal-analytics.not-enough-history':   'historique insuffisant',
   'goal-analytics.pts':                  'pts',
 
-  'goal-analytics.change-over-time':     'Évolution dans le temps',
   'goal-analytics.progress-chart-title': 'Avancement vs rythme prévu',
-  'goal-analytics.legend-achieved':      'Atteint',
-  'goal-analytics.legend-expected':      'Rythme prévu',
   'goal-analytics.legend-allowed':       'Dans la tolérance',
   'goal-analytics.legend-over':          'Hors tolérance',
-  'goal-analytics.last-n-periods':       '{n} dernières périodes',
 
   'goal-analytics.pace-insufficient': 'Élan récent insuffisant pour projeter une date de fin.',
   'goal-analytics.pace-on-track':     'Dans les temps — fin projetée autour de votre échéance du {deadline}.',
@@ -540,7 +535,7 @@ defineStrings({
   'goal-analytics.older-periods-note-week':  'Les semaines plus anciennes apparaîtront ici',
   'goal-analytics.older-periods-note-month': 'Les mois plus anciens apparaîtront ici',
 
-  'goal-analytics.a11y-sparkline': 'Courbe miniature de la progression récente',
+  'goal-analytics.a11y-sparkline': 'Courbe miniature de la progression sur les {n} derniers mois',
   'goal-analytics.a11y-progress-chart': 'Graphique linéaire de l’avancement par rapport au rythme prévu',
   'goal-analytics.a11y-consistency': 'Diagramme en barres du résultat de chaque période par rapport à l’objectif',
   'goal-analytics.a11y-histogram': 'Diagramme en barres du nombre d’entrées par période',

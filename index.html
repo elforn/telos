@@ -97,6 +97,15 @@
         --color-text-on-accent:   #1C1C1E;
         --bottom-nav-height:   80px;
         --pill-inset:          3px;
+        /* The analytics Overview's single hero figure. Its own token because
+           it is the one number in the app allowed to outgrow
+           --font-size-display (40px, the largest size tokens.css defines) —
+           that token tops out a scale meant for values sitting inside cards,
+           and this one owns a whole centred row of the page. Declared here
+           rather than as a multiplier inside the component so the size is a
+           named decision in one place, not a magic number two shadow roots
+           deep. */
+        --font-size-hero:      4.5rem; /* 72px */
         --icon-size-sm:        14px; /* small inline indicator icons (note, link, chevron, pencil) */
         --touch-target-small:  28px; /* accepted small targets: copy btn, colour swatches */
       /* accepted below --touch-target-small: tag-chip-remove (20×20), list-item badge (~20px) */
