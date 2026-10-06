@@ -385,7 +385,7 @@ class GoalAnalytics extends AppElement {
         }
         .card { background: var(--color-surface-raised); border-radius: var(--radius-md); padding: var(--space-4); }
         .card-head { display: flex; justify-content: space-between; align-items: baseline; margin-block-end: var(--space-3); gap: var(--space-2); }
-        .card-head h3 { margin: 0; font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+        .card-head h3 { margin: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
         /* 32px, not the project's 40px --touch-target: a deliberate, accepted
            middle ground (was 24px). A full 40px pill would visually outweigh
            the card heading it sits beside, and changing timeframe is a

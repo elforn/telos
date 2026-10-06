@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.9.1] — 2026-10-07
+
+### Fixed
+- **Analytics card headings (Score, Activity, Consistency…) are back to their original 13px size.** They'd grown to 16px as part of 3.9.0's Overview restyle, which read too heavy next to the rest of the page.
+
+---
+
 ## [3.9.0] — 2026-10-05
 
 ### Changed
