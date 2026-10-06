@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.9.2] — 2026-10-07
+
+### Fixed
+- **The actual tab title ("Overview", "Score"…) is back to 13px** — 3.9.1 had corrected the wrong element (the card headings inside each page, like "Consistency", which are meant to stay at their 3.9.0 size) instead of the page/tab title next to the goal name.
+
+---
+
 ## [3.9.1] — 2026-10-07
 
 ### Fixed

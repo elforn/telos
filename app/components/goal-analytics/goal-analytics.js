@@ -367,7 +367,7 @@ class GoalAnalytics extends AppElement {
            both edges now. */
         .page-head { position: sticky; inset-block-start: 0; z-index: 2; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); background: var(--color-surface); }
         .page-goal { margin: 0; min-inline-size: 0; flex: 1; font-size: var(--font-size-subheading); font-weight: var(--font-weight-bold); color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .page-title { margin: 0; flex-shrink: 0; font-size: var(--font-size-subheading); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); }
+        .page-title { margin: 0; flex-shrink: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); color: var(--color-text-secondary); }
 
         /* Entrance-only transition on page change (swipe, dot tap, or arrow key) —
            direction follows whether the new page index is higher or lower than the
@@ -385,7 +385,7 @@ class GoalAnalytics extends AppElement {
         }
         .card { background: var(--color-surface-raised); border-radius: var(--radius-md); padding: var(--space-4); }
         .card-head { display: flex; justify-content: space-between; align-items: baseline; margin-block-end: var(--space-3); gap: var(--space-2); }
-        .card-head h3 { margin: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+        .card-head h3 { margin: 0; font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
         /* 32px, not the project's 40px --touch-target: a deliberate, accepted
            middle ground (was 24px). A full 40px pill would visually outweigh
            the card heading it sits beside, and changing timeframe is a
