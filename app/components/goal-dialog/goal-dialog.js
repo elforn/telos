@@ -9,7 +9,7 @@ import { pagesFor } from '../../utils/goal-analytics.js';
 import { icons } from '../../icons.js';
 import { installDialogSnapshot } from '../../utils/dialog-snapshot.js';
 import { installDraftToggle } from '../../utils/draft-toggle.js';
-import { percentHistory, historyValueAt, setPercent, clearPercentAt, FIX_DAY_SPAN, DEFAULT_TARGET, WEEKDAYS, targetLimitsFor, isEntryType, isDecreasing, percentValue, currentPeriodCount, currentAllowanceSpent, countdownDaysRemaining } from '../../utils/tracking.js';
+import { percentHistory, historyValueAt, setPercent, clearPercentAt, DEFAULT_TARGET, WEEKDAYS, targetLimitsFor, isEntryType, isDecreasing, percentValue, currentPeriodCount, currentAllowanceSpent, countdownDaysRemaining } from '../../utils/tracking.js';
 import { scheduledDayStates } from '../../utils/frequency-urgency.js';
 import { buildDayStrip, dayStripStyles } from '../../utils/day-strip.js';
 import { todayISO } from '../../utils/today-iso.js';
@@ -17,7 +17,7 @@ import { swatches } from '../../utils/color-palette.js';
 
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
-const TYPES = ['percentage', 'weekly', 'monthly', 'decreasing', 'countdown'];
+const TYPES = ['percentage', 'weekly', 'monthly', 'decreasing', 'countdown', 'daycount'];
 // Every chart inside goal-analytics that keeps its own independent
 // horizontal scroll (see that file's own _syncScrollable). Queried by id
 // regardless of which analytics page is current — querySelector harmlessly
@@ -452,16 +452,36 @@ class GoalDialog extends AppElement {
           margin: 0 0 var(--space-2);
         }
 
+        /* A wrapping grid, three per row — every type visible at once.
+           Two earlier shapes were tried and rejected: one equal-width row
+           (at five pills it already cost "Monthly" ~2px of its own text; at
+           six it ellipses real labels into nonsense), then a horizontal
+           scroller (labels stayed intact, but a type parked off-screen is a
+           type you never discover, and choosing one means scrolling blind
+           past the others — the whole value of a picker is comparing the
+           options side by side).
+
+           Scrolling also carried a hard technical limit worth not
+           forgetting: modal-dialog puts a static touch-action of pan-y
+           pinch-zoom on its body whenever it has tabs, and touch-action
+           intersects down the whole ancestor chain, so a descendant can
+           never add pan-x back — the row would have rendered scrollable and
+           then refused to pan on exactly the path that reaches it (the ⋮
+           menu on an existing goal). A grid has no such problem.
+
+           repeat(3, 1fr) rather than auto-fit so the arrangement is
+           deterministic at every width — a 7th type adds a third row rather
+           than silently reflowing the first two. */
         .type-pill-group {
-          display: flex;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
           gap: var(--space-1);
           background: var(--color-surface-raised);
-          border-radius: var(--radius-full);
+          border-radius: var(--radius-lg);
           padding: var(--space-1);
         }
 
         .type-pill {
-          flex: 1;
           min-inline-size: 0;
           min-block-size: var(--touch-target);
           border: none;
@@ -471,20 +491,20 @@ class GoalDialog extends AppElement {
           font-family: var(--font-family);
           color: var(--color-text-secondary);
           cursor: pointer;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          /* Wraps rather than ellipsing: a grid cell gives each label a
+             third of the row, and a two-word label like "Day count" reading
+             over two lines is still fully legible, where "Day c…" is not. */
+          overflow-wrap: break-word;
           font-size: var(--font-size-caption);
-          /* Five pills sharing one row left "Monthly" (7 chars) short by
-             just ~2px of its own text width at the full --space-2 padding
-             — confirmed via a real layout measurement, not a guess.
-             Trimmed to --space-1 here rather than shrinking the font (this
-             is the primary choice; keeping it at --font-size-caption
-             matters more than a couple px of horizontal breathing room),
-             with margin left over for locale strings shorter/longer than
-             English. */
           padding-inline: var(--space-1);
         }
+
+        /* A 7th type would otherwise land alone in the left column of a
+           third row, reading as a layout accident. :last-child at a 3n+1
+           position is exactly "alone on its own row" (1st, 4th, 7th, ...),
+           so it stretches the full width instead and looks deliberate.
+           Costs nothing at 6 types, where no pill matches. */
+        .type-pill:last-child:nth-child(3n + 1) { grid-column: 1 / -1; }
 
         .type-pill[aria-checked="true"] {
           background: var(--color-accent);
@@ -533,6 +553,7 @@ class GoalDialog extends AppElement {
         }
 
         .countdown-start-input:focus { border-color: var(--color-accent); }
+
 
         /* Fix-a-day's chip strip: no border-top separator like target-block's
            — that line made sense only when the strip sat directly beneath the
@@ -608,6 +629,50 @@ class GoalDialog extends AppElement {
           font-family: var(--font-family);
           font-variant-numeric: tabular-nums;
         }
+
+        /* Day count's permanent count field. Carries .count-chip so it is
+           pixel-identical to the read-only chip every other type shows —
+           same fill, radius and tabular figures — and only adds the input
+           reset plus a focus ring. Sized to the widest value it can hold
+           (366) so typing never resizes the row. */
+        /* Selector deliberately includes input[type="text"]: the blanket
+           input[type="text"] rule near the top of this stylesheet is
+           specificity 0-1-1, so a plain .count-chip-input (0-1-0) loses to it
+           and the field keeps the surface-raised fill, 6px radius and 1px
+           border of an ordinary text box — confirmed by reading computed
+           styles in a real browser, not inferred. Matching its specificity
+           and coming later in the sheet is what actually wins.
+           Every property below is a genuine override of that rule or of a
+           UA default, including margin (it sets a block-end margin) and
+           inline-size (it sets 100%). */
+        input[type="text"].count-chip-input {
+          display: block;
+          align-self: stretch;
+          box-sizing: border-box;
+          inline-size: 4ch;
+          margin: 0;
+          padding: 0 var(--space-1);
+          border: none;
+          outline: none;
+          appearance: none;
+          background: var(--color-accent);
+          color: var(--color-text-inverse);
+          border-radius: var(--radius-full);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          font-variant-numeric: tabular-nums;
+          text-align: center;
+        }
+
+        input[type="text"].count-chip-input:focus-visible {
+          box-shadow: 0 0 0 2px var(--color-text-inverse) inset;
+        }
+
+        /* .count-chip sets display:flex unconditionally, which beats the UA's
+           own [hidden] rule regardless of specificity — without this the
+           field renders for every type. Same trap documented for
+           .deadlines-hidden-badge in deadline-hidden-badge.js. */
+        .count-chip[hidden] { display: none; }
 
         .target-trailing-text {
           display: flex;
@@ -1159,6 +1224,13 @@ class GoalDialog extends AppElement {
                 <span class="target-colon" id="target-colon" hidden>:</span>
                 <div class="count-chip-cluster">
                   <span class="count-chip" id="target-value"></span>
+                  <!-- Day count only: the same chip, but tappable to type a
+                       number straight in. Stepping 1→366 one tap at a time
+                       isn't realistic, and a second control just for that
+                       type would break the one-count-adjuster-look rule
+                       above — so the chip itself becomes the text field,
+                       swapping in place, and the stepper stays identical. -->
+                  <input type="text" inputmode="numeric" class="count-chip count-chip-input" id="target-input" hidden />
                   <div class="reminder-mini-stepper" id="target-mini-stepper">
                     <button type="button" class="reminder-mini-btn" id="target-up" aria-label="${t('goal-dialog.target-increase')}">+</button>
                     <button type="button" class="reminder-mini-btn" id="target-down" aria-label="${t('goal-dialog.target-decrease')}">−</button>
@@ -1345,6 +1417,7 @@ class GoalDialog extends AppElement {
     this._countdownBlock     = this.shadowRoot.querySelector('#countdown-block');
     this._yearStartBtn       = this.shadowRoot.querySelector('#countdown-yearstart-btn');
     this._countdownStartInput = this.shadowRoot.querySelector('#countdown-start-input');
+    this._targetInput        = this.shadowRoot.querySelector('#target-input');
     this._reminderDaysBlock = this.shadowRoot.querySelector('#reminder-days-block');
     this._reminderDayGroup  = this.shadowRoot.querySelector('#reminder-day-group');
     this._reminderAnyChip   = this.shadowRoot.querySelector('#reminder-any-chip');
@@ -1804,19 +1877,41 @@ class GoalDialog extends AppElement {
     };
     this._typePills.forEach(p => p.addEventListener('click', this._onTypePillClick));
 
+    // Why the stepper looked dead while the keyboard was open: focus is
+    // already retained for every button here (see _onButtonPointerDown in
+    // subscribe), so the field never blurs, so _onTargetInputCommit never
+    // runs — and _renderTypeSection deliberately refuses to write into a
+    // focused field, to avoid clobbering someone mid-type. The step was
+    // happening correctly all along; nothing was updating the one element
+    // the user was looking at. Both halves below are the fix: read the value
+    // actually on screen, then write the result straight back to it.
+    //
+    // Reading from the field also keeps a half-typed value honest: "12" then
+    // + gives 13, not 51 from the last committed draft.
+    const stepBase = () => {
+      if (this._draftType !== 'daycount') return this._draftTarget;
+      return this._clampDayCountTarget(this._targetInput.value) ?? this._draftTarget;
+    };
+    const afterStep = () => {
+      this._renderTypeSection();
+      // _renderTypeSection deliberately won't touch a focused field (it would
+      // clobber mid-typing), but this IS the user changing the value, so it
+      // must be written through explicitly.
+      if (this._draftType === 'daycount') this._targetInput.value = String(this._draftTarget);
+      if (!this._isNew) this._commitTrackingChange();
+    };
+
     this._onTargetDown = () => {
       const [min] = targetLimitsFor(this._draftType);
-      this._draftTarget = Math.max(min, this._draftTarget - 1);
-      this._renderTypeSection();
-      if (!this._isNew) this._commitTrackingChange();
+      this._draftTarget = Math.max(min, stepBase() - 1);
+      afterStep();
     };
     this._targetDownBtn.addEventListener('click', this._onTargetDown);
 
     this._onTargetUp = () => {
       const [, max] = targetLimitsFor(this._draftType);
-      this._draftTarget = Math.min(max, this._draftTarget + 1);
-      this._renderTypeSection();
-      if (!this._isNew) this._commitTrackingChange();
+      this._draftTarget = Math.min(max, stepBase() + 1);
+      afterStep();
     };
     this._targetUpBtn.addEventListener('click', this._onTargetUp);
 
@@ -1847,6 +1942,33 @@ class GoalDialog extends AppElement {
       if (!this._isNew) this._commitTrackingChange();
     };
     this._countdownStartInput.addEventListener('change', this._onStartDateInput);
+
+    // Day count's typed total. Commits on blur/change, never per keystroke:
+    // typing "300" passes through "3", and committing that would briefly
+    // rescore the goal at 1/3 — visible on the row behind the dialog — and
+    // would clamp the "3" before the rest of the number arrived. Strips
+    // non-digits and clamps to TARGET_LIMITS on the way out; an empty or
+    // below-min field reverts to the last valid draft rather than committing
+    // 0, which would make percentValue meaningless.
+    this._onTargetInputCommit = () => {
+      if (this._draftType !== 'daycount') return;
+      this._draftTarget = this._clampDayCountTarget(this._targetInput.value)
+        ?? this._draftTarget ?? DEFAULT_TARGET.daycount;
+      this._targetInput.value = String(this._draftTarget);
+      this._renderTypeSection();
+      if (!this._isNew) this._commitTrackingChange();
+    };
+    this._targetInput.addEventListener('change', this._onTargetInputCommit);
+    this._targetInput.addEventListener('blur', this._onTargetInputCommit);
+    // Enter commits and drops the keyboard — the only "I'm done" this field
+    // needs, since it was never a mode to escape from in the first place.
+    this._onTargetInputKey = e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      this._onTargetInputCommit();
+      this._targetInput.blur();
+    };
+    this._targetInput.addEventListener('keydown', this._onTargetInputKey);
 
     // Tapping a day toggles it in/out of the multi-select array, clearing
     // 'any' if it was active; tapping Any toggles the whole thing to/from
@@ -1980,6 +2102,9 @@ class GoalDialog extends AppElement {
     this._targetUpBtn?.removeEventListener('click', this._onTargetUp);
     this._yearStartBtn?.removeEventListener('click', this._onYearStartClick);
     this._countdownStartInput?.removeEventListener('change', this._onStartDateInput);
+    this._targetInput?.removeEventListener('change', this._onTargetInputCommit);
+    this._targetInput?.removeEventListener('blur', this._onTargetInputCommit);
+    this._targetInput?.removeEventListener('keydown', this._onTargetInputKey);
     this._reminderDayGroup?.removeEventListener('click', this._onReminderDayGroupClick);
   }
 
@@ -2079,6 +2204,13 @@ class GoalDialog extends AppElement {
         + t('goal-dialog.tracking-summary-countdown', { days, percent });
       return;
     }
+    if (tr.type === 'daycount') {
+      this._trackingSummary.textContent = t('goal-dialog.tracking-summary-prefix-daycount')
+        + t('goal-dialog.tracking-summary-daycount', {
+          count: tr.entries?.length ?? 0, target: tr.target, percent,
+        });
+      return;
+    }
     // weekly: a specific-days schedule gets the visual day strip (the same
     // one the Upcoming dialog uses, see day-strip.js) instead of a plain
     // count — Any/unconfigured weekly has no per-day granularity to show,
@@ -2151,31 +2283,71 @@ class GoalDialog extends AppElement {
     this._countdownBlock.hidden = !isCountdownType;
     if (isCountdownType) this._countdownStartInput.value = this._draftStartDate ?? '';
 
+    const isDayCountType = this._draftType === 'daycount';
+
     const showTarget = isEntryType(this._draftType);
     // Weekly's count now lives entirely inside the day-chip row — the "x"
     // chip's own label in flexible mode, or the picked-day count otherwise
     // (see _renderReminderDayChips) — so the standalone stepper below is
-    // monthly/decreasing's alone from here on.
+    // monthly/decreasing/daycount's from here on.
     const showStepper = showTarget && this._draftType !== 'weekly';
     this._targetBlock.hidden = !showStepper;
     if (!showStepper) return;
 
     const [min, max] = targetLimitsFor(this._draftType);
     const isDecreasingType = this._draftType === 'decreasing';
-    this._targetValueEl.textContent = `${this._draftTarget}x`;
+    // "Nx" means "N times per period", which day count has no concept of —
+    // its number is a plain total, so it drops the multiplier and says what
+    // the number counts in the trailing text instead.
+    this._targetValueEl.textContent = isDayCountType ? String(this._draftTarget) : `${this._draftTarget}x`;
     // Always screen-reader-only now — Avoid's own copy ("Slip-ups allowed")
     // reads as trailing text next to the chip instead of a heading above
     // it (see _targetTrailingText below); weekly/monthly need no visible
     // copy at all, the "Nx" chip reads fine on its own.
     this._targetLabel.textContent = t(`goal-dialog.target-label-${this._draftType}`);
-    this._targetTrailingText.hidden = !isDecreasingType;
-    this._targetColon.hidden = !isDecreasingType;
-    if (isDecreasingType) {
-      this._targetTrailingText.textContent = t('goal-dialog.target-label-decreasing');
+    // The sr-only #target-label is a <p>, not a <label for> — and a cross-
+    // shadow-boundary association wouldn't resolve anyway — so the one
+    // genuinely interactive control here names itself, from that same string
+    // so the two can never drift. Every other type's value is a plain <span>
+    // with nothing to name.
+    this._targetInput.setAttribute('aria-label', this._targetLabel.textContent);
+    const showTrailing = isDecreasingType || isDayCountType;
+    this._targetTrailingText.hidden = !showTrailing;
+    this._targetColon.hidden = !showTrailing;
+    if (showTrailing) {
+      this._targetTrailingText.textContent = t(`goal-dialog.target-label-${this._draftType}`);
+    }
+    // Day count's chip IS the text field — permanently, keyed off the type,
+    // never a mode you tap into and have to find your way back out of. An
+    // earlier version swapped the two on tap: the stepper stayed visible but
+    // went inert (it re-rendered the hidden chip, not the field in front of
+    // you), and there was no visible way back out, since dismissing relied
+    // on a blur that a tap inside the dialog doesn't reliably produce. Both
+    // problems were the mode itself, not its wiring — so there is no mode
+    // now. Tapping focuses a field that was always there, the OS keyboard is
+    // the only thing that appears, and the stepper keeps working throughout.
+    this._targetValueEl.hidden = isDayCountType;
+    this._targetInput.hidden = !isDayCountType;
+    // Never overwritten mid-typing: a re-render from anything else would
+    // otherwise snap a half-typed "3" of "300" back to the committed value.
+    if (isDayCountType && this.shadowRoot.activeElement !== this._targetInput) {
+      this._targetInput.value = String(this._draftTarget);
     }
     this._targetDownBtn.disabled = this._draftTarget <= min;
     this._targetUpBtn.disabled = this._draftTarget >= max;
+  }
 
+  // Digits-only read of the count field, clamped to TARGET_LIMITS.daycount.
+  // Returns null — not a fallback number — for anything that isn't a usable
+  // total (empty, or below the minimum), so each caller decides what to fall
+  // back to rather than silently inheriting a 0 that would make percentValue
+  // meaningless.
+  _clampDayCountTarget(raw) {
+    const [min, max] = targetLimitsFor('daycount');
+    const digits = String(raw ?? '').replace(/\D/g, '');
+    if (!digits) return null;
+    const parsed = Number(digits);
+    return Number.isFinite(parsed) && parsed >= min ? Math.min(max, parsed) : null;
   }
 
   _renderReminderDayChips() {
@@ -2273,13 +2445,14 @@ class GoalDialog extends AppElement {
     this._announceSaved();
   }
 
-  // The last FIX_DAY_SPAN[type] days, oldest first, each a toggle reflecting
-  // whether an entry exists for that date — tapping a filled chip removes it,
-  // an empty one back-fills it, same control either direction (see CLAUDE.md
-  // Sharing-style "one control, two jobs" precedent). Sized per type since
-  // that's exactly how far back a backfill can still move the score (see
-  // FIX_DAY_SPAN). A month-label divider is inserted wherever the strip
-  // crosses into a new calendar month — plain landmarks, not chips.
+  // 1 January of the goal's year through today, oldest first, each day a
+  // toggle reflecting whether an entry exists for that date — tapping a
+  // filled chip removes it, an empty one back-fills it, same control either
+  // direction (see CLAUDE.md Sharing-style "one control, two jobs"
+  // precedent). A month-label divider is inserted wherever the strip crosses
+  // into a new calendar month — plain landmarks, not chips. See
+  // _renderFixDayChips itself for why the span is year-bounded rather than
+  // the per-type trailing window it used to be.
   // Percentage fix-a-day. The date box defaults to today; the value box shows
   // whatever applies on that date — the snapshot recorded that day if there is
   // one, otherwise the carried-forward value from the most recent earlier
@@ -2292,8 +2465,8 @@ class GoalDialog extends AppElement {
     if (!this._goal) return;
     const iso = this._fixPctDate.value || todayISO();
     if (!this._fixPctDate.value) this._fixPctDate.value = iso;
-    // The first snapshot anchors the expected-pace ramp for the whole year, so
-    // unlike frequency's rolling FIX_DAY_SPAN this reaches back to 1 January.
+    // The first snapshot anchors the expected-pace ramp for the whole year.
+    // Bounded to 1 January, the same span the day-chip strip now uses.
     this._fixPctDate.min = `${iso.slice(0, 4)}-01-01`;
     this._fixPctDate.max = todayISO();
 
@@ -2321,11 +2494,35 @@ class GoalDialog extends AppElement {
     const today = todayISO();
     const [ty, tm, td] = today.split('-').map(Number);
     const dows = [t('goal-dialog.dow-sun'), t('goal-dialog.dow-mon'), t('goal-dialog.dow-tue'), t('goal-dialog.dow-wed'), t('goal-dialog.dow-thu'), t('goal-dialog.dow-fri'), t('goal-dialog.dow-sat')];
-    const span = FIX_DAY_SPAN[type];
+    // The strip spans the goal's own year: 1 January through today, growing
+    // across the year until it covers all of it on 31 December. A past year
+    // shows its full twelve months.
+    //
+    // This replaces a per-type trailing window (FIX_DAY_SPAN: 42 days for
+    // weekly, 180 for monthly). That window was sized to "how far back a
+    // backfilled entry can still move the score", but it could reach into
+    // the PREVIOUS year — and a goal lives inside one year, so an entry
+    // dated before 1 January belongs to no goal that can show it. For a day
+    // count, whose percentage is a flat count from the first entry, one
+    // stray December day silently became the start of the run and dragged
+    // the whole pace line with it.
+    //
+    // Known trade-off, accepted: for weekly/monthly/Avoid a day older than
+    // their rolling window still won't move the displayed percentage. It is
+    // not pointless though — the Activity calendar, histogram and weekday
+    // grid all plot the full year, so correcting an old day fixes the
+    // history even when the score doesn't budge.
+    const year = Number(this._fromYear);
+    const yearStart = new Date(year, 0, 1);
+    const yearEnd = new Date(year, 11, 31);
+    const todayDate = new Date(ty, tm - 1, td);
+    const end = todayDate > yearEnd ? yearEnd : todayDate < yearStart ? yearStart : todayDate;
+    const span = Math.round((end - yearStart) / 86400000) + 1;
+    const [ey, em, ed] = [end.getFullYear(), end.getMonth(), end.getDate()];
     const nodes = [];
     let lastMonth = null;
     for (let i = span - 1; i >= 0; i--) {
-      const d = new Date(ty, tm - 1, td - i);
+      const d = new Date(ey, em, ed - i);
       if (d.getMonth() !== lastMonth) {
         lastMonth = d.getMonth();
         const divider = document.createElement('span');

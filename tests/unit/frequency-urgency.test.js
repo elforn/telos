@@ -44,6 +44,16 @@ describe('frequency-urgency — gating', () => {
     expect(frequencyUrgencyOf(decreasing(1, [MON, TUE, WED]), true, FRI)).toBe('none'); // even well over allowance
   });
 
+  it('is none for daycount, on both the dialog and the row — with no period boundary there is nothing to be behind on', () => {
+    // A flat total has no cadence to fall off: missing today costs exactly
+    // what missing any other day costs, and nothing resets. Only a dueDate
+    // (urgencyOf, a separate source) can make one of these urgent.
+    const goal = { tracking: { type: 'daycount', target: 50, entries: [] } };
+    expect(frequencyUrgencyOf(goal, true, FRI)).toBe('none');
+    expect(frequencyRowUrgencyOf(goal, true, FRI)).toBe('none');
+    expect(frequencyMissedDetail(goal, true, FRI)).toBeNull();
+  });
+
   it('is none for a weekly goal that has never had reminderDays configured (opt-in default)', () => {
     const goal = { tracking: { type: 'weekly', target: 3, entries: [] } }; // no reminderDays key at all
     expect(frequencyUrgencyOf(goal, true, FRI)).toBe('none');

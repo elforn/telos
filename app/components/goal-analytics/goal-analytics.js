@@ -2,13 +2,13 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { t } from '../../../_lib/core/strings.js';
 import { todayISO } from '../../utils/today-iso.js';
 import {
-  isFrequency, isDecreasing, isCountdown, isoWeekKey, monthKey, PERIOD_WINDOW, weekDayStates, daysBetween,
+  isFrequency, isDecreasing, isCountdown, isDayCount, isoWeekKey, monthKey, PERIOD_WINDOW, weekDayStates, daysBetween,
   WEEKDAYS, countdownDaysRemaining,
 } from '../../utils/tracking.js';
 import {
   pagesFor, percentValueAt, dateListFor, rawLoggedDates, topStreaks, countByBucket,
   periodPerformanceSeries,
-  denseSamples, completionSeriesAt, expectedRampSeriesAt, recoveryCurveAt,
+  denseSamples, completionSeriesAt, expectedRampSeriesAt, recoveryCurveAt, dayCountPaceSeriesAt,
   comparisonDelta, updateCount, projectPace,
   slipStates, slipDatesByState, firstRecordIso, naturalUnitFor,
 } from '../../utils/goal-analytics.js';
@@ -92,6 +92,13 @@ const SCORE_SEPTAGON_SIZE = 31.5;
 // dot; a logged day starts at FREQ_DOT_BASE and grows by FREQ_DOT_STEP per
 // entry, capped at 4 entries (_weekdayGridCard's own Math.min(count, 4)).
 // Same reasoning as the Score sizes above — tuned live, likely to move again.
+// The dashed comparison line's two meanings, told apart by pattern alone (no
+// legend — see _progressBody). A plain dash is the pace the type expects of
+// you; dash-dot is a reference pace you are only reading your own slope
+// against, which is what a day-count streak is.
+const DASH_EXPECTED = '4 3';
+const DASH_STREAK = '5 2 1 2';
+
 const FREQ_DOT_ZERO = 5;
 const FREQ_DOT_BASE = 7.5;
 const FREQ_DOT_STEP = 3;
@@ -1268,7 +1275,7 @@ class GoalAnalytics extends AppElement {
     </svg>`;
   }
 
-  _lineChart(seriesA, seriesB, axisLabels = []) {
+  _lineChart(seriesA, seriesB, axisLabels = [], dashB = DASH_EXPECTED) {
     // 96: matches the Consistency bar chart's .perf-tracks height and the
     // Activity histogram's .histogram height, so the two Overview charts
     // read at one plot size instead of each picking its own.
@@ -1296,7 +1303,7 @@ class GoalAnalytics extends AppElement {
     const known = seriesA.filter(v => v !== undefined);
     const lastVal = known[known.length - 1] ?? 0;
     const lastX = w, lastY = padTop + (1 - lastVal / 100) * (h - padTop - padBottom);
-    const dashed = seriesB ? `<path d="${path(seriesB)}" fill="none" stroke="var(--color-text-secondary)" stroke-width="1.5" stroke-dasharray="4 3" />` : '';
+    const dashed = seriesB ? `<path d="${path(seriesB)}" fill="none" stroke="var(--color-text-secondary)" stroke-width="1.5" stroke-dasharray="${dashB}" />` : '';
     // Only the first point is labelled: the last one is already the hero
     // number at the top of the page, so repeating it is noise. Rendered as
     // positioned HTML rather than an SVG <text>, because the chart uses
@@ -1343,7 +1350,7 @@ class GoalAnalytics extends AppElement {
       </div>
       <div class="stat-row centered">${this._typeCard(goal, todayIso)}${this._deadlineCard(goal, todayIso)}${this._daysLeftCard(goal, todayIso)}</div>
       ${trend ? `<div class="stat-row comparison">${this._comparisonRow(goal, todayIso)}</div>` : ''}
-      ${trend ? this._renderPaceCallout(projectPace(goal, todayIso)) : ''}
+      ${trend ? this._renderPaceCallout(projectPace(goal, todayIso), goal) : ''}
       ${this._progressCard(goal, todayIso)}
       ${this._consistencyCard(goal, todayIso)}
     </div>`;
@@ -1508,10 +1515,17 @@ class GoalAnalytics extends AppElement {
     // Weekly/monthly/Avoid use the recovery curve; for Avoid that is a flat
     // 100, kept deliberately as a reference showing that a clean run is the
     // whole target.
+    // Day count gets a straight ramp from its first entry to where an
+    // unbroken daily run would finish — and a dash-dot line rather than the
+    // plain dash the others use, because it is a reference pace to read your
+    // own slope against, not something the type expects of you (see
+    // dayCountPaceSeriesAt).
     const type = goal?.tracking?.type;
     const expected = type === 'percentage' ? expectedRampSeriesAt(goal, samples)
       : type === 'countdown' ? null
+      : type === 'daycount' ? dayCountPaceSeriesAt(goal, samples)
       : recoveryCurveAt(goal, samples, todayIso);
+    const expectedDash = type === 'daycount' ? DASH_STREAK : DASH_EXPECTED;
     // Three labels — oldest, midpoint, newest — matching the Consistency
     // chart's own axis so the two read the same way. Four or fewer periods
     // (quarter, capped at the year's 4) name every one instead: the axis row is
@@ -1525,7 +1539,7 @@ class GoalAnalytics extends AppElement {
     // vs. dashed line is explained by the chart itself (the callout above it
     // names the projected finish, which only makes sense read against the
     // dashed pace line it is compared to).
-    return this._lineChart(achieved, expected, axis);
+    return this._lineChart(achieved, expected, axis, expectedDash);
   }
 
   // How each individual period went against its own target. Only weekly,
@@ -1588,7 +1602,7 @@ class GoalAnalytics extends AppElement {
     return `<span class="sched-strip" role="img" aria-label="${esc(t('goal-analytics.a11y-scheduled-days', { days: named }))}">${slots}</span>`;
   }
 
-  _renderPaceCallout(pace) {
+  _renderPaceCallout(pace, goal) {
     if (!pace) return '';
     const monthsLabel = n => n === 1 ? t('goal-analytics.month-singular') : t('goal-analytics.month-plural', { n });
     let text;
@@ -1601,7 +1615,12 @@ class GoalAnalytics extends AppElement {
       else text = t('goal-analytics.pace-ahead', { monthsLabel: monthsLabel(Math.abs(pace.diffMonths)), projected: label });
     } else {
       const label = monthAbbr(localDate(pace.projectedIso).getMonth()) + ' ' + localDate(pace.projectedIso).getFullYear();
-      text = t('goal-analytics.pace-projected', { projected: label });
+      // Only the no-deadline case gets a type-specific line — the ahead/
+      // behind/on-track variants above are all phrased against the deadline
+      // itself, which reads the same whatever the goal counts in.
+      text = isDayCount(goal)
+        ? t('goal-analytics.pace-projected-daycount', { target: goal.tracking.target, projected: label })
+        : t('goal-analytics.pace-projected', { projected: label });
     }
     return `<div class="pace-callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg><span>${text}</span></div>`;
   }

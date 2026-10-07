@@ -67,8 +67,21 @@ function bucketOf(dueDate, active, todayIso) {
 // `value` is just treated as active. Erring toward "still active" only
 // risks one extra notification for an unusual dueDate-on-a-frequency-goal
 // combination, never a missed one.
+//
+// daycount is the one non-percentage type that can be judged exactly, and
+// it's worth doing rather than lumping in with the rest: its completion is
+// entries.length >= target — two stored fields, no period bucketing, no
+// weighted window, nothing from tracking.js to replicate. That keeps the
+// "never duplicate the scoring logic here" rule intact while removing a
+// genuinely wrong notification (a 50-of-50 goal with a lapsed dueDate would
+// otherwise still nag). A target of 0/undefined falls back to Infinity so a
+// half-configured goal stays active rather than reading as instantly done —
+// the same err-toward-active direction as everything else here.
 function isActive(goal) {
-  return goal?.tracking?.type === 'percentage' ? (goal.tracking.value ?? 0) < 100 : true;
+  const tr = goal?.tracking;
+  if (tr?.type === 'percentage') return (tr.value ?? 0) < 100;
+  if (tr?.type === 'daycount') return (tr.entries?.length ?? 0) < (tr.target || Infinity);
+  return true;
 }
 
 // Duplicated from app/utils/deadline-visibility.js's yearDeadlinesLevel —

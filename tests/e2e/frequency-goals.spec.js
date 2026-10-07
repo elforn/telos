@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForPage } from './helpers.js';
+import { waitForPage, daysSoFarThisYear } from './helpers.js';
 
 const currentYear = new Date().getFullYear();
 
@@ -287,12 +287,14 @@ test.describe('Frequency goals', () => {
         .querySelector('goal-dialog').shadowRoot
         .querySelectorAll('#fixday-chips .day-chip').length
     );
-    expect(chipCount).toBe(42); // 7 × PERIOD_WINDOW.weekly (6)
+    // Year-bounded for every type: a goal lives inside one year, so the
+    // strip can never reach into the previous one.
+    expect(chipCount).toBe(daysSoFarThisYear());
 
     // 1 week (7 days) back — an old miss to back-fill, distinct from
     // "today" (which the hold gesture already covers in the other test
     // above; this one is specifically about arbitrary dates). Fix-a-day's
-    // own strip (FIX_DAY_SPAN, 6 weeks) reaches much further back than
+    // own strip (1 Jan → today) reaches much further back than
     // this, but the *dot-strip* this test also checks only ever displays
     // DOT_WINDOW.weekly (3) weeks — 7 days back safely lands within that
     // shorter display window regardless of what day of the week "today"
@@ -652,7 +654,7 @@ test.describe('Frequency goals', () => {
     expect(backToWeekly.value).toBe(originalValue); // still dormant, still there
   });
 
-  test('Fix a day on a monthly goal spans 180 days with month-label dividers, opened scrolled to today', async ({ page }) => {
+  test('Fix a day on a monthly goal spans 1 Jan → today with month-label dividers, opened scrolled to today', async ({ page }) => {
     await openDialog(page, '#add-capstone');
     await selectType(page, 'monthly');
     await saveDialog(page, 'Call parents');
@@ -676,7 +678,8 @@ test.describe('Frequency goals', () => {
         scrolledToEnd: strip.scrollLeft > 0, // any distance in confirms it isn't stuck at the oldest day
       };
     });
-    expect(chipCount).toBe(180); // FIX_DAY_SPAN.monthly — independent of both the scored (4-month) and displayed (3-month) windows
+    // 1 Jan → today of the goal's own year, identical for every type.
+    expect(chipCount).toBe(daysSoFarThisYear());
     expect(dividerCount).toBeGreaterThanOrEqual(4);
     expect(scrolledToEnd).toBe(true);
   });

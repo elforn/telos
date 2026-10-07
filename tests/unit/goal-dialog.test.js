@@ -1534,6 +1534,111 @@ describe('goal-dialog — type selector (new goal)', () => {
     expect(up.disabled).toBe(true);
   });
 
+  it('selecting Day count reveals the same shared stepper, defaulting to 50 with no "x" multiplier', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'daycount').click();
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(false);
+    // Plain total, not "50x" — this type counts days, not times-per-period.
+    expect(el.shadowRoot.querySelector('#target-input').value).toBe('50');
+    expect(el.shadowRoot.querySelector('#target-trailing-text').hidden).toBe(false);
+  });
+
+  it('the count field is permanent for Day count — never a mode you tap into and must escape', () => {
+    const el = mount();
+    el.open(null);
+    const chip = el.shadowRoot.querySelector('#target-value');
+    const input = el.shadowRoot.querySelector('#target-input');
+    pill(el, 'daycount').click();
+    expect(input.hidden).toBe(false); // already editable, no tap required
+    expect(chip.hidden).toBe(true);
+    // Switching away restores the read-only chip; there is nothing to strand.
+    pill(el, 'monthly').click();
+    expect(input.hidden).toBe(true);
+    expect(chip.hidden).toBe(false);
+  });
+
+  it('the stepper keeps working while the field is showing, and updates it live', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'daycount').click();
+    const input = el.shadowRoot.querySelector('#target-input');
+    const up = el.shadowRoot.querySelector('#target-up');
+    const down = el.shadowRoot.querySelector('#target-down');
+    up.click();
+    expect(input.value).toBe('51');
+    down.click();
+    down.click();
+    expect(input.value).toBe('49');
+  });
+
+  it('the stepper steps from what is currently typed, not the last committed value', () => {
+    // With focus retained (see the pointerdown preventDefault), a half-typed
+    // value never gets its blur-commit — so "12" then + must give 13, not 51.
+    const el = mount();
+    el.open(null);
+    pill(el, 'daycount').click();
+    const input = el.shadowRoot.querySelector('#target-input');
+    input.value = '12'; // typed but never committed
+    el.shadowRoot.querySelector('#target-up').click();
+    expect(input.value).toBe('13');
+  });
+
+  it('the stepper updates the field even while it holds focus — the keyboard-open case', () => {
+    // The dialog already keeps focus on every button press (so the on-screen
+    // keyboard stays up), which means the field never blurs and never
+    // commits, and _renderTypeSection won't write into a focused field. The
+    // stepper therefore has to write through explicitly, or it reads as dead.
+    const el = mount();
+    el.open(null);
+    pill(el, 'daycount').click();
+    const input = el.shadowRoot.querySelector('#target-input');
+    input.focus();
+    expect(el.shadowRoot.activeElement).toBe(input);
+    el.shadowRoot.querySelector('#target-up').click();
+    expect(input.value).toBe('51');
+    expect(el.shadowRoot.activeElement).toBe(input); // keyboard stays up
+  });
+
+  it('the count field names itself — the sr-only label is a <p>, so there is nothing to associate', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'daycount').click();
+    const input = el.shadowRoot.querySelector('#target-input');
+    expect(input.getAttribute('aria-label')).toBe('Days to complete');
+  });
+
+  it('typed input strips non-digits and clamps to the max rather than accepting it', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'daycount').click();
+    const input = el.shadowRoot.querySelector('#target-input');
+    input.value = '9x99';   // digits only -> 999, over the 366 ceiling
+    input.dispatchEvent(new Event('change'));
+    expect(input.value).toBe('366');
+  });
+
+  it('an emptied field reverts to the previous total — never commits 0, which would break percentValue', () => {
+    const el = mount();
+    el.open(null);
+    pill(el, 'daycount').click();
+    const input = el.shadowRoot.querySelector('#target-input');
+    input.value = '';
+    input.dispatchEvent(new Event('change'));
+    expect(input.value).toBe('50');
+  });
+
+  it('every other type keeps the plain read-only chip with its "x" multiplier', () => {
+    const el = mount();
+    el.open(null);
+    const chip = el.shadowRoot.querySelector('#target-value');
+    const input = el.shadowRoot.querySelector('#target-input');
+    pill(el, 'monthly').click();
+    expect(input.hidden).toBe(true);
+    expect(chip.hidden).toBe(false);
+    expect(chip.textContent).toBe('4x');
+  });
+
   it('the target label stays screen-reader-only for every type — Avoid\'s own copy shows as trailing text instead', () => {
     const el = mount();
     el.open(null);
@@ -1542,7 +1647,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     pill(el, 'decreasing').click();
     expect(el.shadowRoot.querySelector('#target-label').classList.contains('sr-only')).toBe(true);
     expect(el.shadowRoot.querySelector('#target-trailing-text').hidden).toBe(false);
-    expect(el.shadowRoot.querySelector('#target-trailing-text').textContent).toBe('Slip-ups allowed');
+    expect(el.shadowRoot.querySelector('#target-trailing-text').textContent).toBe('Slip-ups allowed per week');
     pill(el, 'monthly').click();
     expect(el.shadowRoot.querySelector('#target-trailing-text').hidden).toBe(true);
   });
@@ -1919,7 +2024,15 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
 });
 
 describe('goal-dialog — Fix a day (frequency goals only, icon-only footer toggle)', () => {
-  function expandFixDay(el) {
+  // 1 Jan of the current year through today, inclusive — the strip's span for
+// every tracking type now that it is year-bounded rather than per-type.
+function daysSoFarThisYear() {
+  const now = new Date();
+  const jan1 = new Date(now.getFullYear(), 0, 1);
+  return Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - jan1) / 86400000) + 1;
+}
+
+function expandFixDay(el) {
     el.shadowRoot.querySelector('#fixday-chip').click();
   }
 
@@ -1956,14 +2069,31 @@ describe('goal-dialog — Fix a day (frequency goals only, icon-only footer togg
     expect(el.shadowRoot.querySelector('#fixday-inline').hidden).toBe(false);
     expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false); // unlike type/target, never hides itself
     expect(el.shadowRoot.querySelector('#fixday-chip').getAttribute('aria-pressed')).toBe('true');
-    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(42); // 7 × PERIOD_WINDOW.weekly
+    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(daysSoFarThisYear()); // 1 Jan → today, every type
   });
 
-  it('renders 180 day chips for a monthly goal (FIX_DAY_SPAN.monthly — independent of both the scored window and the shorter display window)', () => {
+  it('spans the same 1 Jan → today window for every type, not a per-type trailing count', () => {
+    // A goal lives inside one year, so the strip can never reach into the
+    // previous one — a backfilled December day would belong to no goal that
+    // could show it, and for a day count it would silently become the start
+    // of the run.
+    const monthlyEl = mount();
+    monthlyEl.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
+    expandFixDay(monthlyEl);
+    expect(monthlyEl.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(daysSoFarThisYear());
+
+    const dayCountEl = mount();
+    dayCountEl.open({ id: 'g2', title: 'Y', tracking: { type: 'daycount', target: 160, entries: [] } });
+    expandFixDay(dayCountEl);
+    expect(dayCountEl.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(daysSoFarThisYear());
+  });
+
+  it('never reaches before 1 January — the oldest chip is always Jan 1 of the goal\'s year', () => {
     const el = mount();
-    el.open({ id: 'g1', title: 'X', tracking: { type: 'monthly', target: 4, entries: [] } });
+    el.open({ id: 'g1', title: 'X', tracking: { type: 'weekly', target: 3, entries: [] } });
     expandFixDay(el);
-    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(180);
+    const first = el.shadowRoot.querySelector('#fixday-chips .day-chip');
+    expect(first.dataset.iso).toBe(`${new Date().getFullYear()}-01-01`);
   });
 
   it('inserts a month-label divider at every calendar-month boundary the strip crosses', () => {
@@ -2057,12 +2187,12 @@ describe('goal-dialog — Fix a day (frequency goals only, icon-only footer togg
     expect(chip.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('is visible for an existing Avoid goal and renders 42 day chips (7 × PERIOD_WINDOW.decreasing), same span as weekly', () => {
+  it('is visible for an existing Avoid goal and spans 1 Jan → today, same as every other type', () => {
     const el = mount();
     el.open({ id: 'g1', title: 'X', tracking: { type: 'decreasing', target: 0, entries: [] } });
     expect(el.shadowRoot.querySelector('#fixday-chip').hidden).toBe(false);
     expandFixDay(el);
-    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(42);
+    expect(el.shadowRoot.querySelectorAll('#fixday-chips .day-chip')).toHaveLength(daysSoFarThisYear());
   });
 
   it('an Avoid goal\'s logged-day chip aria-label says "slipped", not "logged"', () => {

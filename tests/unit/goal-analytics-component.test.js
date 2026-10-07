@@ -27,6 +27,9 @@ function decreasingGoal(target, entries) {
 function countdownGoal(startDate, dueDate) {
   return { id: 'g5', title: 'Countdown', dueDate, tracking: { type: 'countdown', startDate } };
 }
+function dayCountGoal(target, entries) {
+  return { id: 'g6', title: 'Cold plunge', tracking: { type: 'daycount', target, entries } };
+}
 
 describe('goal-analytics — page count per type', () => {
   it('percentage: overview, activity — no score page, no streaks', () => {
@@ -55,6 +58,38 @@ describe('goal-analytics — page count per type', () => {
     const el = mount(countdownGoal('2026-01-01', '2026-12-31'));
     expect(el.pageCount).toBe(1);
   });
+
+  it('daycount: overview, activity, streaks — Score excluded, it has no period to average over', () => {
+    const el = mount(dayCountGoal(50, [TODAY]));
+    expect(el.pageCount).toBe(3);
+  });
+});
+
+describe('goal-analytics — daycount', () => {
+  it('hero number is the flat count over the target', () => {
+    const el = mount(dayCountGoal(4, ['2026-08-01']));
+    expect(el.shadowRoot.querySelector('.hero-number .big').textContent).toContain('25');
+  });
+
+  it('type card names the type and its total', () => {
+    const el = mount(dayCountGoal(50, ['2026-08-01']));
+    const text = el.shadowRoot.querySelector('.stat-row').textContent;
+    expect(text).toContain('Day count');
+    expect(text).toContain('50 days');
+  });
+
+  it('counts entries, not "updates" — it logs days like every other entry type', () => {
+    const el = mount(dayCountGoal(50, ['2026-08-01', '2026-08-02', '2026-08-03']));
+    const text = el.shadowRoot.querySelector('.stat-row').textContent;
+    expect(text).toContain('entries');
+    expect(text).toContain('3');
+  });
+
+  it('drops the Consistency card — no per-period target to measure bars against', () => {
+    const el = mount(dayCountGoal(50, ['2026-08-01']));
+    expect(el.shadowRoot.querySelector('#perf-body')).toBeNull();
+  });
+
 });
 
 describe('goal-analytics — Overview page', () => {

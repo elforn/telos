@@ -1,7 +1,7 @@
 // The `tracking` shape (replaces flat `percentage`, migrated once at boot;
 // see app/utils/migrate-goals.js). Not a strict discriminated union — every
 // goal always carries all four fields:
-//   { type: 'percentage' | 'weekly' | 'monthly' | 'decreasing' | 'countdown', value: number, target: number, entries: string[] }
+//   { type: 'percentage' | 'weekly' | 'monthly' | 'decreasing' | 'countdown' | 'daycount', value: number, target: number, entries: string[] }
 // `type` is a pure discriminant: it tells consumers which fields are "live"
 // (percentValue reads `value` for percentage, `target`/`entries` for
 // weekly/monthly/decreasing), but doesn't gate which fields *exist*.
@@ -51,6 +51,19 @@
 //     different year never shifts a startDate that happened to be set via
 //     "Year start" — re-clicking the button after the move does.
 //
+// `daycount` counts logged days toward one flat total — "50 days of cold
+// plunges this year". It reuses `entries` and `target` exactly as the
+// frequency types do, but has NO period of any kind: percentValue is simply
+// entries.length / target, capped at 100 (see dayCountValue), so a day logged
+// in January counts exactly as much as today's. That makes it the one
+// entry-based type absent from PERIOD_UNIT / PERIOD_WINDOW / DOT_WINDOW /
+// PERIOD_FRACTION — it is in ENTRY_TYPES (tap/hold toggles a day, Fix-a-day
+// applies) but must never be fed to periodKey/recentPeriods/
+// fractionsForWindow, which would bucket its entries into weeks or months and
+// invent a cadence the type doesn't have. It also produces no pace urgency
+// (frequency-urgency.js leaves it at 'none'): with no period boundary there
+// is nothing to be behind on, only a dueDate to miss.
+//
 // `reminderDays` (weekly goals only, set via goal-dialog's own reminder-day
 // chip row) is a separate, independently-optional field on the same object:
 //   undefined  — not configured yet (default; the goal doesn't participate
@@ -95,7 +108,7 @@ const PERIOD_FRACTION = {
 
 // Target/allowance defaults for a type that's never had one set (a fresh
 // goal, or one switching into weekly/monthly/decreasing for the first time).
-export const DEFAULT_TARGET = { weekly: 3, monthly: 4, decreasing: 0 };
+export const DEFAULT_TARGET = { weekly: 3, monthly: 4, decreasing: 0, daycount: 50 };
 
 // Periods considered for the weighted average — weekly and monthly get
 // separate lengths because a "period" is such a different wall-clock span
@@ -120,26 +133,19 @@ export const PERIOD_WINDOW = { weekly: 6, monthly: 4, decreasing: 6 };
 // untouched by this window's size.
 export const DOT_WINDOW = { weekly: 3, monthly: 3, decreasing: 3 };
 
-// Fix-a-day's scrollable window, in calendar days — deliberately independent
-// of both PERIOD_WINDOW (the score) and DOT_WINDOW (the display) and
-// unchanged by the DOT_WINDOW size above:
-// showing less by default was never meant to shrink how far back an entry
-// can still be corrected. Monthly specifically reaches further (6 months)
-// than what's actually scored (PERIOD_WINDOW.monthly, 4 months) — by
-// design, correcting an old month you're catching up on shouldn't require
-// it to still be visible or still counted. Months are approximated at 30
-// days; fix-a-day is a flat day-count strip, not period-boundary-exact —
-// the score itself (via monthKey/isoWeekKey below) is the exact calendar
-// math.
-export const FIX_DAY_SPAN = { weekly: 42, monthly: 180, decreasing: 42 };
 
 // Decreasing's max allowance is capped one day below the week (6 of 7) so
 // at least one day can still cost something; a max equal to the full week
 // would make every day free, i.e. stop tracking anything.
+// Day count reaches a full year — a goal lives inside one year, so 366 (leap-
+// safe) is the most days it could ever claim. Edited as a typed number rather
+// than the ±1 stepper every other type uses: stepping to 50 one tap at a time
+// is not a control, it's a punishment.
 export const TARGET_LIMITS = {
   weekly: [1, 7],
   monthly: [1, 31],
   decreasing: [0, 6],
+  daycount: [1, 366],
 };
 
 // The single place that resolves a type down to its [min, max] pair — every
@@ -157,6 +163,8 @@ export function isFrequency(goal) {
 
 export function isCountdown(goal) { return goal?.tracking?.type === 'countdown'; }
 
+export function isDayCount(goal) { return goal?.tracking?.type === 'daycount'; }
+
 // weekly | monthly | decreasing — every type whose progress lives in
 // `entries` rather than a stored `value`. This, not isFrequency, is what
 // gates the *interaction model* (tap/hold toggles a day, no drag-scrub) and
@@ -166,7 +174,14 @@ export function isCountdown(goal) { return goal?.tracking?.type === 'countdown';
 // renders a septagon history strip instead. Broadening isFrequency to
 // include decreasing would incorrectly hide that label and show the
 // dot-cluster for this type.
-export function isEntryType(type) { return !!PERIOD_UNIT[type]; }
+// Includes daycount, which deliberately has NO PERIOD_UNIT entry — its score
+// is a flat count over a flat target, with no period to bucket entries into
+// (see dayCountValue). Adding it to PERIOD_UNIT to make this predicate
+// simpler would silently opt it into periodKey/recentPeriods/
+// fractionsForWindow and start bucketing its entries by week or month, which
+// is exactly what this type doesn't do — hence the explicit set.
+const ENTRY_TYPES = new Set([...Object.keys(PERIOD_UNIT), 'daycount']);
+export function isEntryType(type) { return ENTRY_TYPES.has(type); }
 export function isEntryBased(goal) { return isEntryType(goal?.tracking?.type); }
 export function isDecreasing(goal) { return goal?.tracking?.type === 'decreasing'; }
 
@@ -262,11 +277,23 @@ export function countdownDaysRemaining(goal, todayIso = todayISO()) {
   return Math.max(0, daysBetween(todayIso, dueDate));
 }
 
+// Day count's whole score: logged days over the target total, capped at 100.
+// Deliberately the simplest math of any type here — no window, no recency
+// weighting, no period. Every other entry-based type answers "how are you
+// doing lately"; this one answers "how far through are you", and an entry
+// from January counts exactly as much as today's.
+export function dayCountValue(goal) {
+  const { entries = [], target } = goal?.tracking ?? {};
+  if (!target) return 0; // not configured yet — no total to divide by
+  return Math.min(100, Math.round((entries.length / target) * 100));
+}
+
 export function percentValue(goal, todayIso = todayISO()) {
   const tr = goal?.tracking;
   if (!tr) return 0;
   if (tr.type === 'percentage') return tr.value ?? 0;
   if (tr.type === 'countdown') return countdownValue(goal, todayIso);
+  if (tr.type === 'daycount') return dayCountValue(goal);
   if (tr.type === 'decreasing') return Math.round(decreasingWeightedAverage(tr, todayIso) * 100);
   return Math.round(weightedAverage(tr, todayIso) * 100);
 }

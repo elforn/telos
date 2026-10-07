@@ -6,6 +6,7 @@ import {
   comparisonDelta, updateCount, projectPace,
   slipStates, slipDatesByState, firstRecordIso,
   denseSamples, periodSamples, completionSeriesAt, expectedRampSeriesAt, recoveryCurveAt,
+  dayCountPaceSeriesAt,
 } from '../../app/utils/goal-analytics.js';
 
 const TODAY = '2026-09-20'; // a Sunday
@@ -314,6 +315,54 @@ describe('goal-analytics — projectPace', () => {
     const result = projectPace(goal, TODAY);
     expect(result.deadlineIso).toBe('2026-12-31');
     expect(typeof result.diffMonths).toBe('number');
+  });
+
+  it('day count measures its rate from the first entry, not a trailing window', () => {
+    // 10 days logged over the 10 days up to today, against a 50-day target:
+    // a real 20%-in-10-days pace. Measured over a fixed 4-month window the
+    // same goal looks like 20% in four months and projects years out.
+    const entries = Array.from({ length: 10 }, (_, i) => {
+      const d = new Date(2026, 8, 11 + i); // 2026-09-11 .. 2026-09-20
+      return `${d.getFullYear()}-09-${String(d.getDate()).padStart(2, '0')}`;
+    });
+    const goal = { id: 'd1', tracking: { type: 'daycount', target: 50, entries } };
+    const result = projectPace(goal, TODAY);
+    expect(result.insufficientMomentum).toBeUndefined();
+    // ~20 points per 10 days ⇒ the remaining 80 points land inside half a year.
+    expect(result.projectedIso < '2027-03-31').toBe(true);
+  });
+
+  it('day count with a single logged day has no span to measure, so reports no momentum', () => {
+    const goal = { id: 'd2', tracking: { type: 'daycount', target: 50, entries: [TODAY] } };
+    expect(projectPace(goal, TODAY)).toEqual({ insufficientMomentum: true });
+  });
+});
+
+describe('goal-analytics — dayCountPaceSeriesAt (streak reference line)', () => {
+  const samples = ['2026-09-10', '2026-09-15', '2026-09-20', '2026-09-25'];
+
+  it('ramps linearly from the first entry — one logged day per calendar day', () => {
+    const goal = { tracking: { type: 'daycount', target: 10, entries: ['2026-09-15'] } };
+    // 2026-09-15 is day 1 of a perfect run (1/10), 09-20 is day 6 (6/10).
+    expect(dayCountPaceSeriesAt(goal, samples)).toEqual([undefined, 10, 60, 100]);
+  });
+
+  it('draws nothing before the first entry — a run cannot be paced from before it began', () => {
+    const goal = { tracking: { type: 'daycount', target: 10, entries: ['2026-09-20'] } };
+    const series = dayCountPaceSeriesAt(goal, samples);
+    expect(series[0]).toBeUndefined();
+    expect(series[1]).toBeUndefined();
+    expect(series[2]).toBe(10);
+  });
+
+  it('caps at 100 rather than running past the target', () => {
+    const goal = { tracking: { type: 'daycount', target: 2, entries: ['2026-09-10'] } };
+    expect(dayCountPaceSeriesAt(goal, samples).every(v => v <= 100)).toBe(true);
+  });
+
+  it('returns null with nothing logged, or no target yet', () => {
+    expect(dayCountPaceSeriesAt({ tracking: { type: 'daycount', target: 10, entries: [] } }, samples)).toBeNull();
+    expect(dayCountPaceSeriesAt({ tracking: { type: 'daycount', entries: ['2026-09-10'] } }, samples)).toBeNull();
   });
 });
 

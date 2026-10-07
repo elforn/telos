@@ -45,3 +45,13 @@ export async function clickInBottomNav(page, selector) {
     document.querySelector('bottom-nav').shadowRoot.querySelector(sel).click()
   , selector);
 }
+
+// Days from 1 January of the current year through today, inclusive — the
+// span Fix-a-day's chip strip covers for every tracking type now that it is
+// year-bounded rather than a per-type trailing window.
+export function daysSoFarThisYear() {
+  const now = new Date();
+  const jan1 = new Date(now.getFullYear(), 0, 1);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((today - jan1) / 86400000) + 1;
+}

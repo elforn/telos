@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.10.0] — 2026-10-08
+
+### Added
+- **A new "Day count" goal type** — mark days done toward one flat total, like "50 cold plunges this year". Unlike Weekly or Monthly there's no per-period target to keep up with and nothing resets: a day logged in January counts exactly as much as today's, and the percentage is simply days done over the total.
+- **Its row carries a diamond showing how many days you've done.** Tap it to log today, the same single tap the weekly dot already takes — the outline around it fills in once today is logged. Holding anywhere on the row still works too.
+- **Day-count goals get the Overview, Activity and Streaks analytics tabs.** Score is left out: it plots a rolling average across periods, and this type has no periods.
+- **The Progress chart draws the pace of an unbroken run**, starting at your first logged day. It's dash-dot rather than the usual dashed line because it's a reference to read your own slope against, not a pace you're expected to hold — 50 days spread across a year is a perfectly good 50-day goal.
+
+### Changed
+- **Fix a day now covers 1 January through today, for every goal type**, growing across the year until it reaches all of it on 31 December. It used to reach back a fixed number of days per type (six weeks for weekly, six months for monthly), which could spill into the *previous* year — and a goal lives inside one year, so a date before 1 January belongs to no goal that can show it.
+- **The goal type picker shows every type at once**, three to a row, instead of squeezing them all into one. At six types the labels had started truncating into nonsense, and picking a type is hard when you can't read the options.
+- **Avoid's target now reads "Slip-ups allowed per week"** — it was always per-week, but the label didn't say so.
+
+### Fixed
+- **A finished day-count goal no longer sends a background reminder about its deadline.** Completed goals are meant to go quiet; the background check couldn't previously tell this type was done.
+
+---
+
 ## [3.9.2] — 2026-10-07
 
 ### Fixed

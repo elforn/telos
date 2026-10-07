@@ -1063,6 +1063,65 @@ describe('goal-item — countdown: rendering', () => {
   });
 });
 
+function dayCountGoal(target, entries = [], extra = {}) {
+  return { id: 'g1', title: 'Cold plunge', tracking: { type: 'daycount', target, entries }, ...extra };
+}
+
+describe('goal-item — daycount: the diamond token', () => {
+  it('sets data-type="daycount" and data-freq="false" — its own token, not the dot-cluster', () => {
+    const el = mount(dayCountGoal(50, []));
+    const bar = el.shadowRoot.querySelector('.bar');
+    expect(bar.dataset.type).toBe('daycount');
+    expect(bar.dataset.freq).toBe('false');
+  });
+
+  it('the numeral is days logged so far, not the target', () => {
+    const el = mount(dayCountGoal(50, ['2026-08-01', '2026-08-02', '2026-08-03']));
+    expect(el.shadowRoot.querySelector('.daycount-num').textContent).toBe('3');
+  });
+
+  it('fill width is the flat count over the target', () => {
+    const el = mount(dayCountGoal(4, ['2026-08-01']));
+    expect(el.shadowRoot.querySelector('.fill').style.width).toBe('25%');
+  });
+
+  it('the contour only appears once today itself is logged', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 10)); // 2026-08-10
+    const unlogged = mount(dayCountGoal(50, ['2026-08-01']));
+    expect(unlogged.shadowRoot.querySelector('.daycount-token').classList.contains('logged')).toBe(false);
+    const logged = mount(dayCountGoal(50, ['2026-08-01', '2026-08-10']));
+    expect(logged.shadowRoot.querySelector('.daycount-token').classList.contains('logged')).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('keeps the percentage label hidden — the bar fill carries it, same as every type but countdown', () => {
+    const el = mount(dayCountGoal(50, ['2026-08-01']));
+    expect(el.shadowRoot.querySelector('.pct-label').hidden).toBe(true);
+  });
+
+  it('takes the entry-based toggle role, not the slider role', () => {
+    const el = mount(dayCountGoal(50, []));
+    const bar = el.shadowRoot.querySelector('.bar');
+    expect(bar.getAttribute('role')).toBe('button');
+    expect(bar.hasAttribute('aria-valuenow')).toBe(false);
+  });
+
+  it('aria-label reports days done against the target', () => {
+    const el = mount(dayCountGoal(50, ['2026-08-01', '2026-08-02']));
+    expect(el.shadowRoot.querySelector('.bar').getAttribute('aria-label'))
+      .toContain('2 of 50 days done');
+  });
+
+  it('ArrowRight toggles today\'s log rather than nudging a percent — entry-based, not scrubbable', async () => {
+    const el = mount(dayCountGoal(50, []));
+    const spy = vi.fn();
+    el.addEventListener('goal-log-toggle', spy);
+    el.shadowRoot.querySelector('.bar').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await vi.waitFor(() => expect(spy).toHaveBeenCalled());
+  });
+});
+
 describe('goal-item — countdown: locked (self-advancing, no manual override)', () => {
   it('role stays "slider" (a continuous value, like percentage) — not the button/toggle role entry-based types use', () => {
     const el = mount(countdownGoal('2026-01-01', '2026-12-31'));

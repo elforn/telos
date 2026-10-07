@@ -7,7 +7,7 @@
 import { todayISO } from './today-iso.js';
 import {
   percentValue, percentHistory, historyValueAt, isoWeekKey, monthKey,
-  isEntryBased, isDecreasing, isFrequency, weekDayStates, daysBetween,
+  isEntryBased, isDecreasing, isFrequency, isDayCount, weekDayStates, daysBetween,
   PERIOD_WINDOW,
 } from './tracking.js';
 
@@ -39,12 +39,17 @@ import {
 // (weekly, target === 7 — see tracking.js, it's a preset, not its own type)
 // and decreasing are the only two shapes where consecutive calendar days is
 // actually the thing being measured in the first place.
+// Day count joins the streak page for the same reason those two qualify: it
+// logs on a plain per-calendar-day cadence with no schedule thinning it out,
+// so consecutive days are a real, reachable thing to measure. It is excluded
+// from Score, though — that page plots a rolling weighted average per period,
+// and this type has no period at all (see tracking.js).
 export function pagesFor(goal) {
   const pages = ['overview'];
   if (isFrequency(goal) || isDecreasing(goal)) pages.push('score');
   if (goal?.tracking?.type !== 'countdown') pages.push('activity');
   const everyDay = goal?.tracking?.type === 'weekly' && goal?.tracking?.target === 7;
-  if (everyDay || isDecreasing(goal)) pages.push('streaks');
+  if (everyDay || isDecreasing(goal) || isDayCount(goal)) pages.push('streaks');
   return pages;
 }
 
@@ -449,6 +454,38 @@ export function expectedRampSeries(goal, unit, count, todayIso = todayISO()) {
   return expectedRampSeriesAt(goal, periodSamples(unit, count, todayIso));
 }
 
+// ── Streak pace (Overview's dashed line, day count) ──────────────────────
+// A straight ramp from the first logged day to the day an unbroken run would
+// finish on — one entry every calendar day, so day k reads (k+1)/target.
+//
+// Straight, unlike the frequency types' recoveryCurveAt, because there is no
+// weighting to curve it: every entry is worth exactly 1/target no matter when
+// it lands (see dayCountValue), so a perfect run really is a straight line.
+// It also ignores any dueDate, unlike percentage's own ramp — the pace being
+// drawn is the shape of a streak, which is set by the target alone.
+//
+// Deliberately NOT an expectation. Logging every single day is the fastest
+// path to the target, not a requirement of this type — a 50-day goal spread
+// across a year is a perfectly good 50-day goal. The chart distinguishes the
+// two by line style (see _progressBody): a plain dash for the types where the
+// line is what you ought to be doing, dash-dot here, where it is a reference
+// pace to read your own slope against.
+//
+// Nothing is drawn before the first entry (undefined, not 0 — the same
+// convention expectedRampSeriesAt uses), since a run can't be measured from
+// before it began.
+export function dayCountPaceSeriesAt(goal, isos) {
+  const target = goal?.tracking?.target;
+  if (!target) return null;
+  const firstIso = firstRecordIso(goal);
+  if (!firstIso) return null; // nothing logged yet — no run to pace
+  return isos.map(iso => {
+    if (iso < firstIso) return undefined;
+    const logged = daysBetween(firstIso, iso) + 1; // the first day counts as one
+    return Math.min(100, Math.round((logged / target) * 100));
+  });
+}
+
 // ── Recovery curve (Overview's "expected pace" line, frequency types) ───
 // What the score would read at each point if every period from the start of
 // the current window onward had been played perfectly. Before that window it
@@ -531,12 +568,36 @@ export function projectPace(goal, todayIso = todayISO()) {
   const current = percentValue(goal, todayIso);
   if (current >= 100) return null;
 
+  // Day count is anchored on its first entry rather than a fixed trailing
+  // window. Its value only ever accumulates, so a window reaching back before
+  // anything was logged averages in time the goal didn't exist for and
+  // reports a rate far below the real one — a goal started three weeks ago
+  // was being projected as though it had been running since the window's
+  // start. Every other type is genuinely measuring a *recent* slope: a
+  // frequency score is a rolling window that forgets old periods on its own,
+  // and percentage reads undefined (not 0) before its first snapshot, so
+  // neither carries the same dead weight.
+  const anchorIso = isDayCount(goal) ? firstRecordIso(goal) : null;
+  if (anchorIso) {
+    const span = daysBetween(anchorIso, todayIso) / 30.44;
+    const startValue = percentValueAt(goal, anchorIso) ?? 0;
+    const rate = span > 0 ? (current - startValue) / span : 0;
+    return paceFromRate(goal, current, rate, todayIso);
+  }
+
   const series = completionSeries(goal, 'month', 4, todayIso).filter(p => p.value !== undefined);
   if (series.length < 2) return null;
 
   const first = series[0], last = series[series.length - 1];
   const monthsSpan = daysBetween(first.iso, last.iso) / 30.44;
   const rate = monthsSpan > 0 ? (last.value - first.value) / monthsSpan : 0;
+  return paceFromRate(goal, current, rate, todayIso);
+}
+
+// Points-per-month → a 100% crossing date, shared by both anchoring paths
+// above so the floor, the rounding and the deadline comparison can't drift
+// between them.
+function paceFromRate(goal, current, rate, todayIso) {
   if (rate <= 0.15) return { insufficientMomentum: true };
 
   const monthsToGo = (100 - current) / rate;

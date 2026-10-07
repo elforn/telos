@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForPage, waitForIDBFlush } from './helpers.js';
+import { waitForPage, waitForIDBFlush, daysSoFarThisYear } from './helpers.js';
 
 const currentYear = new Date().getFullYear();
 
@@ -257,7 +257,7 @@ test.describe('Avoid goals', () => {
     expect(ringLoggedAfterReload).toBe(true);
   });
 
-  test('Fix a day on an Avoid goal spans 42 days (weekly-length), chip aria-label says "slipped"', async ({ page }) => {
+  test('Fix a day on an Avoid goal spans 1 Jan → today, chip aria-label says "slipped"', async ({ page }) => {
     await openDialog(page, '#add-capstone');
     await selectType(page, 'decreasing');
     await saveDialog(page, 'No ice cream');
@@ -276,7 +276,9 @@ test.describe('Avoid goals', () => {
         .querySelector('goal-dialog').shadowRoot
         .querySelectorAll('#fixday-chips .day-chip').length
     );
-    expect(chipCount).toBe(42); // 7 × PERIOD_WINDOW.decreasing (6), same span as weekly
+    // Year-bounded for every type: a goal lives inside one year, so the
+    // strip can never reach into the previous one.
+    expect(chipCount).toBe(daysSoFarThisYear());
 
     // Back-fill 3 weeks ago — inside the window regardless of what day of
     // the week "today" happens to be when this runs (same reasoning as the

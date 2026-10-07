@@ -10,8 +10,8 @@ import { rowChromeStyles, dragHandleStyles, colorPanelStyles, actionButtonStyles
 import { COLOR_WIDTH, DELETE_WIDTH, swipeOffset, swipeCommitted, trackSwipe, closeReveal } from '../../utils/row-swipe.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 import {
-  percentValue, isFrequency, isEntryBased, isDecreasing, isCountdown, countdownDaysRemaining,
-  recentDots, recentWeekStates, isLoggedOn, currentPeriodCount,
+  percentValue, isFrequency, isEntryBased, isDecreasing, isCountdown, isDayCount,
+  countdownDaysRemaining, recentDots, recentWeekStates, isLoggedOn, currentPeriodCount,
 } from '../../utils/tracking.js';
 
 const DRAG_100_INSET = 7;         // px shaved off the drag-to-set-% denominator so the last few px of the bar aren't needed to reach 100 — the fill/UI itself is untouched, only how far a drag has to travel
@@ -25,6 +25,7 @@ const DRAG_VELOCITY_FOR_MAX_INSET = 1.2; // px/ms — drag speed at/above which 
 // (rx = half the box); monthly as a soft square — shape is the only thing
 // on the row that says which unit you're looking at.
 const TODAY_BOX = 40;
+const TODAY_DOT_SIZE = 27;    // the filled dot itself — read by the CSS below AND by the diamond token's geometry, so the family stays in step
 const TODAY_RING_SIZE = 31;   // the <rect>'s width/height, inset within TODAY_BOX — same dot+4 gap as before, just at the smaller scale
 const TODAY_RING_INSET = (TODAY_BOX - TODAY_RING_SIZE) / 2;
 const TODAY_RING_RX = { weekly: TODAY_RING_SIZE / 2, monthly: 7 }; // monthly's corner radius scaled down with it (was 8 at the old 34px ring)
@@ -157,6 +158,101 @@ export function decrHistoryClause(goal) {
 
 // Exact pixel match to freq-dot's history size (13) — literal, not
 // perceptually-compensated.
+// Day count's token — a diamond (square rotated 45°), the one simple shape
+// left once weekly took the circle, monthly the axis-aligned rounded square
+// and decreasing the septagon. Triangle/pentagon/hexagon were all considered:
+// 5 and 6 sides are genuinely hard to tell from the septagon's 7 at this
+// size, and a triangle carries noticeably less optical weight than its
+// neighbours at equal width.
+//
+// Drawn at 31px rather than the 27px weekly/monthly use — the same allowance
+// the septagon already takes at 29px, and for the same reason: a diamond's
+// usable interior is far narrower than a circle's at equal width, and this
+// one carries up to three digits (a 366-day goal spends most of its life
+// there). Ring follows at +4px, the gap every other type uses.
+//
+// Unlike every other token here the fill is BINARY, not a fraction: this type
+// has no period to be partially through, so the glyph answers only "was today
+// logged" (accent) or not (border) — the same two colours weekly's own
+// met/empty dot uses. Overall progress is the bar fill behind it, and the
+// numeral inside is the running count of days done.
+// Corners are rounded to match the rest of the row's language — the bar, the
+// monthly squircle, every chip. Both the fill and the ring are built as real
+// rounded paths (see roundedDiamondPath) rather than plain <polygon>s.
+//
+// A stroke-linejoin: round trick was used first and dropped: it can only ever
+// round a corner by half the stroke width, which is fine for a 6px-stroked
+// fill but leaves a 1.5px-stroked outline visibly sharp — the two shapes
+// disagreed. It also forced the fill's stroke colour to track its fill on
+// every state, since the stroke was load-bearing geometry rather than an
+// outline.
+//
+// Both SVGs use a viewBox of TODAY_BOX units rendered at TODAY_BOX px — 1
+// unit == 1 px — so every number here is a real pixel and none of it needs
+// rescaling if a size changes. (The earlier 0 0 100 100 viewBox silently
+// clipped the ring: its stroke pushed past the box edge at the vertices.)
+// Exactly the 27px every other today-dot uses — no special enlargement. An
+// earlier pass drew it at 31px reasoning that a diamond's interior is
+// narrower, but a token that doesn't line up with its neighbours costs more
+// than the digits gain, and the septagon's own +2 is for 7 wedges, which this
+// doesn't have.
+const DIAMOND_OUTER = TODAY_DOT_SIZE / 2;
+const DIAMOND_CORNER = 3;            // real px — the rounding, matching the row's own language
+const DIAMOND_RING_STROKE = 1.5;     // literal, matching .freq-ring/.septagon-ring
+// The clear gap between weekly's dot and its ring, derived from that token's
+// own numbers rather than transcribed — TODAY_RING_SIZE is the ring's
+// centreline, so half its stroke sits inside that radius and has to come off.
+// Reading it from the source means resizing the circle token can't silently
+// leave this one behind.
+const CIRCLE_TOKEN_GAP = (TODAY_RING_SIZE - TODAY_DOT_SIZE) / 2 - DIAMOND_RING_STROKE / 2;
+// A diamond can't just reuse that figure: for two concentric diamonds a
+// radial gap reads as gap × cos45° (≈0.71) perpendicular to the edges, which
+// is what the eye actually measures — so copying it directly leaves the two
+// outlines visually touching along all four flats. Scaling back up by that
+// factor keeps this in the same token family rather than looking like a
+// diamond crammed inside a diamond.
+const DIAMOND_RING_GAP = CIRCLE_TOKEN_GAP / Math.cos(Math.PI / 4);
+const DIAMOND_RING_RADIUS = DIAMOND_OUTER + DIAMOND_RING_GAP + DIAMOND_RING_STROKE / 2;
+// Offsetting a rounded shape outward raises its corner radius by exactly the
+// offset distance — so the ring tracing the fill at DIAMOND_RING_GAP needs a
+// correspondingly larger radius, or the gap would pinch shut at the four
+// corners while reading correctly along the flats.
+const DIAMOND_RING_CORNER = DIAMOND_CORNER + DIAMOND_RING_GAP;
+
+// A diamond whose rounded outline reaches exactly `outer` from the centre,
+// with `corner`-radius vertices, centred in the box. Every interior angle of
+// a diamond is 90°, so the tangent point sits exactly `corner` back along
+// each edge (corner / tan(45°)); the vertex becomes the control point of a
+// quadratic curve, indistinguishable from a true arc at these sizes.
+//
+// `outer` is the finished extent, not the raw vertex distance, because the
+// two are not the same here and assuming they were drew the token 2px small.
+// Rounding a *square* via border-radius keeps its bounding box — the flat
+// edges still reach full width. A diamond's corners ARE its extremes, so
+// rounding them necessarily pulls the outline inward: the quadratic's apex
+// lands at corner/(2√2) short of the vertex. The vertex is pushed out by
+// that much to compensate, which is what makes this token measure the same
+// 27px as every other one rather than merely being specified as 27.
+function roundedDiamondPath(outer, corner) {
+  const c = TODAY_BOX / 2;
+  const r = outer + corner / (2 * Math.SQRT2);
+  const v = [[c, c - r], [c + r, c], [c, c + r], [c - r, c]];
+  const towards = ([x, y], [tx, ty]) => {
+    const dx = tx - x, dy = ty - y;
+    const len = Math.hypot(dx, dy) || 1;
+    return [x + (dx / len) * corner, y + (dy / len) * corner];
+  };
+  return v.map((vertex, i) => {
+    const [ax, ay] = towards(vertex, v[(i + 3) % 4]);
+    const [bx, by] = towards(vertex, v[(i + 1) % 4]);
+    const f = n => n.toFixed(2);
+    return `${i === 0 ? 'M' : 'L'}${f(ax)},${f(ay)} Q${f(vertex[0])},${f(vertex[1])} ${f(bx)},${f(by)}`;
+  }).join(' ') + ' Z';
+}
+
+const DIAMOND_FILL_PATH = roundedDiamondPath(DIAMOND_OUTER, DIAMOND_CORNER);
+const DIAMOND_RING_PATH = roundedDiamondPath(DIAMOND_RING_RADIUS, DIAMOND_RING_CORNER);
+
 const SEPTAGON_HISTORY_SIZE = 13;
 // A couple px bigger than freq-today's dot (now 27px) — same relationship
 // as before, just following the dot's own 90%-of-original shrink down to
@@ -419,8 +515,8 @@ class GoalItem extends Gestures(AppElement) {
         }
 
         .freq-today .freq-dot {
-          inline-size: 27px;
-          block-size: 27px;
+          inline-size: ${TODAY_DOT_SIZE}px;
+          block-size: ${TODAY_DOT_SIZE}px;
         }
         .bar[data-freq-type="monthly"] .freq-today .freq-dot {
           /* Same size as weekly's dot — border-radius is the only thing
@@ -478,6 +574,74 @@ class GoalItem extends Gestures(AppElement) {
            purpose — a quiet activity marker, not something competing for
            attention with the fill itself. */
         .freq-ring .progress { fill: none; stroke: var(--color-accent); stroke-width: 1.5; }
+
+        /* ── Day count: single diamond token ─────────────────────────────
+           A genuine ${TODAY_BOX}px box like .freq-today and
+           .septagon-week.current, so this type's tap target lands at the
+           identical offset from the row's right edge as every other type's.
+           Nothing is ever placed to its right for that reason — the total
+           lives in the dialog and Overview, not on the row. */
+        .daycount-token {
+          position: relative;
+          z-index: 1;
+          display: none;
+          inline-size: ${TODAY_BOX}px;
+          block-size: ${TODAY_BOX}px;
+          flex-shrink: 0;
+          margin-inline-start: var(--space-2);
+          place-items: center;
+          cursor: pointer;
+        }
+
+        .bar[data-type="daycount"] .daycount-token { display: grid; }
+        /* Same slot the dot-cluster and septagon occupy — all mutually
+           exclusive, keyed off the type. pct-label stays in its template
+           hidden state (only countdown unhides it), since the bar fill
+           already carries the percentage. */
+        .bar[data-type="daycount"] .freq-cluster,
+        .bar[data-type="daycount"] .septagon-strip { display: none; }
+
+        .daycount-fill, .daycount-ring { grid-area: 1 / 1; }
+
+        /* Binary, not a wedge — border when today isn't logged, accent when
+           it is. See DIAMOND_OUTER's own comment for why there's no fraction.
+           Fill only: the rounding is in the path now, so there's no stroke to
+           keep in sync with it. */
+        .daycount-fill path { fill: var(--color-border); }
+        .daycount-token.logged .daycount-fill path { fill: var(--color-accent); }
+
+        /* Same stroke-only ring technique and plain accent as .freq-ring —
+           solid, meaning "did the thing today" (decreasing's is dashed
+           because it means the opposite). */
+        .daycount-ring {
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+        .daycount-token.logged .daycount-ring { opacity: 1; }
+        .daycount-ring path { fill: none; stroke: var(--color-accent); stroke-linejoin: round; }
+
+        /* Same white mix-blend-mode: difference as .freq-target-num, and for
+           the same reason: the glyph beneath flips between --color-border and
+           a user-customisable --color-accent of no guaranteed lightness, so
+           no fixed colour stays legible on both. */
+        .daycount-num {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: var(--font-size-micro);
+          font-weight: var(--font-weight-bold);
+          font-variant-numeric: tabular-nums;
+          color: #FFFFFF;
+          mix-blend-mode: difference;
+          pointer-events: none;
+        }
+
+        /* Neither the grey nor the accent glyph reads against solid danger
+           red — same re-theme the dot-strip and septagon already get. */
+        :host([data-failed]) .daycount-fill path { fill: var(--color-text-inverse); }
+        :host([data-failed]) .daycount-ring path { stroke: var(--color-text-inverse); }
 
         /* Small tick — every successful log. Same recipe as list-item's own
            done-celebrate (outline pulse + background wash), just retargeted
@@ -833,6 +997,15 @@ class GoalItem extends Gestures(AppElement) {
         ${urgencyBadgeMarkup}
         <span class="pct-label" hidden></span>
         <span class="septagon-strip" aria-hidden="true"></span>
+        <span class="daycount-token" aria-hidden="true">
+          <svg class="daycount-fill" viewBox="0 0 ${TODAY_BOX} ${TODAY_BOX}" width="${TODAY_BOX}" height="${TODAY_BOX}">
+            <path d="${DIAMOND_FILL_PATH}"></path>
+          </svg>
+          <span class="daycount-num"></span>
+          <svg class="daycount-ring" viewBox="0 0 ${TODAY_BOX} ${TODAY_BOX}" width="${TODAY_BOX}" height="${TODAY_BOX}">
+            <path d="${DIAMOND_RING_PATH}" stroke-width="${DIAMOND_RING_STROKE}"></path>
+          </svg>
+        </span>
         <span class="freq-cluster" aria-hidden="true">
           <span class="freq-dots"></span>
           <span class="freq-today">
@@ -861,6 +1034,8 @@ class GoalItem extends Gestures(AppElement) {
     this._freqTodayDot = this._freqToday.querySelector('.freq-dot');
     this._freqTargetNum = this._freqToday.querySelector('.freq-target-num');
     this._freqRing = this.shadowRoot.querySelector('.freq-ring .progress');
+    this._dayCountToken = this.shadowRoot.querySelector('.daycount-token');
+    this._dayCountNum = this.shadowRoot.querySelector('.daycount-num');
     this._colorPanel = this.shadowRoot.querySelector('#color-panel');
     this._particleField = this.shadowRoot.querySelector('.particle-field');
     this._revealedDir = null;
@@ -882,7 +1057,12 @@ class GoalItem extends Gestures(AppElement) {
       // _freqToday — queried fresh here instead, while the event is still
       // dispatching and composedPath() is valid.
       const septagonCurrent = this._septagonStrip.querySelector('.septagon-week.current');
-      this._tapOnToday = path.includes(this._freqToday) || (septagonCurrent && path.includes(septagonCurrent));
+      // The day-count diamond is this type's equivalent of the today-dot:
+      // one tap logs today, no 500ms dwell. It's cached at subscribe time
+      // like _freqToday (its element is never replaced, only its contents).
+      this._tapOnToday = path.includes(this._freqToday)
+        || path.includes(this._dayCountToken)
+        || (septagonCurrent && path.includes(septagonCurrent));
     };
     this.addEventListener('pointerdown', this._onPointerDownCapture, true);
 
@@ -1236,6 +1416,14 @@ class GoalItem extends Gestures(AppElement) {
     } else if (isCntdn) {
       const days = countdownDaysRemaining(this._goal) ?? 0;
       label = t('goal-item.countdown-aria', { title: label, pct: this._pct, days });
+    } else if (isDayCount(this._goal)) {
+      // No history clause — this type has no periods to recap, and the count
+      // itself is already the whole running total rather than one period's.
+      const { target, entries } = this._goal.tracking;
+      label = t('goal-item.daycount-aria', {
+        title: label, count: entries?.length ?? 0, target, pct: this._pct,
+      });
+      if (isLoggedOn(this._goal)) label += t('goal-item.freq-logged-suffix');
     }
     // data-failed (full-row-red) is a separate mechanism from the icon's own
     // urgency and can be true while urgency reads something milder (e.g. a
@@ -1376,6 +1564,18 @@ class GoalItem extends Gestures(AppElement) {
       // carries the score; a redundant number next to it isn't shown.
       this._renderSeptagonStrip();
     }
+    if (isDayCount(this._goal)) this._renderDayCountToken();
+  }
+
+  // Two pieces of state, both cheap: the numeral (days logged so far) and
+  // whether today itself is logged, which drives both the glyph's binary
+  // fill and the contour. No history strip — this type has no periods to
+  // show a run of, and the single number is the whole story.
+  _renderDayCountToken() {
+    if (!this._dayCountToken) return;
+    const count = this._goal?.tracking?.entries?.length ?? 0;
+    this._dayCountNum.textContent = String(count);
+    this._dayCountToken.classList.toggle('logged', isLoggedOn(this._goal));
   }
 
   // Builds the wedge-fill SVG for one septagon: 7 <path> wedges (see

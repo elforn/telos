@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
-  isFrequency, isEntryType, isEntryBased, isDecreasing, isCountdown,
+  isFrequency, isEntryType, isEntryBased, isDecreasing, isCountdown, isDayCount,
+  dayCountValue,
   percentValue, setPercent, clearPercentAt, logEntry, unlogEntry, isLoggedOn,
   isoWeekKey, monthKey, recentPeriods, periodFractions, recentDots, currentPeriodCount,
   weekDayStates, recentWeekStates, isOverAllowance, currentAllowanceSpent,
   countdownValue, countdownDaysRemaining,
-  PERIOD_WINDOW, DOT_WINDOW, TARGET_LIMITS, DEFAULT_TARGET, FIX_DAY_SPAN,
+  PERIOD_WINDOW, DOT_WINDOW, TARGET_LIMITS, DEFAULT_TARGET,
   targetLimitsFor,
 } from '../../app/utils/tracking.js';
 
@@ -564,6 +565,75 @@ describe('tracking — countdownDaysRemaining', () => {
   });
 });
 
+describe('tracking — daycount', () => {
+  function dayCount(target, entries = []) {
+    return { tracking: { type: 'daycount', target, entries } };
+  }
+
+  it('percentValue is simply logged days over the target', () => {
+    expect(percentValue(dayCount(50, ['2026-01-01', '2026-01-02']), '2026-06-01')).toBe(4);
+    expect(percentValue(dayCount(4, ['2026-01-01']), '2026-06-01')).toBe(25);
+  });
+
+  it('caps at 100 once the target is passed, never reports more', () => {
+    const entries = Array.from({ length: 6 }, (_, i) => `2026-01-0${i + 1}`);
+    expect(percentValue(dayCount(4, entries), '2026-06-01')).toBe(100);
+  });
+
+  it('an entry from months ago counts exactly as much as today\'s — no recency weighting', () => {
+    const old = dayCount(10, ['2026-01-05', '2026-01-06']);
+    const recent = dayCount(10, ['2026-05-30', '2026-05-31']);
+    expect(percentValue(old, '2026-06-01')).toBe(percentValue(recent, '2026-06-01'));
+  });
+
+  it('is unaffected by the date it is read on — there is no window to slide', () => {
+    const goal = dayCount(10, ['2026-01-05', '2026-01-06', '2026-01-07']);
+    expect(percentValue(goal, '2026-01-07')).toBe(30);
+    expect(percentValue(goal, '2029-12-31')).toBe(30);
+  });
+
+  it('an unconfigured target reads 0 rather than dividing by zero', () => {
+    expect(dayCountValue({ tracking: { type: 'daycount', entries: ['2026-01-01'] } })).toBe(0);
+    expect(dayCountValue({ tracking: { type: 'daycount', target: 0, entries: ['2026-01-01'] } })).toBe(0);
+  });
+
+  it('no entries yet reads 0', () => {
+    expect(percentValue(dayCount(50), '2026-06-01')).toBe(0);
+  });
+
+  it('is an entry type (tap/hold toggles a day, Fix-a-day applies)', () => {
+    expect(isEntryType('daycount')).toBe(true);
+    expect(isEntryBased(dayCount(50))).toBe(true);
+    expect(isDayCount(dayCount(50))).toBe(true);
+  });
+
+  it('is NOT a frequency type — it has no period, so it must never reach the dot-strip', () => {
+    expect(isFrequency(dayCount(50))).toBe(false);
+    expect(isDecreasing(dayCount(50))).toBe(false);
+    expect(isCountdown(dayCount(50))).toBe(false);
+  });
+
+  it('has no period config at all — feeding it to the period machinery would invent a cadence', () => {
+    expect(PERIOD_WINDOW.daycount).toBeUndefined();
+    expect(DOT_WINDOW.daycount).toBeUndefined();
+  });
+
+  it('shares logEntry/unlogEntry/isLoggedOn unchanged with every other entry type', () => {
+    let goal = dayCount(50);
+    goal = logEntry(goal, '2026-06-01');
+    expect(isLoggedOn(goal, '2026-06-01')).toBe(true);
+    expect(percentValue(goal, '2026-06-01')).toBe(2);
+    goal = logEntry(goal, '2026-06-01'); // same day twice is a no-op
+    expect(goal.tracking.entries).toEqual(['2026-06-01']);
+    goal = unlogEntry(goal, '2026-06-01');
+    expect(percentValue(goal, '2026-06-01')).toBe(0);
+  });
+
+  it('DEFAULT_TARGET.daycount is 50', () => {
+    expect(DEFAULT_TARGET.daycount).toBe(50);
+  });
+});
+
 describe('tracking — percentValue (decreasing): the allowance refills weekly', () => {
   const currentMonday = '2026-08-10'; // matches TODAY in the describe blocks above
   const SUNDAY = '2026-08-16'; // fully-elapsed current week, avoids the elapsed-day correction
@@ -748,12 +818,17 @@ describe('tracking — TARGET_LIMITS / targetLimitsFor', () => {
       weekly: [1, 7],
       monthly: [1, 31],
       decreasing: [0, 6],
+      daycount: [1, 366],
     });
   });
 
   it('targetLimitsFor returns each type\'s plain pair', () => {
     expect(targetLimitsFor('weekly')).toEqual([1, 7]);
     expect(targetLimitsFor('monthly')).toEqual([1, 31]);
+  });
+
+  it('targetLimitsFor("daycount") reaches a full leap year — a goal lives inside one year', () => {
+    expect(targetLimitsFor('daycount')).toEqual([1, 366]);
   });
 
   it('targetLimitsFor("decreasing") is [0, 6] — one day below the full week, so a day can still cost something', () => {
@@ -770,16 +845,6 @@ describe('tracking — decreasing constants', () => {
     expect(PERIOD_WINDOW.decreasing).toBe(6);
   });
 
-  it('FIX_DAY_SPAN.decreasing is 42 (7 × 6 weeks), matching weekly\'s span', () => {
-    expect(FIX_DAY_SPAN.decreasing).toBe(42);
-    expect(FIX_DAY_SPAN.decreasing).toBe(FIX_DAY_SPAN.weekly);
-  });
-
-  it('FIX_DAY_SPAN.monthly is 180 (6 months) — independent of both PERIOD_WINDOW.monthly (4, the score) and DOT_WINDOW.monthly (3, the display)', () => {
-    expect(FIX_DAY_SPAN.monthly).toBe(180);
-    expect(FIX_DAY_SPAN.monthly).toBeGreaterThan(30 * PERIOD_WINDOW.monthly); // reaches further than what's still scored
-    expect(FIX_DAY_SPAN.monthly).toBeGreaterThan(30 * DOT_WINDOW.monthly); // reaches further than what's currently shown
-  });
 });
 
 describe('tracking — dated percentage edits', () => {

@@ -89,8 +89,25 @@ describe('sw-extensions — isActive', () => {
     expect(isActive({ tracking: { type: 'percentage' } })).toBe(true);
   });
 
-  it('treats any non-percentage tracking type as active — no replicated frequency-pace logic', () => {
+  it('treats frequency types as active regardless — no replicated frequency-pace logic', () => {
     expect(isActive({ tracking: { type: 'weekly', value: 100 } })).toBe(true);
+    expect(isActive({ tracking: { type: 'monthly', value: 100 } })).toBe(true);
+    expect(isActive({ tracking: { type: 'decreasing', value: 100 } })).toBe(true);
+    expect(isActive({ tracking: { type: 'countdown', startDate: '2026-01-01' } })).toBe(true);
+  });
+
+  it('judges a day count exactly — entries vs target needs no scoring logic to replicate', () => {
+    expect(isActive({ tracking: { type: 'daycount', target: 3, entries: ['a', 'b'] } })).toBe(true);
+    expect(isActive({ tracking: { type: 'daycount', target: 3, entries: ['a', 'b', 'c'] } })).toBe(false);
+    // Over-target (the real percentage caps at 100) still counts as done.
+    expect(isActive({ tracking: { type: 'daycount', target: 3, entries: ['a', 'b', 'c', 'd'] } })).toBe(false);
+  });
+
+  it('keeps a half-configured day count active rather than reading as instantly done', () => {
+    // target 0/undefined would make entries.length >= target true immediately,
+    // silencing a goal that was never actually set up.
+    expect(isActive({ tracking: { type: 'daycount', entries: [] } })).toBe(true);
+    expect(isActive({ tracking: { type: 'daycount', target: 0, entries: [] } })).toBe(true);
   });
 });
 
