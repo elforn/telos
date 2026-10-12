@@ -77,6 +77,33 @@ describe('sw-extensions — bucketOf', () => {
 describe('sw-extensions — isActive', () => {
   const { isActive } = loadSandbox();
 
+  // A group's percentage is computed once by app/utils/aggregate.js and
+  // parked in tracking.aggValue, so this file can read it exactly without
+  // replicating any member resolution — the one type here that costs nothing.
+  it('treats a group under 100 as active', () => {
+    expect(isActive({ tracking: { type: 'aggregate', aggValue: 61, members: [] } })).toBe(true);
+  });
+
+  it('treats a group at 100 as inactive, so a finished group stops nagging', () => {
+    expect(isActive({ tracking: { type: 'aggregate', aggValue: 100, members: [] } })).toBe(false);
+  });
+
+  it('treats a never-reconciled group as active', () => {
+    // No aggValue yet: err toward active, the same direction as every other
+    // fallback in this file.
+    expect(isActive({ tracking: { type: 'aggregate', members: [] } })).toBe(true);
+  });
+
+  it('ignores a group’s dormant entries from a previous type', () => {
+    // Switching type never drops the inactive side, so a group can carry
+    // weekly entries. Reading those instead of aggValue would score it as a
+    // frequency goal.
+    expect(isActive({ tracking: {
+      type: 'aggregate', aggValue: 100, members: [],
+      target: 3, entries: ['2026-10-01', '2026-10-02'],
+    } })).toBe(false);
+  });
+
   it('treats a percentage goal under 100 as active', () => {
     expect(isActive({ tracking: { type: 'percentage', value: 40 } })).toBe(true);
   });

@@ -221,4 +221,18 @@ describe('build — custom BASE_PATH', () => {
       ])
     );
   });
+
+  it('appends sw-extensions.js into the built service worker', () => {
+    // utils/build.js folds app/sw-extensions.js onto dist/sw.js and into the
+    // cache-version hash. It is a classic script with no imports, so nothing
+    // else would catch it silently failing to land.
+    const sw = readFileSync(join(DIST, 'sw.js'), 'utf8');
+    expect(sw).toContain('periodicsync');
+    expect(sw).toContain('notificationclick');
+    // The aggregate arm specifically: this file reads the cached aggValue
+    // rather than replicating any scoring logic, so a finished group stops
+    // sending background deadline reminders.
+    expect(sw).toContain("tr?.type === 'aggregate'");
+    expect(sw).toContain('aggValue');
+  });
 });

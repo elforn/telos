@@ -9,6 +9,7 @@ import { toast } from '../../_lib/modules/toast/toast.js';
 import { withUndo } from '../../_lib/modules/toast/undo.js';
 import { FilterState } from '../../_lib/modules/filter-state/filter-state.js';
 import { onDayChange } from '../utils/day-change-watcher.js';
+import { pruneMembers } from '../utils/aggregate.js';
 import '../components/year-header/year-header.js';
 import '../components/goal-item/goal-item.js';
 import '../components/goal-dialog/goal-dialog.js';
@@ -1402,11 +1403,65 @@ class HomePage extends AppElement {
   }
 
   _openGoalDialog(goal, opts) {
+    // An aggregate can hold references to goals that have since been
+    // deleted — or, after a year handoff, to years this install never had.
+    // They are dropped here, scoped to the one record being opened, exactly
+    // the way list-detail-page prunes a list item's own inGoals. Deliberately
+    // not on the goals write path: a prune there would be permanent, with no
+    // later write able to put a cross-year reference back.
+    //
+    // Order matters. The prune has to land in the store BEFORE _editSnapshot
+    // is taken, or _onGoalClosed's stringify comparison sees the prune as a
+    // user edit and fires a "Goal saved" toast whose Undo would restore the
+    // dead references.
+    const opened = goal ? this._pruneGoalMembers(goal) : goal;
     this._dialog.existingTags   = this._collectAllTags();
     this._dialog.currentYear    = this._year;
     this._dialog.availableLists = getState().lists ?? [];
-    if (goal) this._editSnapshot = getState().goals;
-    this._dialog.open(goal, opts);
+    this._dialog.availableGoals = this._collectAllGoals();
+    if (opened) this._editSnapshot = getState().goals;
+    this._dialog.open(opened, opts);
+  }
+
+  // Writes the pruned goal back and returns it. Returns the goal untouched
+  // (same reference, no store write) when nothing needed dropping, which is
+  // the overwhelmingly common case — see pruneMembers' own contract.
+  _pruneGoalMembers(goal) {
+    const goals = getState().goals ?? {};
+    const pruned = pruneMembers(goal, goals);
+    if (pruned === goal) return goal;
+    // Every caller sets _editingSection immediately before opening, the same
+    // way every other dialog handler in this file depends on it. If it is
+    // somehow unset, skip the write and return the goal untouched — the
+    // prune is opportunistic tidying, not a correctness requirement
+    // (computeAggregate already ignores references it cannot resolve).
+    const year = String(this._year);
+    const section = this._editingSection;
+    const yg = goals[year] ?? {};
+    if (!section || !Array.isArray(yg[section])) return goal;
+    setState('goals', {
+      ...goals,
+      [year]: { ...yg, [section]: yg[section].map(g => (g.id === goal.id ? pruned : g)) },
+    });
+    return pruned;
+  }
+
+  // Every goal in the store, flattened to the { year, section, goal } shape
+  // goal-dialog's members list and goal-picker-dialog both read. Same
+  // two-level walk as _collectAllTags above, including the Array.isArray
+  // guard — a year object is not guaranteed to hold only section arrays.
+  _collectAllGoals() {
+    const entries = [];
+    for (const [year, yg] of Object.entries(getState().goals ?? {})) {
+      for (const [section, list] of Object.entries(yg ?? {})) {
+        if (!Array.isArray(list)) continue;
+        for (const goal of list) entries.push({ year, section, goal });
+      }
+    }
+    // Deliberately unsorted — goal-dialog renders members in their stored
+    // order and goal-picker-dialog sorts its own rows, so imposing an order
+    // here would just be a second, competing opinion about display order.
+    return entries;
   }
 
   _collectAllTags() {

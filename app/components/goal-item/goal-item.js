@@ -10,7 +10,7 @@ import { rowChromeStyles, dragHandleStyles, colorPanelStyles, actionButtonStyles
 import { COLOR_WIDTH, DELETE_WIDTH, swipeOffset, swipeCommitted, trackSwipe, closeReveal } from '../../utils/row-swipe.js';
 import { markDelete } from '../../utils/delete-ghost-guard.js';
 import {
-  percentValue, isFrequency, isEntryBased, isDecreasing, isCountdown, isDayCount,
+  percentValue, isFrequency, isEntryBased, isDecreasing, isCountdown, isDayCount, isAggregate,
   countdownDaysRemaining, recentDots, recentWeekStates, isLoggedOn, currentPeriodCount,
 } from '../../utils/tracking.js';
 
@@ -1161,6 +1161,7 @@ class GoalItem extends Gestures(AppElement) {
     this._closeReveal();
     if (isEntryBased(this._goal)) { this._toggleLog(); return; }
     if (isCountdown(this._goal)) return; // self-advancing, not manually adjustable
+    if (isAggregate(this._goal)) return; // derived from its members, same reasoning
     this.classList.add('hold-active');
     this._bar.style.transition = 'none';
     this._setDragMode(true);
@@ -1175,6 +1176,7 @@ class GoalItem extends Gestures(AppElement) {
   onHoldDragKey(dir) {
     if (isEntryBased(this._goal)) { this._toggleLog(); return; } // either arrow — it's a toggle, not a scrub
     if (isCountdown(this._goal)) return; // self-advancing, not manually adjustable
+    if (isAggregate(this._goal)) return; // derived from its members, same reasoning
     this._setPct(dir === 'right' ? Math.min(100, this._pct + 5) : Math.max(0, this._pct - 5));
     if (this._pct === 100) this._celebrate();
     this._emitProgress();
@@ -1183,6 +1185,7 @@ class GoalItem extends Gestures(AppElement) {
   onHoldDrag(e) {
     if (isEntryBased(this._goal)) return;
     if (isCountdown(this._goal)) return;
+    if (isAggregate(this._goal)) return;
     const rect = this._bar.getBoundingClientRect();
     if (!rect.width) return;
 
@@ -1207,6 +1210,7 @@ class GoalItem extends Gestures(AppElement) {
   onHoldDragEnd() {
     if (isEntryBased(this._goal)) return;
     if (isCountdown(this._goal)) return;
+    if (isAggregate(this._goal)) return;
     this.classList.remove('hold-active');
     this._bar.style.transition = '';
     this._setDragMode(false);
@@ -1270,7 +1274,24 @@ class GoalItem extends Gestures(AppElement) {
     this._fill.style.width = `${this._pct}%`;
     if (!isEntryBased(this._goal)) this._bar.setAttribute('aria-valuenow', String(this._pct));
     if (!this._pctLabel) return;
-    if (isCountdown(this._goal)) {
+    if (isAggregate(this._goal)) {
+      // A group has no glyph, by design: every other type's token is an
+      // INPUT affordance (tap the dot to log today, tap the diamond to log a
+      // day, hold-drag the bar to scrub), and a group has nothing to input,
+      // so a token would be a control that does nothing. What it does have
+      // worth saying on the row is what it is made of — and countdown
+      // already established this label as the slot for a type with no glyph
+      // and something better than a percentage to show. Always visible, not
+      // drag-gated: there is no drag mode to enter (see onHoldDragStart).
+      this._pctLabel.hidden = false;
+      // t() is plain interpolation with no plural machinery, so a counted
+      // label needs its own singular key — the same two-key branch
+      // goal-analytics uses for month-singular/month-plural.
+      const count = this._goal.tracking?.members?.length ?? 0;
+      this._pctLabel.textContent = count === 1
+        ? t('goal-item.aggregate-count-one')
+        : t('goal-item.aggregate-count', { count });
+    } else if (isCountdown(this._goal)) {
       // Always visible (not drag-gated like percentage's own label above) —
       // there's no drag mode to enter for a self-advancing type, see
       // onHoldDragStart. Shows days remaining, not the percent itself — see
@@ -1416,6 +1437,12 @@ class GoalItem extends Gestures(AppElement) {
     } else if (isCntdn) {
       const days = countdownDaysRemaining(this._goal) ?? 0;
       label = t('goal-item.countdown-aria', { title: label, pct: this._pct, days });
+    } else if (isAggregate(this._goal)) {
+      // The member count is what the row's visible label says, so the
+      // announcement says the same thing plus the percentage the label omits.
+      label = t('goal-item.aggregate-aria', {
+        title: label, pct: this._pct, count: this._goal.tracking?.members?.length ?? 0,
+      });
     } else if (isDayCount(this._goal)) {
       // No history clause — this type has no periods to recap, and the count
       // itself is already the whole running total rather than one period's.
@@ -1548,7 +1575,9 @@ class GoalItem extends Gestures(AppElement) {
       // assistive tech into expecting arrow keys to work. aria-readonly is
       // the correct ARIA affordance for exactly this case: a slider whose
       // value is displayed but not user-editable.
-      if (isCntdn) this._bar.setAttribute('aria-readonly', 'true');
+      // Aggregate joins countdown here for the same reason: role="slider"
+      // still describes a continuous 0-100 value, but neither is adjustable.
+      if (isCntdn || isAggregate(this._goal)) this._bar.setAttribute('aria-readonly', 'true');
       else this._bar.removeAttribute('aria-readonly');
     }
 

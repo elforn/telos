@@ -6,7 +6,7 @@ import {
   comparisonDelta, updateCount, projectPace,
   slipStates, slipDatesByState, firstRecordIso,
   denseSamples, periodSamples, completionSeriesAt, expectedRampSeriesAt, recoveryCurveAt,
-  dayCountPaceSeriesAt,
+  dayCountPaceSeriesAt, pagesFor,
 } from '../../app/utils/goal-analytics.js';
 
 const TODAY = '2026-09-20'; // a Sunday
@@ -617,3 +617,106 @@ function daysBetweenIso(a, b) {
   const [yb, mb, db] = b.split('-').map(Number);
   return Math.round((new Date(yb, mb - 1, db) - new Date(ya, ma - 1, da)) / 86400000);
 }
+
+
+describe('goal-analytics — aggregate ("Group") goals', () => {
+  // A group stores no history; its value at a past date is derived from its
+  // members, each of which answers honestly on its own (asOf trims entries,
+  // countdown is pure calendar, percentage reads its own snapshot log).
+  const Y = '2026';
+  const mRef = (goalId, weight) =>
+    weight === undefined ? { year: Y, section: 'focus', goalId } : { year: Y, section: 'focus', goalId, weight };
+
+  const weekly = {
+    id: 'w', title: 'Run',
+    tracking: { type: 'weekly', target: 3,
+      entries: ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-14', '2026-09-15', '2026-09-16'] },
+  };
+  const pctMember = {
+    id: 'p', title: 'Draft',
+    tracking: { type: 'percentage', value: 70,
+      history: [{ date: '2026-09-05', value: 40 }, { date: '2026-09-18', value: 70 }] },
+  };
+  const grp = (members, aggValue = 0) => ({
+    id: 'grp', title: 'Book', dueDate: '2026-12-31',
+    tracking: { type: 'aggregate', members, aggValue },
+  });
+  const graph = (...extra) => ({
+    [Y]: { capstone: [], milestones: [], wow: [], focus: [weekly, pctMember, ...extra] },
+  });
+
+  it('gets Overview alone — never Score, Activity or Streaks', () => {
+    expect(pagesFor(grp([mRef('w')]))).toEqual(['overview']);
+  });
+
+  it('derives a past value from its members, weighted', () => {
+    const g = grp([mRef('w'), mRef('p', 3)]);
+    // 2026-09-20: weekly scores its own window, percentage carries 70 forward.
+    const at = percentValueAt(g, '2026-09-20', graph(g));
+    const w = percentValueAt(weekly, '2026-09-20');
+    expect(at).toBe(Math.round((w * 1 + 70 * 3) / 4));
+  });
+
+  it('drops a member with no data yet rather than counting it as 0', () => {
+    // Before 2026-09-05 the percentage member is undefined. Counting it as
+    // zero would report progress backwards that never happened.
+    const g = grp([mRef('w'), mRef('p', 3)]);
+    const at = percentValueAt(g, '2026-09-02', graph(g));
+    expect(at).toBe(percentValueAt(weekly, '2026-09-02'));
+  });
+
+  it('reads undefined when no member has data at that date', () => {
+    const g = grp([mRef('p')]);
+    expect(percentValueAt(g, '2026-08-01', graph(g))).toBeUndefined();
+  });
+
+  it('reads undefined — not today’s number — when handed no graph', () => {
+    // An unwired caller must show a blank chart, never a confident flat line
+    // at the current value.
+    const g = grp([mRef('w')], 61);
+    expect(percentValueAt(g, '2026-09-20')).toBeUndefined();
+  });
+
+  it('derives a genuinely changing series, not a flat line', () => {
+    const g = grp([mRef('w'), mRef('p', 3)]);
+    const values = completionSeriesAt(g, ['2026-09-02', '2026-09-20', '2026-09-30'], graph(g))
+      .map(p => p.value);
+    expect(new Set(values).size).toBeGreaterThan(1);
+    expect(values.every(v => v === undefined)).toBe(false);
+  });
+
+  it('reports a real comparison delta between two derived readings', () => {
+    const g = grp([mRef('p')]);
+    // A month before 2026-10-05 is 2026-09-05: the member's first snapshot,
+    // 40, against 70 now.
+    expect(comparisonDelta(g, 'month', '2026-10-05', graph(g))).toBe(30);
+  });
+
+  it('recurses through a nested group at a past date', () => {
+    const inner = { id: 'in', title: 'Inner', tracking: { type: 'aggregate', members: [mRef('p')], aggValue: 0 } };
+    const outer = grp([{ year: Y, section: 'focus', goalId: 'in' }]);
+    const g = graph(inner, outer);
+    expect(percentValueAt(outer, '2026-09-10', g)).toBe(40);
+  });
+
+  it('survives a cycle at a past date without overflowing the stack', () => {
+    const a = { id: 'ga', title: 'A', tracking: { type: 'aggregate', members: [{ year: Y, section: 'focus', goalId: 'gb' }] } };
+    const b = { id: 'gb', title: 'B', tracking: { type: 'aggregate', members: [{ year: Y, section: 'focus', goalId: 'ga' }] } };
+    const g = graph(a, b);
+    expect(percentValueAt(a, '2026-09-20', g)).toBeUndefined();
+  });
+
+  it('has no per-day log, so nothing feeds an Activity page', () => {
+    const g = grp([mRef('w')]);
+    expect(dateListFor(g, TODAY)).toEqual([]);
+    expect(rawLoggedDates(g, TODAY)).toEqual([]);
+    expect(updateCount(g, TODAY)).toBe(0);
+  });
+
+  it('leaves every other type’s page list and past values untouched', () => {
+    expect(pagesFor({ tracking: { type: 'percentage', value: 5 } })).toEqual(['overview', 'activity']);
+    expect(pagesFor({ tracking: { type: 'weekly', target: 7, entries: [] } }))
+      .toEqual(['overview', 'score', 'activity', 'streaks']);
+    expect(percentValueAt(pctMember, '2026-09-10')).toBe(40);
+  });
+});

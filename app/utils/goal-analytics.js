@@ -7,9 +7,10 @@
 import { todayISO } from './today-iso.js';
 import {
   percentValue, percentHistory, historyValueAt, isoWeekKey, monthKey,
-  isEntryBased, isDecreasing, isFrequency, isDayCount, weekDayStates, daysBetween,
+  isEntryBased, isDecreasing, isFrequency, isDayCount, isAggregate, weekDayStates, daysBetween,
   PERIOD_WINDOW,
 } from './tracking.js';
+import { resolveMember, memberKey, memberWeight } from './aggregate.js';
 
 // ── Page list ────────────────────────────────────────────────────────────
 // The analytics view's own internal pages, in display order. The "Score"
@@ -46,6 +47,19 @@ import {
 // and this type has no period at all (see tracking.js).
 export function pagesFor(goal) {
   const pages = ['overview'];
+  // An aggregate gets Overview alone. Score plots a rolling weighted average
+  // per period and this type has no period; Streaks needs entries.
+  //
+  // Activity is the interesting exclusion. Its three cards all answer "which
+  // days did you act on this", and a group is never the thing you act on —
+  // its members are. There is also no reading of "the score moved" that
+  // means action here: every type self-advances as time passes (an Avoid
+  // score recovers as slips age out, a frequency score decays as periods
+  // roll, a To-date goal advances purely on the calendar), so a group's
+  // number drifts daily on its own. A calendar built on that would be lit
+  // almost everywhere and would mean nothing. For a group's activity, look
+  // at its members' own Activity pages.
+  if (isAggregate(goal)) return pages;
   if (isFrequency(goal) || isDecreasing(goal)) pages.push('score');
   if (goal?.tracking?.type !== 'countdown') pages.push('activity');
   const everyDay = goal?.tracking?.type === 'weekly' && goal?.tracking?.target === 7;
@@ -91,9 +105,74 @@ function asOf(goal, iso) {
 // tracking.history closes. Returns undefined — not 0 — when no snapshot
 // predates `iso` at all, so callers can tell "not enough history yet" apart
 // from a real 0%.
-export function percentValueAt(goal, iso) {
-  if (goal?.tracking?.type !== 'percentage') return percentValue(asOf(goal, iso), iso);
-  return historyValueAt(percentHistory(goal), iso);
+// `goals` is the store-shaped graph, and is needed only for an aggregate —
+// the one type whose past value lives in other goals rather than in itself.
+// Every other type ignores it, so the existing two-argument callers are
+// untouched. An aggregate asked without a graph reads `undefined` (no data)
+// rather than falling back to its current value: a flat line at today's
+// number is exactly the fabrication this whole approach exists to avoid, and
+// an unwired caller should show a blank chart, not a confident wrong one.
+export function percentValueAt(goal, iso, goals) {
+  if (goal?.tracking?.type === 'percentage') return historyValueAt(percentHistory(goal), iso);
+  if (isAggregate(goal)) return goals ? aggregateValueAt(goal, goals, iso) : undefined;
+  return percentValue(asOf(goal, iso), iso);
+}
+
+// ── aggregateValueAt ─────────────────────────────────────────────────────
+// A group's weighted mean AS OF a past date, derived rather than recorded.
+// This is why aggregates store no history: every member type answers
+// honestly at a past date on its own — asOf trims entries for the frequency
+// and day-count types, countdown is pure calendar arithmetic, and percentage
+// reads its own snapshot log.
+//
+// A member contributing `undefined` is DROPPED from that sample's weight sum
+// rather than counted as 0. Only a percentage member can do this, and only
+// before its first snapshot; counting it as zero would drag the whole group
+// down to report progress that never happened. The consequence worth
+// knowing: early in the series a group may be averaging fewer members than
+// it has.
+//
+// Returns undefined — not 0 — when nothing contributes at that date, so the
+// chart draws no point at all (the same convention expectedRampSeriesAt
+// uses). Contrast computeAggregate, whose 0 means "not configured yet" and
+// is about *now*.
+//
+// `cache` memoises within ONE date's traversal only (a group's value depends
+// on the date, so it cannot be shared across samples) and is what keeps a
+// diamond-shaped graph from being walked exponentially. `seen` stays
+// per-path, for cycles — see aggregate.js for why those are separate.
+export function aggregateValueAt(goal, goals, iso, seen = new Set(), cache = new Map()) {
+  const id = goal?.id;
+  if (id && cache.has(id)) return cache.get(id);
+  const nextSeen = new Set(seen);
+  if (id) nextSeen.add(id);
+
+  let weighted = 0;
+  let weightSum = 0;
+  let cyclic = false;
+  const counted = new Set();
+
+  for (const ref of goal?.tracking?.members ?? []) {
+    const key = memberKey(ref);
+    if (counted.has(key)) continue;
+    counted.add(key);
+    const member = resolveMember(goals, ref);
+    if (!member) continue;
+    if (nextSeen.has(member.id)) { cyclic = true; continue; }
+
+    const value = isAggregate(member)
+      ? aggregateValueAt(member, goals, iso, nextSeen, cache)
+      : percentValueAt(member, iso);
+    if (value === undefined) continue; // no data at this date yet
+
+    const weight = memberWeight(ref);
+    weighted += value * weight;
+    weightSum += weight;
+  }
+
+  const result = weightSum > 0 ? Math.round(weighted / weightSum) : undefined;
+  if (id && !cyclic) cache.set(id, result);
+  return result;
 }
 
 // ── dateListFor ──────────────────────────────────────────────────────────
@@ -105,7 +184,10 @@ export function dateListFor(goal, todayIso = todayISO(), daysBack = 180) {
   if (isDecreasing(goal)) return decreasingOnTrackDates(goal, todayIso, daysBack);
   if (isEntryBased(goal)) return (goal?.tracking?.entries ?? []).filter(cutoff);
   if (goal?.tracking?.type === 'percentage') return percentHistory(goal).map(h => h.date).filter(cutoff);
-  return []; // countdown has no discrete per-day log of any kind
+  // countdown has no discrete per-day log of any kind, and an aggregate has
+  // no log of its own at all — see pagesFor for why it has no Activity page
+  // to need one.
+  return [];
 }
 
 // The dates something was actually *logged* — as opposed to dateListFor's
@@ -286,12 +368,12 @@ export function denseSamples(unit, count, todayIso = todayISO(), maxPoints = 140
 // One point per sampled date, oldest first. Points with value === undefined
 // (percentage-type, before any snapshot existed) are left in — the chart is
 // expected to skip drawing them, not fabricate 0.
-export function completionSeriesAt(goal, isos) {
-  return isos.map(iso => ({ iso, value: percentValueAt(goal, iso) }));
+export function completionSeriesAt(goal, isos, goals) {
+  return isos.map(iso => ({ iso, value: percentValueAt(goal, iso, goals) }));
 }
 
-export function completionSeries(goal, unit, count, todayIso = todayISO()) {
-  return completionSeriesAt(goal, periodSamples(unit, count, todayIso));
+export function completionSeries(goal, unit, count, todayIso = todayISO(), goals) {
+  return completionSeriesAt(goal, periodSamples(unit, count, todayIso), goals);
 }
 
 // A single period's raw achieved fraction (0-1), independent of the
@@ -545,11 +627,11 @@ export function recoveryCurve(goal, unit, count, todayIso = todayISO()) {
 // ── Comparison delta (Overview "vs month/quarter/year") ─────────────────
 // null — not a fake 0 — when there's no snapshot old enough yet, so the
 // caller can show "not enough history" instead of a misleading number.
-export function comparisonDelta(goal, unit, todayIso = todayISO()) {
+export function comparisonDelta(goal, unit, todayIso = todayISO(), goals) {
   const pastIso = toIso(stepDate(unit, todayIso, 1));
-  const before = percentValueAt(goal, pastIso);
+  const before = percentValueAt(goal, pastIso, goals);
   if (before === undefined) return null;
-  const now = percentValueAt(goal, todayIso) ?? percentValue(goal, todayIso);
+  const now = percentValueAt(goal, todayIso, goals) ?? percentValue(goal, todayIso);
   return Math.round(now - before);
 }
 
@@ -564,7 +646,7 @@ export function updateCount(goal, todayIso = todayISO(), daysBack = 180) {
 // dueDate gets an ahead/behind read against it; one without just gets the
 // projected date on its own. Returns null when there's nothing useful to
 // say (already at 100%, or too little history to have a slope at all).
-export function projectPace(goal, todayIso = todayISO()) {
+export function projectPace(goal, todayIso = todayISO(), goals) {
   const current = percentValue(goal, todayIso);
   if (current >= 100) return null;
 
@@ -580,12 +662,12 @@ export function projectPace(goal, todayIso = todayISO()) {
   const anchorIso = isDayCount(goal) ? firstRecordIso(goal) : null;
   if (anchorIso) {
     const span = daysBetween(anchorIso, todayIso) / 30.44;
-    const startValue = percentValueAt(goal, anchorIso) ?? 0;
+    const startValue = percentValueAt(goal, anchorIso, goals) ?? 0;
     const rate = span > 0 ? (current - startValue) / span : 0;
     return paceFromRate(goal, current, rate, todayIso);
   }
 
-  const series = completionSeries(goal, 'month', 4, todayIso).filter(p => p.value !== undefined);
+  const series = completionSeries(goal, 'month', 4, todayIso, goals).filter(p => p.value !== undefined);
   if (series.length < 2) return null;
 
   const first = series[0], last = series[series.length - 1];

@@ -405,6 +405,7 @@ test('the histogram hangs its newest bar flush right, with the axis the same wid
 test('the Consistency chart does not phantom-overflow when its bars genuinely fit', async ({ page }) => {
   await createGoal(page, { title: 'No phantom scroll', type: 'weekly' });
   await reopenGoal(page);
+  await gotoTab(page, 2); // Score — where the Consistency card lives
 
   const m = await page.evaluate(() => {
     const sc = window.__ga().shadowRoot.querySelector('#perf-scroll');
@@ -429,7 +430,9 @@ test('changing a timeframe keeps focus on the select and leaves the rest of the 
     const ga = window.__ga().shadowRoot;
     const sel = ga.querySelector('#tf-progress');
     const hero = ga.querySelector('.hero-number');
-    const perf = ga.querySelector('#perf-body');
+    // The Consistency card moved to the Score page, so the sibling worth
+    // proving untouched here is the type/deadline stat row, not #perf-body.
+    const stats = ga.querySelector('.stat-row');
     const bodyHTML = ga.querySelector('#progress-body').innerHTML;
     sel.focus();
     const focusBefore = ga.activeElement?.id;
@@ -440,7 +443,7 @@ test('changing a timeframe keeps focus on the select and leaves the rest of the 
       focusAfter: ga.activeElement?.id,
       sameSelect: ga.querySelector('#tf-progress') === sel,
       heroUntouched: ga.querySelector('.hero-number') === hero,
-      otherCardUntouched: ga.querySelector('#perf-body') === perf,
+      otherCardUntouched: ga.querySelector('.stat-row') === stats,
       bodyChanged: ga.querySelector('#progress-body').innerHTML !== bodyHTML,
     };
   });
@@ -751,7 +754,7 @@ test('the day-label rows line up with the real heatmap cell height', async ({ pa
 test('Consistency bars only stretch to fill on the quarter timeframe, never week/month', async ({ page }) => {
   await createGoal(page, { title: 'Fixed bar width', type: 'weekly' });
   await reopenGoal(page);
-  await gotoTab(page, 1); // Overview
+  await gotoTab(page, 2); // Score — where the Consistency card lives
 
   const m = await page.evaluate(() => {
     const ga = window.__ga().shadowRoot;
@@ -793,4 +796,102 @@ test('Consistency bars only stretch to fill on the quarter timeframe, never week
   // account for the full row width — the opposite layout rule from
   // week/month, where leftover space stays unused rather than stretching.
   expect(m.quarter.colW * 4 + m.quarter.gap * 3).toBeGreaterThan(m.quarter.scrollW - 2);
+});
+
+// ── Tab scroll positions ─────────────────────────────────────────────────────
+// Needs a real browser: the whole thing is scrollTop/scrollWidth on a
+// shadow-DOM scroll container, none of which happy-dom models.
+//
+// The model: a dialog opens with every tab at the top and every chart showing
+// the current period; while it stays open each tab remembers where it was;
+// reopening starts over.
+
+const bodyTop = page => page.evaluate(() =>
+  window.__modal().shadowRoot.querySelector('.body').scrollTop);
+
+async function scrollBody(page, top) {
+  await page.evaluate(t => {
+    window.__modal().shadowRoot.querySelector('.body').scrollTop = t;
+  }, top);
+  await page.waitForTimeout(60);
+}
+
+test('a tab visited for the first time opens at the top, not where the last one was', async ({ page }) => {
+  // The bug: _showView only toggles `hidden` on the sibling views and never
+  // touched the shared modal body, so a first visit inherited the outgoing
+  // tab's scrollTop and landed mid-page.
+  await createGoal(page, { title: 'Scroll reset', type: 'weekly', target: 7 });
+  await reopenGoal(page);
+  await gotoTab(page, 1); // Overview
+
+  await scrollBody(page, 400);
+  const scrolled = await bodyTop(page);
+  expect(scrolled).toBeGreaterThan(0); // the page really is long enough to scroll
+
+  await gotoTab(page, 3); // Activity, never visited
+  expect(await bodyTop(page)).toBe(0);
+
+  await gotoTab(page, 4); // Streaks, never visited
+  expect(await bodyTop(page)).toBe(0);
+});
+
+test('a tab returned to lands back where it was left', async ({ page }) => {
+  await createGoal(page, { title: 'Scroll memory', type: 'weekly', target: 7 });
+  await reopenGoal(page);
+  await gotoTab(page, 1);
+
+  await scrollBody(page, 300);
+  const left = await bodyTop(page);
+  expect(left).toBeGreaterThan(0);
+
+  await gotoTab(page, 3);
+  expect(await bodyTop(page)).toBe(0);
+
+  await gotoTab(page, 1); // back to Overview
+  expect(await bodyTop(page)).toBe(left);
+});
+
+test('reopening the dialog starts every tab at the top again', async ({ page }) => {
+  await createGoal(page, { title: 'Scroll fresh open', type: 'weekly', target: 7 });
+  await reopenGoal(page);
+  await gotoTab(page, 1);
+  await scrollBody(page, 300);
+  expect(await bodyTop(page)).toBeGreaterThan(0);
+
+  await page.evaluate(() => window.__modal().close());
+  await page.waitForFunction(() => !window.__dialogOpen());
+  await reopenGoal(page);
+
+  // Opens on Overview (see _resetForm) — and at the top.
+  expect(await bodyTop(page)).toBe(0);
+});
+
+test('a chart keeps its own horizontal position across a tab switch, and re-anchors on reopen', async ({ page }) => {
+  await createGoal(page, { title: 'Chart scroll', type: 'weekly', target: 7 });
+  await reopenGoal(page);
+  await gotoTab(page, 2); // Score — the Consistency chart lives here
+
+  const read = () => page.evaluate(() => {
+    const el = window.__ga().shadowRoot.querySelector('#perf-scroll');
+    return el ? { left: Math.round(el.scrollLeft), max: Math.round(el.scrollWidth - el.clientWidth) } : null;
+  });
+
+  const opened = await read();
+  // Charts open anchored to the current period, i.e. hard right.
+  expect(opened.left).toBe(opened.max);
+
+  if (opened.max > 0) {
+    await page.evaluate(() => { window.__ga().shadowRoot.querySelector('#perf-scroll').scrollLeft = 0; });
+    await page.waitForTimeout(60);
+    await gotoTab(page, 1);
+    await gotoTab(page, 2);
+    expect((await read()).left).toBe(0); // remembered, not re-anchored
+  }
+
+  await page.evaluate(() => window.__modal().close());
+  await page.waitForFunction(() => !window.__dialogOpen());
+  await reopenGoal(page);
+  await gotoTab(page, 2);
+  const reopened = await read();
+  expect(reopened.left).toBe(reopened.max); // fresh open re-anchors
 });

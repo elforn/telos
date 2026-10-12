@@ -77,9 +77,16 @@ function bucketOf(dueDate, active, todayIso) {
 // otherwise still nag). A target of 0/undefined falls back to Infinity so a
 // half-configured goal stays active rather than reading as instantly done —
 // the same err-toward-active direction as everything else here.
+//
+// aggregate is the cheapest of the lot: its percentage is computed once by
+// app/utils/aggregate.js and parked in tracking.aggValue, so reading it here
+// is exact without replicating anything at all — no member resolution, no
+// recursion, no weighting. A missing aggValue (never reconciled yet) falls
+// back to active, the same err-toward-active direction as everything else.
 function isActive(goal) {
   const tr = goal?.tracking;
   if (tr?.type === 'percentage') return (tr.value ?? 0) < 100;
+  if (tr?.type === 'aggregate') return (tr.aggValue ?? 0) < 100;
   if (tr?.type === 'daycount') return (tr.entries?.length ?? 0) < (tr.target || Infinity);
   return true;
 }

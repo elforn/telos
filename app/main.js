@@ -12,6 +12,7 @@ import '../_lib/core/components/update-banner/update-banner.js';
 import { backupBeforeRepair } from './utils/backup-before-repair.js';
 import { combineSharedText } from './utils/combine-shared-text.js';
 import { migrateGoals } from './utils/migrate-goals.js';
+import { startAggregateReconciler } from './store/aggregate-reconciler.js';
 import './pages/year-redirect.js';
 import './pages/home-page.js';
 import './pages/not-found-page.js';
@@ -28,6 +29,16 @@ import { buildDigest } from './utils/build-telos-digest.js';
 initTheme();
 
 await boot({ dbName: 'telos', initialState: { goals: {}, images: {}, accentColors: {}, reflections: {}, lists: [], goalsTagsVisible: {}, goalsDeadlinesVisible: {}, listsTagsVisible: {}, listsRollupVisible: true, listsDeadlinesVisible: {} }, migrate: migrateGoals });
+
+// Aggregate goals derive their percentage from other goals, so the value is
+// computed once and stored rather than resolved on every read (percentValue
+// is pure over a single goal, and two of its callers — export-markdown.js and
+// the classic-script sw-extensions.js — cannot see the rest of the store at
+// all). This subscription is what keeps that stored number true: it fires
+// immediately for the boot pass, then on every later `goals` write from
+// anywhere. See app/store/aggregate-reconciler.js for why the write-back is
+// deferred rather than synchronous.
+startAggregateReconciler();
 
 // bottom-nav mounts (and subscribes) before boot loads state, and boot doesn't
 // re-notify existing subscribers — refresh its urgency roll-up and Upcoming

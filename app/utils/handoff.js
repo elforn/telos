@@ -30,8 +30,23 @@ export function buildItemsHandoff(items) {
   return { __telosHandoff: true, kind: 'items', items: items.map(item => ({ ...item, inGoals: [] })) };
 }
 
+// An aggregate's members point at goal ids that exist only in the sender's
+// store — the same dangling-reference problem every builder above avoids by
+// stripping inGoals to []. Here there is something better to fall back on
+// than nothing: the computed percentage is a real number, so the goal
+// arrives as a plain percentage holding its last-known value rather than as
+// an empty group. Its chart does not travel, because a group stores no
+// history at all — the curve is derived from members the receiver will not
+// have. One-way, like everything else in a handoff; the receiver can rebuild
+// it as a group over their own goals if they want one.
 export function buildGoalHandoff(goal) {
-  return { __telosHandoff: true, kind: 'goal', goal };
+  if (goal?.tracking?.type !== 'aggregate') return { __telosHandoff: true, kind: 'goal', goal };
+  const { members, aggValue, ...tracking } = goal.tracking;
+  return {
+    __telosHandoff: true,
+    kind: 'goal',
+    goal: { ...goal, tracking: { ...tracking, type: 'percentage', value: aggValue ?? 0 } },
+  };
 }
 
 export function buildYearHandoff(year, yearGoals) {

@@ -12,6 +12,11 @@ function mount(goal) {
 
 const TODAY = '2026-09-20';
 
+// Consistency moved from Overview to the Score page. Score is page 1 for
+// every type that has it, so any test reaching #tf-perf / .perf-* has to
+// navigate there first.
+function toScore(el) { el.activePage = 1; return el; }
+
 function pctGoal(value, history = []) {
   return { id: 'g1', title: 'Ship it', dueDate: '2026-12-31', tracking: { type: 'percentage', value, history } };
 }
@@ -800,6 +805,8 @@ describe('goal-analytics — a goal with no tracking at all', () => {
 
 describe('goal-analytics — Consistency chart', () => {
   it('is not shown for a "To date" goal, which has no per-period target to measure', () => {
+    // No Score page for this type at all, so there is nowhere the card
+    // could appear — Overview stays intact without it.
     const el = mount(countdownGoal('2026-01-01', '2026-12-31'));
     expect(el.shadowRoot.querySelector('#perf-scroll')).toBeNull();
     expect(el.shadowRoot.querySelector('#tf-perf')).toBeNull();
@@ -808,7 +815,7 @@ describe('goal-analytics — Consistency chart', () => {
 
   it('is shown for every type that does have one', () => {
     for (const goal of [weeklyGoal(3, [isoDaysAgo(0)]), monthlyGoal(2, [isoDaysAgo(0)]), decreasingGoal(1, [])]) {
-      expect(mount(goal).shadowRoot.querySelector('#tf-perf')).toBeTruthy();
+      expect(toScore(mount(goal)).shadowRoot.querySelector('#tf-perf')).toBeTruthy();
     }
   });
 
@@ -827,7 +834,7 @@ describe('goal-analytics — Consistency chart', () => {
         '2026-09-01', '2026-09-02', '2026-09-03',        // two weeks back: 3 of 2 — the high, and over 100%
         // the week before that, and everything older: untouched (0%)
       ];
-      return mount(weeklyGoal(target, entries));
+      return toScore(mount(weeklyGoal(target, entries)));
     }
 
     it('labels the single highest bar, inside its own column so it tracks that bar', () => {
@@ -878,11 +885,76 @@ describe('goal-analytics — Consistency chart', () => {
         const base = new Date(2026, 8, 20 - w * 7);
         return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
       });
-      const el = mount(weeklyGoal(1, entries));
+      const el = toScore(mount(weeklyGoal(1, entries)));
       const vals = [...el.shadowRoot.querySelectorAll('.perf-val')];
       const labelled = vals.map(v => v.textContent.trim()).filter(Boolean);
       expect(labelled).toEqual(['100%']);
     });
+  });
+});
+
+describe('goal-analytics — Consistency lives on the Score page', () => {
+  // The card's own guard is isFrequency || isDecreasing, which is the exact
+  // predicate pagesFor uses to grant the Score page — so it could never
+  // appear on an Overview without a Score tab behind it. Keeping both on
+  // Overview left these three types the only ones with two full charts there.
+  const WITH_SCORE = () => [weeklyGoal(3, [isoDaysAgo(0)]), monthlyGoal(2, [isoDaysAgo(0)]), decreasingGoal(1, [])];
+
+  it('is absent from Overview for every type that has it', () => {
+    for (const goal of WITH_SCORE()) {
+      const el = mount(goal);
+      expect(el.shadowRoot.querySelector('#perf-body')).toBeNull();
+      expect(el.shadowRoot.querySelector('#tf-perf')).toBeNull();
+      // Overview keeps its own chart and the rest of the page.
+      expect(el.shadowRoot.querySelector('#progress-body')).toBeTruthy();
+      expect(el.shadowRoot.querySelector('.hero-number')).toBeTruthy();
+    }
+  });
+
+  it('is present on the Score page, below the contribution grid', () => {
+    for (const goal of WITH_SCORE()) {
+      const el = toScore(mount(goal));
+      const grid = el.shadowRoot.querySelector('#calc-scroll');
+      const perf = el.shadowRoot.querySelector('#perf-body');
+      expect(grid).toBeTruthy();
+      expect(perf).toBeTruthy();
+      // Reading order is the argument for the move: the window the score
+      // reads first, the longer trend second.
+      expect(grid.compareDocumentPosition(perf) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
+  it('its timeframe select is wired on the Score page', () => {
+    // The regression this move introduced and the suite caught: #tf-perf was
+    // bound only under _wireInteractive('overview'), so once the card moved
+    // the select rendered inert — changing it did nothing at all.
+    const el = toScore(mount(weeklyGoal(1, Array.from({ length: 20 }, (_, i) => isoDaysAgo(i * 7)))));
+    const before = el.shadowRoot.querySelectorAll('.perf-col').length;
+    const sel = el.shadowRoot.querySelector('#tf-perf');
+    sel.value = 'quarter';
+    sel.dispatchEvent(new Event('change'));
+    expect(el.shadowRoot.querySelectorAll('.perf-col').length).toBe(4);
+    expect(before).not.toBe(4);
+  });
+
+  it('changing it swaps only the card body, leaving the grid untouched', () => {
+    const el = toScore(mount(weeklyGoal(1, [isoDaysAgo(7), isoDaysAgo(0)])));
+    const grid = el.shadowRoot.querySelector('#calc-scroll');
+    const sel = el.shadowRoot.querySelector('#tf-perf');
+    sel.value = 'month';
+    sel.dispatchEvent(new Event('change'));
+    expect(el.shadowRoot.querySelector('#calc-scroll')).toBe(grid);
+    expect(el.shadowRoot.querySelector('#tf-perf')).toBe(sel); // focus stays put
+  });
+
+  it('types without a Score page have nowhere for it and show none', () => {
+    for (const goal of [pctGoal(50, [{ date: isoDaysAgo(0), value: 50 }]),
+                        countdownGoal('2026-01-01', '2026-12-31'),
+                        dayCountGoal(50, [isoDaysAgo(0)])]) {
+      const el = mount(goal);
+      expect(el.shadowRoot.querySelector('#tf-perf')).toBeNull();
+      expect(el.shadowRoot.querySelector('#perf-body')).toBeNull();
+    }
   });
 });
 
@@ -997,7 +1069,7 @@ describe('goal-analytics — one year is the ceiling on every chart', () => {
   }
 
   it('the Consistency chart plots 4 quarters, not 8', () => {
-    const el = weeklyWithYear();
+    const el = toScore(weeklyWithYear());
     pick(el, '#tf-perf', 'quarter');
     expect(el.shadowRoot.querySelectorAll('.perf-col').length).toBe(4);
   });
@@ -1031,12 +1103,12 @@ describe('goal-analytics — Consistency/Activity bar count is bounded by first 
   }
 
   it('a goal 3 weeks old shows 3 week-bars, not the full 12-week cap', () => {
-    const el = mount(weeklyGoal(1, [isoDaysAgo(14), isoDaysAgo(7), isoDaysAgo(0)]));
+    const el = toScore(mount(weeklyGoal(1, [isoDaysAgo(14), isoDaysAgo(7), isoDaysAgo(0)])));
     expect(el.shadowRoot.querySelectorAll('.perf-col').length).toBe(3);
   });
 
   it('a goal 3 months old shows 3 month-bars, not the full 12-month cap', () => {
-    const el = mount(weeklyGoal(1, [isoDaysAgo(60)]));
+    const el = toScore(mount(weeklyGoal(1, [isoDaysAgo(60)])));
     pick(el, '#tf-perf', 'month');
     expect(el.shadowRoot.querySelectorAll('.perf-col').length).toBe(3);
   });
@@ -1050,7 +1122,7 @@ describe('goal-analytics — Consistency/Activity bar count is bounded by first 
   it('never reaches before 1 January of the year being viewed, even for an older goal', () => {
     // First entry is in the PRIOR year — the bound should clamp to this
     // year's own 1 January instead of reaching back to that entry.
-    const el = mountFor(weeklyGoal(1, [`${THIS_YEAR - 1}-11-01`, `${THIS_YEAR}-01-15`]), THIS_YEAR);
+    const el = toScore(mountFor(weeklyGoal(1, [`${THIS_YEAR - 1}-11-01`, `${THIS_YEAR}-01-15`]), THIS_YEAR));
     pick(el, '#tf-perf', 'month');
     const months = el.shadowRoot.querySelectorAll('.perf-col').length;
     // From January of THIS_YEAR through "today" (the real current month) —
@@ -1061,13 +1133,13 @@ describe('goal-analytics — Consistency/Activity bar count is bounded by first 
   });
 
   it('falls back to the year boundary alone for a goal with no entries yet', () => {
-    const el = mount(weeklyGoal(3, []));
+    const el = toScore(mount(weeklyGoal(3, [])));
     // No throw, and at least one column rendered rather than an empty chart.
     expect(el.shadowRoot.querySelectorAll('.perf-col').length).toBeGreaterThan(0);
   });
 
   it('quarter is unaffected — still shows all 4 regardless of how recent the first entry is', () => {
-    const el = mount(weeklyGoal(1, [isoDaysAgo(0)])); // first entry is today
+    const el = toScore(mount(weeklyGoal(1, [isoDaysAgo(0)]))); // first entry is today
     pick(el, '#tf-perf', 'quarter');
     expect(el.shadowRoot.querySelectorAll('.perf-col').length).toBe(4);
   });
@@ -1201,7 +1273,7 @@ describe('goal-analytics — few bars stretch to fill the card', () => {
   }
 
   it('the Consistency chart fills and names every quarter', () => {
-    const el = weekly();
+    const el = toScore(weekly());
     pick(el, '#tf-perf', 'quarter');
     expect(el.shadowRoot.querySelector('.perf-tracks').classList.contains('fill')).toBe(true);
     expect([...el.shadowRoot.querySelectorAll('.perf-ax')].every(a => a.textContent.trim())).toBe(true);
@@ -1217,7 +1289,7 @@ describe('goal-analytics — few bars stretch to fill the card', () => {
   });
 
   it('keeps the fixed-width, right-anchored layout once the bars could overflow', () => {
-    const el = weekly();
+    const el = toScore(weekly());
     pick(el, '#tf-perf', 'month');
     expect(el.shadowRoot.querySelector('.perf-tracks').classList.contains('fill')).toBe(false);
     // The sparse first/middle/last axis rule is back.
@@ -1274,17 +1346,18 @@ describe('goal-analytics — every chart opens on the goal’s natural period', 
     // the Streaks-gating behaviour itself (covered separately).
     for (const goal of [weeklyGoal(7, []), decreasingGoal(1, [])]) {
       const el = mount(goal);
-      expect(selected(el, '#tf-progress')).toBe('week');
-      expect(selected(el, '#tf-perf')).toBe('week');
+      expect(selected(el, '#tf-progress')).toBe('week');   // Overview
+      toScore(el);
+      expect(selected(el, '#tf-perf')).toBe('week');       // Score
       el.activePage = el.pageCount - 2; // Activity
       expect(selected(el, '#tf-activity')).toBe('week');
     }
   });
 
   it('week for a percentage goal too, on the charts it actually has', () => {
-    // No #tf-perf here: percentage has no per-period target for Consistency
-    // to measure against, so it has no Consistency card at all — see
-    // _consistencyCard's own guard.
+    // No #tf-perf anywhere for this type: percentage has no per-period
+    // target for Consistency to measure against, so no Consistency card —
+    // and no Score page for one to live on either.
     const el = mount(pctGoal(50, [{ date: isoDaysAgo(0), value: 50 }]));
     expect(selected(el, '#tf-progress')).toBe('week');
     expect(el.shadowRoot.querySelector('#tf-perf')).toBeNull();
@@ -1295,6 +1368,7 @@ describe('goal-analytics — every chart opens on the goal’s natural period', 
   it('month for a monthly goal — its weeks hold no fraction of a monthly target', () => {
     const el = mount(monthlyGoal(2, []));
     expect(selected(el, '#tf-progress')).toBe('month');
+    toScore(el);
     expect(selected(el, '#tf-perf')).toBe('month');
     el.activePage = 2;
     expect(selected(el, '#tf-activity')).toBe('month');
@@ -1335,5 +1409,120 @@ describe('goal-analytics — the newest column sits at the right edge', () => {
     // stranded mid-card with empty space trailing it.
     expect(css).toMatch(/\.heatmap-inner\s*\{[^}]*margin-inline-start:\s*auto/);
     expect(css).toMatch(/\.freqgrid\s*\{[^}]*margin-inline-start:\s*auto/);
+  });
+});
+
+// ── Aggregate ("Group") goals ───────────────────────────────────────────────
+// A group stores no history. Its past values are derived from its members,
+// so the component is handed the goal graph as a property (same contract as
+// `members`) and reads no store of its own.
+
+const AGG_Y = '2026';
+const aggRef = (goalId, weight) =>
+  weight === undefined ? { year: AGG_Y, section: 'focus', goalId } : { year: AGG_Y, section: 'focus', goalId, weight };
+
+const AGG_MEMBER = {
+  id: 'p', title: 'First draft',
+  tracking: { type: 'percentage', value: 70,
+    history: [{ date: '2026-08-01', value: 10 }, { date: '2026-09-01', value: 40 }, { date: '2026-09-18', value: 70 }] },
+};
+
+function aggGoal(members = [aggRef('p')], aggValue = 70) {
+  return { id: 'g7', title: 'Ship the book', dueDate: '2026-12-31',
+           tracking: { type: 'aggregate', members, aggValue } };
+}
+const aggGraph = extra => ({
+  [AGG_Y]: { capstone: [], milestones: [], wow: [], focus: [AGG_MEMBER, ...(extra ?? [])] },
+});
+
+function mountAgg({ goal = aggGoal(), graph = aggGraph(), members = null } = {}) {
+  const el = document.createElement('goal-analytics');
+  document.body.appendChild(el);
+  if (members) el.members = members;
+  el.goals = graph;
+  el.goal = goal;
+  return el;
+}
+
+describe('goal-analytics — aggregate goals', () => {
+  it('has exactly one page: Overview', () => {
+    expect(mountAgg().pageCount).toBe(1);
+  });
+
+  it('renders the hero number from the stored value', () => {
+    expect(mountAgg().shadowRoot.querySelector('.hero-number .big').textContent).toContain('70');
+  });
+
+  it('draws a sparkline from derived past values', () => {
+    const el = mountAgg();
+    expect(el.shadowRoot.querySelector('.hero-number svg')).toBeTruthy();
+  });
+
+  it('draws no expected-pace line — a group has no pace of its own', () => {
+    const el = mountAgg();
+    const dashed = [...el.shadowRoot.querySelectorAll('polyline')]
+      .filter(pl => pl.getAttribute('stroke-dasharray'));
+    expect(dashed).toHaveLength(0);
+  });
+
+  it('shows the comparison row, now that the deltas are real readings', () => {
+    expect(mountAgg().shadowRoot.querySelector('.stat-row.comparison')).toBeTruthy();
+  });
+
+  it('shows no count stat — a group has no log of its own to count', () => {
+    const labels = [...mountAgg().shadowRoot.querySelectorAll('.stat-label')].map(n => n.textContent);
+    expect(labels).not.toContain('entries');
+    expect(labels).not.toContain('updates');
+    expect(labels).not.toContain('changes');
+  });
+
+  it('clamps any page index back to Overview', () => {
+    const el = mountAgg();
+    el.activePage = 2;
+    expect(el.shadowRoot.querySelector('.hero-number')).toBeTruthy();
+    expect(el.shadowRoot.querySelector('.histogram')).toBeNull();
+    expect(el.shadowRoot.querySelector('.heatmap-outer')).toBeNull();
+    expect(el.shadowRoot.querySelector('.calc-header')).toBeNull();
+  });
+
+  it('renders the member breakdown when members are supplied', () => {
+    const el = mountAgg({ members: [
+      { title: 'Outline', pct: 100, weight: 1 },
+      { title: 'First draft', pct: 42, weight: 3 },
+    ] });
+    const rows = [...el.shadowRoot.querySelectorAll('.members-card-row')];
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('.member-name').textContent).toBe('Outline');
+    expect(rows[1].querySelector('.member-name').textContent).toContain('×3');
+    expect(rows[1].querySelector('.streak-fill').style.width).toBe('42%');
+  });
+
+  it('omits an untouched weight from the breakdown label', () => {
+    const el = mountAgg({ members: [{ title: 'Outline', pct: 50, weight: 1 }] });
+    expect(el.shadowRoot.querySelector('.member-name').textContent).toBe('Outline');
+  });
+
+  it('escapes a member title rather than injecting it as markup', () => {
+    const el = mountAgg({ members: [{ title: '<img src=x onerror=1>', pct: 10, weight: 1 }] });
+    expect(el.shadowRoot.querySelector('.member-name img')).toBeNull();
+    expect(el.shadowRoot.querySelector('.member-name').textContent).toContain('<img');
+  });
+
+  it('renders no breakdown card at all when there is nothing to break down', () => {
+    expect(mountAgg().shadowRoot.querySelector('.members-card-row')).toBeNull();
+  });
+
+  it('renders without throwing when handed no graph at all', () => {
+    // Every derived reading reads undefined, so the chart is blank rather
+    // than a flat line at today's number.
+    const el = document.createElement('goal-analytics');
+    document.body.appendChild(el);
+    el.goal = aggGoal();
+    expect(el.shadowRoot.querySelector('.hero-number .big').textContent).toContain('70');
+  });
+
+  it('renders a brand-new group with no members without throwing', () => {
+    const el = mountAgg({ goal: aggGoal([], 0) });
+    expect(el.shadowRoot.querySelector('.hero-number .big').textContent).toContain('0');
   });
 });

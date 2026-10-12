@@ -2,8 +2,8 @@ import { AppElement } from '../../../_lib/core/app-element.js';
 import { t } from '../../../_lib/core/strings.js';
 import { todayISO } from '../../utils/today-iso.js';
 import {
-  isFrequency, isDecreasing, isCountdown, isDayCount, isoWeekKey, monthKey, PERIOD_WINDOW, weekDayStates, daysBetween,
-  WEEKDAYS, countdownDaysRemaining,
+  isFrequency, isDecreasing, isCountdown, isDayCount, isAggregate, isoWeekKey, monthKey, PERIOD_WINDOW, weekDayStates, daysBetween,
+  WEEKDAYS, countdownDaysRemaining, percentValue,
 } from '../../utils/tracking.js';
 import {
   pagesFor, percentValueAt, dateListFor, rawLoggedDates, topStreaks, countByBucket,
@@ -294,7 +294,39 @@ function naturalUnitIsMonth(goal) { return naturalUnitFor(goal) === 'month'; }
 
 function unitWord(unit, n) { return n === 1 ? t(`goal-analytics.unit-${unit}`) : t(`goal-analytics.unit-${unit}-plural`); }
 
+// ── Public interface ─────────────────────────────────────────────────────
+// Three properties, and for an aggregate ("Group") goal all three have to be
+// set together — they are not independent:
+//
+//   .goal     the record to render. Required.
+//   .goals    the store-shaped goal graph. Required for an aggregate: its
+//             value at a past date is derived from its members rather than
+//             recorded on itself, so without this every past reading is
+//             undefined and the charts come up blank. Harmless for every
+//             other type, which ignores it.
+//   .members  [{ title, pct, weight }] for the breakdown card. Resolved by
+//             the caller because it owns availableGoals; without it the card
+//             simply doesn't render.
+//
+// A blank chart is the deliberate failure mode for a missing .goals — see
+// percentValueAt's own note on why a flat line at today's value would be
+// worse. goal-dialog is the only caller today and sets all three; anything
+// new has to do the same.
 class GoalAnalytics extends AppElement {
+  // [{ title, pct, weight }] for an aggregate goal, resolved by goal-dialog
+  // because that component is the one holding availableGoals. Keeps this
+  // component at the UI tier with no store knowledge, as it always has been.
+  set members(val) { this._members = val ?? []; }
+  get members()    { return this._members ?? []; }
+
+  // The store-shaped goal graph, also supplied by goal-dialog. Needed only
+  // for an aggregate, whose value at a past date is derived from its members
+  // rather than recorded on itself (see aggregateValueAt). Arrives as a
+  // property for the same reason `members` does — this component still reads
+  // no store of its own.
+  set goals(val) { this._goals = val ?? null; }
+  get goals()    { return this._goals ?? null; }
+
   // Every analytics page leads with which goal it belongs to — the edit form
   // shows the title in its own input, but the analytics pages otherwise give
   // no clue which goal you swiped into.
@@ -821,6 +853,12 @@ class GoalAnalytics extends AppElement {
         /* Streaks */
         .streak-list { display: flex; flex-direction: column; gap: 9px; }
         .streak-row { display: grid; grid-template-columns: 46px 1fr 32px; align-items: center; gap: var(--space-2); }
+        /* A goal title needs far more room than a streak's date label, so the
+           members card overrides only the first column — same grid, same bar,
+           same number, only the label width differs. */
+        .members-card-row { grid-template-columns: minmax(0, 1.4fr) 1fr 34px; }
+        .member-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .member-weight-note { color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); }
         .streak-date { font-size: var(--font-size-micro); color: var(--color-text-muted); white-space: nowrap; }
         .streak-track { block-size: 9px; background: var(--color-border); border-radius: var(--radius-full); overflow: hidden; }
         .streak-fill { block-size: 100%; background: var(--color-accent); border-radius: var(--radius-full); }
@@ -974,23 +1012,34 @@ class GoalAnalytics extends AppElement {
   //    the top of the document every time. Swapping only .card-body leaves
   //    .card-head, and therefore the select, untouched — so focus simply stays
   //    where it was and the listener bound here stays bound.
+  //
+  // Dispatched by page rather than wiring everything unconditionally, so a
+  // select that moves between pages has to move its listener too — which is
+  // exactly what caught the Consistency card's move off Overview: the card
+  // rendered on Score and its timeframe select did nothing at all, because
+  // #tf-perf was still only ever bound under 'overview'.
   _wireInteractive(kind) {
     if (kind === 'overview') this._wireOverviewSelects();
+    if (kind === 'score') this._wireScoreSelects();
     if (kind === 'activity') this._wireActivitySelect();
     this._schedulePostRenderSync();
   }
 
   _wireOverviewSelects() {
-    const today = () => todayISO();
     const sel = this.shadowRoot.querySelector('#tf-progress');
     sel?.addEventListener('change', () => {
       this._tfProgress = sel.value;
-      this._swapCardBody('progress-body', this._progressBody(this._goal, today()));
+      this._swapCardBody('progress-body', this._progressBody(this._goal, todayISO()));
     });
+  }
+
+  // Consistency's own select. Lives here rather than with the Overview ones
+  // because the card does — see _renderScore.
+  _wireScoreSelects() {
     const perf = this.shadowRoot.querySelector('#tf-perf');
     perf?.addEventListener('change', () => {
       this._tfPerf = perf.value;
-      this._swapCardBody('perf-body', this._consistencyBody(this._goal, today()));
+      this._swapCardBody('perf-body', this._consistencyBody(this._goal, todayISO()));
       this._syncScrollable('perf-scroll');
     });
   }
@@ -1330,7 +1379,7 @@ class GoalAnalytics extends AppElement {
   // hero number and the page's assembly order.
   _renderOverview(goal) {
     const todayIso = todayISO();
-    const current = percentValueAt(goal, todayIso) ?? 0;
+    const current = this._valueNow(goal, todayIso);
     // Countdown gets no trend section and no pace callout. Its percentage is
     // the calendar running down — nothing else feeds it — so every trend
     // reading is a restatement of the arithmetic the user already set up: the
@@ -1339,8 +1388,14 @@ class GoalAnalytics extends AppElement {
     // projected right around your 31 Dec deadline" — it could never say
     // anything else). The days-left card below carries the one figure here
     // that actually tells the user something.
+    // A group keeps the trend section. Its deltas and projection read values
+    // DERIVED at each past date from its members (see aggregateValueAt), not
+    // a stored log, so "+7 vs last month" is a real comparison of two real
+    // readings. Countdown still has none: its deltas are a fixed rate it
+    // cannot deviate from, and its projected finish is the due date by
+    // construction.
     const trend = !isCountdown(goal);
-    const recent = completionSeriesAt(goal, this._sparkSamples(todayIso)).map(p => p.value);
+    const recent = completionSeriesAt(goal, this._sparkSamples(todayIso), this.goals).map(p => p.value);
     const spark = this._sparkline(recent);
 
     return `<div class="page">
@@ -1350,14 +1405,58 @@ class GoalAnalytics extends AppElement {
       </div>
       <div class="stat-row centered">${this._typeCard(goal, todayIso)}${this._deadlineCard(goal, todayIso)}${this._daysLeftCard(goal, todayIso)}</div>
       ${trend ? `<div class="stat-row comparison">${this._comparisonRow(goal, todayIso)}</div>` : ''}
-      ${trend ? this._renderPaceCallout(projectPace(goal, todayIso), goal) : ''}
+      ${trend ? this._renderPaceCallout(projectPace(goal, todayIso, this.goals), goal) : ''}
       ${this._progressCard(goal, todayIso)}
-      ${this._consistencyCard(goal, todayIso)}
+      ${this._membersCard(goal)}
     </div>`;
   }
 
   // What kind of goal this is, and how much has been logged — the two stats
   // sitting side by side under the hero number.
+  // Why a group's number is what it is — the one thing on this page a hero
+  // percentage cannot say on its own. Reuses the Streaks card's
+  // label | bar | number grid rather than a second three-column layout,
+  // with the weight folded into the label where it belongs (it modifies the
+  // member; it isn't a third measurement).
+  //
+  // Renders nothing when there is nothing to break down: a group with no
+  // members yet, or whose members were all deleted. An empty card reads as a
+  // bug rather than as an empty state.
+  // Today's value. For a group that is the reconciler's cached aggValue —
+  // O(1), already correct, and exactly what the goal's own row shows.
+  // Derivation (aggregateValueAt) exists for PAST dates only, where there is
+  // nothing stored to read; using it for today would mean this page could
+  // disagree with the row over the same number, and would read 0 whenever
+  // the graph property happened not to be wired.
+  _valueNow(goal, todayIso) {
+    if (isAggregate(goal)) return percentValue(goal, todayIso);
+    return percentValueAt(goal, todayIso, this.goals) ?? 0;
+  }
+
+  _membersCard(goal) {
+    if (!isAggregate(goal)) return '';
+    const members = this.members;
+    if (!members.length) return '';
+    const rows = members.map(m => {
+      const pct = Math.max(0, Math.min(100, Math.round(m.pct ?? 0)));
+      // The weight only earns a mention once it is doing something — an
+      // untouched x1 on every row is noise.
+      const weight = (m.weight ?? 1) > 1
+        ? ` <span class="member-weight-note">\u00d7${m.weight}</span>` : '';
+      // esc() because a member title is free user text and this component
+      // renders through innerHTML — see esc's own note above.
+      return `<div class="streak-row members-card-row">
+        <span class="streak-date member-name">${esc(m.title)}${weight}</span>
+        <div class="streak-track"><div class="streak-fill" style="width:${pct}%"></div></div>
+        <span class="streak-len tabular">${pct}%</span>
+      </div>`;
+    }).join('');
+    return `<div class="card">
+      <div class="card-head"><h3>${t('goal-analytics.members-card')}</h3></div>
+      <div class="streak-list">${rows}</div>
+    </div>`;
+  }
+
   _typeCard(goal, todayIso) {
     // Every read here goes through `tr` rather than goal.tracking directly: a
     // goal whose tracking was never migrated (or a caller passing a bare
@@ -1377,7 +1476,11 @@ class GoalAnalytics extends AppElement {
       : `goal-dialog.type-summary-${tr.type}`;
     const summary = tr.type === 'countdown'
       ? (goal.dueDate ? fullDate(goal.dueDate) : null) // no deadline set yet — nothing to count down to
-      : summaryKey ? t(summaryKey, { target: tr.target }) : null;
+      // Aggregate's summary counts members rather than naming a target it
+      // doesn't have — goal-dialog's _renderTypeSection makes the identical
+      // substitution against the identical key, which is the drift this
+      // comment block has always been warning about.
+      : summaryKey ? t(summaryKey, { target: tr.target, count: tr.members?.length ?? 0 }) : null;
     // A weekly goal on a specific-days schedule says which days right here,
     // under its own "N×/week" line — that schedule *is* the goal ("Mon/Wed/
     // Fri", not just "3 times somewhere in the week"), and it was otherwise
@@ -1392,7 +1495,9 @@ class GoalAnalytics extends AppElement {
           scheduledDays ? this._scheduleStrip(scheduledDays) : ''}</div>`
       : null;
 
-    const count = isCountdown(goal) ? null : updateCount(goal, todayIso, this._daysBack(todayIso));
+    // A group has no per-day log of its own to count — see dateListFor and
+    // pagesFor. Null, same as countdown.
+    const count = isCountdown(goal) || isAggregate(goal) ? null : updateCount(goal, todayIso, this._daysBack(todayIso));
     const countLabel = isDecreasing(goal) ? 'goal-analytics.stat-slips' : tr.type === 'percentage' ? 'goal-analytics.stat-updates' : 'goal-analytics.stat-entries';
     // The Avoid count is every slip logged, forgiven ones included — that's
     // what "slips" means, and hiding the allowed ones would make the number
@@ -1420,7 +1525,7 @@ class GoalAnalytics extends AppElement {
   // carries the same meaning in text, so colour is never the only cue.
   _deadlineCard(goal, todayIso) {
     if (!goal?.dueDate || isCountdown(goal)) return '';
-    const active = (percentValueAt(goal, todayIso) ?? 0) < 100 && !goal.archived;
+    const active = (this._valueNow(goal, todayIso)) < 100 && !goal.archived;
     const bucket = urgencyOf(goal.dueDate, active);
     return `<div class="stat">
       <div class="stat-label">${t('goal-analytics.stat-deadline')}</div>
@@ -1458,7 +1563,7 @@ class GoalAnalytics extends AppElement {
   // nothing. If goals ever span years, it can come back.
   _comparisonRow(goal, todayIso) {
     return ['week', 'month', 'quarter'].map(unit => {
-      const delta = comparisonDelta(goal, unit, todayIso);
+      const delta = comparisonDelta(goal, unit, todayIso, this.goals);
       const label = t(`goal-analytics.vs-${unit}`);
       if (delta === null) return `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value muted tabular">—</div></div>`;
       // Zero is neither gain nor loss and stays the default text colour —
@@ -1507,7 +1612,7 @@ class GoalAnalytics extends AppElement {
     // boundaries entirely). Both lines read the same sample dates, so they
     // stay aligned on the x-axis.
     const samples = denseSamples(tf, count, todayIso);
-    const achieved = completionSeriesAt(goal, samples).map(p => p.value);
+    const achieved = completionSeriesAt(goal, samples, this.goals).map(p => p.value);
     // null means no dashed line at all. Percentage anchors its ramp on the
     // first recorded value and draws nothing before one exists. Countdown
     // draws nothing ever: its value is driven purely by the calendar, so an
@@ -1521,7 +1626,13 @@ class GoalAnalytics extends AppElement {
     // own slope against, not something the type expects of you (see
     // dayCountPaceSeriesAt).
     const type = goal?.tracking?.type;
-    const expected = type === 'percentage' ? expectedRampSeriesAt(goal, samples)
+    // Aggregate draws no expected line either, and this one was a deliberate
+    // reversal: expectedRampSeriesAt would happily ramp from the first
+    // snapshot to 100% at the deadline, but that asserts a pace nobody set —
+    // a group goes wherever its members go. The achieved series is recorded
+    // and honest; an expectation over it would be invented.
+    const expected = type === 'aggregate' ? null
+      : type === 'percentage' ? expectedRampSeriesAt(goal, samples)
       : type === 'countdown' ? null
       : type === 'daycount' ? dayCountPaceSeriesAt(goal, samples)
       : recoveryCurveAt(goal, samples, todayIso);
@@ -1661,7 +1772,7 @@ class GoalAnalytics extends AppElement {
     // the same reserved blanks the counted group already uses.
     const contextGroups = Math.min(SCORE_CONTEXT_GROUPS_MAX, Math.ceil(availableContextPeriods / window));
     const totalGroups = contextGroups + 1;
-    const current = percentValueAt(goal, todayIso) ?? 0;
+    const current = this._valueNow(goal, todayIso);
     const label = `${window} ${unitWord(unit, window)}`;
 
     let groupsHtml = '';
@@ -1682,12 +1793,24 @@ class GoalAnalytics extends AppElement {
     const olderNote = contextGroups === 0
       ? `<p class="calc-older-note">${t(`goal-analytics.older-periods-note-${unit}`)}</p>` : '';
 
+    // Consistency sits here rather than on Overview, and the order is the
+    // argument: the grid above is the fixed window the score actually reads
+    // (6 weeks or 4 months, weighted), the bars below are the longer,
+    // user-chosen view of how each period went. "Why is my score this" then
+    // "am I getting better".
+    //
+    // It also belongs here by construction — _consistencyCard's own guard is
+    // isFrequency || isDecreasing, which is the exact predicate pagesFor uses
+    // to grant this page. The card could never appear on an Overview that
+    // didn't also have a Score tab behind it, and keeping both on Overview
+    // left these three types the only ones carrying two full charts there.
     return `<div class="page">
       ${this._pageHead(goal, 'goal-analytics.page-title-score')}
       <div class="card">
         <div class="calc-header"><span>${t('goal-analytics.score-contribute', { label })}</span><span class="calc-header-pct tabular">${current}%</span></div>
         <div class="calc-scroll-outer" id="calc-scroll" role="img" aria-label="${t('goal-analytics.a11y-score-grid')}">${olderNote}<div class="calc-grid">${groupsHtml}</div></div>
       </div>
+      ${this._consistencyCard(goal, todayIso)}
     </div>`;
   }
 

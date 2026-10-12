@@ -3,6 +3,7 @@ import { attachMarkdownHighlight } from '../../utils/markdown-highlight.js';
 import { t } from '../../../_lib/core/strings.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
 import '../list-picker-dialog/list-picker-dialog.js';
+import '../goal-picker-dialog/goal-picker-dialog.js';
 import '../tag-input/tag-input.js';
 import '../goal-analytics/goal-analytics.js';
 import { pagesFor } from '../../utils/goal-analytics.js';
@@ -14,10 +15,11 @@ import { scheduledDayStates } from '../../utils/frequency-urgency.js';
 import { buildDayStrip, dayStripStyles } from '../../utils/day-strip.js';
 import { todayISO } from '../../utils/today-iso.js';
 import { swatches } from '../../utils/color-palette.js';
+import { AGGREGATE_WEIGHT_LIMITS, memberKey, memberWeight, goalsFromEntries, computeAggregate } from '../../utils/aggregate.js';
 
 const SECTIONS  = ['capstone', 'milestones', 'wow', 'focus'];
 const SNAPSHOT_KEY = 'telos:snapshot.new-goal';
-const TYPES = ['percentage', 'weekly', 'monthly', 'decreasing', 'countdown', 'daycount'];
+const TYPES = ['percentage', 'weekly', 'monthly', 'decreasing', 'countdown', 'daycount', 'aggregate'];
 // Every chart inside goal-analytics that keeps its own independent
 // horizontal scroll (see that file's own _syncScrollable). Queried by id
 // regardless of which analytics page is current — querySelector harmlessly
@@ -43,6 +45,15 @@ class GoalDialog extends AppElement {
   set availableLists(val) { this._availableLists = val ?? []; }
   get availableLists()    { return this._availableLists ?? []; }
 
+  // Every goal in the store as { year, section, goal }, fed by home-page on
+  // open (same lazy, set-once-per-open contract as availableLists). An
+  // aggregate's own members block needs this to show each member's title and
+  // current percentage, and the picker needs it to walk the graph for
+  // wouldCycle — so the component resolves references against this array
+  // rather than ever reading the store itself.
+  set availableGoals(val) { this._availableGoals = val ?? []; }
+  get availableGoals()    { return this._availableGoals ?? []; }
+
   set existingTags(val)   {
     this._existingTags = val ?? [];
     if (this._tagInputEl) this._tagInputEl.existingTags = this._existingTags;
@@ -64,8 +75,6 @@ class GoalDialog extends AppElement {
     // the starting tab without that event ever having fired.
     this._scrollMemory = new Map();
     this._lastTabIndex = this._modal.activeTab;
-    const body = this._modal.shadowRoot?.querySelector('.body');
-    if (body) body.scrollTop = 0;
     // A saved goal opens on its Overview, not the edit form (see _resetForm):
     // nothing there wants the caret, and focusing the title input would raise
     // the on-screen keyboard over a page that exists to be read. A new goal
@@ -73,6 +82,18 @@ class GoalDialog extends AppElement {
     // point of that state.
     const openingOnAnalytics = this._modal.activeTab > 0;
     this._modal.show(openingOnAnalytics ? null : this._input);
+    // AFTER show(), not before. The body is display:none until then, so it
+    // has no layout and no overflow — assigning scrollTop = 0 at that point
+    // is a no-op, and the browser restores the offset the body had before it
+    // was hidden as soon as it becomes visible again. Reopening a dialog
+    // therefore landed wherever the previous session had scrolled to
+    // (measured: 189px on a reopen after scrolling Overview).
+    //
+    // Routed through _restoreTabScroll rather than zeroing the body here, so
+    // there is one place that knows what a tab's starting position is — the
+    // memory was just cleared above, so it applies the defaults: body at the
+    // top, every chart anchored to the current period.
+    this._restoreTabScroll(this._modal.activeTab);
     if (openingOnAnalytics) return;
     setTimeout(() => {
       const len = this._input.value.length;
@@ -132,6 +153,10 @@ class GoalDialog extends AppElement {
     // Weekly-only (see tracking.js) — stays undefined until the chip row is
     // actually touched, matching "opt-in per goal, default not configured".
     this._draftReminderDays = goal?.tracking?.reminderDays;
+    // Aggregate-only, and kept even when the current type isn't aggregate —
+    // same "never drops the inactive side" rule as value/entries/startDate
+    // above, so switching away and back recovers the same membership.
+    this._draftMembers = goal?.tracking?.members ?? [];
     this._typeExpanded = false;
     this._fixDayExpanded = false;
     this._renderTypeSection();
@@ -188,6 +213,8 @@ class GoalDialog extends AppElement {
       // annual, and the analytics view anchors its full-history charts to that
       // year's 1 January (see goal-analytics' own `year` setter).
       this._analyticsEl.year = this._fromYear;
+      this._analyticsEl.members = this._analyticsMembers(goal);
+      this._analyticsEl.goals = goalsFromEntries(this.availableGoals);
       this._analyticsEl.goal = goal;
       this._analyticsEl.activePage = 0;
       this._showView('analytics');
@@ -722,6 +749,136 @@ class GoalDialog extends AppElement {
           border-block-start: 0.5px solid var(--color-border);
         }
 
+        /* ── Aggregate ("Group") membership ───────────────────────────────
+           Same top-border separator as .target-block/.countdown-block, even
+           though this one sits outside .type-field — it reads as another
+           block in the same stack. */
+        .members-block {
+          margin-block-start: var(--space-3);
+          padding-block-start: var(--space-3);
+          border-block-start: 0.5px solid var(--color-border);
+        }
+
+        .member-list {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-1);
+        }
+
+        /* align-items:stretch so the weight cluster's own height drives the
+           row, exactly as .reminder-day-group does for the day chips. The
+           58px floor is that cluster (two 28px buttons + a 2px gap), which
+           is taller than the two-line text — an accepted cost of reusing the
+           count-adjuster every other type already uses. */
+        .member-row {
+          display: flex;
+          align-items: stretch;
+          gap: var(--space-3);
+          min-block-size: calc(28px * 2 + 2px);
+          border-block-end: 0.5px solid var(--color-border);
+        }
+
+        .member-row:last-child { border-block-end: none; }
+
+        /* Two-line title + context, lifted from upcoming-dialog's own row —
+           a member can live in another year, so the year/section line is
+           load-bearing, not decoration. */
+        .member-text {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 1px;
+          flex: 1;
+          min-inline-size: 0;
+        }
+
+        .member-title {
+          font-size: var(--font-size-body);
+          font-weight: var(--font-weight-medium);
+          color: var(--color-text-primary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .member-sub {
+          font-size: var(--font-size-caption);
+          color: var(--color-text-muted);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .member-pct {
+          display: flex;
+          align-items: center;
+          flex-shrink: 0;
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-text-secondary);
+          font-variant-numeric: tabular-nums;
+        }
+
+        /* An untouched weight is outlined and muted rather than accent-
+           filled, so a plain average looks like a plain average and only
+           deliberately-weighted members draw the eye. */
+        .member-weight.is-default {
+          background: transparent;
+          color: var(--color-text-muted);
+          border: 0.5px solid var(--color-border);
+          font-weight: var(--font-weight-medium);
+        }
+
+        .member-remove {
+          align-self: center;
+          flex-shrink: 0;
+          inline-size: 20px;
+          block-size: 20px;
+          padding: 0;
+          border: none;
+          border-radius: var(--radius-full);
+          background: var(--_chip-x-bg, rgba(0, 0, 0, 0.09));
+          color: var(--color-text-secondary);
+          font-size: var(--font-size-caption);
+          line-height: 1;
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+          font-family: var(--font-family);
+        }
+
+        .member-remove:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
+        .members-empty {
+          margin: 0;
+          font-size: var(--font-size-caption);
+          color: var(--color-text-secondary);
+        }
+
+        /* Dashed, matching list-picker-dialog's own "new list" affordance —
+           the established look for "add another one of these". */
+        .members-add {
+          margin-block-start: var(--space-2);
+          inline-size: 100%;
+          min-block-size: var(--touch-target);
+          border: 1px dashed var(--color-border);
+          border-radius: var(--radius-md);
+          background: transparent;
+          color: var(--color-text-secondary);
+          font-size: var(--font-size-caption);
+          font-weight: var(--font-weight-semibold);
+          font-family: var(--font-family);
+          cursor: pointer;
+        }
+
+        .members-add:focus-visible {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
+        }
+
         .reminder-day-group {
           display: flex;
           align-items: stretch;
@@ -1245,6 +1402,19 @@ class GoalDialog extends AppElement {
               </div>
             </div>
           </div>
+          <!-- Deliberately OUTSIDE .type-field, unlike the target/reminder/
+               countdown blocks. _renderTypeSection's collapsed early-return
+               hides all three of those, and for an existing goal the type
+               editor stays collapsed until "Change type" is tapped — but a
+               group's membership is the goal's own content (the way entries
+               are for a frequency goal), not a seldom-touched setting, so it
+               has to stay visible without expanding anything. -->
+          <div class="members-block" id="members-block" hidden>
+            <p class="field-label" id="members-label">${t('goal-dialog.members-label')}</p>
+            <div class="member-list" id="member-list"></div>
+            <p class="members-empty" id="members-empty" hidden>${t('goal-dialog.members-empty')}</p>
+            <button type="button" class="members-add" id="members-add-btn">${t('goal-dialog.members-add')}</button>
+          </div>
           <!-- Below the type section (not above it) for every type, not just
                countdown — countdown's own start-date row sits right above
                this, so the two dates read top-to-bottom as start → end
@@ -1350,6 +1520,7 @@ class GoalDialog extends AppElement {
 
       <!-- ── List picker (opens as sub-modal for Create list item) ──────── -->
       <list-picker-dialog id="list-picker"></list-picker-dialog>
+      <goal-picker-dialog id="goal-picker"></goal-picker-dialog>
     `;
   }
 
@@ -1419,6 +1590,11 @@ class GoalDialog extends AppElement {
     this._countdownStartInput = this.shadowRoot.querySelector('#countdown-start-input');
     this._targetInput        = this.shadowRoot.querySelector('#target-input');
     this._reminderDaysBlock = this.shadowRoot.querySelector('#reminder-days-block');
+    this._membersBlock      = this.shadowRoot.querySelector('#members-block');
+    this._memberList        = this.shadowRoot.querySelector('#member-list');
+    this._membersEmpty      = this.shadowRoot.querySelector('#members-empty');
+    this._membersAddBtn     = this.shadowRoot.querySelector('#members-add-btn');
+    this._goalPickerDialog  = this.shadowRoot.querySelector('#goal-picker');
     this._reminderDayGroup  = this.shadowRoot.querySelector('#reminder-day-group');
     this._reminderAnyChip   = this.shadowRoot.querySelector('#reminder-any-chip');
     this._reminderXLabel    = this.shadowRoot.querySelector('#reminder-x-label');
@@ -1672,6 +1848,8 @@ class GoalDialog extends AppElement {
         return;
       }
       this._analyticsEl.year = this._fromYear;
+      this._analyticsEl.members = this._analyticsMembers(this._goal);
+      this._analyticsEl.goals = goalsFromEntries(this.availableGoals);
       this._analyticsEl.goal = this._goal;
       this._analyticsEl.activePage = index - 1;
       this._showView('analytics');
@@ -1858,7 +2036,13 @@ class GoalDialog extends AppElement {
       // (isEntryType('countdown') is false), so it's excluded here too —
       // resetting it would inject DEFAULT_TARGET['countdown'] (undefined)
       // into the tracking object for no reason.
-      if (this._draftType !== 'percentage' && this._draftType !== 'countdown') this._draftTarget = DEFAULT_TARGET[this._draftType];
+      // Aggregate is excluded for exactly the same reason as countdown: it
+      // has no target concept, so resetting here would write
+      // DEFAULT_TARGET['aggregate'] (undefined) into tracking and destroy a
+      // dormant weekly/monthly/daycount target in the process.
+      if (this._draftType !== 'percentage' && this._draftType !== 'countdown' && this._draftType !== 'aggregate') {
+        this._draftTarget = DEFAULT_TARGET[this._draftType];
+      }
       // Countdown is non-functional without an end date — surface the
       // due-date field rather than leaving it silently collapsed. Mirrors
       // _onDueDateToggle's own reveal+flash timing exactly. (_draftStartDate
@@ -2036,6 +2220,24 @@ class GoalDialog extends AppElement {
     };
     this._listPickerDialog.addEventListener('list-pick', this._onListPick);
 
+    // One delegated listener for every weight stepper and remove button in
+    // the members list, so re-rendering the rows never re-binds anything.
+    this._onMembersClick = e => this._onMembersBlockClick(e);
+    this._membersBlock.addEventListener('click', this._onMembersClick);
+
+    this._onMembersAdd = () => {
+      // The picker needs the whole graph (to walk it for cycles) plus who is
+      // asking, so it can exclude the goal itself and its existing members.
+      this._goalPickerDialog.availableGoals = this.availableGoals;
+      this._goalPickerDialog.selfId = this._goal?.id;
+      this._goalPickerDialog.existingMembers = this._draftMembers ?? [];
+      this._goalPickerDialog.show();
+    };
+    this._membersAddBtn.addEventListener('click', this._onMembersAdd);
+
+    this._onGoalPickEvent = e => this._onGoalPick(e.detail?.refs);
+    this._goalPickerDialog.addEventListener('goal-pick', this._onGoalPickEvent);
+
     this._snapshot = installDialogSnapshot(this, {
       key:      SNAPSHOT_KEY,
       isOpen:   () => !!this._modal.shadowRoot?.querySelector('dialog')?.open,
@@ -2091,6 +2293,9 @@ class GoalDialog extends AppElement {
     this._moveMoveBtn?.removeEventListener('click', this._onMoveCta);
     this._moveCopyBtn?.removeEventListener('click', this._onCopyCta);
     this._listPickerDialog?.removeEventListener('list-pick', this._onListPick);
+    this._membersBlock?.removeEventListener('click', this._onMembersClick);
+    this._membersAddBtn?.removeEventListener('click', this._onMembersAdd);
+    this._goalPickerDialog?.removeEventListener('goal-pick', this._onGoalPickEvent);
     this._fixDayToggle?.removeEventListener('click', this._onFixDayToggleClick);
     this._fixDayChips?.removeEventListener('click', this._onFixDayChipClick);
     this._fixPctDate?.removeEventListener('change', this._onFixPctDate);
@@ -2142,8 +2347,9 @@ class GoalDialog extends AppElement {
   _draftTracking() {
     const tracking = {
       type: this._draftType, value: 0, target: this._draftTarget, entries: [],
-      startDate: this._draftStartDate,
+      startDate: this._draftStartDate, members: this._draftMembers ?? [],
     };
+    if (this._draftType === 'aggregate') tracking.aggValue = this._aggValueFor(tracking);
     // Same "omit unless actually touched" contract as _commitTrackingChange —
     // a new goal can already have reminder days set if the chips were tapped
     // before the title blur that creates it.
@@ -2179,7 +2385,14 @@ class GoalDialog extends AppElement {
     this._trackingSummary.hidden = false;
     this._trackingSummary.replaceChildren();
 
-    if (tr.type === 'percentage') {
+    if (tr.type === 'aggregate') {
+      // Reads the goal's committed state like every other arm here, so the
+      // percentage shown is the reconciler's stored value rather than a
+      // second, parallel computation over the draft's own member list.
+      this._trackingSummary.textContent = t('goal-dialog.tracking-summary-prefix-aggregate')
+        + t('goal-dialog.tracking-summary-aggregate', { count: tr.members?.length ?? 0, percent });
+      return;
+    } else if (tr.type === 'percentage') {
       this._trackingSummary.textContent = t('goal-dialog.tracking-summary-prefix-percentage')
         + t('goal-dialog.tracking-summary-percentage', { percent });
       return;
@@ -2247,14 +2460,23 @@ class GoalDialog extends AppElement {
     const showTypeEditor = this._isNew || this._typeExpanded;
     this._typePillGroup.hidden = !showTypeEditor;
     this._renderFixDayToggle();
+    // Ahead of the early return below, deliberately — see the markup comment
+    // on #members-block for why this one block survives a collapsed editor.
+    this._renderMembersBlock();
 
     // 'percentage' is the one type with no target concept at all — every
     // other type (including any future one) uses its own type-summary-*
     // string rather than silently falling back to "Percentage" here.
 
+    // Aggregate's own summary counts members rather than describing a
+    // target it doesn't have — the same substitution goal-analytics'
+    // _typeCard has to make, since the two build this key identically.
     this._changeTypeValue.textContent = this._draftType === 'percentage'
       ? t('goal-dialog.type-percentage')
-      : t(`goal-dialog.type-summary-${this._draftType}`, { target: this._draftTarget });
+      : t(`goal-dialog.type-summary-${this._draftType}`, {
+          target: this._draftTarget,
+          count: (this._draftMembers ?? []).length,
+        });
 
     if (!showTypeEditor) {
       this._targetBlock.hidden = true;
@@ -2417,6 +2639,213 @@ class GoalDialog extends AppElement {
   // _editingGoal, not from this event's detail), and a goal that new
   // genuinely has no prior value/entries yet, so the `?? 0`/`?? []`
   // fallbacks are exactly correct, not just safe defaults.
+  // Today's weighted value for a draft/edited aggregate.
+  //
+  // The reconciler remains the authority for what is persisted — but it only
+  // runs after the store write lands, and _patchGoal never sees that write
+  // come back while the dialog is open (see its own comment). So carrying the
+  // previous aggValue through an edit left percentValue — and with it the
+  // tracking summary line and the analytics hero number — reporting the value
+  // from *before* the membership changed, while the chart and the breakdown
+  // card (which read tracking.members directly) updated immediately. The
+  // percentage appeared frozen until the dialog was reopened.
+  //
+  // This is not a second implementation of the arithmetic: it calls the same
+  // computeAggregate the reconciler calls, over the same store-shaped graph,
+  // which arrives here as the availableGoals property rather than from any
+  // store read. Deliberately NOT aggregateValueAt: that one resolves a
+  // percentage member through its snapshot log and reads undefined before the
+  // member's first snapshot, so at today's date it can disagree with what the
+  // reconciler will persist. Same function in, same number out.
+  _aggValueFor(tracking) {
+    const graph = goalsFromEntries(this.availableGoals);
+    return computeAggregate({ ...this._goal, tracking }, graph, todayISO());
+  }
+
+  // The member breakdown goal-analytics renders, resolved here because this
+  // component is the one holding availableGoals — keeping that component at
+  // the UI tier with no store knowledge, as it has always been.
+  _analyticsMembers(goal) {
+    if (goal?.tracking?.type !== 'aggregate') return [];
+    const [minWeight] = AGGREGATE_WEIGHT_LIMITS;
+    return (goal.tracking.members ?? []).flatMap(ref => {
+      const entry = this._resolveMember(ref);
+      if (!entry) return [];
+      return [{ title: entry.goal.title ?? '', pct: percentValue(entry.goal), weight: ref.weight ?? minWeight }];
+    });
+  }
+
+  // Resolves a stored member reference against availableGoals. Returns the
+  // { year, section, goal } entry, or undefined for a reference whose goal
+  // no longer exists — those are rendered as nothing rather than as a broken
+  // row; home-page prunes them for real when the dialog opens.
+  _resolveMember(ref) {
+    return this.availableGoals.find(e =>
+      String(e.year) === String(ref.year) && e.section === ref.section && e.goal?.id === ref.goalId);
+  }
+
+  // The members list for an aggregate. Hidden outright for every other type,
+  // but rendered from the top of _renderTypeSection rather than after its
+  // collapsed early-return — see the markup comment on #members-block.
+  _renderMembersBlock() {
+    if (!this._membersBlock) return;
+    const show = this._draftType === 'aggregate';
+    this._membersBlock.hidden = !show;
+    if (!show) return;
+
+    const members = this._draftMembers ?? [];
+    this._membersEmpty.hidden = members.length > 0;
+    this._memberList.replaceChildren();
+
+    for (const ref of members) {
+      const entry = this._resolveMember(ref);
+      if (!entry) continue;
+
+      // A presentational container holding sibling controls — never a button
+      // inside a button. Same rule bulk-tag-editor's chips follow.
+      const row = document.createElement('div');
+      row.className = 'member-row';
+      row.dataset.memberKey = memberKey(ref);
+
+      const text = document.createElement('div');
+      text.className = 'member-text';
+      const title = document.createElement('span');
+      title.className = 'member-title';
+      title.textContent = entry.goal.title ?? '';
+      const sub = document.createElement('span');
+      sub.className = 'member-sub';
+      // Reuses upcoming-dialog's own sublabel string rather than a second
+      // copy of "Goal / year / section" — already translated in fr and ca.
+      sub.textContent = t('upcoming.sub-goal', {
+        year: entry.year,
+        section: t(`goal-dialog.move-section-${entry.section}`),
+      });
+      text.append(title, sub);
+
+      const pct = document.createElement('span');
+      pct.className = 'member-pct';
+      pct.textContent = `${percentValue(entry.goal)}%`;
+
+      // The same .count-chip + stacked mini-stepper cluster the times-per-
+      // week/month and Avoid-allowance rows use, so there is one
+      // count-adjuster look across the whole dialog.
+      const cluster = document.createElement('div');
+      cluster.className = 'count-chip-cluster';
+      const chip = document.createElement('span');
+      chip.className = 'count-chip member-weight';
+      const stepper = document.createElement('div');
+      stepper.className = 'reminder-mini-stepper';
+      const up = document.createElement('button');
+      up.type = 'button';
+      up.className = 'reminder-mini-btn';
+      up.dataset.weightStep = 'up';
+      up.textContent = '+';
+      up.setAttribute('aria-label', t('goal-dialog.weight-increase'));
+      const down = document.createElement('button');
+      down.type = 'button';
+      down.className = 'reminder-mini-btn';
+      down.dataset.weightStep = 'down';
+      down.textContent = '\u2212';
+      down.setAttribute('aria-label', t('goal-dialog.weight-decrease'));
+      stepper.append(up, down);
+      cluster.append(chip, stepper);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'member-remove';
+      remove.textContent = '\u00d7';
+      remove.setAttribute('aria-label', t('tag.remove', { tag: entry.goal.title ?? '' }));
+
+      row.append(text, pct, cluster, remove);
+      this._syncMemberRow(row, ref);
+      this._memberList.appendChild(row);
+    }
+  }
+
+  // The weight chip and its two stepper buttons, for one row. Shared by the
+  // build above and by a weight step, which updates the row IN PLACE rather
+  // than re-rendering the list: rebuilding destroys the very button the user
+  // just pressed, and a keyboard user is then dropped to <body> with nothing
+  // focused. Same trap documented on goal-analytics' _wireInteractive, and
+  // the reason _renderReminderDayChips updates attributes on existing chips
+  // instead of replacing them.
+  _syncMemberRow(row, ref) {
+    const [minWeight, maxWeight] = AGGREGATE_WEIGHT_LIMITS;
+    const weight = memberWeight(ref);
+    const chip = row.querySelector('.member-weight');
+    chip.textContent = `\u00d7${weight}`;
+    // Outlined and muted while untouched, so a plain average looks like one.
+    chip.classList.toggle('is-default', weight === minWeight);
+    row.querySelector('[data-weight-step="up"]').disabled = weight >= maxWeight;
+    row.querySelector('[data-weight-step="down"]').disabled = weight <= minWeight;
+  }
+
+  // Both the weight steppers and the remove buttons, through one delegated
+  // listener reading closest() — the idiom the weekly chip row already uses.
+  _onMembersBlockClick(e) {
+    const row = e.target.closest('.member-row');
+    if (!row) return;
+    const key = row.dataset.memberKey;
+    const step = e.target.closest('[data-weight-step]');
+    const remove = e.target.closest('.member-remove');
+    if (!step && !remove) return;
+
+    if (remove) return this._removeMember(key, row);
+    return this._stepMemberWeight(key, row, step);
+  }
+
+  // Dropping a row necessarily destroys the button that was pressed, so
+  // focus is placed deliberately — the next row's own remove button, or the
+  // add affordance once the last member is gone. Letting it fall to <body>
+  // would strand a keyboard user mid-list.
+  _removeMember(key, row) {
+    const index = [...this._memberList.querySelectorAll('.member-row')].indexOf(row);
+    this._draftMembers = (this._draftMembers ?? []).filter(ref => memberKey(ref) !== key);
+    this._renderTypeSection();
+    if (!this._isNew) this._commitTrackingChange();
+    const remaining = [...this._memberList.querySelectorAll('.member-remove')];
+    (remaining[Math.min(index, remaining.length - 1)] ?? this._membersAddBtn)?.focus();
+  }
+
+  // Deliberately does NOT call _renderTypeSection: that rebuilds every row,
+  // which would destroy the stepper button mid-press and drop focus (see
+  // _syncMemberRow). Only this row's own controls and the tracking summary
+  // can change — the member count on the ⋮ menu item cannot.
+  _stepMemberWeight(key, row, step) {
+    const [minWeight, maxWeight] = AGGREGATE_WEIGHT_LIMITS;
+    const dir = step.dataset.weightStep === 'up' ? 1 : -1;
+    this._draftMembers = (this._draftMembers ?? []).map(ref => {
+      if (memberKey(ref) !== key) return ref;
+      const next = Math.min(maxWeight, Math.max(minWeight, memberWeight(ref) + dir));
+      // Omit the key entirely at the default rather than storing weight: 1 —
+      // the same convention Goal.color follows for "no colour".
+      const { weight, ...rest } = ref;
+      return next === minWeight ? rest : { ...rest, weight: next };
+    });
+    this._syncMemberRow(row, (this._draftMembers ?? []).find(ref => memberKey(ref) === key));
+    // Hitting either end disables the button being pressed, and a disabled
+    // element cannot hold focus — hand it to the opposite button, which is
+    // necessarily enabled now.
+    if (step.disabled) {
+      const other = step.dataset.weightStep === 'up' ? 'down' : 'up';
+      row.querySelector(`[data-weight-step="${other}"]`)?.focus();
+    }
+    if (this._isNew) this._renderTrackingSummary();
+    else this._commitTrackingChange();
+  }
+
+  // Adds the picked references, skipping any that are already members. The
+  // picker already excludes them, so this is belt-and-braces against a
+  // stale open.
+  _onGoalPick(refs) {
+    const existing = new Set((this._draftMembers ?? []).map(memberKey));
+    const added = (refs ?? []).filter(ref => !existing.has(memberKey(ref)));
+    if (!added.length) return;
+    this._draftMembers = [...(this._draftMembers ?? []), ...added];
+    this._renderTypeSection();
+    if (!this._isNew) this._commitTrackingChange();
+  }
+
   _commitTrackingChange() {
     const tracking = {
       type: this._draftType,
@@ -2424,7 +2853,10 @@ class GoalDialog extends AppElement {
       target: this._draftTarget,
       entries: this._goal?.tracking?.entries ?? [],
       startDate: this._draftStartDate,
+      members: this._draftMembers ?? [],
     };
+    if (this._draftType === 'aggregate') tracking.aggValue = this._aggValueFor(tracking);
+    else if (this._goal?.tracking?.aggValue !== undefined) tracking.aggValue = this._goal.tracking.aggValue;
     // Omitted entirely while never touched (undefined) — matches the
     // "default not configured" contract in tracking.js; a value of 'any' or
     // an array (however empty) is a real, deliberately-set state and is
@@ -2620,26 +3052,34 @@ class GoalDialog extends AppElement {
     this._scrollMemory.set(index, { bodyTop: body.scrollTop, charts });
   }
 
-  // Restores a previously-saved position, or does nothing for a tab never
-  // visited this session — leaving each chart at whatever position its own
-  // natural render already put it (goal-analytics' own _syncScrollable
-  // anchors a genuinely-overflowing chart to "now"; a short one just has no
-  // scroll at all), and the body wherever _showView's own content swap left
-  // it (effectively the top, nothing having scrolled it yet). Deferred a
-  // frame: goal-analytics' own rAF-based _syncScrollable (queued when
-  // activePage is set, just before this runs) would otherwise overwrite a
-  // chart's scrollLeft with its own "scrolled to now" default on the very
-  // frame this tries to restore it — same ordering hazard as that method's
-  // own doc comment on reading scrollWidth too early.
+  // Puts a tab back where it was, or at its starting position if this is the
+  // first visit of this dialog session: body at the top, each chart anchored
+  // to the current period.
+  //
+  // The defaults are applied explicitly, and that is the fix for a real bug.
+  // This used to return early when nothing was saved, on the stated
+  // assumption that an unvisited tab was already at the top — but _showView
+  // only toggles `hidden` on the sibling views and never touches the shared
+  // modal body, so the body kept whatever scrollTop the tab being LEFT had.
+  // Scrolling down Overview and then opening Activity for the first time
+  // landed mid-page, often past the end of a shorter one.
+  //
+  // Deferred a frame: goal-analytics' own rAF-based _syncScrollable (queued
+  // when activePage is set, just before this runs) would otherwise overwrite
+  // a chart's scrollLeft on the very frame this tries to restore it — same
+  // ordering hazard as that method's own doc comment on reading scrollWidth
+  // too early.
   _restoreTabScroll(index) {
     const saved = this._scrollMemory.get(index);
-    if (!saved) return;
     requestAnimationFrame(() => {
       const body = this._modal?.shadowRoot?.querySelector('.body');
-      if (body) body.scrollTop = saved.bodyTop;
-      for (const [id, scrollLeft] of Object.entries(saved.charts)) {
+      if (body) body.scrollTop = saved?.bodyTop ?? 0;
+      for (const id of CHART_SCROLL_IDS) {
         const el = this._analyticsEl.shadowRoot.querySelector('#' + id);
-        if (el) el.scrollLeft = scrollLeft;
+        if (!el) continue;
+        // scrollWidth, not 0: with no remembered position a chart shows the
+        // current period, the same anchoring a fresh render applies.
+        el.scrollLeft = saved?.charts?.[id] ?? el.scrollWidth;
       }
     });
   }

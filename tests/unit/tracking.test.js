@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  isFrequency, isEntryType, isEntryBased, isDecreasing, isCountdown, isDayCount,
+  isFrequency, isEntryType, isEntryBased, isDecreasing, isCountdown, isDayCount, isAggregate,
   dayCountValue,
   percentValue, setPercent, clearPercentAt, logEntry, unlogEntry, isLoggedOn,
   isoWeekKey, monthKey, recentPeriods, periodFractions, recentDots, currentPeriodCount,
@@ -887,5 +887,40 @@ describe('tracking — dated percentage edits', () => {
     const empty = clearPercentAt(g, '2026-05-01');
     expect(empty.tracking.history).toEqual([]);
     expect(empty.tracking.value).toBe(0);
+  });
+});
+
+
+describe('tracking — aggregate type', () => {
+  const agg = extra => ({ id: 'a', title: 'A', tags: [], tracking: { type: 'aggregate', ...extra } });
+
+  it('percentValue reads the stored aggValue', () => {
+    expect(percentValue(agg({ aggValue: 38 }))).toBe(38);
+  });
+
+  it('reads 0 before the reconciler has ever run', () => {
+    expect(percentValue(agg({ members: [] }))).toBe(0);
+  });
+
+  it('ignores dormant entries left over from a previous type', () => {
+    // The real hazard: without an explicit branch this would fall through to
+    // weightedAverage and be scored as a weekly goal from stale entries.
+    const goal = agg({ aggValue: 38, target: 3, entries: ['2026-10-01', '2026-10-02', '2026-10-03'] });
+    expect(percentValue(goal)).toBe(38);
+  });
+
+  it('is recognised by isAggregate and by no other predicate', () => {
+    const goal = agg({ aggValue: 10 });
+    expect(isAggregate(goal)).toBe(true);
+    expect(isFrequency(goal)).toBe(false);
+    expect(isEntryBased(goal)).toBe(false);
+    expect(isDecreasing(goal)).toBe(false);
+    expect(isCountdown(goal)).toBe(false);
+    expect(isDayCount(goal)).toBe(false);
+  });
+
+  it('has no target limits — it has no target concept', () => {
+    expect(targetLimitsFor('aggregate')).toBeUndefined();
+    expect(isEntryType('aggregate')).toBe(false);
   });
 });

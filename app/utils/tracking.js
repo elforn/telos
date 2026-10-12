@@ -1,7 +1,7 @@
 // The `tracking` shape (replaces flat `percentage`, migrated once at boot;
 // see app/utils/migrate-goals.js). Not a strict discriminated union — every
 // goal always carries all four fields:
-//   { type: 'percentage' | 'weekly' | 'monthly' | 'decreasing' | 'countdown' | 'daycount', value: number, target: number, entries: string[] }
+//   { type: 'percentage' | 'weekly' | 'monthly' | 'decreasing' | 'countdown' | 'daycount' | 'aggregate', value: number, target: number, entries: string[] }
 // `type` is a pure discriminant: it tells consumers which fields are "live"
 // (percentValue reads `value` for percentage, `target`/`entries` for
 // weekly/monthly/decreasing), but doesn't gate which fields *exist*.
@@ -165,6 +165,11 @@ export function isCountdown(goal) { return goal?.tracking?.type === 'countdown';
 
 export function isDayCount(goal) { return goal?.tracking?.type === 'daycount'; }
 
+// Aggregate ("Group") — the one type whose percentage comes from other goals
+// rather than from anything stored on the goal itself. Its own number lives
+// in tracking.aggValue, written by app/utils/aggregate.js and read below.
+export function isAggregate(goal) { return goal?.tracking?.type === 'aggregate'; }
+
 // weekly | monthly | decreasing — every type whose progress lives in
 // `entries` rather than a stored `value`. This, not isFrequency, is what
 // gates the *interaction model* (tap/hold toggles a day, no drag-scrub) and
@@ -295,6 +300,13 @@ export function percentValue(goal, todayIso = todayISO()) {
   if (tr.type === 'countdown') return countdownValue(goal, todayIso);
   if (tr.type === 'daycount') return dayCountValue(goal);
   if (tr.type === 'decreasing') return Math.round(decreasingWeightedAverage(tr, todayIso) * 100);
+  // Must sit above the weightedAverage fallback: an aggregate carries no
+  // entries of its own, but may still have dormant ones from a previous type
+  // (nothing drops the inactive side), and the fallback would happily score
+  // them as a weekly goal. Reads the value aggregate.js parked here rather
+  // than resolving members, so this stays pure over one goal — see that
+  // module's doc for why that matters to the ~20 callers of this function.
+  if (tr.type === 'aggregate') return tr.aggValue ?? 0;
   return Math.round(weightedAverage(tr, todayIso) * 100);
 }
 

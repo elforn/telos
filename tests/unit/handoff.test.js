@@ -132,3 +132,44 @@ describe('shareHandoff', () => {
     expect(consoleErr).toHaveBeenCalled();
   });
 });
+
+
+describe('buildGoalHandoff — aggregate degrades to a percentage', () => {
+  const aggregate = {
+    id: 'agg1', title: 'Ship the book', tags: [],
+    tracking: {
+      type: 'aggregate',
+      members: [{ year: '2026', section: 'focus', goalId: 'f1' }],
+      aggValue: 38,
+      value: 0, target: 3, entries: [],
+    },
+  };
+
+  it('strips the member references, which point at ids the receiver lacks', () => {
+    const { goal } = buildGoalHandoff(aggregate);
+    expect('members' in goal.tracking).toBe(false);
+    expect('aggValue' in goal.tracking).toBe(false);
+  });
+
+  it('arrives as a percentage holding the last computed value', () => {
+    const { goal } = buildGoalHandoff(aggregate);
+    expect(goal.tracking.type).toBe('percentage');
+    expect(goal.tracking.value).toBe(38);
+  });
+
+  it('carries no chart across — a group stores none to carry', () => {
+    // The curve is derived from members the receiver will not have.
+    const { goal } = buildGoalHandoff(aggregate);
+    expect('history' in goal.tracking).toBe(false);
+  });
+
+  it('reads a never-reconciled aggregate as 0 rather than undefined', () => {
+    const fresh = { id: 'a', title: 'A', tags: [], tracking: { type: 'aggregate', members: [] } };
+    expect(buildGoalHandoff(fresh).goal.tracking.value).toBe(0);
+  });
+
+  it('leaves every other type untouched, by reference', () => {
+    const plain = { id: 'g1', title: 'G', tags: [], tracking: { type: 'weekly', target: 3, entries: [] } };
+    expect(buildGoalHandoff(plain).goal).toBe(plain);
+  });
+});

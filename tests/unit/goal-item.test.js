@@ -1446,3 +1446,114 @@ describe('goal-item — tags in the accessible name', () => {
     expect(el.shadowRoot.querySelector('.tag-pills').getAttribute('aria-hidden')).toBe('true');
   });
 });
+
+// ── Aggregate ("Group") rows ─────────────────────────────────────────────────
+// This type deliberately has NO glyph: every other token is an input
+// affordance, and a group has nothing to input. What it shows instead is the
+// member count, in the same .pct-label slot countdown repurposes for its
+// days-remaining readout.
+
+function aggGoal(members, aggValue = 0, extra = {}) {
+  return {
+    id: 'agg1', title: 'Ship the book', tags: [],
+    tracking: { type: 'aggregate', members, aggValue, ...extra },
+  };
+}
+const memberRef = (goalId, weight) =>
+  weight === undefined ? { year: '2026', section: 'focus', goalId }
+                       : { year: '2026', section: 'focus', goalId, weight };
+
+describe('goal-item — aggregate rows', () => {
+  it('fills the bar from the stored aggValue', () => {
+    const el = mount(aggGoal([memberRef('a')], 38));
+    expect(el.shadowRoot.querySelector('.fill').style.width).toBe('38%');
+  });
+
+  it('shows the member count in .pct-label, visible without any drag', () => {
+    const el = mount(aggGoal([memberRef('a'), memberRef('b'), memberRef('c')], 38));
+    const label = el.shadowRoot.querySelector('.pct-label');
+    expect(label.hidden).toBe(false);
+    expect(label.textContent).toBe('3 goals');
+  });
+
+  it('uses the singular string for exactly one member', () => {
+    const el = mount(aggGoal([memberRef('a')], 90));
+    expect(el.shadowRoot.querySelector('.pct-label').textContent).toBe('1 goal');
+  });
+
+  it('reads zero members as a count of zero rather than crashing', () => {
+    const el = mount(aggGoal([], 0));
+    expect(el.shadowRoot.querySelector('.pct-label').textContent).toBe('0 goals');
+  });
+
+  it('renders no frequency cluster, septagon strip or day-count token', () => {
+    const el = mount(aggGoal([memberRef('a')], 50));
+    const bar = el.shadowRoot.querySelector('.bar');
+    expect(bar.dataset.type).toBe('aggregate');
+    // No .bar[data-type="aggregate"] rule exists, so every other type's
+    // glyph stays in its default-hidden state — nothing to assert but that
+    // the row never set itself up as one of them.
+    expect(bar.dataset.freq).toBe('false');
+    expect(el.shadowRoot.querySelector('.freq-dots').children.length).toBe(0);
+    expect(el.shadowRoot.querySelector('.septagon-strip').children.length).toBe(0);
+  });
+
+  it('is a read-only slider — not a toggle, and not arrow-adjustable', () => {
+    const el = mount(aggGoal([memberRef('a')], 38));
+    const bar = el.shadowRoot.querySelector('.bar');
+    expect(bar.getAttribute('role')).toBe('slider');
+    expect(bar.getAttribute('aria-readonly')).toBe('true');
+    expect(bar.hasAttribute('aria-pressed')).toBe(false);
+  });
+
+  it('ignores an arrow-key scrub and emits no progress event', () => {
+    const el = mount(aggGoal([memberRef('a')], 38));
+    const seen = [];
+    el.addEventListener('goal-progress', e => seen.push(e.detail));
+    el.onHoldDragKey('right');
+    expect(seen).toEqual([]);
+    expect(el.shadowRoot.querySelector('.fill').style.width).toBe('38%');
+  });
+
+  it('ignores a hold-drag entirely, leaving the fill where it was', () => {
+    const el = mount(aggGoal([memberRef('a')], 38));
+    const seen = [];
+    el.addEventListener('goal-progress', e => seen.push(e.detail));
+    el.onHoldDragStart();
+    el.onHoldDrag({ endX: 500 });
+    el.onHoldDragEnd();
+    expect(seen).toEqual([]);
+    expect(el.classList.contains('hold-active')).toBe(false);
+    expect(el.shadowRoot.querySelector('.fill').style.width).toBe('38%');
+  });
+
+  it('emits no log toggle — a group has nothing to log', () => {
+    const el = mount(aggGoal([memberRef('a')], 38));
+    const seen = [];
+    el.addEventListener('goal-log-toggle', e => seen.push(e.detail));
+    el.onHoldDragStart();
+    el.onHoldDragKey('left');
+    expect(seen).toEqual([]);
+  });
+
+  it('is still reorderable — the drag handle is unconditional', () => {
+    const el = mount(aggGoal([memberRef('a')], 38));
+    expect(el.shadowRoot.querySelector('#drag-btn')).toBeTruthy();
+  });
+
+  it('announces the percentage and the member count together', () => {
+    const el = mount(aggGoal([memberRef('a'), memberRef('b')], 38));
+    const label = el.shadowRoot.querySelector('.bar').getAttribute('aria-label');
+    expect(label).toContain('Ship the book');
+    expect(label).toContain('38%');
+    expect(label).toContain('2 goals');
+  });
+
+  it('keeps the count label when the row escalates to Failed', () => {
+    // .pct-label has its own :host([data-failed]) colour override already, so
+    // the label must survive the escalation rather than be swapped out.
+    const el = mount(aggGoal([memberRef('a')], 20, {}));
+    el.goal = { ...aggGoal([memberRef('a')], 20), dueDate: isoDaysFromNow(-3) };
+    expect(el.shadowRoot.querySelector('.pct-label').textContent).toBe('1 goal');
+  });
+});

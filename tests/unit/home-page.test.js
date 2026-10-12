@@ -1528,3 +1528,139 @@ describe('home-page — goalsDeadlinesVisible gates every goal-item and year-hea
     expect(badgeHidden(el)).toBe(true); // badge's own .hidden stays true (not shown) — 'warn' is not "hidden", only 'off' shows the awareness badge
   });
 });
+
+// ── Aggregate ("Group") goals: the graph handed to the dialog, and the
+//    prune that has to land before the edit snapshot ───────────────────────
+
+describe('home-page — aggregate goals', () => {
+  const pct = (id, value) => ({ id, title: id, tags: [], tracking: { type: 'percentage', value } });
+  const agg = (id, members) => ({
+    id, title: id, tags: [], tracking: { type: 'aggregate', aggValue: 0, members },
+  });
+  const ref = (goalId, section = 'focus', year = '2026') => ({ year, section, goalId });
+
+  async function bootWith(goals) {
+    await boot({ dbName: freshName(), initialState: { goals, images: {} } });
+  }
+  function tapGoal(el, listId, goal) {
+    el.shadowRoot.querySelector(listId).dispatchEvent(new CustomEvent('goal-tap', {
+      bubbles: true, composed: true, detail: { goal },
+    }));
+  }
+
+  it('hands the dialog every goal in the store, flattened with its address', async () => {
+    await bootWith({
+      '2026': { capstone: [pct('c1', 10)], milestones: [], wow: [], focus: [pct('f1', 20)] },
+      '2027': { capstone: [], milestones: [pct('m1', 30)], wow: [], focus: [] },
+    });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1));
+
+    tapGoal(el, '#capstone-list', pct('c1', 10));
+    const available = el.shadowRoot.querySelector('#dialog').availableGoals;
+    expect(available.map(e => `${e.year}|${e.section}|${e.goal.id}`).sort())
+      .toEqual(['2026|capstone|c1', '2026|focus|f1', '2027|milestones|m1']);
+  });
+
+  it('skips non-array keys on a year object when collecting', async () => {
+    // A year object is not guaranteed to hold only section arrays.
+    await bootWith({
+      '2026': { capstone: [pct('c1', 10)], milestones: [], wow: [], focus: [], stray: 'not an array' },
+    });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1));
+    tapGoal(el, '#capstone-list', pct('c1', 10));
+    expect(el.shadowRoot.querySelector('#dialog').availableGoals).toHaveLength(1);
+  });
+
+  it('prunes a dead member reference when the dialog opens', async () => {
+    await bootWith({
+      '2026': {
+        capstone: [agg('a1', [ref('f1'), ref('ghost')])],
+        milestones: [], wow: [], focus: [pct('f1', 50)],
+      },
+    });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1));
+
+    tapGoal(el, '#capstone-list', getState().goals['2026'].capstone[0]);
+    await vi.waitFor(() =>
+      expect(getState().goals['2026'].capstone[0].tracking.members).toEqual([ref('f1')]));
+  });
+
+  it('leaves a healthy group untouched on open — no write at all', async () => {
+    await bootWith({
+      '2026': {
+        capstone: [agg('a1', [ref('f1')])],
+        milestones: [], wow: [], focus: [pct('f1', 50)],
+      },
+    });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1));
+
+    const before = getState().goals['2026'].capstone[0];
+    tapGoal(el, '#capstone-list', before);
+    expect(getState().goals['2026'].capstone[0]).toBe(before); // same reference
+  });
+
+  it('takes the edit snapshot AFTER the prune, so closing untouched shows no toast', async () => {
+    // The ordering bug this guards: _onGoalClosed compares the store against
+    // _editSnapshot, so a prune captured on the wrong side of that read reads
+    // as a user edit and fires a "Goal saved" toast whose Undo would restore
+    // the dead reference.
+    _resetToast();
+    await bootWith({
+      '2026': {
+        capstone: [agg('a1', [ref('f1'), ref('ghost')])],
+        milestones: [], wow: [], focus: [pct('f1', 50)],
+      },
+    });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1));
+
+    tapGoal(el, '#capstone-list', getState().goals['2026'].capstone[0]);
+    await vi.waitFor(() =>
+      expect(getState().goals['2026'].capstone[0].tracking.members).toHaveLength(1));
+
+    // Close with no edits whatsoever.
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-closed', {
+      bubbles: true, composed: true, detail: {},
+    }));
+    await new Promise(r => setTimeout(r, 0));
+    expect(document.querySelector('#toast-container .socle-toast-success')).toBeNull();
+  });
+
+  it('still toasts when the group is genuinely edited — the control for the test above', async () => {
+    // Without this, a selector that stopped matching would make the previous
+    // test pass for the wrong reason.
+    _resetToast();
+    await bootWith({
+      '2026': {
+        capstone: [agg('a1', [ref('f1')])],
+        milestones: [], wow: [], focus: [pct('f1', 50)],
+      },
+    });
+    const el = mount(2026);
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length).toBe(1));
+
+    tapGoal(el, '#capstone-list', getState().goals['2026'].capstone[0]);
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-title-changed', {
+      bubbles: true, composed: true, detail: { title: 'Renamed' },
+    }));
+    await vi.waitFor(() =>
+      expect(getState().goals['2026'].capstone[0].title).toBe('Renamed'));
+
+    el.shadowRoot.querySelector('#dialog').dispatchEvent(new CustomEvent('goal-closed', {
+      bubbles: true, composed: true, detail: {},
+    }));
+    await vi.waitFor(() =>
+      expect(document.querySelector('#toast-container .socle-toast-success')?.textContent)
+        .toContain('Goal saved'));
+  });
+});

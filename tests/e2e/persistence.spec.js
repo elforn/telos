@@ -505,3 +505,170 @@ test.describe('Data persistence', () => {
     expect(tracking.history.at(-1).value).toBe(tracking.value);
   });
 });
+
+// ── Aggregate ("Group") goals ────────────────────────────────────────────────
+// A group stores only its member references and their weights. Its percentage
+// is a cache recomputed by app/store/aggregate-reconciler.js — at boot among
+// other triggers — so a cold reload is the real test of the whole chain:
+// IDB → boot → reconcile → rendered row.
+
+test.describe('Aggregate goal persistence', () => {
+  const Y = String(currentYear);
+
+  async function seed(page, goals) {
+    await page.evaluate(async goals => {
+      await new Promise((res, rej) => {
+        const r = indexedDB.open('telos', 1);
+        r.onsuccess = () => {
+          const db = r.result;
+          const tx = db.transaction('state', 'readwrite');
+          const os = tx.objectStore('state');
+          const g = os.get('root');
+          g.onsuccess = () => os.put({ id: 'root', data: { ...(g.result?.data ?? {}), goals } });
+          tx.oncomplete = () => { db.close(); res(); };
+          tx.onerror = () => { db.close(); rej(tx.error); };
+        };
+        r.onerror = () => rej(r.error);
+      });
+    }, goals);
+  }
+
+  const readRow = (page, id) => page.evaluate(id => {
+    const row = [...document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot.querySelectorAll('goal-item')]
+      .find(el => el._goal?.id === id);
+    if (!row) return null;
+    return {
+      fill: row.shadowRoot.querySelector('.fill').style.width,
+      label: row.shadowRoot.querySelector('.pct-label').textContent,
+      members: row._goal.tracking.members,
+      aggValue: row._goal.tracking.aggValue,
+    };
+  }, id);
+
+  test('weighted membership survives a cold reload and the value is recomputed at boot', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await waitForHomePage(page);
+
+    // aggValue deliberately absent: the boot pass has to produce it.
+    // m1 100% x1 with f1 0% x3 -> 25%.
+    await seed(page, {
+      [Y]: {
+        capstone: [{ id: 'grp', title: 'Ship the book', tags: [], tracking: {
+          type: 'aggregate',
+          members: [
+            { year: Y, section: 'milestones', goalId: 'm1' },
+            { year: Y, section: 'focus', goalId: 'f1', weight: 3 },
+          ],
+        } }],
+        milestones: [{ id: 'm1', title: 'Outline', tags: [], tracking: { type: 'percentage', value: 100 } }],
+        wow: [],
+        focus: [{ id: 'f1', title: 'First draft', tags: [], tracking: { type: 'percentage', value: 0 } }],
+      },
+    });
+    await page.reload();
+    await waitForHomePage(page);
+
+    await page.waitForFunction(() => {
+      const row = [...document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelectorAll('goal-item')]
+        .find(el => el._goal?.id === 'grp');
+      return row?._goal?.tracking?.aggValue === 25;
+    });
+
+    const r = await readRow(page, 'grp');
+    expect(r.fill).toBe('25%');
+    expect(r.label).toBe('2 goals');
+    // The authored data is what persisted; the weight omitted at 1 stays omitted.
+    expect(r.members).toEqual([
+      { year: Y, section: 'milestones', goalId: 'm1' },
+      { year: Y, section: 'focus', goalId: 'f1', weight: 3 },
+    ]);
+  });
+
+  test('the recomputed value is written back to IDB, not just rendered', async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await waitForHomePage(page);
+    await seed(page, {
+      [Y]: {
+        capstone: [{ id: 'grp', title: 'Group', tags: [], tracking: {
+          type: 'aggregate', members: [{ year: Y, section: 'focus', goalId: 'f1' }],
+        } }],
+        milestones: [], wow: [],
+        focus: [{ id: 'f1', title: 'Member', tags: [], tracking: { type: 'percentage', value: 80 } }],
+      },
+    });
+    await page.reload();
+    await waitForHomePage(page);
+    await page.waitForFunction(() => {
+      const row = [...document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelectorAll('goal-item')]
+        .find(el => el._goal?.id === 'grp');
+      return row?._goal?.tracking?.aggValue === 80;
+    });
+    await waitForIDBFlush(page);
+
+    const persisted = await page.evaluate(() => new Promise(res => {
+      const r = indexedDB.open('telos', 1);
+      r.onsuccess = () => {
+        const db = r.result;
+        const g = db.transaction('state', 'readonly').objectStore('state').get('root');
+        g.onsuccess = () => { res(g.result?.data); db.close(); };
+      };
+    }));
+    const grp = persisted.goals[Y].capstone[0];
+    expect(grp.tracking.aggValue).toBe(80);
+    // A group records no history — the evolution curve is derived at render time.
+    expect('history' in grp.tracking).toBe(false);
+  });
+
+  test('a cross-year member still resolves after a cold reload', async ({ page }) => {
+    const next = String(currentYear + 1);
+    await page.goto(`/${currentYear}`);
+    await waitForHomePage(page);
+    await seed(page, {
+      [Y]: {
+        capstone: [{ id: 'grp', title: 'Multi-year', tags: [], tracking: {
+          type: 'aggregate', members: [{ year: next, section: 'focus', goalId: 'future' }],
+        } }],
+        milestones: [], wow: [], focus: [],
+      },
+      [next]: {
+        capstone: [], milestones: [], wow: [],
+        focus: [{ id: 'future', title: 'Next year', tags: [], tracking: { type: 'percentage', value: 60 } }],
+      },
+    });
+    await page.reload();
+    await waitForHomePage(page);
+
+    await page.waitForFunction(() => {
+      const row = [...document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelectorAll('goal-item')]
+        .find(el => el._goal?.id === 'grp');
+      return row?._goal?.tracking?.aggValue === 60;
+    });
+    expect((await readRow(page, 'grp')).fill).toBe('60%');
+  });
+
+  test('a group whose member no longer exists reads 0 rather than breaking the page', async ({ page }) => {
+    // Pruning is scoped to opening the dialog, so a dangling reference has to
+    // survive a boot untouched and simply not contribute.
+    await page.goto(`/${currentYear}`);
+    await waitForHomePage(page);
+    await seed(page, {
+      [Y]: {
+        capstone: [{ id: 'grp', title: 'Orphaned', tags: [], tracking: {
+          type: 'aggregate', members: [{ year: '1999', section: 'focus', goalId: 'ghost' }],
+        } }],
+        milestones: [], wow: [], focus: [],
+      },
+    });
+    await page.reload();
+    await waitForHomePage(page);
+
+    const r = await readRow(page, 'grp');
+    expect(r.fill).toBe('0%');
+    expect(r.label).toBe('1 goal');
+    expect(r.members).toHaveLength(1); // not pruned on the write path
+  });
+});

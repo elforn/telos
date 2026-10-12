@@ -1459,7 +1459,7 @@ describe('goal-dialog — type selector (new goal)', () => {
   it('goal-created carries a full percentage tracking object by default (value/target/entries all present)', () => {
     const el = mount();
     const events = create(el);
-    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 0, target: 3, entries: [], startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 0, target: 3, entries: [], startDate: '2026-01-01', members: [] });
   });
 
   it('goal-created carries the selected weekly type/target, with a dormant value alongside empty entries', () => {
@@ -1471,7 +1471,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'Move my body';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: [], startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: [], startDate: '2026-01-01', members: [] });
   });
 
   it('stepper increments/decrements and clamps to TARGET_LIMITS.monthly (1–31)', () => {
@@ -1497,7 +1497,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'Call parents';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'monthly', value: 0, target: 5, entries: [], startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'monthly', value: 0, target: 5, entries: [], startDate: '2026-01-01', members: [] });
   });
 
   it('resets to percentage default after a quick-add commit (Enter) starts the next entry', () => {
@@ -1661,7 +1661,7 @@ describe('goal-dialog — type selector (new goal)', () => {
     el.addEventListener('goal-created', e => events.push(e));
     el.shadowRoot.querySelector('#input').value = 'No ice cream';
     el.shadowRoot.querySelector('#modal').close();
-    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 1, entries: [], startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 1, entries: [], startDate: '2026-01-01', members: [] });
   });
 
 });
@@ -1845,7 +1845,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'weekly').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 62, target: 3, entries: [], startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 62, target: 3, entries: [], startDate: '2026-01-01', members: [] });
   });
 
   it('switching a frequency goal to percentage preserves entries dormant and surfaces the last value', () => {
@@ -1856,7 +1856,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'percentage').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 62, target: 5, entries: ['2026-08-01'], startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'percentage', value: 62, target: 5, entries: ['2026-08-01'], startDate: '2026-01-01', members: [] });
   });
 
   it('switching back and forth (weekly → percentage → weekly) recovers the original entries — nothing is destroyed', () => {
@@ -1887,7 +1887,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'weekly').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 3, entries: ['2026-07-01', '2026-08-01'], startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 3, entries: ['2026-07-01', '2026-08-01'], startDate: '2026-01-01', members: [] });
     expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true); // weekly never shows the standalone stepper
   });
 
@@ -1899,7 +1899,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     el.shadowRoot.querySelector('#reminder-mini-up').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: ['2026-08-01'], startDate: '2026-01-01', reminderDays: 'any' });
+    expect(events[0].detail.tracking).toEqual({ type: 'weekly', value: 0, target: 4, entries: ['2026-08-01'], startDate: '2026-01-01', reminderDays: 'any', members: [] });
     expect(el.shadowRoot.querySelector('#reminder-x-label').textContent).toBe('4x');
   });
 
@@ -1972,7 +1972,7 @@ describe('goal-dialog — type/target: no main-view presence for an existing goa
     el.addEventListener('goal-tracking-changed', e => events.push(e));
     pill(el, 'decreasing').click();
     expect(events).toHaveLength(1);
-    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 0, entries: ['2026-08-01'], startDate: '2026-01-01' });
+    expect(events[0].detail.tracking).toEqual({ type: 'decreasing', value: 0, target: 0, entries: ['2026-08-01'], startDate: '2026-01-01', members: [] });
   });
 
   it('switching back and forth (weekly → Avoid → weekly) recovers the original entries — nothing is destroyed', () => {
@@ -2926,5 +2926,331 @@ describe('goal-dialog — Fix a day for percentage goals', () => {
   it('reaches back to 1 January rather than a rolling window, since the first record anchors the ramp', () => {
     const el = open([{ date: '2026-05-10', value: 45 }]);
     expect(el.shadowRoot.querySelector('#fixpct-date').min).toMatch(/-01-01$/);
+  });
+});
+
+// ── Aggregate ("Group") membership ──────────────────────────────────────────
+
+function stubGoalPicker(el) {
+  const picker = el.shadowRoot.querySelector('#goal-picker');
+  const modal  = picker.shadowRoot?.querySelector('#modal');
+  if (modal) { modal.show = vi.fn(); modal.close = vi.fn(); }
+  picker.show = vi.fn();
+  return picker;
+}
+
+const AVAILABLE = [
+  { year: '2026', section: 'milestones', goal: { id: 'm1', title: 'Finish the outline', tags: [], tracking: { type: 'percentage', value: 100 } } },
+  { year: '2026', section: 'focus',      goal: { id: 'f1', title: 'First draft',       tags: [], tracking: { type: 'percentage', value: 42 } } },
+  { year: '2027', section: 'capstone',   goal: { id: 'c1', title: 'Edit and publish',  tags: [], tracking: { type: 'percentage', value: 0 } } },
+];
+const mRef = (goalId, section, year, weight) =>
+  weight === undefined ? { year, section, goalId } : { year, section, goalId, weight };
+
+function openAggregate(el, members, extra = {}) {
+  el.availableGoals = AVAILABLE;
+  el.open({
+    id: 'agg1', title: 'Ship the book', tags: [],
+    tracking: { type: 'aggregate', members, aggValue: 38, ...extra },
+  });
+  return el;
+}
+
+describe('goal-dialog — aggregate membership', () => {
+  it('offers a seventh type pill', () => {
+    const el = mount();
+    el.open();
+    const types = [...el.shadowRoot.querySelectorAll('.type-pill')].map(p => p.dataset.type);
+    expect(types).toHaveLength(7);
+    expect(types).toContain('aggregate');
+  });
+
+  it('shows the members block and hides every other per-type block', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026')]);
+    expect(el.shadowRoot.querySelector('#members-block').hidden).toBe(false);
+    expect(el.shadowRoot.querySelector('#target-block').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#reminder-days-block').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#countdown-block').hidden).toBe(true);
+  });
+
+  it('keeps the members block visible while the type editor is COLLAPSED', () => {
+    // The entire justification for placing #members-block outside
+    // .type-field: for an existing goal the type editor stays collapsed
+    // until "Change type" is tapped, and membership is the goal's content,
+    // not a type setting.
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026')]);
+    expect(el.shadowRoot.querySelector('#type-pills').hidden).toBe(true);
+    expect(el.shadowRoot.querySelector('#members-block').hidden).toBe(false);
+  });
+
+  it('hides the members block for every other type', () => {
+    const el = mount();
+    el.availableGoals = AVAILABLE;
+    el.open({ id: 'g1', title: 'X', tags: [], tracking: { type: 'percentage', value: 10 } });
+    expect(el.shadowRoot.querySelector('#members-block').hidden).toBe(true);
+  });
+
+  it('renders a row per member with its title, context and current percentage', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026'), mRef('c1', 'capstone', '2027')]);
+    const rows = [...el.shadowRoot.querySelectorAll('.member-row')];
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('.member-title').textContent).toBe('Finish the outline');
+    expect(rows[0].querySelector('.member-sub').textContent).toBe('Goal · 2026 · Milestones');
+    expect(rows[0].querySelector('.member-pct').textContent).toBe('100%');
+    expect(rows[1].querySelector('.member-sub').textContent).toBe('Goal · 2027 · Capstone');
+  });
+
+  it('skips a member whose goal no longer exists rather than rendering a broken row', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026'), mRef('ghost', 'focus', '2026')]);
+    expect(el.shadowRoot.querySelectorAll('.member-row')).toHaveLength(1);
+  });
+
+  it('shows the empty state when there are no members', () => {
+    const el = mount();
+    openAggregate(el, []);
+    expect(el.shadowRoot.querySelector('#members-empty').hidden).toBe(false);
+    expect(el.shadowRoot.querySelectorAll('.member-row')).toHaveLength(0);
+  });
+
+  it('marks an untouched weight as the default and disables its minus', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026')]);
+    const chip = el.shadowRoot.querySelector('.member-weight');
+    expect(chip.textContent).toBe('×1');
+    expect(chip.classList.contains('is-default')).toBe(true);
+    expect(el.shadowRoot.querySelector('[data-weight-step="down"]').disabled).toBe(true);
+    expect(el.shadowRoot.querySelector('[data-weight-step="up"]').disabled).toBe(false);
+  });
+
+  it('steps a weight up, commits it, and drops the default styling', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026')]);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e.detail));
+    el.shadowRoot.querySelector('[data-weight-step="up"]').click();
+
+    const chip = el.shadowRoot.querySelector('.member-weight');
+    expect(chip.textContent).toBe('×2');
+    expect(chip.classList.contains('is-default')).toBe(false);
+    expect(events).toHaveLength(1);
+    expect(events[0].tracking.members).toEqual([{ year: '2026', section: 'milestones', goalId: 'm1', weight: 2 }]);
+  });
+
+  it('omits the weight key entirely when stepped back down to 1', () => {
+    // The same "omit rather than store the default" rule Goal.color follows.
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026', 2)]);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e.detail));
+    el.shadowRoot.querySelector('[data-weight-step="down"]').click();
+    expect(events[0].tracking.members).toEqual([{ year: '2026', section: 'milestones', goalId: 'm1' }]);
+    expect('weight' in events[0].tracking.members[0]).toBe(false);
+  });
+
+  it('clamps the weight at the top of the range and disables the plus', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026', 9)]);
+    expect(el.shadowRoot.querySelector('[data-weight-step="up"]').disabled).toBe(true);
+    expect(el.shadowRoot.querySelector('[data-weight-step="down"]').disabled).toBe(false);
+  });
+
+  it('removes a member and commits', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026'), mRef('f1', 'focus', '2026')]);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e.detail));
+    el.shadowRoot.querySelector('.member-row .member-remove').click();
+    expect(el.shadowRoot.querySelectorAll('.member-row')).toHaveLength(1);
+    expect(events[0].tracking.members).toEqual([{ year: '2026', section: 'focus', goalId: 'f1' }]);
+  });
+
+  it('opens the picker with the goal’s own id and current members', () => {
+    const el = mount();
+    const picker = stubGoalPicker(el);
+    openAggregate(el, [mRef('m1', 'milestones', '2026')]);
+    el.shadowRoot.querySelector('#members-add-btn').click();
+    expect(picker.show).toHaveBeenCalled();
+    expect(picker.selfId).toBe('agg1');
+    expect(picker.existingMembers).toEqual([{ year: '2026', section: 'milestones', goalId: 'm1' }]);
+    expect(picker.availableGoals).toHaveLength(3);
+  });
+
+  it('appends picked references, ignoring ones already present', () => {
+    const el = mount();
+    const picker = stubGoalPicker(el);
+    openAggregate(el, [mRef('m1', 'milestones', '2026')]);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e.detail));
+    picker.dispatchEvent(new CustomEvent('goal-pick', {
+      bubbles: true, composed: true,
+      detail: { refs: [mRef('m1', 'milestones', '2026'), mRef('f1', 'focus', '2026')] },
+    }));
+    expect(events[0].tracking.members).toEqual([
+      { year: '2026', section: 'milestones', goalId: 'm1' },
+      { year: '2026', section: 'focus', goalId: 'f1' },
+    ]);
+  });
+
+  it('preserves a dormant target when switching INTO aggregate', () => {
+    // DEFAULT_TARGET has no 'aggregate' entry, so an unguarded reset would
+    // write target: undefined and destroy the weekly target underneath.
+    const el = mount();
+    el.availableGoals = AVAILABLE;
+    el.open({ id: 'g1', title: 'X', tags: [], tracking: { type: 'weekly', value: 0, target: 5, entries: ['2026-08-01'] } });
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e.detail));
+    el.shadowRoot.querySelector('.type-pill[data-type="aggregate"]').click();
+    expect(events[0].tracking.target).toBe(5);
+    expect(events[0].tracking.entries).toEqual(['2026-08-01']);
+  });
+
+  it('preserves membership when switching away from aggregate and back', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026', 3)]);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e.detail));
+    el.shadowRoot.querySelector('.type-pill[data-type="percentage"]').click();
+    el.shadowRoot.querySelector('.type-pill[data-type="aggregate"]').click();
+    expect(events.at(-1).tracking.members).toEqual([
+      { year: '2026', section: 'milestones', goalId: 'm1', weight: 3 },
+    ]);
+  });
+
+  it('recomputes aggValue on a membership edit instead of carrying a stale one', () => {
+    // The regression: aggValue used to be carried through untouched, so
+    // percentValue — and with it the summary line and the analytics hero —
+    // kept reporting the value from before the edit, while the chart and the
+    // breakdown card (which read tracking.members directly) updated at once.
+    // The percentage looked frozen until the dialog was reopened.
+    // m1 sits at 100%, so a one-member group is 100 whatever the weight.
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026')]);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e.detail));
+    el.shadowRoot.querySelector('[data-weight-step="up"]').click();
+    expect(events[0].tracking.aggValue).toBe(100);
+    expect('history' in events[0].tracking).toBe(false);
+  });
+
+  it('reflects a recomputed value in the summary line immediately', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026')]);
+    el.shadowRoot.querySelector('[data-weight-step="up"]').click();
+    expect(el.shadowRoot.querySelector('#tracking-summary').textContent).toBe('G: 1 goals at 100%');
+  });
+
+  it('recomputes when a member is added', () => {
+    // m1 is 100%, f1 is 42% — an unweighted pair averages to 71.
+    const el = mount();
+    const picker = stubGoalPicker(el);
+    openAggregate(el, [mRef('m1', 'milestones', '2026')]);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e.detail));
+    picker.dispatchEvent(new CustomEvent('goal-pick', {
+      bubbles: true, composed: true, detail: { refs: [mRef('f1', 'focus', '2026')] },
+    }));
+    expect(events.at(-1).tracking.aggValue).toBe(71);
+  });
+
+  it('recomputes when a member is removed', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026'), mRef('f1', 'focus', '2026')]);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e.detail));
+    // Drop m1 (100%), leaving only f1 (42%).
+    el.shadowRoot.querySelector('.member-row .member-remove').click();
+    expect(events.at(-1).tracking.aggValue).toBe(42);
+  });
+
+  it('keeps focus on the stepper across a weight step', () => {
+    // Rebuilding the list destroyed the button mid-press and dropped focus to
+    // <body> — the same trap goal-analytics' _wireInteractive documents. A
+    // weight step now updates its own row in place.
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026')]);
+    const up = el.shadowRoot.querySelector('[data-weight-step="up"]');
+    up.focus();
+    up.click();
+    expect(el.shadowRoot.querySelector('[data-weight-step="up"]')).toBe(up); // same node
+    expect(el.shadowRoot.activeElement).toBe(up);
+    expect(el.shadowRoot.querySelector('.member-weight').textContent).toBe('×2');
+  });
+
+  it('hands focus to the opposite button when a step disables the one pressed', () => {
+    // A disabled element cannot hold focus, so stepping to the limit would
+    // otherwise still lose it.
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026', 8)]);
+    const up = el.shadowRoot.querySelector('[data-weight-step="up"]');
+    up.focus();
+    up.click(); // 8 -> 9, the maximum
+    expect(up.disabled).toBe(true);
+    expect(el.shadowRoot.activeElement).toBe(el.shadowRoot.querySelector('[data-weight-step="down"]'));
+  });
+
+  it('moves focus to a neighbouring row when a member is removed', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026'), mRef('f1', 'focus', '2026')]);
+    el.shadowRoot.querySelector('.member-row .member-remove').click();
+    const remaining = el.shadowRoot.querySelectorAll('.member-remove');
+    expect(remaining).toHaveLength(1);
+    expect(el.shadowRoot.activeElement).toBe(remaining[0]);
+  });
+
+  it('falls back to the add button when the last member is removed', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026')]);
+    el.shadowRoot.querySelector('.member-row .member-remove').click();
+    expect(el.shadowRoot.querySelectorAll('.member-row')).toHaveLength(0);
+    expect(el.shadowRoot.activeElement).toBe(el.shadowRoot.querySelector('#members-add-btn'));
+  });
+
+  it('applies the weight to the recomputed value', () => {
+    // m1 100% x1 with f1 42% x3 -> (100 + 126) / 4 = 56.5 -> 57
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026'), mRef('f1', 'focus', '2026')]);
+    const events = [];
+    el.addEventListener('goal-tracking-changed', e => events.push(e.detail));
+    // A held reference survives now that a weight step updates its row in
+    // place rather than rebuilding the list.
+    const up = [...el.shadowRoot.querySelectorAll('.member-row')][1]
+      .querySelector('[data-weight-step="up"]');
+    up.click(); // f1 -> x2
+    up.click(); // f1 -> x3
+    expect(events.at(-1).tracking.aggValue).toBe(57);
+  });
+
+  it('carries aggValue for a brand-new group so the row never renders blank', () => {
+    const el = mount();
+    el.availableGoals = AVAILABLE;
+    el.open();
+    el.shadowRoot.querySelector('.type-pill[data-type="aggregate"]').click();
+    const picker = stubGoalPicker(el);
+    el.shadowRoot.querySelector('#members-add-btn').click();
+    picker.dispatchEvent(new CustomEvent('goal-pick', {
+      bubbles: true, composed: true, detail: { refs: [mRef('m1', 'milestones', '2026')] },
+    }));
+    const created = [];
+    el.addEventListener('goal-created', e => created.push(e.detail));
+    const input = el.shadowRoot.querySelector('#input');
+    input.value = 'Ship the book';
+    input.dispatchEvent(new Event('blur'));
+    expect(created[0].tracking.aggValue).toBe(100);
+  });
+
+  it('summarises membership and percentage in the tracking line', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026'), mRef('f1', 'focus', '2026')]);
+    expect(el.shadowRoot.querySelector('#tracking-summary').textContent).toBe('G: 2 goals at 38%');
+  });
+
+  it('shows the member count, not a target, on the Change type menu item', () => {
+    const el = mount();
+    openAggregate(el, [mRef('m1', 'milestones', '2026'), mRef('f1', 'focus', '2026')]);
+    expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('2 goals');
   });
 });

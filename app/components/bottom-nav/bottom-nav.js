@@ -7,6 +7,7 @@ import { exportData, downloadExport, readImportFile, previewImport, applyMerge, 
 import { toast } from '../../../_lib/modules/toast/toast.js';
 import { getState, setRuntimeState } from '../../../_lib/core/store/store.js';
 import { onDayChange } from '../../utils/day-change-watcher.js';
+import { scheduleAggregateReconcile } from '../../store/aggregate-reconciler.js';
 import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
 import { frequencyUrgencyOf } from '../../utils/frequency-urgency.js';
 import { collectUpcoming, collectHiddenUrgent, upcomingBadgeCount } from '../../utils/upcoming.js';
@@ -116,11 +117,22 @@ class BottomNav extends AppElement {
              digit rather than a dot. Declared here so the badges and the
              calc()s that position them read the same number. */
           --badge-count-size: 16px;
-          /* Cell height. --row-height (56px) rather than --nav-height (64px):
-             a nav cell is then exactly as tall as a goal/list row, so the bar
-             reads as one more band in the same rhythm instead of a heavier
-             slab under them. Total bar is 57px vs the old pill bar's 67px. */
-          --nav-cell-height: var(--row-height);
+          /* Cell height. Derived from --row-height (56px) rather than
+             --nav-height (64px, Socle's token, unused here): a nav cell then
+             sits in the same rhythm as a goal/list row instead of reading as
+             a heavier slab under them. Shaved 5px below that row height on
+             purpose — the bar is chrome, not content, so matching a row
+             exactly gave it more presence than it earns, and the glyphs and
+             labels were already centred with room to spare. Total bar is
+             52px (51 + the 0.5px border), down from 57px, and from the
+             original pill bar's 67px.
+             Everything below reads this var — cell min-heights, the square
+             icon cells, and the badge-positioning calc()s — so the whole bar
+             follows one number. The published --bottom-nav-height is
+             measured from offsetHeight at runtime (see _publishHeight), so
+             the pages' bottom padding and the toast inset track it with no
+             second value to keep in sync. */
+          --nav-cell-height: calc(var(--row-height) - 5px);
           /* Icon cells are square and fixed-width; the two route cells take
              the rest, so Years/Lists keep ~2/3 of the bar between them — they
              are the app's only two destinations, the bell and gear open sheets. */
@@ -767,7 +779,18 @@ class BottomNav extends AppElement {
     // Left open across midnight, these badges are only ever as fresh as the
     // last store write that happened to touch them — refresh on resume if
     // the calendar day has actually moved on (see day-change-watcher.js).
-    onDayChange(this, () => { this.refreshUrgency(); this.refreshUpcoming(); });
+    // An aggregate's members can be weekly/monthly/Avoid/countdown goals,
+    // whose own percentage moves with the calendar day without any write
+    // happening at all — so the stored group value has to be recomputed here
+    // too, not just on writes. The resulting setState re-renders the rows for
+    // free, and the same pass records the new day's snapshot for the
+    // evolution chart. This component is always mounted, which is why the
+    // hook lives here rather than on a page.
+    onDayChange(this, () => {
+      scheduleAggregateReconcile();
+      this.refreshUrgency();
+      this.refreshUpcoming();
+    });
     this._updateGearBadge();
 
     this._onReminderGroup = e => {

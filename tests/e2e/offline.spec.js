@@ -91,4 +91,70 @@ test.describe('Offline behaviour', () => {
     });
     expect(onestAvailable).toBe(true);
   });
+
+  // A group's percentage is a number already in IDB — reading it needs no
+  // network at all, and the reconciler that maintains it runs entirely
+  // locally. This confirms the whole chain (boot -> reconcile -> render -> a
+  // local write) works with the network cut.
+  test('a group reconciles and renders with the network cut', async ({ page, context }) => {
+    const year = new Date().getFullYear();
+    await page.goto(`/${year}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await page.waitForFunction(() =>
+      !!document.querySelector('app-router')?.shadowRoot?.querySelector('home-page')
+    );
+
+    await context.setOffline(true);
+
+    // Seed with no aggValue, so the boot pass has to compute it offline.
+    await page.evaluate(async y => {
+      const Y = String(y);
+      await new Promise((res, rej) => {
+        const r = indexedDB.open('telos', 1);
+        r.onsuccess = () => {
+          const db = r.result;
+          const tx = db.transaction('state', 'readwrite');
+          const os = tx.objectStore('state');
+          const g = os.get('root');
+          g.onsuccess = () => os.put({ id: 'root', data: { ...(g.result?.data ?? {}), goals: {
+            [Y]: {
+              capstone: [{ id: 'grp', title: 'Offline group', tags: [], tracking: {
+                type: 'aggregate', members: [{ year: Y, section: 'focus', goalId: 'f1' }],
+              } }],
+              milestones: [], wow: [],
+              focus: [{ id: 'f1', title: 'Member', tags: [], tracking: { type: 'percentage', value: 45 } }],
+            },
+          } } });
+          tx.oncomplete = () => { db.close(); res(); };
+          tx.onerror = () => { db.close(); rej(tx.error); };
+        };
+        r.onerror = () => rej(r.error);
+      });
+    }, year);
+
+    // Reload from cache alone.
+    await page.reload();
+    await page.waitForFunction(() =>
+      !!document.querySelector('app-router')?.shadowRoot?.querySelector('home-page')
+    );
+
+    await page.waitForFunction(() => {
+      const row = [...document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelectorAll('goal-item')]
+        .find(el => el._goal?.id === 'grp');
+      return row?._goal?.tracking?.aggValue === 45;
+    });
+
+    const rendered = await page.evaluate(() => {
+      const row = [...document.querySelector('app-router').shadowRoot
+        .querySelector('home-page').shadowRoot.querySelectorAll('goal-item')]
+        .find(el => el._goal?.id === 'grp');
+      return {
+        fill: row.shadowRoot.querySelector('.fill').style.width,
+        label: row.shadowRoot.querySelector('.pct-label').textContent,
+      };
+    });
+    expect(rendered.fill).toBe('45%');
+    expect(rendered.label).toBe('1 goal');
+  });
 });
