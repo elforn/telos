@@ -240,3 +240,102 @@ test('editing a member updates its group’s rendered row, with no further inter
   // derived from the members at render time instead.
   expect('history' in grp.tracking).toBe(false);
 });
+
+// ── Hold-drag is inert on a group row ────────────────────────────────────────
+// Driven through real pointer events so the Gestures mixin actually runs —
+// the unit tests call onHoldDrag* directly, which proves the early-returns but
+// not that the gesture reaches them. Mirrors the same check countdown-goals
+// makes for its own derived type. A percentage row runs the identical gesture
+// as a positive control, so this cannot pass by the gesture simply failing to
+// fire.
+
+const barBoxOf = (page, id) => page.evaluate(id => {
+  const row = [...document.querySelector('app-router').shadowRoot
+    .querySelector('home-page').shadowRoot.querySelectorAll('goal-item')]
+    .find(el => el._goal?.id === id);
+  return row.shadowRoot.querySelector('.bar').getBoundingClientRect().toJSON();
+}, id);
+
+const rowState = (page, id) => page.evaluate(id => {
+  const row = [...document.querySelector('app-router').shadowRoot
+    .querySelector('home-page').shadowRoot.querySelectorAll('goal-item')]
+    .find(el => el._goal?.id === id);
+  return {
+    fill: row.shadowRoot.querySelector('.fill').style.width,
+    holdActive: row.classList.contains('hold-active'),
+    value: row._goal?.tracking?.value,
+    aggValue: row._goal?.tracking?.aggValue,
+  };
+}, id);
+
+async function holdDragAcross(page, box) {
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(600); // past the dwell — a percentage row enters scrub here
+  await page.mouse.move(box.x + box.width * 0.9, box.y + box.height / 2);
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+}
+
+test('a real hold-drag changes nothing on a group row, but does on a percentage row', async ({ page }) => {
+  const y = String(currentYear);
+  await page.goto(`/${currentYear}`);
+  await waitForPage(page);
+
+  // Group in capstone, its member and a plain percentage control in focus.
+  await page.evaluate(async y => {
+    await new Promise((res, rej) => {
+      const r = indexedDB.open('telos', 1);
+      r.onsuccess = () => {
+        const db = r.result;
+        const tx = db.transaction('state', 'readwrite');
+        const os = tx.objectStore('state');
+        const g = os.get('root');
+        g.onsuccess = () => os.put({ id: 'root', data: { ...(g.result?.data ?? {}), goals: {
+          [y]: {
+            capstone: [{ id: 'grp', title: 'Group', tags: [], tracking: {
+              type: 'aggregate', members: [{ year: y, section: 'focus', goalId: 'mem' }],
+            } }],
+            milestones: [], wow: [],
+            focus: [
+              { id: 'mem', title: 'Member', tags: [], tracking: { type: 'percentage', value: 30 } },
+              { id: 'ctl', title: 'Control', tags: [], tracking: { type: 'percentage', value: 30 } },
+            ],
+          },
+        } } });
+        tx.oncomplete = () => { db.close(); res(); };
+        tx.onerror = () => { db.close(); rej(tx.error); };
+      };
+      r.onerror = () => rej(r.error);
+    });
+  }, y);
+  await page.reload();
+  await waitForPage(page);
+  await page.waitForFunction(() => {
+    const row = [...document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot.querySelectorAll('goal-item')]
+      .find(el => el._goal?.id === 'grp');
+    return row?._goal?.tracking?.aggValue === 30;
+  });
+
+  // ── The control first: the same gesture must genuinely scrub a percentage
+  //    row, or the assertion below proves nothing.
+  const ctlBefore = await rowState(page, 'ctl');
+  await holdDragAcross(page, await barBoxOf(page, 'ctl'));
+  const ctlAfter = await rowState(page, 'ctl');
+  expect(ctlAfter.fill).not.toBe(ctlBefore.fill);
+  expect(ctlAfter.value).toBeGreaterThan(ctlBefore.value);
+  expect(ctlAfter.holdActive).toBe(false); // released cleanly
+
+  // ── The group: identical gesture, nothing moves.
+  const grpBefore = await rowState(page, 'grp');
+  await holdDragAcross(page, await barBoxOf(page, 'grp'));
+  const grpAfter = await rowState(page, 'grp');
+  expect(grpAfter.fill).toBe(grpBefore.fill);
+  expect(grpAfter.aggValue).toBe(grpBefore.aggValue);
+  // Never entered scrub mode at all — onHoldDragStart returns before adding it.
+  expect(grpAfter.holdActive).toBe(false);
+
+  // And the member it derives from is untouched, so nothing leaked sideways.
+  expect((await rowState(page, 'mem')).value).toBe(30);
+});
