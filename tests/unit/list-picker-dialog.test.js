@@ -478,3 +478,55 @@ describe('list-picker-dialog — heading override', () => {
     expect(el.shadowRoot.querySelector('.heading').textContent).toBe('Move to list');
   });
 });
+
+// ── Listbox keyboard model ────────────────────────────────────────────────────
+// Converted alongside goal-picker-dialog: these two are the same widget with
+// different payloads, so the keyboard must not behave differently between them.
+
+describe('list-picker-dialog — listbox keyboard model', () => {
+  const rows = el => [...el.shadowRoot.querySelectorAll('.row')];
+  const key = (el, k) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+
+  function open(lists = [LIST_A, LIST_B, LIST_C]) {
+    const el = mount();
+    el.lists = lists;
+    el.show();
+    return el;
+  }
+
+  it('is one tab stop for the whole list, not one per row', () => {
+    expect(rows(open()).map(r => r.tabIndex)).toEqual([0, -1, -1]);
+  });
+
+  it('arrows move the tab stop and focus together', () => {
+    const el = open();
+    key(rows(el)[0], 'ArrowDown');
+    expect(rows(el).map(r => r.tabIndex)).toEqual([-1, 0, -1]);
+    key(rows(el)[1], 'ArrowUp');
+    expect(rows(el).map(r => r.tabIndex)).toEqual([0, -1, -1]);
+  });
+
+  it('Home and End jump to the ends without wrapping', () => {
+    const el = open();
+    key(rows(el)[0], 'End');
+    expect(rows(el).map(r => r.tabIndex)).toEqual([-1, -1, 0]);
+    key(rows(el)[2], 'ArrowDown');
+    expect(rows(el).map(r => r.tabIndex)).toEqual([-1, -1, 0]);
+    key(rows(el)[2], 'Home');
+    expect(rows(el).map(r => r.tabIndex)).toEqual([0, -1, -1]);
+  });
+
+  it('re-syncs the tab stop on every open', () => {
+    const el = open();
+    key(rows(el)[0], 'End');
+    el.show();
+    expect(rows(el).map(r => r.tabIndex)).toEqual([0, -1, -1]);
+  });
+
+  it('leaves Enter and Space to the button, so selection still works', () => {
+    const el = open();
+    rows(el)[1].click();
+    expect(rows(el)[1].getAttribute('aria-selected')).toBe('true');
+    expect(el.shadowRoot.querySelector('#move-btn').disabled).toBe(false);
+  });
+});

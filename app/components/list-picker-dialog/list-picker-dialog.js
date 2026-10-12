@@ -1,6 +1,15 @@
 import { AppElement } from '../../../_lib/core/app-element.js';
 import { t } from '../../../_lib/core/strings.js';
+import { attachListboxKeys } from '../../utils/listbox-keys.js';
 import '../../../_lib/modules/modal-dialog/modal-dialog.js';
+
+// Room the modal's own chrome needs above and below the scrolling list —
+// heading, the new-list affordance, footer and the dialog's padding.
+// Subtracted from the visual viewport so the footer stays reachable with a
+// keyboard open; the floor keeps at least one row visible on a very short
+// viewport. Kept identical to goal-picker-dialog's pair on purpose.
+const LIST_CHROME_PX = 280;
+const LIST_MIN_PX = 80;
 
 class ListPickerDialog extends AppElement {
   // ── Public properties ────────────────────────────────────────────────────────
@@ -328,6 +337,12 @@ class ListPickerDialog extends AppElement {
     this._onResize = () => this._syncItemsHeight();
     (window.visualViewport ?? window).addEventListener('resize', this._onResize);
 
+    // Converted alongside goal-picker-dialog deliberately: these two are the
+    // same widget with different payloads, and leaving one on a Tab-per-row
+    // model would make the keyboard behave differently in two places that
+    // look identical.
+    this._listboxKeys = attachListboxKeys(this._itemsEl);
+
     this._onClearBtn = () => {
       this._selectedIds.clear();
       this._itemsEl.querySelectorAll('.row.selected').forEach(row => {
@@ -357,6 +372,7 @@ class ListPickerDialog extends AppElement {
     this.shadowRoot.querySelector('#back-btn')?.removeEventListener('click', this._onBackBtn);
     this._moveBtn?.removeEventListener('click', this._onMoveBtn);
     this._copyBtn?.removeEventListener('click', this._onCopyBtn);
+    this._listboxKeys?.detach();
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
@@ -365,7 +381,7 @@ class ListPickerDialog extends AppElement {
     if (!this._itemsEl) return;
     const vh = window.visualViewport?.height ?? window.innerHeight;
     // Subtract fixed chrome: handle + heading + count/new-list area + footer + dialog padding
-    this._itemsEl.style.maxBlockSize = `${Math.max(vh - 280, 80)}px`;
+    this._itemsEl.style.maxBlockSize = `${Math.max(vh - LIST_CHROME_PX, LIST_MIN_PX)}px`;
   }
 
   _renderRows() {
@@ -415,6 +431,7 @@ class ListPickerDialog extends AppElement {
 
       this._itemsEl.appendChild(row);
     }
+    this._listboxKeys?.syncTabStops();
   }
 
   _updateCtaState() {
