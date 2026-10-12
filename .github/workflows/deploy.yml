@@ -3,6 +3,12 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  # Lets a deploy be retried without a dummy commit. Needed because
+  # actions/deploy-pages can fail on a transient Pages API 500, and
+  # re-running the failed job is NOT a fix: upload-pages-artifact lives in the
+  # same job, so a re-run leaves two artifacts named github-pages in the run
+  # and deploy-pages then refuses to choose between them.
+  workflow_dispatch:
 
 permissions:
   contents: read
