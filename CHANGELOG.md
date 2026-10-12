@@ -5,6 +5,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.11.0] — 2026-10-12
+
+### Added
+- **A new "Group" goal type** — a goal whose progress is the weighted average of other goals'. "Ship the book" over "Outline", "First draft" and "Edit and publish", and its percentage moves whenever any of those do. Members can live in **any year**, so a multi-year goal can sit above one yearly goal per year.
+- **Each member carries a weight**, set with the same ±1 stepper the times-per-week and times-per-month rows already use. An untouched weight reads as a quiet "×1", so a plain average looks like a plain average and only the members you have deliberately weighted stand out.
+- **Members are picked from a new goal picker**, grouped by year and showing each goal's current percentage. Anything that would create a loop is left out of the list rather than offered and rejected — and a group may hold another group, nested as deep as you like.
+- **The group's row has no glyph, just the bar and a count of what it is made of.** Every other type's token is something you tap or drag to record progress, and a group has nothing to record — so it shows "3 goals" where a To-date goal shows its days remaining.
+- **A group's row is read-only.** You cannot drag or arrow it to a percentage, because the number is its members' and nothing else — editing it would have nowhere to go. You can still reorder it, open it, and give it a deadline like any other goal.
+- **Overview charts the group's evolution**, with the progress line, the sparkline, the month and quarter comparisons and the pace projection. None of it is stored: a group's value on any past day is worked out from its members as they were that day, so the curve reaches back as far as they do and corrects itself if you fix a member's own history. One honest limit — a Percentage member counts only from its first recorded value, so early on a group may be averaging fewer members than it has.
+
+### Changed
+- **The group's Overview leaves out the expected-pace line.** For every other type that dashed line is a pace you set; a group goes wherever its members go, so drawing one would invent a target nobody chose. In its place is a **member breakdown** — every member, its weight and its own percentage — which is what actually explains the number above it.
+- **Groups get Overview only.** Score plots a rolling average per period and a group has no period; Streaks needs logged days. Activity is left out on purpose and will stay out: its cards answer "which days did you act on this", and a group is never the thing you act on — its members are. Every goal type also drifts on its own as time passes, so even "the day the number moved" would mean nothing here. For a group's activity, open its members' own Activity tabs.
+- **Sharing a group to another Telos install sends it as a Percentage goal** holding its last computed value. Its members point at goals that exist only in your copy, so neither they nor the chart drawn from them can travel.
+- **The Consistency chart moved from Overview to the Score tab**, for Weekly, Monthly and Avoid goals — the only three types that have either, and you could never see one without the other. On Score it reads in the right order: the grid above is the window your score counts, the bars below are the longer run of how each period went. Overview is back to one chart, like every other type.
+- **The bottom bar is 5px shorter.** It is chrome rather than content, so matching a goal row's height exactly gave it more presence than it earns. Everything that reserves space above it — the pages and the toast — tracks the new height automatically.
+- **Both pickers behave like the lists they say they are on a keyboard.** The goal picker and the list picker were one Tab stop per row, so reaching the buttons underneath meant tabbing past every option. They now take a single stop for the whole list, with Up/Down to move inside it and Home/End to jump to either end — and reopening one lands on your existing selection rather than back at the top. Enter and Space still select, exactly as before.
+
+
+### Fixed
+- **Analytics tabs no longer open part-scrolled.** Opening a tab for the first time inherited however far you had scrolled the previous one, so a long Overview could drop you into the middle of a shorter Activity page — or past its end. Each tab now starts at the top, keeps its own position while you move between tabs, and starts fresh the next time you open the goal. Charts behave the same way: they open showing the current period, hold wherever you drag them, and re-anchor on a fresh open.
+- **Reopening a goal starts at the top of the page again.** It used to come back wherever the last visit had scrolled to, because the reset ran while the sheet was still hidden and had nothing to reset.
+
+---
+
 ## [3.10.0] — 2026-10-08
 
 ### Added
