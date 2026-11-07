@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.11.2] — 2026-11-07
+
+### Fixed
+- **Cycling a list item's status no longer wipes its note, link and tags.** Tapping the status badge — or triple-tapping the row — saved the item with only its title and its new status, blanking the three fields it was not handed. Every tap did it, so one pass from Open to Done cost the note you had written, the link you had saved and every tag on the item. Its deadline and colour were never affected. Items emptied this way before this release cannot be recovered inside the app — restore them from a backup export if you have one.
+
+---
+
 ## [3.11.1] — 2026-11-06
 
 ### Fixed
