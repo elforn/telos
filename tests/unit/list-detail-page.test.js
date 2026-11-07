@@ -456,6 +456,47 @@ describe('list-detail-page — colour cycle', () => {
   });
 });
 
+describe('list-detail-page — status cycle', () => {
+  const FULL_ITEM = {
+    id: 'i1', title: 'Flowers', status: 'open',
+    note: 'Peonies, not roses', url: 'https://example.com/florist',
+    dueDate: '2026-12-01', color: '#E5534B',
+    tags: ['gifts'], inGoals: [],
+  };
+
+  it('preserves note, url and tags when cycling status via the badge', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [FULL_ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    el.shadowRoot.querySelector('#item-list').dispatchEvent(new CustomEvent('item-status-cycle', {
+      bubbles: true, composed: true, detail: { item: FULL_ITEM, next: 'done' },
+    }));
+    await vi.waitFor(() => expect(getState().lists[0].items[0].status).toBe('done'));
+    const saved = getState().lists[0].items[0];
+    expect(saved.note).toBe('Peonies, not roses');
+    expect(saved.url).toBe('https://example.com/florist');
+    expect(saved.tags).toEqual(['gifts']);
+    expect(saved.dueDate).toBe('2026-12-01');
+    expect(saved.color).toBe('#E5534B');
+    expect(saved.title).toBe('Flowers');
+  });
+
+  it('survives a full cycle back to open with every field intact', async () => {
+    await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items: [FULL_ITEM] }] } });
+    const el = mount();
+    await vi.waitFor(() => expect(el.shadowRoot.querySelector('list-item')).not.toBeNull());
+    const list = el.shadowRoot.querySelector('#item-list');
+    for (const next of ['done', 'paused', 'closed', 'open']) {
+      const current = getState().lists[0].items[0];
+      list.dispatchEvent(new CustomEvent('item-status-cycle', {
+        bubbles: true, composed: true, detail: { item: current, next },
+      }));
+      await vi.waitFor(() => expect(getState().lists[0].items[0].status).toBe(next));
+    }
+    expect(getState().lists[0].items[0]).toEqual({ ...FULL_ITEM, status: 'open' });
+  });
+});
+
 // ── Drag reorder ─────────────────────────────────────────────────────────────
 
 const ITEM_A = { id: 'a', title: 'A', status: 'open', tags: [], inGoals: [] };
@@ -1795,10 +1836,15 @@ describe('list-detail-page — inbound ?q= filter', () => {
     await boot({ dbName: freshName(), initialState: { lists: [{ ...LIST, items }] } });
     history.pushState({}, '', '?q=flowers');
     const el = mount();
-    await vi.waitFor(() => expect(el.shadowRoot.querySelectorAll('list-item').length).toBe(2));
-    const listItems = [...el.shadowRoot.querySelectorAll('list-item')];
-    expect(listItems.find(i => i._item.title === 'Flowers').hidden).toBe(false);
-    expect(listItems.find(i => i._item.title === 'Chocolates').hidden).toBe(true);
+    // The rows render before the inbound ?q= filter is applied, so waiting only
+    // for them to exist leaves a window where hidden is still false on both —
+    // wait on the filter result itself.
+    await vi.waitFor(() => {
+      const listItems = [...el.shadowRoot.querySelectorAll('list-item')];
+      expect(listItems.length).toBe(2);
+      expect(listItems.find(i => i._item.title === 'Flowers').hidden).toBe(false);
+      expect(listItems.find(i => i._item.title === 'Chocolates').hidden).toBe(true);
+    });
   });
 
   it('no ?q= param shows all items normally', async () => {

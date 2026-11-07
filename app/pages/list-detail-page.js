@@ -1559,8 +1559,17 @@ class ListDetailPage extends AppElement {
     this._mutateItems(items => [...items, item]);
   }
 
-  _editItem(id, { title, status, note, url, tags }) {
-    this._mutateItems(items => items.map(i => i.id === id ? { ...i, title, status, note, url, tags } : i));
+  // Applies only the keys actually present in `patch`. The status badge's
+  // tap-to-cycle passes just { title, status }, and spreading the absent
+  // note/url/tags over the stored item blanked all three on every tap.
+  // Clearing a field is done by destructuring the key away at the callsite
+  // (as the dueDate/color paths above do), never by passing undefined, so
+  // dropping undefined values here loses no legitimate write.
+  _editItem(id, patch) {
+    const fields = Object.fromEntries(
+      Object.entries(patch).filter(([, v]) => v !== undefined)
+    );
+    this._mutateItems(items => items.map(i => i.id === id ? { ...i, ...fields } : i));
   }
 
   _collectAllTags(state = getState()) {
