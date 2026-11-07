@@ -22,6 +22,14 @@ beforeEach(() => { _realMatchMedia = window.matchMedia; });
 afterEach(() => { window.matchMedia = _realMatchMedia; });
 
 
+// The gestures mixin's hold fires at a real 500ms (LONG_PRESS_DELAY), on a
+// real timer. A 600ms budget left only 100ms of headroom, which this suite
+// exceeds under parallel load — these tests passed alone and failed
+// intermittently in a full run. The wait is a ceiling, not an assertion: the
+// expectations still require exactly one event and no scrub, so a generous
+// ceiling removes the load sensitivity without weakening anything.
+const HOLD_WAIT = 2000;
+
 HTMLElement.prototype.setPointerCapture    = () => {};
 HTMLElement.prototype.releasePointerCapture = () => {};
 
@@ -414,7 +422,7 @@ describe('goal-item — hold drag', () => {
     el.addEventListener('goal-progress', e => events.push(e));
 
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
-    await vi.waitFor(() => expect(el.classList.contains('hold-active')).toBe(true), { timeout: 600 });
+    await vi.waitFor(() => expect(el.classList.contains('hold-active')).toBe(true), { timeout: HOLD_WAIT });
     el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 100, clientY: 20, pointerId: 1 }));
     el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 100, clientY: 20, pointerId: 1, button: 0 }));
 
@@ -433,7 +441,7 @@ describe('goal-item — hold drag', () => {
     el.addEventListener('goal-progress', e => events.push(e));
 
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
-    await vi.waitFor(() => expect(el.classList.contains('hold-active')).toBe(true), { timeout: 600 });
+    await vi.waitFor(() => expect(el.classList.contains('hold-active')).toBe(true), { timeout: HOLD_WAIT });
     // 7px short of the bar's right edge (200px wide) — should already read 100%.
     el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 193, clientY: 20, pointerId: 1 }));
     el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 193, clientY: 20, pointerId: 1, button: 0 }));
@@ -504,7 +512,7 @@ describe('goal-item — hold drag', () => {
     el.addEventListener('goal-log-toggle', e => toggleEvents.push(e));
 
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
-    await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: 600 });
+    await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: HOLD_WAIT });
     el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 100, clientY: 20, pointerId: 1 }));
     el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, clientX: 100, clientY: 20, pointerId: 1, button: 0 }));
 
@@ -764,7 +772,7 @@ describe('goal-item — frequency: tap still edits, hold logs', () => {
     el.addEventListener('goal-log-toggle', e => toggleEvents.push(e));
 
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
-    await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: 600 });
+    await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: HOLD_WAIT });
     el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
 
     expect(progressEvents).toHaveLength(0);
@@ -830,7 +838,7 @@ describe('goal-item — frequency: tap still edits, hold logs', () => {
     const today = el.shadowRoot.querySelector('.freq-today');
     const opts = { bubbles: true, composed: true, clientX: 10, clientY: 10, pointerId: 1, button: 0 };
     today.dispatchEvent(new PointerEvent('pointerdown', opts));
-    await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: 600 });
+    await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: HOLD_WAIT });
     today.dispatchEvent(new PointerEvent('pointerup', opts));
   });
 });
@@ -1267,7 +1275,7 @@ describe('goal-item — decreasing: tap/hold', () => {
 
     const widthBefore = el.shadowRoot.querySelector('.fill').style.width;
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
-    await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: 600 });
+    await vi.waitFor(() => expect(toggleEvents).toHaveLength(1), { timeout: HOLD_WAIT });
     el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 10, clientY: 20, pointerId: 1, button: 0 }));
 
     expect(el.classList.contains('hold-active')).toBe(false);
