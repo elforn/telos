@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.11.1] — 2026-11-06
+
+### Fixed
+- **"To date" and Avoid goals due today or tomorrow now actually show up.** Both types sit at 100% during normal use — a To-date goal because its span has run, an Avoid goal because staying inside your weekly allowance *is* 100% — and anything at 100% was treated as finished, so their deadlines were switched off. A To-date goal due today showed no calendar marker, never matched the Week filter pill, and never reached the Upcoming view, the bell badge or the daily digest. The longer the span, the wider the blind spot: a year-long To-date goal went quiet for its last two days, a two-year one for its last four.
+- **Weekly and monthly goals that are behind on pace now match the date filter pills.** A goal falling behind its times-per-week or scheduled days is marked urgent on its row, but the filters read only the deadline you had typed in — so a goal that was due today, due tomorrow or overdue purely from pace, with no deadline set, could only be found under "None". Overdue and Week now find it. "None" still means "no deadline set", so such a goal appears under both.
+- **A To-date goal past its date stays finished rather than turning overdue.** Reaching the date is the whole point of the type, so it is due, then done — never late, and never shown in solid red. The same holds for an Avoid goal whose deadline has passed: the window you committed to has ended, and an Avoid goal's real failure signal is its weekly allowance, which is unaffected.
+- **A healthy Avoid goal with a deadline shows that deadline on its Overview.** The "due this week" line under the date was hidden for any Avoid goal inside its allowance, which is to say nearly all of them — it only ever appeared on a week you were also over.
+
+---
+
 ## [3.11.0] — 2026-10-12
 
 ### Added
