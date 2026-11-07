@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForPage, waitForListsPage, waitForListDetailPage } from './helpers.js';
+import { waitForPage, waitForListsPage, waitForListDetailPage, waitForIDBFlush } from './helpers.js';
 
 const currentYear = new Date().getFullYear();
 
@@ -200,5 +200,114 @@ test.describe('Item status cycle', () => {
       , expected);
       expect(await getItemStatus(page)).toBe(expected);
     }
+  });
+});
+
+
+// ── Field preservation across the cycle ───────────────────────────────────────
+//
+// Regression guard. The cycle handler used to re-save the item with only its
+// title and new status, so note, url and tags were blanked on every tap. The
+// suite above could not see it: it creates a title-only item and asserts only
+// status, and an item with no other fields has nothing to lose. These seed a
+// fully-populated item instead and check it through the real browser's badge
+// click and a cold reload from IDB.
+
+function seedState(page, patch) {
+  return page.evaluate(p => new Promise((res, rej) => {
+    const r = indexedDB.open('telos', 1);
+    r.onsuccess = () => {
+      const db = r.result;
+      const tx = db.transaction('state', 'readwrite');
+      const os = tx.objectStore('state');
+      const g = os.get('root');
+      g.onsuccess = () => os.put({ id: 'root', data: { ...(g.result?.data ?? {}), ...p } });
+      tx.oncomplete = () => { db.close(); res(); };
+      tx.onerror = () => { db.close(); rej(tx.error); };
+    };
+    r.onerror = () => rej(r.error);
+  }), patch);
+}
+
+const FULL_ITEM = {
+  id: 'i-full', title: 'Keep my fields', status: 'open',
+  note: 'Peonies, not roses', url: 'https://example.com/florist',
+  dueDate: '2026-12-01', color: '#E5534B',
+  tags: ['gifts'], inGoals: [],
+};
+
+function readItem(page) {
+  return page.evaluate(() => {
+    const item = document.querySelector('app-router').shadowRoot
+      .querySelector('list-detail-page').shadowRoot
+      .querySelector('#item-list list-item');
+    return item?._item;
+  });
+}
+
+async function waitForStatus(page, status) {
+  await page.waitForFunction(s =>
+    document.querySelector('app-router')?.shadowRoot
+      ?.querySelector('list-detail-page')?.shadowRoot
+      ?.querySelector('#item-list list-item')?._item?.status === s
+  , status);
+}
+
+test.describe('Item status cycle — field preservation', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`/${currentYear}`);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    await seedState(page, { lists: [{ id: 'l-full', name: 'Preserve list', items: [FULL_ITEM] }] });
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForPage(page);
+    await navToLists(page);
+    await navToFirstList(page);
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('#item-list')?.querySelectorAll('list-item').length ?? 0) >= 1
+    );
+  });
+
+  test('one badge tap keeps note, url and tags', async ({ page }) => {
+    await clickStatusBadge(page);
+    await waitForStatus(page, 'done');
+
+    const item = await readItem(page);
+    expect(item.note).toBe('Peonies, not roses');
+    expect(item.url).toBe('https://example.com/florist');
+    expect(item.tags).toEqual(['gifts']);
+    expect(item.dueDate).toBe('2026-12-01');
+    expect(item.color).toBe('#E5534B');
+    expect(item.title).toBe('Keep my fields');
+  });
+
+  test('a full four-tap cycle leaves every field intact', async ({ page }) => {
+    for (const expected of ['done', 'paused', 'closed', 'open']) {
+      await clickStatusBadge(page);
+      await waitForStatus(page, expected);
+    }
+    expect(await readItem(page)).toEqual(FULL_ITEM);
+  });
+
+  test('fields survive the cycle through a cold reload from IDB', async ({ page }) => {
+    await clickStatusBadge(page);
+    await waitForStatus(page, 'done');
+    await waitForIDBFlush(page);
+
+    // The reload keeps the list-detail route, so this lands straight back on
+    // the item rather than on the year page.
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await waitForListDetailPage(page);
+    await page.waitForFunction(() =>
+      (document.querySelector('app-router')?.shadowRoot
+        ?.querySelector('list-detail-page')?.shadowRoot
+        ?.querySelector('#item-list')?.querySelectorAll('list-item').length ?? 0) >= 1
+    );
+
+    expect(await readItem(page)).toEqual({ ...FULL_ITEM, status: 'done' });
   });
 });
