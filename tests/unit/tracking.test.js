@@ -7,8 +7,7 @@ import {
   weekDayStates, recentWeekStates, isOverAllowance, currentAllowanceSpent,
   countdownValue, countdownDaysRemaining,
   PERIOD_WINDOW, DOT_WINDOW, TARGET_LIMITS, DEFAULT_TARGET,
-  targetLimitsFor,
-} from '../../app/utils/tracking.js';
+  targetLimitsFor, completesByScore, isActiveForUrgency} from '../../app/utils/tracking.js';
 
 function pct(value) { return { tracking: { type: 'percentage', value } }; }
 function weekly(target, entries) { return { tracking: { type: 'weekly', target, entries } }; }
@@ -922,5 +921,76 @@ describe('tracking — aggregate type', () => {
   it('has no target limits — it has no target concept', () => {
     expect(targetLimitsFor('aggregate')).toBeUndefined();
     expect(isEntryType('aggregate')).toBe(false);
+  });
+});
+
+// ── The urgency gate ──────────────────────────────────────────────────────
+// Regression cover for the two types whose 100% does NOT mean "achieved".
+// Before isActiveForUrgency existed, every urgency consumer gated on a bare
+// `percentValue(goal) < 100`, which switched a countdown's and an Avoid
+// goal's deadline off exactly when it mattered — see the function's own doc.
+describe('tracking — completesByScore / isActiveForUrgency', () => {
+  const dated = (tracking, dueDate) => ({ id: 'g', title: 'g', dueDate, tracking });
+
+  it('treats percentage, weekly, monthly, daycount and aggregate as completing by score', () => {
+    for (const type of ['percentage', 'weekly', 'monthly', 'daycount', 'aggregate']) {
+      expect(completesByScore({ tracking: { type } })).toBe(true);
+    }
+  });
+
+  it('treats countdown and decreasing as never completing by score', () => {
+    expect(completesByScore({ tracking: { type: 'countdown' } })).toBe(false);
+    expect(completesByScore({ tracking: { type: 'decreasing' } })).toBe(false);
+  });
+
+  it('keeps a countdown active ON its due date, at 100%', () => {
+    const g = dated({ type: 'countdown', startDate: '2026-01-01' }, '2026-06-01');
+    expect(percentValue(g, '2026-06-01')).toBe(100);
+    expect(isActiveForUrgency(g, '2026-06-01')).toBe(true);
+  });
+
+  it('treats a countdown PAST its due date as finished, never overdue', () => {
+    // A countdown's date is the type's subject, not a commitment it can
+    // miss — reaching it is the countdown succeeding. So it is due, then
+    // done; it must never go overdue / full-row red.
+    const g = dated({ type: 'countdown', startDate: '2026-01-01' }, '2026-06-01');
+    expect(isActiveForUrgency(g, '2026-06-02')).toBe(false);
+    expect(isActiveForUrgency(g, '2026-09-01')).toBe(false);
+  });
+
+  it('treats an Avoid goal past its due date as finished too', () => {
+    // The committed window ended. Its real failure signal is the weekly
+    // allowance, which frequencyRowUrgencyOf finds without any due date.
+    const g = dated({ type: 'decreasing', target: 2, entries: [] }, '2026-06-01');
+    expect(isActiveForUrgency(g, '2026-06-01')).toBe(true);
+    expect(isActiveForUrgency(g, '2026-06-02')).toBe(false);
+  });
+
+  it('keeps a DATELESS countdown or Avoid goal active indefinitely', () => {
+    // The common case for Avoid goals — this is what keeps allowance-failure
+    // red working for them.
+    expect(isActiveForUrgency({ tracking: { type: 'decreasing', target: 2, entries: [] } }, '2026-06-02')).toBe(true);
+    expect(isActiveForUrgency({ tracking: { type: 'countdown' } }, '2026-06-02')).toBe(true);
+  });
+
+  it('keeps a countdown active through the rounding window BEFORE its due date', () => {
+    // percentValue rounds, so a long span reads 100 a day or more early —
+    // the original bug silenced today AND tomorrow on year-long countdowns.
+    const g = dated({ type: 'countdown', startDate: '2026-01-01' }, '2027-01-01');
+    expect(percentValue(g, '2026-12-31')).toBe(100); // 100% a day early
+    expect(isActiveForUrgency(g, '2026-12-31')).toBe(true);
+  });
+
+  it('keeps an Avoid goal active at 100% — within allowance is its healthy resting state', () => {
+    const g = dated({ type: 'decreasing', target: 2, entries: [] }, '2026-08-12');
+    expect(percentValue(g, '2026-08-12')).toBe(100);
+    expect(isActiveForUrgency(g, '2026-08-12')).toBe(true);
+  });
+
+  it('still deactivates a genuinely finished goal of a score-completing type', () => {
+    expect(isActiveForUrgency(dated({ type: 'percentage', value: 100 }, '2026-08-12'))).toBe(false);
+    expect(isActiveForUrgency(dated({ type: 'percentage', value: 99 }, '2026-08-12'))).toBe(true);
+    const done = dated({ type: 'daycount', target: 2, entries: ['2026-01-01', '2026-01-02'] }, '2026-08-12');
+    expect(isActiveForUrgency(done, '2026-08-12')).toBe(false);
   });
 });

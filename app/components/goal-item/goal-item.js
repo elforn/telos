@@ -12,6 +12,7 @@ import { markDelete } from '../../utils/delete-ghost-guard.js';
 import {
   percentValue, isFrequency, isEntryBased, isDecreasing, isCountdown, isDayCount, isAggregate,
   countdownDaysRemaining, recentDots, recentWeekStates, isLoggedOn, currentPeriodCount,
+  isActiveForUrgency,
 } from '../../utils/tracking.js';
 
 const DRAG_100_INSET = 7;         // px shaved off the drag-to-set-% denominator so the last few px of the bar aren't needed to reach 100 — the fill/UI itself is untouched, only how far a drag has to travel
@@ -1484,7 +1485,12 @@ class GoalItem extends Gestures(AppElement) {
     // is only ever seen at all, archived or not, when something renders it —
     // the main list gated behind the Archived filter pill, or the
     // Hidden-items dialog for a still-overdue one (see upcoming.js).
-    const active = this._pct < 100;
+    // NOT `this._pct < 100` — see isActiveForUrgency's own doc in
+    // tracking.js. A countdown reads 100% from (slightly before) its due
+    // date onward and an Avoid goal reads 100% whenever it is behaving, so
+    // the plain score check silenced this row's marker for both types in
+    // exactly the window it existed to flag.
+    const active = isActiveForUrgency(this._goal);
     // TWO genuinely independent mechanisms, each with its own merge, its own
     // DOM attribute, and its own CSS — not one computed value read by both.
     // (An earlier version of this file computed a single merged bucket and

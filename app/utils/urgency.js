@@ -16,8 +16,8 @@ export const URGENCY_ORDER = ['none', 'far', 'month', 'week', 'tomorrow', 'today
 // Whole days from local today until `iso` (negative if in the past). Parses the
 // date parts manually — `new Date('2026-07-28')` is UTC midnight and can land on
 // the wrong local day.
-export function daysUntil(iso) {
-  const [ty, tm, td] = todayISO().split('-').map(Number);
+export function daysUntil(iso, todayIso = todayISO()) {
+  const [ty, tm, td] = todayIso.split('-').map(Number);
   const [dy, dm, dd] = iso.split('-').map(Number);
   const today = new Date(ty, tm - 1, td);
   const due = new Date(dy, dm - 1, dd);
@@ -26,12 +26,19 @@ export function daysUntil(iso) {
 
 // The urgency bucket for a due date. `active` gates the whole thing off — an
 // inactive (done/closed/completed/archived) or date-less item is always 'none'.
-export function urgencyOf(dueDate, active) {
+//
+// `todayIso` is an optional override for deterministic tests, defaulting to
+// real today — the same convention percentValue and frequencyUrgencyOf
+// already follow. It is not merely a convenience: goalUrgencyOf
+// (frequency-urgency.js) merges this function's bucket with a pace bucket
+// and threads one date into both, so without an override here the two halves
+// of that merge would silently resolve against different days whenever a
+// caller passed anything but real today.
+export function urgencyOf(dueDate, active, todayIso = todayISO()) {
   if (!dueDate || !active) return 'none';
-  const today = todayISO();
-  if (dueDate < today) return 'overdue'; // lexical compare == chronological for YYYY-MM-DD
-  if (dueDate === today) return 'today';
-  const days = daysUntil(dueDate);
+  if (dueDate < todayIso) return 'overdue'; // lexical compare == chronological for YYYY-MM-DD
+  if (dueDate === todayIso) return 'today';
+  const days = daysUntil(dueDate, todayIso);
   if (days === 1) return 'tomorrow';
   if (days <= WEEK_DAYS) return 'week';
   if (days <= MONTH_DAYS) return 'month';
@@ -64,16 +71,39 @@ export function formatCount(n) {
 // The date-filter pill keys, in display order.
 export const DATE_FILTER_KEYS = ['overdue', 'week', 'month', 'later', 'none'];
 
-// Whether a `dueDate` (with its `active` state) belongs to a date-filter bucket.
-// The four dated buckets reuse urgencyOf so the filter matches exactly what the
-// calendar marker shows (active-only). 'none' means "no date at all", regardless
-// of status — the "what haven't I dated?" case.
-export function matchesDateBucket(key, dueDate, active) {
-  if (key === 'none') return !dueDate;
-  const bucket = urgencyOf(dueDate, active);
+// Which date-filter key claims an ALREADY-COMPUTED urgency bucket. Split out
+// from matchesDateBucket so the goal-aware variant — which merges dueDate
+// urgency with frequency/pace urgency before filtering, see
+// matchesGoalDateBucket in frequency-urgency.js — maps its merged bucket
+// through this exact same table instead of repeating it. The mapping is a
+// clean partition of URGENCY_ORDER: every bucket but 'none' is claimed by
+// exactly one key, and 'today'/'tomorrow' both fold into 'week' (a pill
+// labelled "Week" is understood to mean "due within the week", today
+// included — there are deliberately no separate Today/Tomorrow pills).
+//
+// 'none' is not handled here on purpose: it is the one key that asks about
+// the ABSENCE of a date rather than about a bucket, so each caller answers
+// it from its own data before reaching for this.
+export function bucketMatchesKey(key, bucket) {
   if (key === 'overdue') return bucket === 'overdue';
   if (key === 'week') return bucket === 'today' || bucket === 'tomorrow' || bucket === 'week';
   if (key === 'month') return bucket === 'month';
   if (key === 'later') return bucket === 'far';
   return false;
+}
+
+// Whether a `dueDate` (with its `active` state) belongs to a date-filter bucket.
+// The four dated buckets reuse urgencyOf so the filter matches exactly what the
+// calendar marker shows (active-only). 'none' means "no date at all", regardless
+// of status — the "what haven't I dated?" case.
+//
+// This is the LIST-ITEM form: items carry nothing but a dueDate, so it is
+// complete for them. Goals have a second urgency source (frequency/pace) that
+// this signature structurally cannot see — it takes no goal — so goals must go
+// through matchesGoalDateBucket instead (frequency-urgency.js). Keeping items on
+// this leaner function is deliberate: it lets urgency.js stay free of any
+// tracking.js dependency, which list-item.js's import chain relies on.
+export function matchesDateBucket(key, dueDate, active, todayIso = todayISO()) {
+  if (key === 'none') return !dueDate;
+  return bucketMatchesKey(key, urgencyOf(dueDate, active, todayIso));
 }

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach, afterAll } from 'vitest';
 import '../../app/strings.js';
 import '../../app/components/goal-analytics/goal-analytics.js';
 
@@ -11,6 +11,29 @@ function mount(goal) {
 }
 
 const TODAY = '2026-09-20';
+
+// This file dates its fixtures two ways — the frozen TODAY literal above, and
+// isoDaysAgo() below, which counts back from `new Date()`. The component
+// resolves its own "today" through todayISO(), also `new Date()`. So with a
+// real clock the two drift apart as soon as the wall date leaves the fixture
+// window, and the frozen-literal tests rot: a history snapshot pinned to
+// 2026-09-20 stops being "this month" once the real month moves on, and the
+// month/quarter comparisons silently collapse to a 0-point delta.
+//
+// Freezing the clock to the same date the fixtures already declare makes all
+// three agree. Only Date is faked — setTimeout and friends stay real, because
+// the hold/animation timers these components use must keep running normally.
+// beforeEach, not beforeAll: two describes further down freeze their own
+// dates and clean up with `afterEach(() => vi.useRealTimers())`, which would
+// otherwise tear this down for every test that runs after them — leaving the
+// back half of the file on the real clock again. Re-establishing per test
+// also keeps those local vi.setSystemTime() calls working, since they run
+// inside the test body and simply override this.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 8, 20, 12, 0, 0)); // 2026-09-20, local noon
+});
+afterAll(() => { vi.useRealTimers(); });
 
 // Consistency moved from Overview to the Score page. Score is page 1 for
 // every type that has it, so any test reaching #tf-perf / .perf-* has to
@@ -741,6 +764,23 @@ describe('goal-analytics — Overview: deadline card', () => {
 
   it('shows no card at all for a goal with no deadline', () => {
     expect(deadlineCard(mount(weeklyGoal(3, [])))).toBeUndefined();
+  });
+
+  it('names the deadline on a healthy Avoid goal — 100% is its resting state, not a finish', () => {
+    // An Avoid goal within allowance scores 100, which used to gate this
+    // card's relative phrase off entirely for every dated Avoid goal.
+    const goal = { id: 'a', title: 'a', dueDate: isoDaysAgo(-4), tracking: { type: 'decreasing', target: 2, entries: [] } };
+    const card = deadlineCard(mount(goal));
+    expect(card.querySelector('.stat-sub').textContent).toBe('due this week');
+  });
+
+  it('does not call a lapsed Avoid deadline overdue — it agrees with the row', () => {
+    // The committed window ended; the row deliberately reads 'none' for this
+    // (see isActiveForUrgency), so this card must not say overdue either.
+    const goal = { id: 'a', title: 'a', dueDate: isoDaysAgo(9), tracking: { type: 'decreasing', target: 2, entries: [] } };
+    const card = deadlineCard(mount(goal));
+    expect(card.querySelector('.stat-value').classList.contains('overdue')).toBe(false);
+    expect(card.querySelector('.stat-sub')).toBeNull();
   });
 
   it('shows no card for "To date", whose type card already names that very date', () => {

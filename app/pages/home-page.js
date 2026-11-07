@@ -18,9 +18,9 @@ import '../components/date-filter-row/date-filter-row.js';
 import { exportGoalsMarkdown, exportGoalMarkdown } from '../utils/export-markdown.js';
 import { icons } from '../icons.js';
 import { tagColor } from '../utils/tag-color.js';
-import { matchesDateBucket } from '../utils/urgency.js';
+import { matchesGoalDateBucket } from '../utils/frequency-urgency.js';
 import { yearDeadlinesLevel } from '../utils/deadline-visibility.js';
-import { percentValue, setPercent, clearPercentAt, logEntry, unlogEntry, isLoggedOn } from '../utils/tracking.js';
+import { percentValue, setPercent, clearPercentAt, logEntry, unlogEntry, isLoggedOn, isActiveForUrgency } from '../utils/tracking.js';
 import { filterBarStyles, filterBarMarkup } from '../utils/filter-bar.js';
 import { buildGoalHandoff, buildYearHandoff, shareHandoff } from '../utils/handoff.js';
 import { shareMarkdown } from '../utils/share-markdown.js';
@@ -1351,8 +1351,15 @@ class HomePage extends AppElement {
       // Not gated on archived, matching goal-item.js's own urgency compute —
       // an archived goal viewed via the Archived pill still matches the
       // date-filter pills consistently with what its row actually shows.
-      const active = percentValue(goal) < 100;
-      if (![...dates].some(key => matchesDateBucket(key, goal.dueDate, active))) return false;
+      //
+      // matchesGoalDateBucket, not matchesDateBucket: the latter takes a bare
+      // dueDate and so cannot see pace at all, which meant a weekly/monthly
+      // goal due today or overdue BY PACE matched no dated pill. And
+      // isActiveForUrgency, not `percentValue < 100`, so a countdown or Avoid
+      // goal sitting at 100% isn't gated out before its bucket is computed.
+      // Both halves are required for the pills to actually mirror the markers.
+      const active = isActiveForUrgency(goal);
+      if (![...dates].some(key => matchesGoalDateBucket(key, goal, active))) return false;
     }
     return true;
   }

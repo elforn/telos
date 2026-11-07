@@ -310,6 +310,75 @@ export function percentValue(goal, todayIso = todayISO()) {
   return Math.round(weightedAverage(tr, todayIso) * 100);
 }
 
+// ── The urgency gate ──────────────────────────────────────────────────────
+// Every urgency computation in the app (urgencyOf, frequencyUrgencyOf,
+// frequencyRowUrgencyOf) takes an `active` flag that switches the whole
+// thing off, and for most types "active" is simply percentValue < 100: a
+// goal you have finished has no deadline left to miss. Two types break
+// that equivalence, and both used to go silent exactly when they mattered
+// most, so the rule lives here rather than being re-derived inline:
+//
+//   countdown  — 100% means the calendar span elapsed, NOT that anything
+//                was achieved. Worse, percentValue rounds, so a long
+//                countdown reads 100 BEFORE its due date arrives (a
+//                one-year span for its final 2 days, a two-year span for
+//                its final 4). Gating on <100 therefore silenced the
+//                marker, the Week filter pill and the Upcoming/bell entry
+//                across precisely the today/tomorrow window the deadline
+//                existed to flag.
+//   decreasing  — 100% is an Avoid goal's healthy RESTING state (at or
+//                under its weekly allowance scores a full 100), not a
+//                finish line. Gating on <100 meant an Avoid goal with a
+//                deadline could only ever show that deadline on a week it
+//                was also blowing its allowance.
+//
+// Neither type can ever complete by score, so neither is ever switched off
+// by one. `archived` is deliberately NOT folded in — callers disagree
+// about it on purpose (goal-item.js shows an archived goal's urgency
+// normally; bottom-nav.js's roll-up pill excludes it), so each site still
+// adds its own `&& !archived` exactly as before.
+export function completesByScore(goal) {
+  const type = goal?.tracking?.type;
+  return type !== 'countdown' && type !== 'decreasing';
+}
+
+// ...but "cannot complete by score" is NOT the same as "stays urgent
+// forever", and conflating the two would trade one wrong answer for
+// another. These two types complete by DATE instead: they can be DUE, and
+// never LATE.
+//
+//   countdown  — its due date is the type's whole SUBJECT, not a commitment
+//                it could fail to keep. Counting down to the date and
+//                reaching it is the countdown succeeding, so a lapsed one is
+//                finished, not overdue — it must never take the full-row-red
+//                treatment. Two existing decisions already said exactly this
+//                and are the precedent here: countdownDaysRemaining floors
+//                at 0 rather than going negative, and goal-analytics'
+//                _deadlineCard excludes countdown from the deadline readout
+//                altogether.
+//   decreasing  — a lapsed due date means the window the user committed to
+//                has ended, which again is not a missed commitment. An Avoid
+//                goal's real failure signal is its weekly allowance, which
+//                frequencyRowUrgencyOf computes on its own and never needed a
+//                due date to find.
+//
+// So for both, urgency runs up to and INCLUDING the due date, then stops.
+// Dateless goals of either type stay active indefinitely, which is what
+// keeps a plain Avoid goal's allowance-failure red working (the common case
+// — Avoid goals rarely carry a due date at all).
+//
+// Note the consequence for a lapsed countdown: it now matches no dated
+// filter pill, exactly like any other finished goal that still has a date on
+// it. That is the Done state pill's job, not the date pills' — a countdown
+// past its date reads 100%, so Done finds it.
+export function isActiveForUrgency(goal, todayIso = todayISO()) {
+  if (!completesByScore(goal)) {
+    const due = goal?.dueDate;
+    return !due || due >= todayIso; // lexical compare == chronological for YYYY-MM-DD
+  }
+  return percentValue(goal, todayIso) < 100;
+}
+
 // `history` is percentage-type's own analytics log — a snapshot of `value`
 // per calendar day, one entry per day max (upsert, overwriting same-day),
 // mirroring the "one entry per day max" convention `entries` already uses

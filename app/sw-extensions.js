@@ -83,6 +83,14 @@ function bucketOf(dueDate, active, todayIso) {
 // is exact without replicating anything at all — no member resolution, no
 // recursion, no weighting. A missing aggValue (never reconciled yet) falls
 // back to active, the same err-toward-active direction as everything else.
+// countdown and decreasing fall through to `true` here, and that is now the
+// INTENDED answer rather than a lucky side-effect of not replicating their
+// scoring: neither type can ever complete by score (a countdown's 100% means
+// the span elapsed, an Avoid goal's 100% means it is behaving), so neither
+// may be switched off by one. app/utils/tracking.js's completesByScore is the
+// canonical statement of that rule — this file cannot import it (classic
+// script, see the module doc), so if a future type joins that list, this
+// fall-through has to be revisited by hand.
 function isActive(goal) {
   const tr = goal?.tracking;
   if (tr?.type === 'percentage') return (tr.value ?? 0) < 100;

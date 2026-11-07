@@ -44,6 +44,7 @@
 // available slack.
 import { todayISO } from './today-iso.js';
 import { WEEKDAYS, currentPeriodCount, isOverAllowance } from './tracking.js';
+import { urgencyOf, mostUrgent, bucketMatchesKey } from './urgency.js';
 
 function localDate(iso) {
   const [y, m, d] = iso.split('-').map(Number);
@@ -551,4 +552,42 @@ export function frequencyRowUrgencyOf(goal, active, todayIso = todayISO()) {
   }
 
   return 'none';
+}
+
+// ── The merged, goal-level view ───────────────────────────────────────────
+// A goal has TWO independent urgency sources — its plain dueDate countdown
+// (urgencyOf) and its own frequency pace (above) — and a goal's real state
+// is whichever is worse. Every consumer has to merge them or it silently
+// reads only half the picture; this is that merge, in one place, so a new
+// consumer can't accidentally ship the half-blind version.
+//
+// Icon-facing (frequencyUrgencyOf), matching the calendar marker on the row
+// and the Upcoming dialog/bell badge — NOT the row's separate sticky
+// "the week is lost" bookkeeping (frequencyRowUrgencyOf), which answers a
+// different question and is deliberately not what a filter or a skim view
+// should surface. goal-item.js still computes both itself, since it is the
+// one place that genuinely needs the two side by side.
+export function goalUrgencyOf(goal, active, todayIso = todayISO()) {
+  return mostUrgent([
+    urgencyOf(goal?.dueDate, active, todayIso),
+    frequencyUrgencyOf(goal, active, todayIso),
+  ]);
+}
+
+// matchesDateBucket's goal-aware counterpart (see urgency.js for the
+// list-item form and for the shared key→bucket table this defers to).
+// Goals need their own version because the item signature takes a bare
+// dueDate and so cannot see `tracking.entries`/`tracking.reminderDays` at
+// all — which meant a weekly or monthly goal that was due today, due
+// tomorrow or outright overdue BY PACE, with no dueDate set, matched no
+// dated pill whatsoever and surfaced only under "None".
+//
+// 'none' still means strictly "no dueDate set", unchanged: it is the
+// "what haven't I dated?" question, and a pace-urgent goal genuinely has no
+// deadline on it. So such a goal now matches both its pace-derived dated
+// pill and 'none' — the pills are OR-combined and independently selectable,
+// so that reads correctly either way round.
+export function matchesGoalDateBucket(key, goal, active, todayIso = todayISO()) {
+  if (key === 'none') return !goal?.dueDate;
+  return bucketMatchesKey(key, goalUrgencyOf(goal, active, todayIso));
 }

@@ -6,9 +6,9 @@
 // its own frequency pace (see frequency-urgency.js) — to whichever is
 // worse, exactly mirroring goal-item's own row icon so a goal's Upcoming
 // placement always matches what its row is showing.
-import { urgencyOf, mostUrgent, daysUntil } from './urgency.js';
-import { percentValue } from './tracking.js';
-import { frequencyUrgencyOf, frequencyMissedDetail } from './frequency-urgency.js';
+import { urgencyOf, daysUntil } from './urgency.js';
+import { isActiveForUrgency } from './tracking.js';
+import { goalUrgencyOf, frequencyMissedDetail } from './frequency-urgency.js';
 import { yearDeadlinesLevel, listDeadlinesVisible } from './deadline-visibility.js';
 
 const GOAL_SECTIONS = ['capstone', 'milestones', 'wow', 'focus'];
@@ -43,10 +43,12 @@ function itemDetail(item, active) {
 //
 // 'tomorrow' is now a first-class bucket value in its own right (see
 // urgency.js/frequency-urgency.js), not a separate flag layered on top of
-// 'week' — so placement is a single mostUrgent()+bucket check for goals and
-// items alike, the same shape as the overdue/today branches right next to
-// it, rather than the old OR-of-two-different-tomorrow-signals it used to
-// take to detect the same thing.
+// 'week' — so placement is a single bucket check for goals and items alike,
+// the same shape as the overdue/today branches right next to it, rather than
+// the old OR-of-two-different-tomorrow-signals it used to take to detect the
+// same thing. The two-source merge itself now lives in goalUrgencyOf (see
+// frequency-urgency.js) rather than being spelled out here, so this file and
+// goal-item.js can no longer drift apart on what a goal's bucket is.
 //
 // goalsDeadlinesVisible/listsDeadlinesVisible gate a whole year's goals or a
 // whole list's items out of this aggregation entirely when 'off' — the same
@@ -68,11 +70,11 @@ export function collectUpcoming({ goals, lists, goalsDeadlinesVisible, listsDead
     for (const section of GOAL_SECTIONS) {
       for (const goal of yg?.[section] ?? []) {
         if (goal.archived) continue;
-        const active = percentValue(goal) < 100;
+        const active = isActiveForUrgency(goal);
         const entry = { kind: 'goal', id: goal.id, title: goal.title, year, section };
         const detail = goalDetail(goal, active);
         if (detail) entry.detail = detail;
-        const bucket = mostUrgent([urgencyOf(goal.dueDate, active), frequencyUrgencyOf(goal, active)]);
+        const bucket = goalUrgencyOf(goal, active);
         if (bucket === 'overdue') overdue.push(entry);
         else if (bucket === 'today') today.push(entry);
         else if (bucket === 'tomorrow') tomorrow.push(entry);
@@ -129,8 +131,8 @@ export function collectHiddenUrgent({ goals, lists, goalsDeadlinesVisible, lists
     for (const section of GOAL_SECTIONS) {
       for (const goal of yg?.[section] ?? []) {
         if (!yearHidden && !goal.archived) continue;
-        const active = percentValue(goal) < 100;
-        const bucket = mostUrgent([urgencyOf(goal.dueDate, active), frequencyUrgencyOf(goal, active)]);
+        const active = isActiveForUrgency(goal);
+        const bucket = goalUrgencyOf(goal, active);
         if (bucket === 'overdue' || bucket === 'today') {
           const entry = { kind: 'goal', id: goal.id, title: goal.title, year, section };
           if (goal.archived) entry.archived = true;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { frequencyUrgencyOf, frequencyRowUrgencyOf, frequencyMissedDetail } from '../../app/utils/frequency-urgency.js';
-import { isOverAllowance } from '../../app/utils/tracking.js';
+import { frequencyUrgencyOf, frequencyRowUrgencyOf, frequencyMissedDetail, goalUrgencyOf, matchesGoalDateBucket } from '../../app/utils/frequency-urgency.js';
+import { isOverAllowance, isActiveForUrgency } from '../../app/utils/tracking.js';
 
 // Reference week: 2026-08-10 is a Monday, 2026-08-16 the following Sunday
 // (confirmed against isoWeekKey's own test fixtures in tracking.test.js).
@@ -544,5 +544,93 @@ describe('frequency-urgency — frequencyMissedDetail (Upcoming dialog "why" com
     const goal = scheduled(4, ['mon', 'tue', 'wed', 'thu'], ['2026-08-11', '2026-08-12', '2026-08-13']);
     const detail = frequencyMissedDetail(goal, true, '2026-08-14');
     expect(statesByDay(detail).mon).toBe('missed');
+  });
+});
+
+// ── The merged, goal-level view ───────────────────────────────────────────
+// matchesGoalDateBucket is what the home-page date-filter pills call. The
+// bug it fixes: the pills used to call urgency.js's matchesDateBucket, which
+// takes a bare dueDate and so could not see pace at all — a weekly/monthly
+// goal due today or overdue BY PACE, with no dueDate, matched no dated pill.
+describe('frequency-urgency — goalUrgencyOf / matchesGoalDateBucket', () => {
+  // WED of the reference week, 5x/week with nothing logged: only 5 days
+  // remain (Wed-Sun) for 5 entries, so slack is 0 and pace reads 'today'.
+  const pacedToday = { id: 'g', title: 'g', tracking: { type: 'weekly', target: 5, entries: [], reminderDays: 'any' } };
+  // SUN with nothing logged and 3 still needed: unrecoverable -> 'overdue'.
+  const pacedOverdue = { id: 'g', title: 'g', tracking: { type: 'weekly', target: 3, entries: [], reminderDays: 'any' } };
+
+  it('merges dueDate and pace to whichever is worse', () => {
+    // Pace says today; a far-off dueDate must not drag it back down.
+    const g = { ...pacedToday, dueDate: '2026-12-31' };
+    expect(goalUrgencyOf(g, true, WED)).toBe('today');
+    // ...and the reverse: an overdue dueDate outweighs a quiet pace.
+    const quiet = { id: 'g', dueDate: '2026-08-01', tracking: { type: 'weekly', target: 1, entries: [MON], reminderDays: 'any' } };
+    expect(goalUrgencyOf(quiet, true, WED)).toBe('overdue');
+  });
+
+  it('matches a pace-driven today under the Week pill, with no dueDate at all', () => {
+    expect(frequencyUrgencyOf(pacedToday, true, WED)).toBe('today');
+    expect(matchesGoalDateBucket('week', pacedToday, true, WED)).toBe(true);
+    expect(matchesGoalDateBucket('overdue', pacedToday, true, WED)).toBe(false);
+  });
+
+  it('matches a pace-driven overdue under the Overdue pill, with no dueDate at all', () => {
+    expect(frequencyUrgencyOf(pacedOverdue, true, SUN)).toBe('overdue');
+    expect(matchesGoalDateBucket('overdue', pacedOverdue, true, SUN)).toBe(true);
+    expect(matchesGoalDateBucket('week', pacedOverdue, true, SUN)).toBe(false);
+  });
+
+  it("keeps 'none' meaning strictly no dueDate, so a pace-urgent goal matches both", () => {
+    // 'none' answers "what haven't I dated?" — a pace-urgent goal genuinely
+    // has no deadline, so it belongs to both. The pills are OR-combined.
+    expect(matchesGoalDateBucket('none', pacedToday, true, WED)).toBe(true);
+    expect(matchesGoalDateBucket('none', { ...pacedToday, dueDate: '2026-12-31' }, true, WED)).toBe(false);
+  });
+
+  it('still honours the active gate', () => {
+    expect(matchesGoalDateBucket('week', pacedToday, false, WED)).toBe(false);
+    expect(goalUrgencyOf(pacedToday, false, WED)).toBe('none');
+  });
+
+  it('leaves non-frequency types to their dueDate alone', () => {
+    const pct = { id: 'g', dueDate: WED, tracking: { type: 'percentage', value: 50 } };
+    expect(goalUrgencyOf(pct, true, WED)).toBe('today');
+    expect(matchesGoalDateBucket('week', pct, true, WED)).toBe(true);
+    const undated = { id: 'g', tracking: { type: 'percentage', value: 50 } };
+    expect(goalUrgencyOf(undated, true, WED)).toBe('none');
+    expect(matchesGoalDateBucket('none', undated, true, WED)).toBe(true);
+  });
+});
+
+describe('frequency-urgency — a lapsed countdown is finished, not overdue', () => {
+  // Regression cover: making countdown "always active" (so a countdown due
+  // today would finally reach the Week pill) initially also made a lapsed one
+  // read 'overdue' and take the full-row-red treatment. A countdown's date is
+  // its subject, not a commitment — it is due, then done.
+  const cd = due => ({ id: 'c', title: 'c', dueDate: due, tracking: { type: 'countdown', startDate: '2026-01-01' } });
+
+  it('reads today on its due date and nothing after it', () => {
+    const g = cd('2026-08-12');
+    expect(goalUrgencyOf(g, isActiveForUrgency(g, '2026-08-12'), '2026-08-12')).toBe('today');
+    expect(goalUrgencyOf(g, isActiveForUrgency(g, '2026-08-13'), '2026-08-13')).toBe('none');
+    expect(goalUrgencyOf(g, isActiveForUrgency(g, '2026-10-01'), '2026-10-01')).toBe('none');
+  });
+
+  it('never matches the Overdue pill', () => {
+    const g = cd('2026-08-12');
+    for (const day of ['2026-08-13', '2026-09-01', '2026-12-31']) {
+      expect(matchesGoalDateBucket('overdue', g, isActiveForUrgency(g, day), day)).toBe(false);
+    }
+  });
+
+  it('still matches the Week pill on its due date', () => {
+    const g = cd('2026-08-12');
+    expect(matchesGoalDateBucket('week', g, isActiveForUrgency(g, '2026-08-12'), '2026-08-12')).toBe(true);
+  });
+
+  it('a healthy Avoid goal with a lapsed due date is not reddened by the date', () => {
+    const g = { id: 'a', dueDate: '2026-08-12', tracking: { type: 'decreasing', target: 2, entries: [] } };
+    expect(frequencyRowUrgencyOf(g, isActiveForUrgency(g, '2026-08-20'), '2026-08-20')).toBe('none');
+    expect(goalUrgencyOf(g, isActiveForUrgency(g, '2026-08-20'), '2026-08-20')).toBe('none');
   });
 });

@@ -1664,3 +1664,111 @@ describe('home-page — aggregate goals', () => {
         .toContain('Goal saved'));
   });
 });
+
+// ── Date-filter pills vs. the row's own marker ────────────────────────────
+// These pills mirror the calendar marker, and for two types they silently
+// did not: the filter gated on a bare `percentValue(goal) < 100`, but a
+// countdown reads 100% from (just before) its due date onward and an Avoid
+// goal reads 100% whenever it is within allowance — so both were gated out
+// before their bucket was ever computed, and "Week" could not surface a goal
+// due today. A third case was missed for a different reason: pace urgency
+// was invisible to the filter entirely. See isActiveForUrgency (tracking.js)
+// and matchesGoalDateBucket (frequency-urgency.js).
+describe('home-page — date filter covers every goal type', () => {
+  const YEAR = String(new Date().getFullYear());
+  const offsetIso = n => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const TODAY = offsetIso(0);
+
+  // The goal filter is localStorage-backed (FilterState, keyed per year) and
+  // store reset() does not touch localStorage, so a pill left selected by an
+  // earlier test in this file would otherwise carry into these ones.
+  beforeEach(() => { localStorage.removeItem(`telos:filter:goals:${YEAR}`); });
+
+  async function mountWithGoals(capstone) {
+    await boot({ dbName: freshName(), initialState: { goals: {}, images: {} } });
+    const el = mount(YEAR);
+    setState('goals', { [YEAR]: { capstone, milestones: [], wow: [], focus: [] } });
+    setState('goalsDeadlinesVisible', { [YEAR]: 'full' });
+    await vi.waitFor(() =>
+      expect(el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item').length)
+        .toBe(capstone.length));
+    return el;
+  }
+
+  function clickDatePill(el, key) {
+    el.shadowRoot.querySelector('date-filter-row')
+      .shadowRoot.querySelector(`.filter-date-pill[data-date="${key}"]`).click();
+  }
+
+  const shownIds = el => [...el.shadowRoot.querySelector('#capstone-list').querySelectorAll('goal-item')]
+    .filter(g => !g.hidden).map(g => g._goal.id).sort();
+
+  it('shows a countdown and an Avoid goal due today under the Week pill', async () => {
+    const el = await mountWithGoals([
+      { id: 'pct',   title: 'percentage',  dueDate: TODAY, tracking: { type: 'percentage', value: 50 } },
+      { id: 'cd',    title: 'countdown',   dueDate: TODAY, tracking: { type: 'countdown', startDate: `${YEAR}-01-01` } },
+      { id: 'avoid', title: 'avoid',       dueDate: TODAY, tracking: { type: 'decreasing', target: 2, entries: [] } },
+      { id: 'far',   title: 'far off',     dueDate: offsetIso(90), tracking: { type: 'percentage', value: 50 } },
+    ]);
+
+    clickDatePill(el, 'week');
+    await vi.waitFor(() => expect(shownIds(el)).toEqual(['avoid', 'cd', 'pct']));
+  });
+
+  it('gives the countdown and Avoid rows the same today marker the pill now matches', async () => {
+    const el = await mountWithGoals([
+      { id: 'cd',    title: 'countdown', dueDate: TODAY, tracking: { type: 'countdown', startDate: `${YEAR}-01-01` } },
+      { id: 'avoid', title: 'avoid',     dueDate: TODAY, tracking: { type: 'decreasing', target: 2, entries: [] } },
+    ]);
+    const byId = id => [...el.shadowRoot.querySelectorAll('goal-item')].find(g => g._goal.id === id);
+    await vi.waitFor(() => {
+      expect(byId('cd').dataset.urgency).toBe('today');
+      expect(byId('avoid').dataset.urgency).toBe('today');
+    });
+  });
+
+  it('surfaces a pace-overdue frequency goal under Overdue despite having no dueDate', async () => {
+    // 7x/week with nothing logged is unrecoverable on any day but Monday.
+    const el = await mountWithGoals([
+      { id: 'pace',  title: 'daily habit', tracking: { type: 'weekly', target: 7, entries: [], reminderDays: 'any' } },
+      { id: 'quiet', title: 'undated',     tracking: { type: 'percentage', value: 50 } },
+    ]);
+    const pace = [...el.shadowRoot.querySelectorAll('goal-item')].find(g => g._goal.id === 'pace');
+    // Only meaningful while the row itself reads overdue (not true on a Monday).
+    await vi.waitFor(() => expect(pace.dataset.urgency).not.toBe(undefined));
+    if (pace.dataset.urgency !== 'overdue') return;
+
+    clickDatePill(el, 'overdue');
+    await vi.waitFor(() => expect(shownIds(el)).toEqual(['pace']));
+  });
+
+  it('does not redden or flag a countdown past its due date — it is finished', async () => {
+    const el = await mountWithGoals([
+      { id: 'lapsed', title: 'lapsed countdown', dueDate: offsetIso(-10), tracking: { type: 'countdown', startDate: `${YEAR}-01-01` } },
+      { id: 'late',   title: 'lapsed percentage', dueDate: offsetIso(-10), tracking: { type: 'percentage', value: 50 } },
+    ]);
+    const byId = id => [...el.shadowRoot.querySelectorAll('goal-item')].find(g => g._goal.id === id);
+    await vi.waitFor(() => expect(byId('late').dataset.urgency).toBe('overdue'));
+    // The countdown reached its date: no marker, no full-row red.
+    expect(byId('lapsed').dataset.urgency).toBe('none');
+    expect(byId('lapsed').hasAttribute('data-failed')).toBe(false);
+    // ...and a percentage goal that genuinely missed its deadline still does.
+    expect(byId('late').hasAttribute('data-failed')).toBe(true);
+
+    clickDatePill(el, 'overdue');
+    await vi.waitFor(() => expect(shownIds(el)).toEqual(['late']));
+  });
+
+  it('still hides a genuinely completed goal from every dated pill', async () => {
+    const el = await mountWithGoals([
+      { id: 'done', title: 'finished', dueDate: TODAY, tracking: { type: 'percentage', value: 100 } },
+      { id: 'open', title: 'open',     dueDate: TODAY, tracking: { type: 'percentage', value: 40 } },
+    ]);
+    clickDatePill(el, 'week');
+    await vi.waitFor(() => expect(shownIds(el)).toEqual(['open']));
+  });
+});

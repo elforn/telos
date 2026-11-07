@@ -9,10 +9,10 @@ import { getState, setRuntimeState } from '../../../_lib/core/store/store.js';
 import { onDayChange } from '../../utils/day-change-watcher.js';
 import { scheduleAggregateReconcile } from '../../store/aggregate-reconciler.js';
 import { urgencyOf, mostUrgent, urgentCount, formatCount } from '../../utils/urgency.js';
-import { frequencyUrgencyOf } from '../../utils/frequency-urgency.js';
+import { goalUrgencyOf } from '../../utils/frequency-urgency.js';
 import { collectUpcoming, collectHiddenUrgent, upcomingBadgeCount } from '../../utils/upcoming.js';
 import { yearDeadlinesLevel, listDeadlinesVisible } from '../../utils/deadline-visibility.js';
-import { percentValue } from '../../utils/tracking.js';
+import { isActiveForUrgency } from '../../utils/tracking.js';
 import { repairInstallation } from '../../../_lib/core/sw-manager/sw-repair.js';
 import { mergeStrategy } from '../../utils/merge-strategy.js';
 import { backupBeforeRepair, LAST_EXPORT_KEY } from '../../utils/backup-before-repair.js';
@@ -1433,8 +1433,13 @@ class BottomNav extends AppElement {
     const goalBuckets = ['capstone', 'milestones', 'wow', 'focus']
       .flatMap(s => year[s] ?? [])
       .map(g => {
-        const active = percentValue(g) < 100 && !g.archived;
-        return mostUrgent([urgencyOf(g.dueDate, active), frequencyUrgencyOf(g, active)]);
+        // isActiveForUrgency, not `percentValue < 100` — a countdown reads
+        // 100% from its due date onward and an Avoid goal reads 100% while
+        // it is behaving, so the plain score check kept both out of this
+        // pill entirely (see tracking.js). `!archived` stays local to this
+        // site: the roll-up excludes archived goals, goal-item.js does not.
+        const active = isActiveForUrgency(g) && !g.archived;
+        return goalUrgencyOf(g, active);
       });
 
     const rollupVisible = getState().listsRollupVisible ?? true;

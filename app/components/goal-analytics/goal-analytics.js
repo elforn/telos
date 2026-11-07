@@ -3,7 +3,7 @@ import { t } from '../../../_lib/core/strings.js';
 import { todayISO } from '../../utils/today-iso.js';
 import {
   isFrequency, isDecreasing, isCountdown, isDayCount, isAggregate, isoWeekKey, monthKey, PERIOD_WINDOW, weekDayStates, daysBetween,
-  WEEKDAYS, countdownDaysRemaining, percentValue,
+  WEEKDAYS, countdownDaysRemaining, percentValue, completesByScore, isActiveForUrgency,
 } from '../../utils/tracking.js';
 import {
   pagesFor, percentValueAt, dateListFor, rawLoggedDates, topStreaks, countByBucket,
@@ -1525,7 +1525,22 @@ class GoalAnalytics extends AppElement {
   // carries the same meaning in text, so colour is never the only cue.
   _deadlineCard(goal, todayIso) {
     if (!goal?.dueDate || isCountdown(goal)) return '';
-    const active = (this._valueNow(goal, todayIso)) < 100 && !goal.archived;
+    // Two different questions, so two different answers — not a bare <100.
+    // A score-completing type keeps reading _valueNow, since this page
+    // resolves values as-of todayIso through the history log rather than
+    // from the live record (see _valueNow); switching it to
+    // isActiveForUrgency's own percentValue call would change what this
+    // page reports for every percentage goal, which is nothing to do with
+    // this fix. The two date-completing types instead defer wholly to the
+    // shared rule, so this card agrees with the row: an Avoid goal reads
+    // 100% whenever it is within allowance (which used to suppress this
+    // card's "due this week" phrase for every healthy Avoid goal with a
+    // deadline), but a LAPSED due date must not read as overdue here when
+    // the row deliberately calls it finished. Countdown never reaches this
+    // branch — it returns above — so decreasing is the only type affected.
+    const active = (completesByScore(goal)
+      ? this._valueNow(goal, todayIso) < 100
+      : isActiveForUrgency(goal, todayIso)) && !goal.archived;
     const bucket = urgencyOf(goal.dueDate, active);
     return `<div class="stat">
       <div class="stat-label">${t('goal-analytics.stat-deadline')}</div>
