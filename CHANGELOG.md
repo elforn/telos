@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.11.3] — 2026-11-09
+
+### Fixed
+- **Goals you add to a new Group are saved as you pick them.** If you had typed a title, the group was only created when that field lost focus — so the members you had just picked were held nowhere but the open dialog until then. They are now saved the moment you pick them.
+- **A Group you set up before naming it survives a reload.** Tapping Group and picking members before typing a title left that membership with nowhere to go at all, since a goal cannot be saved without a name — a reload, or the phone closing the app, took the type and every member with it. It is now kept as a recoverable draft, the same way an unfinished title, note or tag already was, and you are offered it again the next time you add a goal to that section. A draft's target, start date and reminder days are kept the same way.
+
+---
+
 ## [3.11.2] — 2026-11-07
 
 ### Fixed
