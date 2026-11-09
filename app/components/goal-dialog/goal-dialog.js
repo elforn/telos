@@ -134,29 +134,7 @@ class GoalDialog extends AppElement {
     // collapsed behind a plain read-only label — a seldom-changed setting,
     // changed via "Change type" in the ⋮ menu rather than shown expanded on
     // every open. Fix-a-day starts collapsed too, independently.
-    this._draftType   = goal?.tracking?.type   ?? 'percentage';
-    // `?? DEFAULT_TARGET[this._draftType]` picks up the right seed per type
-    // (0 for decreasing, which is falsy but meaningful — never `||` here);
-    // the trailing `?? DEFAULT_TARGET.weekly` only matters for 'percentage',
-    // which has no entry of its own and never reads _draftTarget anyway.
-    this._draftTarget = goal?.tracking?.target ?? DEFAULT_TARGET[this._draftType] ?? DEFAULT_TARGET.weekly;
-    // Decreasing-only; kept even when the current type isn't decreasing so a
-    // Countdown-only; kept even when the current type isn't countdown, same
-    // "never drops the inactive side" spirit as value/entries above. A
-    // goal that's never touched countdown defaults to Jan 1 of the year
-    // it's being opened in (_fromYear, set by open() just before this
-    // runs) — "Year start" is a one-shot quick-fill button, not a stored
-    // mode, so there's nothing else to seed here; see tracking.js's
-    // countdown doc comment for why startDate is a frozen concrete date
-    // rather than recomputed live.
-    this._draftStartDate = goal?.tracking?.startDate ?? `${this._fromYear}-01-01`;
-    // Weekly-only (see tracking.js) — stays undefined until the chip row is
-    // actually touched, matching "opt-in per goal, default not configured".
-    this._draftReminderDays = goal?.tracking?.reminderDays;
-    // Aggregate-only, and kept even when the current type isn't aggregate —
-    // same "never drops the inactive side" rule as value/entries/startDate
-    // above, so switching away and back recovers the same membership.
-    this._draftMembers = goal?.tracking?.members ?? [];
+    this._seedTrackingDrafts(goal?.tracking);
     this._typeExpanded = false;
     this._fixDayExpanded = false;
     this._renderTypeSection();
@@ -173,7 +151,11 @@ class GoalDialog extends AppElement {
     // Draft recovery: target is blank for a new entry, the stored record for an existing one.
     const targetValues = goal
       ? { title: goal.title ?? '', notes: goal.notes, dueDate: goal.dueDate, tags: [...(goal.tags ?? [])], color: goal.color ?? null }
-      : { title: '', notes: undefined, dueDate: undefined, tags: [], color: null };
+      // tracking: null means "a fresh draft's defaults" — present for a new
+      // entry because its snapshot carries tracking too, so Clear has to be
+      // able to undo a restored type/membership; absent for an existing
+      // record, whose tracking the store already owns (see _applyFormValues).
+      : { title: '', notes: undefined, dueDate: undefined, tags: [], color: null, tracking: null };
     // Existing records: a draft is only ever offered via the button, never silently
     // applied over the real value the form already shows (peek() doesn't write it).
     // New entries: nothing committed to protect, so recovering the draft on open
@@ -1626,18 +1608,7 @@ class GoalDialog extends AppElement {
         // key — instead of relying on the close click, which mobile can swallow
         // while dismissing the keyboard. Once committed we're in edit mode, so
         // modal-close dispatches goal-closed rather than a second goal-created.
-        if (!v) return;
-        const notes   = this._descInput.value.trim() || undefined;
-        const dueDate = this._dueDateInput.value || undefined;
-        const tags    = this._tagInputEl.commitPending();
-        const color   = this._selectedColor ?? undefined;
-        const tracking = this._draftTracking();
-        this._isNew = false;
-        this._lastValidTitle = v;
-        this._snapshot?.clear();
-        this.dispatchEvent(new CustomEvent('goal-created', {
-          bubbles: true, composed: true, detail: { title: v, notes, dueDate, tags, color, tracking },
-        }));
+        if (!this._commitNewGoal()) return;
         this._renderTypeSection();
         return;
       }
@@ -1734,24 +1705,11 @@ class GoalDialog extends AppElement {
     this._onModalClose = e => {
       e.stopPropagation();
       if (this._isNew) {
-        const title = this._input.value.trim();
-        if (title) {
-          this._snapshot?.clear(); // committed — drop any hide-time snapshot
-          const notes = this._descInput.value.trim() || undefined;
-          const dueDate = this._dueDateInput.value || undefined;
-          const tags  = this._tagInputEl.commitPending();
-          const color = this._selectedColor ?? undefined;
-          const tracking = this._draftTracking();
-          // Mark committed so a blur fired *after* this close (the browser fires
-          // the dialog's close before the focused input's blur) doesn't re-create
-          // via _onTitleBlur's commit-on-blur path.
-          this._isNew = false;
-          this._lastValidTitle = title;
-          this.dispatchEvent(new CustomEvent('goal-created', {
-            bubbles: true, composed: true, detail: { title, notes, dueDate, tags, color, tracking },
-          }));
-        } else {
-          this._snapshot?.capture(); // can't commit without a title — preserve notes/tags
+        // _commitNewGoal marks the dialog committed, so a blur fired *after*
+        // this close (the browser fires the dialog's close before the focused
+        // input's blur) doesn't re-create via _onTitleBlur's own path.
+        if (!this._commitNewGoal()) {
+          this._snapshot?.capture(); // can't commit without a title — preserve the draft
         }
       } else {
         this._snapshot?.clear(); // edited record closed — store owns it now
@@ -2057,7 +2015,7 @@ class GoalDialog extends AppElement {
         });
       }
       this._renderTypeSection();
-      if (!this._isNew) this._commitTrackingChange();
+      this._commitOrCaptureTracking();
     };
     this._typePills.forEach(p => p.addEventListener('click', this._onTypePillClick));
 
@@ -2082,7 +2040,7 @@ class GoalDialog extends AppElement {
       // clobber mid-typing), but this IS the user changing the value, so it
       // must be written through explicitly.
       if (this._draftType === 'daycount') this._targetInput.value = String(this._draftTarget);
-      if (!this._isNew) this._commitTrackingChange();
+      this._commitOrCaptureTracking();
     };
 
     this._onTargetDown = () => {
@@ -2108,7 +2066,7 @@ class GoalDialog extends AppElement {
     this._onYearStartClick = () => {
       this._draftStartDate = `${this._fromYear}-01-01`;
       this._countdownStartInput.value = this._draftStartDate;
-      if (!this._isNew) this._commitTrackingChange();
+      this._commitOrCaptureTracking();
     };
     this._yearStartBtn.addEventListener('click', this._onYearStartClick);
 
@@ -2123,7 +2081,7 @@ class GoalDialog extends AppElement {
         return;
       }
       this._draftStartDate = this._countdownStartInput.value;
-      if (!this._isNew) this._commitTrackingChange();
+      this._commitOrCaptureTracking();
     };
     this._countdownStartInput.addEventListener('change', this._onStartDateInput);
 
@@ -2140,7 +2098,7 @@ class GoalDialog extends AppElement {
         ?? this._draftTarget ?? DEFAULT_TARGET.daycount;
       this._targetInput.value = String(this._draftTarget);
       this._renderTypeSection();
-      if (!this._isNew) this._commitTrackingChange();
+      this._commitOrCaptureTracking();
     };
     this._targetInput.addEventListener('change', this._onTargetInputCommit);
     this._targetInput.addEventListener('blur', this._onTargetInputCommit);
@@ -2167,7 +2125,7 @@ class GoalDialog extends AppElement {
           ? Math.min(max, this._draftTarget + 1)
           : Math.max(min, this._draftTarget - 1);
         this._renderTypeSection();
-        if (!this._isNew) this._commitTrackingChange();
+        this._commitOrCaptureTracking();
         return;
       }
       const chip = e.target.closest('.reminder-day-chip');
@@ -2199,7 +2157,7 @@ class GoalDialog extends AppElement {
         if (this._draftReminderDays.length > 0) this._draftTarget = this._draftReminderDays.length;
       }
       this._renderTypeSection();
-      if (!this._isNew) this._commitTrackingChange();
+      this._commitOrCaptureTracking();
     };
     this._reminderDayGroup.addEventListener('click', this._onReminderDayGroupClick);
 
@@ -2248,8 +2206,15 @@ class GoalDialog extends AppElement {
         const dueDate = this._dueDateInput.value;
         if (this._isNew) {
           const tags = this._tagInputEl.commitPending();
-          return (title.trim() || notes.trim() || dueDate || tags.length || this._selectedColor)
-            ? { title, notes, dueDate, tags, color: this._selectedColor } : null;
+          // tracking rides along for a new draft only. An existing record
+          // commits every tracking edit to the store the moment it is made,
+          // so its snapshot has no business carrying one — and the key's
+          // mere presence is what tells _applyFormValues whether the type
+          // section is its to restore (see there).
+          const tracking = this._draftTracking();
+          return (title.trim() || notes.trim() || dueDate || tags.length || this._selectedColor
+                  || this._draftTrackingWorthKeeping())
+            ? { title, notes, dueDate, tags, color: this._selectedColor, tracking } : null;
         }
         // existing: only if a text field has an unsaved edit (tags/dueDate/colour commit immediately)
         return (title !== this._lastValidTitle || notes !== this._lastValidNotes)
@@ -2322,7 +2287,8 @@ class GoalDialog extends AppElement {
     return this._goal?.id ?? `new:${this._fromYear}:${this._fromSection}`;
   }
 
-  _applyFormValues({ title, notes, dueDate, tags, color }) {
+  _applyFormValues(data) {
+    const { title, notes, dueDate, tags, color } = data ?? {};
     this._input.value = title ?? '';
     this._descInput.value = notes ?? '';
     this._descHighlight?.sync();
@@ -2330,6 +2296,45 @@ class GoalDialog extends AppElement {
     this._showDueDateField(!!dueDate);
     this._tagInputEl.tags = tags ?? [];
     this._selectColor(color ?? null);
+    // Only a new draft ever carries tracking (see the snapshot() option), and
+    // the key's *presence* is the signal — not its value: the draft-toggle's
+    // own "Clear" target passes tracking: null, meaning "put the type section
+    // back to a fresh draft's defaults", which is a different instruction
+    // from an existing record's payload, where the key is absent and the
+    // type section must be left exactly as the store has it.
+    if (data && 'tracking' in data) {
+      this._seedTrackingDrafts(data.tracking);
+      this._renderTypeSection();
+    }
+  }
+
+  // The five draft fields that mirror a tracking object, seeded from one.
+  // Shared by _resetForm (seeding from the stored record, or from nothing for
+  // a fresh draft) and by a snapshot restore, so neither place can drift from
+  // the other on what a given type's default actually is.
+  _seedTrackingDrafts(tracking) {
+    this._draftType   = tracking?.type ?? 'percentage';
+    // `?? DEFAULT_TARGET[this._draftType]` picks up the right seed per type
+    // (0 for decreasing, which is falsy but meaningful — never `||` here);
+    // the trailing `?? DEFAULT_TARGET.weekly` only matters for 'percentage',
+    // which has no entry of its own and never reads _draftTarget anyway.
+    this._draftTarget = tracking?.target ?? DEFAULT_TARGET[this._draftType] ?? DEFAULT_TARGET.weekly;
+    // Countdown-only; kept even when the current type isn't countdown, same
+    // "never drops the inactive side" spirit as value/entries above. A
+    // goal that's never touched countdown defaults to Jan 1 of the year
+    // it's being opened in (_fromYear, set by open() just before this
+    // runs) — "Year start" is a one-shot quick-fill button, not a stored
+    // mode, so there's nothing else to seed here; see tracking.js's
+    // countdown doc comment for why startDate is a frozen concrete date
+    // rather than recomputed live.
+    this._draftStartDate = tracking?.startDate ?? `${this._fromYear}-01-01`;
+    // Weekly-only (see tracking.js) — stays undefined until the chip row is
+    // actually touched, matching "opt-in per goal, default not configured".
+    this._draftReminderDays = tracking?.reminderDays;
+    // Aggregate-only, and kept even when the current type isn't aggregate —
+    // same "never drops the inactive side" rule as value/entries/startDate
+    // above, so switching away and back recovers the same membership.
+    this._draftMembers = tracking?.members ?? [];
   }
 
   _selectColor(color) {
@@ -2355,6 +2360,49 @@ class GoalDialog extends AppElement {
     // before the title blur that creates it.
     if (this._draftReminderDays !== undefined) tracking.reminderDays = this._draftReminderDays;
     return tracking;
+  }
+
+  // Is this draft's tracking, on its own, worth writing a snapshot for — with
+  // every text field still empty?
+  //
+  // Only group membership is. A type, a target, a reminder day: each is one
+  // tap to re-pick, and resurrecting one into an otherwise-blank dialog would
+  // silently change what the *next* new goal starts as, for no real saving.
+  // Members are the opposite — several taps through a second modal, resolved
+  // against other records — so they justify a snapshot by themselves. (Once
+  // any other field has made a snapshot worth writing, tracking rides along
+  // in it regardless; this only decides the all-blank case.)
+  _draftTrackingWorthKeeping() {
+    return (this._draftMembers?.length ?? 0) > 0;
+  }
+
+  // Creates the goal from whatever the form currently holds and flips the
+  // dialog into edit mode. Three different moments can be the first one worth
+  // committing at — the title blurring, the dialog closing, and a group
+  // member being picked — so the sequence lives here once rather than being
+  // written out at each. Returns false, having done nothing, when there is no
+  // title yet: a goal without one cannot be committed at all, which is
+  // exactly what the draft snapshot exists to cover.
+  //
+  // Deliberately does NOT set this._goal: the id is home-page's to mint (it
+  // resolves the new record from its own _editingGoal, not from this event),
+  // so the dialog stays in the "committed but id unknown" state every caller
+  // here already handles — see _aggValueFor's own note on it.
+  _commitNewGoal() {
+    const title = this._input.value.trim();
+    if (!title) return false;
+    const notes   = this._descInput.value.trim() || undefined;
+    const dueDate = this._dueDateInput.value || undefined;
+    const tags    = this._tagInputEl.commitPending();
+    const color   = this._selectedColor ?? undefined;
+    const tracking = this._draftTracking();
+    this._isNew = false;
+    this._lastValidTitle = title;
+    this._snapshot?.clear(); // committed — drop any hide-time snapshot
+    this.dispatchEvent(new CustomEvent('goal-created', {
+      bubbles: true, composed: true, detail: { title, notes, dueDate, tags, color, tracking },
+    }));
+    return true;
   }
 
   // Existing goal: no presence on the main view at all until "Change type"
@@ -2802,7 +2850,7 @@ class GoalDialog extends AppElement {
     const index = [...this._memberList.querySelectorAll('.member-row')].indexOf(row);
     this._draftMembers = (this._draftMembers ?? []).filter(ref => memberKey(ref) !== key);
     this._renderTypeSection();
-    if (!this._isNew) this._commitTrackingChange();
+    this._commitOrCaptureTracking();
     const remaining = [...this._memberList.querySelectorAll('.member-remove')];
     (remaining[Math.min(index, remaining.length - 1)] ?? this._membersAddBtn)?.focus();
   }
@@ -2831,19 +2879,47 @@ class GoalDialog extends AppElement {
       row.querySelector(`[data-weight-step="${other}"]`)?.focus();
     }
     if (this._isNew) this._renderTrackingSummary();
-    else this._commitTrackingChange();
+    this._commitOrCaptureTracking();
   }
 
   // Adds the picked references, skipping any that are already members. The
   // picker already excludes them, so this is belt-and-braces against a
   // stale open.
+  //
+  // Picking members is the most expensive thing anyone does in this dialog —
+  // several taps through a second modal — so it is also the point at which a
+  // draft most needs to stop being a draft. If a title is already typed, the
+  // goal is created right here rather than waiting for that field to blur:
+  // the blur does happen today (showModal on the picker steals focus), but
+  // depending on a focus side-effect for a store write is not something to
+  // leave load-bearing. With no title yet there is nothing to create, so the
+  // snapshot carries the membership instead — see _commitOrCaptureTracking.
   _onGoalPick(refs) {
     const existing = new Set((this._draftMembers ?? []).map(memberKey));
     const added = (refs ?? []).filter(ref => !existing.has(memberKey(ref)));
     if (!added.length) return;
     this._draftMembers = [...(this._draftMembers ?? []), ...added];
     this._renderTypeSection();
-    if (!this._isNew) this._commitTrackingChange();
+    if (this._isNew && this._commitNewGoal()) {
+      // _isNew has just flipped, which changes what the type section shows —
+      // and goal-created already carried this membership, so the normal
+      // commit path below would be a second, identical write.
+      this._renderTypeSection();
+      return;
+    }
+    this._commitOrCaptureTracking();
+  }
+
+  // Every tracking edit has to land somewhere the moment it is made. An
+  // existing goal writes straight to the store; a draft with no record yet
+  // writes a form snapshot instead — synchronous localStorage, so it
+  // survives a reload or a crash the way an IndexedDB write would not (see
+  // dialog-snapshot.js). Without the second half a draft's type, target and
+  // — most expensively — its group membership lived only in this component's
+  // own fields until the title committed, and a refresh took the lot.
+  _commitOrCaptureTracking() {
+    if (this._isNew) this._snapshot?.capture();
+    else this._commitTrackingChange();
   }
 
   _commitTrackingChange() {

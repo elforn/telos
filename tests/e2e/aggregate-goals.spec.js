@@ -339,3 +339,112 @@ test('a real hold-drag changes nothing on a group row, but does on a percentage 
   // And the member it derives from is untouched, so nothing leaked sideways.
   expect((await rowState(page, 'mem')).value).toBe(30);
 });
+
+// ── A new group's membership is registered as it is picked ──────────────────
+// Real-browser because the whole point is what survives a genuine reload: the
+// store write for a titled draft, and the synchronous form snapshot for one
+// with no title yet (a goal cannot be committed without a title, so there is
+// nothing else that could carry it). Both used to be lost — membership lived
+// only in goal-dialog's own fields until the title committed.
+
+async function pickFirstMember(page) {
+  await page.evaluate(() => document.querySelector('app-router').shadowRoot
+    .querySelector('home-page').shadowRoot.querySelector('goal-dialog').shadowRoot
+    .querySelector('#members-add-btn').click());
+  await page.waitForFunction(() => document.querySelector('app-router').shadowRoot
+    .querySelector('home-page').shadowRoot.querySelector('goal-dialog').shadowRoot
+    .querySelector('#goal-picker').shadowRoot.querySelector('#modal').shadowRoot
+    .querySelector('dialog')?.open);
+  await page.evaluate(() => {
+    const p = document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot.querySelector('goal-dialog').shadowRoot
+      .querySelector('#goal-picker').shadowRoot;
+    p.querySelectorAll('#items .row')[0].click();
+    p.querySelector('#add-btn').click();
+  });
+}
+
+const pickGroupType = page => page.evaluate(() => document.querySelector('app-router').shadowRoot
+  .querySelector('home-page').shadowRoot.querySelector('goal-dialog').shadowRoot
+  .querySelector('.type-pill[data-type="aggregate"]').click());
+
+const MEMBER_SEED = {
+  goals: { [String(currentYear)]: {
+    capstone: [], milestones: [], wow: [],
+    focus: [{ id: 'mem', title: 'First draft', tags: [], tracking: { type: 'percentage', value: 20 } }],
+  } },
+};
+const MEMBER_REF = { year: String(currentYear), section: 'focus', goalId: 'mem' };
+
+const readState = page => page.evaluate(() => new Promise(res => {
+  const r = indexedDB.open('telos', 1);
+  r.onsuccess = () => {
+    const db = r.result;
+    const g = db.transaction('state', 'readonly').objectStore('state').get('root');
+    g.onsuccess = () => { res(g.result?.data); db.close(); };
+  };
+}));
+
+test('a titled draft persists its members the moment they are picked', async ({ page }) => {
+  await page.goto(`/${currentYear}`);
+  await waitForPage(page);
+  await seedState(page, MEMBER_SEED);
+  await page.reload();
+  await waitForPage(page);
+
+  await openNewCapstone(page);
+  await page.keyboard.type('My group'); // the title field is focused on open
+  await pickGroupType(page);
+  await pickFirstMember(page);
+
+  await waitForIDBFlush(page);
+  const grp = ((await readState(page)).goals[String(currentYear)].capstone ?? [])[0];
+  expect(grp.title).toBe('My group');
+  expect(grp.tracking.type).toBe('aggregate');
+  expect(grp.tracking.members).toEqual([MEMBER_REF]);
+  // The reconciler has already scored it from that member.
+  expect(grp.tracking.aggValue).toBe(20);
+});
+
+test('an untitled draft recovers its members after a reload', async ({ page }) => {
+  await page.goto(`/${currentYear}`);
+  await waitForPage(page);
+  await seedState(page, MEMBER_SEED);
+  await page.reload();
+  await waitForPage(page);
+
+  // Group picked and members added before any title is typed — the ordering
+  // that had nothing anywhere to hold them.
+  await openNewCapstone(page);
+  await pickGroupType(page);
+  await pickFirstMember(page);
+
+  await page.reload();
+  await waitForPage(page);
+  await openNewCapstone(page);
+
+  const recovered = await page.evaluate(() => {
+    const sr = document.querySelector('app-router').shadowRoot
+      .querySelector('home-page').shadowRoot.querySelector('goal-dialog').shadowRoot;
+    return {
+      rows: sr.querySelectorAll('.member-row').length,
+      title: sr.querySelector('.member-title')?.textContent,
+      blockHidden: sr.querySelector('#members-block').hidden,
+      groupChecked: sr.querySelector('.type-pill[data-type="aggregate"]').getAttribute('aria-checked'),
+    };
+  });
+  expect(recovered.rows).toBe(1);
+  expect(recovered.title).toBe('First draft');
+  expect(recovered.blockHidden).toBe(false);
+  expect(recovered.groupChecked).toBe('true');
+
+  // Typing the title now commits the recovered membership for real.
+  await page.keyboard.type('Recovered group');
+  await page.evaluate(() => document.querySelector('app-router').shadowRoot
+    .querySelector('home-page').shadowRoot.querySelector('goal-dialog').shadowRoot
+    .querySelector('#input').blur());
+  await waitForIDBFlush(page);
+  const grp = ((await readState(page)).goals[String(currentYear)].capstone ?? [])[0];
+  expect(grp.title).toBe('Recovered group');
+  expect(grp.tracking.members).toEqual([MEMBER_REF]);
+});

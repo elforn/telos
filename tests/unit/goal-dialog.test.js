@@ -3253,4 +3253,103 @@ describe('goal-dialog — aggregate membership', () => {
     openAggregate(el, [mRef('m1', 'milestones', '2026'), mRef('f1', 'focus', '2026')]);
     expect(el.shadowRoot.querySelector('#change-type-value').textContent).toBe('2 goals');
   });
+
+  // ── A draft's membership is registered the moment it is picked ───────────
+  // It used to live only in the component's own _draftMembers until the title
+  // committed, so a reload or a crash mid-setup took every picked member with
+  // it. Which of the two mechanisms below applies depends only on whether a
+  // title exists yet, since a goal cannot be committed without one.
+
+  function pickInto(el, refs) {
+    const picker = stubGoalPicker(el);
+    el.shadowRoot.querySelector('#members-add-btn').click();
+    picker.dispatchEvent(new CustomEvent('goal-pick', {
+      bubbles: true, composed: true, detail: { refs },
+    }));
+  }
+
+  it('creates the goal as soon as a member is picked, if a title is typed', () => {
+    const el = mount();
+    el.availableGoals = AVAILABLE;
+    el.open();
+    el.shadowRoot.querySelector('.type-pill[data-type="aggregate"]').click();
+    el.shadowRoot.querySelector('#input').value = 'Ship the book';
+    const created = [];
+    const tracked = [];
+    el.addEventListener('goal-created', e => created.push(e.detail));
+    el.addEventListener('goal-tracking-changed', e => tracked.push(e.detail));
+
+    pickInto(el, [mRef('m1', 'milestones', '2026')]);
+
+    // One write, not two: goal-created already carries the membership, so the
+    // normal tracking-change path must not also fire for the same pick.
+    expect(created).toHaveLength(1);
+    expect(tracked).toHaveLength(0);
+    expect(created[0].title).toBe('Ship the book');
+    expect(created[0].tracking.members).toEqual([mRef('m1', 'milestones', '2026')]);
+    // Committed: a later blur of the same (unchanged) title must not re-create.
+    el.shadowRoot.querySelector('#input').dispatchEvent(new Event('blur'));
+    expect(created).toHaveLength(1);
+  });
+
+  it('snapshots an untitled draft’s membership, and recovers it on the next open', () => {
+    const el = mount();
+    el.availableGoals = AVAILABLE;
+    el.open();
+    el.shadowRoot.querySelector('.type-pill[data-type="aggregate"]').click();
+    const created = [];
+    el.addEventListener('goal-created', e => created.push(e.detail));
+
+    pickInto(el, [mRef('f1', 'focus', '2026')]);
+    // Nothing to create — a goal needs a title — so the draft is all there is.
+    expect(created).toHaveLength(0);
+
+    // Written synchronously at pick time rather than waiting on pagehide, so
+    // a crash that fires no unload event still can't lose it.
+    const raw = localStorage.getItem('telos:snapshot.new-goal:new:2026:capstone');
+    expect(JSON.parse(raw).tracking.members).toEqual([mRef('f1', 'focus', '2026')]);
+
+    // A fresh component, as a reload would give: same type, same member row.
+    const el2 = mount();
+    el2.availableGoals = AVAILABLE;
+    el2.open();
+    expect(el2._draftType).toBe('aggregate');
+    expect(el2.shadowRoot.querySelectorAll('.member-row')).toHaveLength(1);
+    expect(el2.shadowRoot.querySelector('.member-title').textContent).toBe('First draft');
+    // And finishing the title commits what was recovered.
+    const created2 = [];
+    el2.addEventListener('goal-created', e => created2.push(e.detail));
+    el2.shadowRoot.querySelector('#input').value = 'Recovered';
+    el2.shadowRoot.querySelector('#input').dispatchEvent(new Event('blur'));
+    expect(created2[0].tracking.members).toEqual([mRef('f1', 'focus', '2026')]);
+    localStorage.clear();
+  });
+
+  it('keeps no snapshot for a bare type pick with nothing else drafted', () => {
+    // The counterpart to the test above: a type is one tap to re-pick, so
+    // resurrecting one into an otherwise-blank dialog would just change what
+    // the next new goal starts as. Only membership earns a snapshot alone.
+    const el = mount();
+    el.open();
+    el.shadowRoot.querySelector('.type-pill[data-type="monthly"]').click();
+    expect(localStorage.getItem('telos:snapshot.new-goal:new:2026:capstone')).toBe(null);
+  });
+
+  it('reverts a recovered draft’s type and membership when Clear is tapped', () => {
+    const el = mount();
+    el.availableGoals = AVAILABLE;
+    el.open();
+    el.shadowRoot.querySelector('.type-pill[data-type="aggregate"]').click();
+    pickInto(el, [mRef('f1', 'focus', '2026')]);
+
+    const el2 = mount();
+    el2.availableGoals = AVAILABLE;
+    el2.open();
+    expect(el2._draftType).toBe('aggregate');
+    el2.shadowRoot.querySelector('#draft-toggle-btn').click();
+    expect(el2._draftType).toBe('percentage');
+    expect(el2._draftMembers).toEqual([]);
+    expect(el2.shadowRoot.querySelector('#members-block').hidden).toBe(true);
+    localStorage.clear();
+  });
 });
